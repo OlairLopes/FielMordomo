@@ -32,13 +32,14 @@ def _get_lanc(slug):
 
 
 def render():
-    slug   = slug_da_sessao()
-    df_cad = _get_cad(slug)
+    slug    = slug_da_sessao()
+    df_cad  = _get_cad(slug)
     df_lanc = _get_lanc(slug)
     membros = obter_ativos(df_cad, "MEMBRO")
     fornec  = obter_ativos(df_cad, "FORNECEDOR")
 
-    with st.expander("Novo lancamento", expanded=True):
+    # ── Novo lancamento ──────────────────────────────────────────────────
+    with st.expander("Novo lancamento", expanded=False):
         with st.form("form_lanc", clear_on_submit=True):
             data_l = st.date_input("Data", value=datetime.date.today(), format="DD/MM/YYYY")
             tipo   = st.selectbox("Tipo", ["Entrada", "Saida"])
@@ -76,77 +77,87 @@ def render():
                     st.toast("Lancamento salvo!")
                     st.rerun()
 
-    st.dataframe(preparar_df(df_lanc), use_container_width=True)
-    st.divider()
-    st.subheader("Editar ou excluir")
+    # ── Tabela (oculta por padrao) ────────────────────────────────────────
+    total = len(df_lanc)
+    with st.expander(f"Ver lancamentos ({total} registros)", expanded=False):
+        if df_lanc.empty:
+            st.info("Nenhum lancamento ainda.")
+        else:
+            st.dataframe(preparar_df(df_lanc), use_container_width=True)
+            csv = gerar_csv(preparar_df(df_lanc))
+            st.download_button("Exportar CSV", csv, "lancamentos.csv", "text/csv")
 
-    if df_lanc.empty:
-        st.info("Nenhum lancamento ainda.")
-        return
+    # ── Editar / Excluir (oculto por padrao) ─────────────────────────────
+    with st.expander("Editar ou excluir lancamento", expanded=False):
+        if df_lanc.empty:
+            st.info("Nenhum lancamento ainda.")
+            return
 
-    df_e = df_lanc.copy()
-    df_e["data_fmt"] = pd.to_datetime(df_e["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
-    df_e["rotulo"] = df_e.apply(
-        lambda r: f'{int(r["id_lancamento"])} | {r["data_fmt"]} | {r["tipo"]} | {r["categoria"]} | {r["nome_cadastro"] or "Sem vinculo"} | {formatar_moeda(r["valor"])}',
-        axis=1,
-    )
+        df_e = df_lanc.copy()
+        df_e["data_fmt"] = pd.to_datetime(df_e["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+        df_e["rotulo"] = df_e.apply(
+            lambda r: f'{int(r["id_lancamento"])} | {r["data_fmt"]} | {r["tipo"]} | {r["categoria"]} | {r["nome_cadastro"] or "Sem vinculo"} | {formatar_moeda(r["valor"])}',
+            axis=1,
+        )
 
-    rotulo = st.selectbox("Selecione o lancamento", df_e["rotulo"].tolist(), key="sel_lanc_edit")
-    sel    = df_e[df_e["rotulo"] == rotulo].iloc[0]
-    id_lanc = int(sel["id_lancamento"])
+        rotulo  = st.selectbox("Selecione o lancamento", df_e["rotulo"].tolist(), key="sel_lanc_edit")
+        sel     = df_e[df_e["rotulo"] == rotulo].iloc[0]
+        id_lanc = int(sel["id_lancamento"])
 
-    data_base = pd.to_datetime(sel["data"], errors="coerce")
-    data_edit = st.date_input("Data", value=data_base.date() if pd.notna(data_base) else datetime.date.today(),
-                              format="DD/MM/YYYY", key="edit_data")
+        data_base = pd.to_datetime(sel["data"], errors="coerce")
+        data_edit = st.date_input("Data", value=data_base.date() if pd.notna(data_base) else datetime.date.today(),
+                                  format="DD/MM/YYYY", key="edit_data")
 
-    tipo_opc = ["Entrada", "Saida"]
-    tipo_e   = st.selectbox("Tipo", tipo_opc, index=tipo_opc.index(sel["tipo"]) if sel["tipo"] in tipo_opc else 0, key="edit_tipo")
-    cat_e    = st.selectbox("Categoria", CATEGORIAS_ENTRADA,
-                            index=CATEGORIAS_ENTRADA.index(sel["categoria"]) if sel["categoria"] in CATEGORIAS_ENTRADA else 0,
-                            key="edit_cat") if tipo_e == "Entrada" else "Despesa"
-    if tipo_e == "Saida":
-        st.text_input("Categoria", value="Despesa", disabled=True, key="edit_cat_d")
+        tipo_opc = ["Entrada", "Saida"]
+        tipo_e   = st.selectbox("Tipo", tipo_opc, index=tipo_opc.index(sel["tipo"]) if sel["tipo"] in tipo_opc else 0, key="edit_tipo")
+        cat_e    = st.selectbox("Categoria", CATEGORIAS_ENTRADA,
+                                index=CATEGORIAS_ENTRADA.index(sel["categoria"]) if sel["categoria"] in CATEGORIAS_ENTRADA else 0,
+                                key="edit_cat") if tipo_e == "Entrada" else "Despesa"
+        if tipo_e == "Saida":
+            st.text_input("Categoria", value="Despesa", disabled=True, key="edit_cat_d")
 
-    vinc_str = str(sel["tipo_cadastro"]).strip().upper()
-    vinc_pad_e = "Membro" if (tipo_e == "Entrada" and cat_e == "Dizimo") else "Fornecedor" if vinc_str == "FORNECEDOR" else "Membro" if vinc_str == "MEMBRO" else "Nenhum"
-    vincular_e = st.selectbox("Vincular a", ["Nenhum", "Membro", "Fornecedor"],
-                              index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_e), key="edit_vinc")
+        vinc_str   = str(sel["tipo_cadastro"]).strip().upper()
+        vinc_pad_e = "Membro" if (tipo_e == "Entrada" and cat_e == "Dizimo") else "Fornecedor" if vinc_str == "FORNECEDOR" else "Membro" if vinc_str == "MEMBRO" else "Nenhum"
+        vincular_e = st.selectbox("Vincular a", ["Nenhum", "Membro", "Fornecedor"],
+                                  index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_e), key="edit_vinc")
 
-    id_e, nome_e, tipo_e2 = None, "", ""
-    if vincular_e == "Membro" and not membros.empty:
-        opc = montar_opcoes(membros)
-        chave = encontrar_chave(opc, sel["id_cadastro"])
-        chaves = list(opc.keys())
-        esc = st.selectbox("Membro", chaves, index=chaves.index(chave) if chave in chaves else 0, key="edit_mem")
-        l = opc[esc]; id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
-    elif vincular_e == "Fornecedor" and not fornec.empty:
-        opc = montar_opcoes(fornec)
-        chave = encontrar_chave(opc, sel["id_cadastro"])
-        chaves = list(opc.keys())
-        esc = st.selectbox("Fornecedor", chaves, index=chaves.index(chave) if chave in chaves else 0, key="edit_forn")
-        l = opc[esc]; id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+        id_e, nome_e, tipo_e2 = None, "", ""
+        if vincular_e == "Membro" and not membros.empty:
+            opc    = montar_opcoes(membros)
+            chave  = encontrar_chave(opc, sel["id_cadastro"])
+            chaves = list(opc.keys())
+            esc    = st.selectbox("Membro", chaves, index=chaves.index(chave) if chave in chaves else 0, key="edit_mem")
+            l = opc[esc]; id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+        elif vincular_e == "Fornecedor" and not fornec.empty:
+            opc    = montar_opcoes(fornec)
+            chave  = encontrar_chave(opc, sel["id_cadastro"])
+            chaves = list(opc.keys())
+            esc    = st.selectbox("Fornecedor", chaves, index=chaves.index(chave) if chave in chaves else 0, key="edit_forn")
+            l = opc[esc]; id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+        else:
+            st.text_input("Nome", value="", disabled=True, key="edit_nome_vazio")
 
-    desc_e  = st.text_input("Descricao", value=str(sel["descricao"]), key="edit_desc")
-    valor_e = st.number_input("Valor (R$)", min_value=0.0, value=float(sel["valor"]), step=0.01, format="%.2f", key="edit_val")
+        desc_e  = st.text_input("Descricao", value=str(sel["descricao"]), key="edit_desc")
+        valor_e = st.number_input("Valor (R$)", min_value=0.0, value=float(sel["valor"]), step=0.01, format="%.2f", key="edit_val")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Salvar alteracoes", type="primary", key="btn_salvar_lanc"):
-            lanc = Lancamento(data=data_edit, tipo=tipo_e, categoria=cat_e,
-                              valor=valor_e, descricao=desc_e,
-                              id_cadastro=id_e, nome_cadastro=nome_e, tipo_cadastro=tipo_e2,
-                              id_lancamento=id_lanc)
-            erros = lanc.validar()
-            if erros:
-                for e in erros: st.error(e)
-            else:
-                atualizar_lancamento(slug, lanc)
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Salvar alteracoes", type="primary", key="btn_salvar_lanc"):
+                lanc = Lancamento(data=data_edit, tipo=tipo_e, categoria=cat_e,
+                                  valor=valor_e, descricao=desc_e,
+                                  id_cadastro=id_e, nome_cadastro=nome_e, tipo_cadastro=tipo_e2,
+                                  id_lancamento=id_lanc)
+                erros = lanc.validar()
+                if erros:
+                    for e in erros: st.error(e)
+                else:
+                    atualizar_lancamento(slug, lanc)
+                    _invalida()
+                    st.toast("Alterado!")
+                    st.rerun()
+        with c2:
+            if confirmar_exclusao("del_lanc", "Excluir lancamento"):
+                excluir_lancamento(slug, id_lanc)
                 _invalida()
-                st.toast("Alterado!")
+                st.toast("Excluido.")
                 st.rerun()
-    with c2:
-        if confirmar_exclusao("del_lanc", "Excluir lancamento"):
-            excluir_lancamento(slug, id_lanc)
-            _invalida()
-            st.toast("Excluido.")
-            st.rerun()
