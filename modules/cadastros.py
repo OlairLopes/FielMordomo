@@ -18,7 +18,6 @@ FUNCOES = [
 CONGREGACOES = [
     "AD Serrinha",
     "AD Paraiso",
-    "AD Vila Nova",
     "",
 ]
 
