@@ -13,9 +13,15 @@ FUNCOES = [
     "Presbitero", "Evangelista", "Cooperador", "Dirigente",
     "Secretario", "Tesoureiro", "Professor", "Lider", "",
 ]
-CONGREGAÇÕES = [
-    "AD Serrinha", "AD Paraíso", "",
+
+# ── Edite aqui com os nomes reais das suas congregacoes ──────────────────
+CONGREGACOES = [
+    "AD Serrinha",
+    "AD Paraiso",
+    "AD Vila Nova",
+    "",
 ]
+
 
 def _cache_key():
     return f"df_cad_{slug_da_sessao()}"
@@ -43,7 +49,7 @@ def render():
             tipo   = st.selectbox("Tipo", ["Membro", "Fornecedor"])
             nome   = st.text_input("Nome")
             funcao = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
-            cong   = st.selectbox("Congregacao",CONGREGAÇÕES) if tipo == "AD Serrinha" else ""
+            cong   = st.selectbox("Congregacao", CONGREGACOES)
             sit    = st.selectbox("Situacao", ["Ativo", "Inativo"])
             if st.form_submit_button("Salvar", type="primary"):
                 c = Cadastro(nome=nome, tipo_cadastro=tipo, funcao=funcao,
@@ -91,11 +97,15 @@ def render():
                          key="e_funcao")
             if tipo_edit == "Membro" else ""
         )
-        cong_edit = st.text_input("Congregacao", value=str(sel["congregacao"]), key="e_cong")
-        sit_opc   = ["Ativo", "Inativo"]
-        sit_edit  = st.selectbox("Situacao", sit_opc,
-                                 index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
-                                 key="e_sit")
+
+        cong_atual = str(sel["congregacao"])
+        idx_cong   = CONGREGACOES.index(cong_atual) if cong_atual in CONGREGACOES else 0
+        cong_edit  = st.selectbox("Congregacao", CONGREGACOES, index=idx_cong, key="e_cong")
+
+        sit_opc  = ["Ativo", "Inativo"]
+        sit_edit = st.selectbox("Situacao", sit_opc,
+                                index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
+                                key="e_sit")
 
         c1, c2 = st.columns(2)
         with c1:
