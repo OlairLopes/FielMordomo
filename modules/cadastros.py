@@ -41,7 +41,7 @@ def render():
             tipo   = st.selectbox("Tipo", ["Membro", "Fornecedor"])
             nome   = st.text_input("Nome")
             funcao = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
-            cong   = st.text_input("Congregacao")
+            cong   = st.selectbox("Congregacao",CONGREGAÇÕES) if tipo == "AD Serrinha" esse ""
             sit    = st.selectbox("Situacao", ["Ativo", "Inativo"])
             if st.form_submit_button("Salvar", type="primary"):
                 c = Cadastro(nome=nome, tipo_cadastro=tipo, funcao=funcao,
