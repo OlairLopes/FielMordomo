@@ -1,0 +1,111 @@
+import streamlit as st
+import pandas as pd
+
+from data.models import Cadastro
+from data.repository import (
+    carregar_cadastros, inserir_cadastro, atualizar_cadastro,
+    excluir_cadastro, cadastro_em_uso,
+)
+from utils.helpers import preparar_df, confirmar_exclusao, slug_da_sessao
+
+FUNCOES = [
+    "Membro", "Congregado", "Auxiliar", "Pastor", "Diacono", "Diaconisa",
+    "Presbitero", "Evangelista", "Cooperador", "Dirigente",
+    "Secretario", "Tesoureiro", "Professor", "Lider", "",
+]
+
+
+def _cache_key():
+    return f"df_cad_{slug_da_sessao()}"
+
+
+def _get(slug):
+    k = _cache_key()
+    if k not in st.session_state:
+        st.session_state[k] = carregar_cadastros(slug)
+    return st.session_state[k]
+
+
+def _invalida(slug):
+    st.session_state.pop(_cache_key(), None)
+
+
+def render():
+    slug = slug_da_sessao()
+    st.subheader("Membros e fornecedores")
+    df = _get(slug)
+
+    with st.expander("Novo cadastro", expanded=False):
+        with st.form("form_novo_cad", clear_on_submit=True):
+            tipo  = st.selectbox("Tipo", ["Membro", "Fornecedor"])
+            nome  = st.text_input("Nome")
+            funcao = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
+            cong  = st.text_input("Congregacao")
+            sit   = st.selectbox("Situacao", ["Ativo", "Inativo"])
+            if st.form_submit_button("Salvar", type="primary"):
+                c = Cadastro(nome=nome, tipo_cadastro=tipo, funcao=funcao,
+                             congregacao=cong, situacao=sit)
+                erros = c.validar()
+                if erros:
+                    for e in erros: st.error(e)
+                else:
+                    inserir_cadastro(slug, c)
+                    _invalida(slug)
+                    st.toast("Cadastro salvo!")
+                    st.rerun()
+
+    st.dataframe(preparar_df(df), use_container_width=True)
+    st.divider()
+    st.subheader("Editar ou excluir")
+
+    if df.empty:
+        st.info("Nenhum cadastro ainda.")
+        return
+
+    df_r = df.reset_index(drop=True)
+    df_r["rotulo"] = df_r.apply(
+        lambda r: f'{int(r["id_cadastro"])} | {r["tipo_cadastro"]} | {r["nome"]} | {r["situacao"]}', axis=1
+    )
+    rotulo = st.selectbox("Selecione", df_r["rotulo"].tolist())
+    sel    = df_r[df_r["rotulo"] == rotulo].iloc[0]
+    id_sel = int(sel["id_cadastro"])
+
+    tipo_opc = ["Membro", "Fornecedor"]
+    tipo_edit = st.selectbox("Tipo", tipo_opc,
+                             index=tipo_opc.index(sel["tipo_cadastro"]) if sel["tipo_cadastro"] in tipo_opc else 0,
+                             key="e_tipo")
+    nome_edit = st.text_input("Nome", value=str(sel["nome"]), key="e_nome")
+    funcao_edit = (
+        st.selectbox("Funcao", FUNCOES,
+                     index=FUNCOES.index(str(sel["funcao"])) if str(sel["funcao"]) in FUNCOES else 0,
+                     key="e_funcao")
+        if tipo_edit == "Membro" else ""
+    )
+    cong_edit = st.text_input("Congregacao", value=str(sel["congregacao"]), key="e_cong")
+    sit_opc   = ["Ativo", "Inativo"]
+    sit_edit  = st.selectbox("Situacao", sit_opc,
+                             index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
+                             key="e_sit")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Salvar alteracoes", type="primary", key="btn_salvar_cad"):
+            c = Cadastro(id_cadastro=id_sel, nome=nome_edit, tipo_cadastro=tipo_edit,
+                         funcao=funcao_edit, congregacao=cong_edit, situacao=sit_edit)
+            erros = c.validar()
+            if erros:
+                for e in erros: st.error(e)
+            else:
+                atualizar_cadastro(slug, c)
+                _invalida(slug)
+                st.toast("Alterado!")
+                st.rerun()
+    with c2:
+        if confirmar_exclusao("del_cad", "Excluir cadastro"):
+            if cadastro_em_uso(slug, id_sel):
+                st.error("Cadastro vinculado a lancamento. Nao e possivel excluir.")
+            else:
+                excluir_cadastro(slug, id_sel)
+                _invalida(slug)
+                st.toast("Excluido.")
+                st.rerun()
