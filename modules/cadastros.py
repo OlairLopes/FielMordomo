@@ -13,6 +13,9 @@ FUNCOES = [
     "Presbitero", "Evangelista", "Cooperador", "Dirigente",
     "Secretario", "Tesoureiro", "Professor", "Lider", "",
 ]
+CONGREGAÇÕES = [
+    "AD Serrinha", "AD Paraíso", "",
+]
 
 
 def _cache_key():
