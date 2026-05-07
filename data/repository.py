@@ -173,15 +173,16 @@ def inicializar_tenant(slug: str):
                 situacao      TEXT DEFAULT 'Ativo'
             );
             CREATE TABLE IF NOT EXISTS lancamentos (
-                id_lancamento INTEGER PRIMARY KEY AUTOINCREMENT,
-                data          TEXT NOT NULL,
-                tipo          TEXT NOT NULL,
-                categoria     TEXT NOT NULL,
-                id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
-                nome_cadastro TEXT DEFAULT '',
-                tipo_cadastro TEXT DEFAULT '',
-                descricao     TEXT DEFAULT '',
-                valor         REAL NOT NULL
+                id_lancamento   INTEGER PRIMARY KEY AUTOINCREMENT,
+                data            TEXT NOT NULL,
+                tipo            TEXT NOT NULL,
+                categoria       TEXT NOT NULL,
+                id_cadastro     INTEGER REFERENCES cadastros(id_cadastro),
+                nome_cadastro   TEXT DEFAULT '',
+                tipo_cadastro   TEXT DEFAULT '',
+                descricao       TEXT DEFAULT '',
+                forma_pagamento TEXT DEFAULT 'Dinheiro',
+                valor           REAL NOT NULL
             );
         """)
 
@@ -385,16 +386,22 @@ def carregar_lancamentos(slug: str) -> pd.DataFrame:
 def inserir_lancamento(slug: str, l) -> int:
     db = _tenant_db(slug)
     with _conn(db) as conn:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
+        if "forma_pagamento" not in cols:
+            conn.execute("ALTER TABLE lancamentos ADD COLUMN forma_pagamento TEXT DEFAULT 'Dinheiro'")
         cur = conn.execute(
             """INSERT INTO lancamentos
-               (data, tipo, categoria, id_cadastro, nome_cadastro, tipo_cadastro, descricao, valor)
-               VALUES (?,?,?,?,?,?,?,?)""",
+               (data, tipo, categoria, id_cadastro, nome_cadastro, tipo_cadastro,
+                descricao, forma_pagamento, valor)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (
                 l.data.isoformat() if hasattr(l.data, "isoformat") else str(l.data),
                 l.tipo, l.categoria,
                 int(l.id_cadastro) if l.id_cadastro else None,
                 sanitizar(l.nome_cadastro), l.tipo_cadastro,
-                sanitizar(l.descricao), float(l.valor),
+                sanitizar(l.descricao),
+                getattr(l, "forma_pagamento", "Dinheiro"),
+                float(l.valor),
             ),
         )
         return cur.lastrowid
@@ -403,16 +410,21 @@ def inserir_lancamento(slug: str, l) -> int:
 def atualizar_lancamento(slug: str, l):
     db = _tenant_db(slug)
     with _conn(db) as conn:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
+        if "forma_pagamento" not in cols:
+            conn.execute("ALTER TABLE lancamentos ADD COLUMN forma_pagamento TEXT DEFAULT 'Dinheiro'")
         conn.execute(
             """UPDATE lancamentos SET data=?, tipo=?, categoria=?, id_cadastro=?,
-               nome_cadastro=?, tipo_cadastro=?, descricao=?, valor=?
+               nome_cadastro=?, tipo_cadastro=?, descricao=?, forma_pagamento=?, valor=?
                WHERE id_lancamento=?""",
             (
                 l.data.isoformat() if hasattr(l.data, "isoformat") else str(l.data),
                 l.tipo, l.categoria,
                 int(l.id_cadastro) if l.id_cadastro else None,
                 sanitizar(l.nome_cadastro), l.tipo_cadastro,
-                sanitizar(l.descricao), float(l.valor),
+                sanitizar(l.descricao),
+                getattr(l, "forma_pagamento", "Dinheiro"),
+                float(l.valor),
                 l.id_lancamento,
             ),
         )
