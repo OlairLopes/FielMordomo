@@ -1,9 +1,5 @@
 """
 Camada de persistencia multi-tenant.
-
-Dois niveis de banco:
-  1. master.db  — igrejas, planos, autenticacao (gerenciado pelo super admin)
-  2. <slug>.db  — dados financeiros exclusivos de cada igreja (isolados)
 """
 
 import os
@@ -75,7 +71,6 @@ def _fazer_backup(db_path: Path):
 # ── logos ─────────────────────────────────────────────────────────────────
 
 def salvar_logo_sistema(dados: bytes, extensao: str) -> Path:
-    """Salva o logo do FielMordomo."""
     for f in LOGOS_DIR.glob("sistema.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"sistema.{extensao}"
@@ -84,7 +79,6 @@ def salvar_logo_sistema(dados: bytes, extensao: str) -> Path:
 
 
 def obter_logo_sistema():
-    """Retorna (bytes, extensao) do logo do sistema, ou None."""
     for ext in ("png", "jpg", "jpeg", "webp"):
         p = LOGOS_DIR / f"sistema.{ext}"
         if p.exists():
@@ -93,7 +87,6 @@ def obter_logo_sistema():
 
 
 def salvar_logo_igreja(slug: str, dados: bytes, extensao: str) -> Path:
-    """Salva o logo de uma igreja especifica."""
     for f in LOGOS_DIR.glob(f"{slug}.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"{slug}.{extensao}"
@@ -102,7 +95,6 @@ def salvar_logo_igreja(slug: str, dados: bytes, extensao: str) -> Path:
 
 
 def obter_logo_igreja(slug: str):
-    """Retorna (bytes, extensao) do logo da igreja, ou None."""
     for ext in ("png", "jpg", "jpeg", "webp"):
         p = LOGOS_DIR / f"{slug}.{ext}"
         if p.exists():
@@ -171,6 +163,13 @@ def inicializar_tenant(slug: str):
                 nome          TEXT NOT NULL,
                 funcao        TEXT DEFAULT '',
                 congregacao   TEXT DEFAULT '',
+                cpf           TEXT DEFAULT '',
+                telefone      TEXT DEFAULT '',
+                logradouro    TEXT DEFAULT '',
+                numero        TEXT DEFAULT '',
+                bairro        TEXT DEFAULT '',
+                cidade        TEXT DEFAULT '',
+                cep           TEXT DEFAULT '',
                 situacao      TEXT DEFAULT 'Ativo'
             );
             CREATE TABLE IF NOT EXISTS lancamentos (
@@ -281,24 +280,73 @@ def carregar_cadastros(slug: str) -> pd.DataFrame:
     return df
 
 
-def inserir_cadastro(slug: str, c) -> int:
+def cpf_existe(slug: str, cpf: str, id_excluir: int = None) -> bool:
+    if not cpf.strip():
+        return False
+    cpf_limpo = "".join(c for c in cpf if c.isdigit())
     db = _tenant_db(slug)
     with _conn(db) as conn:
+        if id_excluir:
+            row = conn.execute(
+                "SELECT 1 FROM cadastros WHERE cpf=? AND id_cadastro!=? LIMIT 1",
+                (cpf_limpo, id_excluir),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT 1 FROM cadastros WHERE cpf=? LIMIT 1",
+                (cpf_limpo,),
+            ).fetchone()
+    return row is not None
+
+
+def inserir_cadastro(slug: str, c) -> int:
+    db = _tenant_db(slug)
+    cpf_limpo = "".join(d for d in c.cpf if d.isdigit()) if c.cpf else ""
+    cep_limpo = "".join(d for d in c.cep if d.isdigit()) if c.cep else ""
+    with _conn(db) as conn:
         cur = conn.execute(
-            "INSERT INTO cadastros (tipo_cadastro, nome, funcao, congregacao, situacao) VALUES (?,?,?,?,?)",
+            """INSERT INTO cadastros
+               (tipo_cadastro, nome, funcao, congregacao, cpf,
+                telefone, logradouro, numero, bairro, cidade, cep, situacao)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
-             sanitizar(c.congregacao), c.situacao),
+             sanitizar(c.congregacao), cpf_limpo,
+             sanitizar(c.telefone), sanitizar(c.logradouro),
+             sanitizar(c.numero), sanitizar(c.bairro),
+             sanitizar(c.cidade), cep_limpo, c.situacao),
         )
         return cur.lastrowid
 
 
 def atualizar_cadastro(slug: str, c):
     db = _tenant_db(slug)
+    cpf_limpo = "".join(d for d in c.cpf if d.isdigit()) if c.cpf else ""
+    cep_limpo = "".join(d for d in c.cep if d.isdigit()) if c.cep else ""
     with _conn(db) as conn:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(cadastros)").fetchall()]
+        for col, tipo in [
+            ("cpf",        "TEXT DEFAULT ''"),
+            ("telefone",   "TEXT DEFAULT ''"),
+            ("logradouro", "TEXT DEFAULT ''"),
+            ("numero",     "TEXT DEFAULT ''"),
+            ("bairro",     "TEXT DEFAULT ''"),
+            ("cidade",     "TEXT DEFAULT ''"),
+            ("cep",        "TEXT DEFAULT ''"),
+        ]:
+            if col not in cols:
+                conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
         conn.execute(
-            "UPDATE cadastros SET tipo_cadastro=?, nome=?, funcao=?, congregacao=?, situacao=? WHERE id_cadastro=?",
+            """UPDATE cadastros
+               SET tipo_cadastro=?, nome=?, funcao=?, congregacao=?, cpf=?,
+                   telefone=?, logradouro=?, numero=?, bairro=?, cidade=?, cep=?,
+                   situacao=?
+               WHERE id_cadastro=?""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
-             sanitizar(c.congregacao), c.situacao, c.id_cadastro),
+             sanitizar(c.congregacao), cpf_limpo,
+             sanitizar(c.telefone), sanitizar(c.logradouro),
+             sanitizar(c.numero), sanitizar(c.bairro),
+             sanitizar(c.cidade), cep_limpo,
+             c.situacao, c.id_cadastro),
         )
 
 
