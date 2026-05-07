@@ -1,15 +1,19 @@
+"""
+FielMordomo - Gestao financeira para igrejas
+SaaS multi-tenant com dados isolados por igreja
+"""
+
 import sys
 import os
+from pathlib import Path
 
-# Streamlit Cloud monta em /mount/src/REPO_NAME/
-# Precisamos garantir que esse diretorio esteja no path
 _here = os.path.dirname(os.path.abspath(__file__))
 if _here not in sys.path:
     sys.path.insert(0, _here)
 
 import streamlit as st
 
-from data.repository import inicializar_master
+from data.repository import inicializar_master, obter_logo_igreja, obter_logo_sistema
 from modules.auth import tela_login, logout, modo_atual
 
 st.set_page_config(
@@ -29,7 +33,12 @@ modo = modo_atual()
 if modo == "admin":
     from admin import painel
     with st.sidebar:
-        st.markdown("### FielMordomo")
+        logo_sis = obter_logo_sistema()
+        if logo_sis:
+            dados, _ = logo_sis
+            st.image(dados, width=140)
+        else:
+            st.markdown("### FielMordomo")
         st.caption("Painel do administrador")
         st.divider()
         if st.button("Sair", use_container_width=True):
@@ -51,8 +60,21 @@ elif modo == "igreja":
         st.session_state["pagina"] = "home"
 
     with st.sidebar:
-        st.markdown("### FielMordomo")
         igreja = st.session_state.get("igreja", {})
+        slug   = igreja.get("slug", "")
+
+        logo_ig = obter_logo_igreja(slug)
+        if logo_ig:
+            dados, _ = logo_ig
+            st.image(dados, width=140)
+        else:
+            logo_sis = obter_logo_sistema()
+            if logo_sis:
+                dados, _ = logo_sis
+                st.image(dados, width=140)
+            else:
+                st.markdown("### FielMordomo")
+
         st.caption(igreja.get("nome", ""))
         st.caption(f'Plano: {igreja.get("plano","").capitalize()}')
         st.divider()
