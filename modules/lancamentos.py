@@ -35,7 +35,7 @@ def _get_lanc(slug):
     return st.session_state[k]
 
 
-def _logo_base64(slug: str) -> str | None:
+def _logo_base64(slug: str):
     """Retorna o logo da igreja em base64 para embutir no HTML."""
     resultado = obter_logo_igreja(slug)
     if resultado:
@@ -67,7 +67,11 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
     if logo_b64:
         logo_tag = f'<img src="{logo_b64}" style="max-height:80px;max-width:200px;object-fit:contain"/>'
     else:
-        logo_tag = f'<span style="font-size:1.4rem;font-weight:700;color:#1D9E75">FielMordomo</span>'
+        logo_tag = '<span style="font-size:1.4rem;font-weight:700;color:#1D9E75">FielMordomo</span>'
+
+    vinc_str = nome_vinc
+    if tipo_vinc:
+        vinc_str = nome_vinc + " (" + tipo_vinc + ")"
 
     html = f"""
 <!DOCTYPE html>
@@ -221,11 +225,11 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
   </div>
 
   <div class="titulo-comprovante">
-    {tipo} — {categoria}
+    {tipo} - {categoria}
   </div>
 
   <div class="corpo">
-    <p class="numero">Comprovante N° <span>#{id_lanc:04d}</span></p>
+    <p class="numero">Comprovante N <span>#{id_lanc:04d}</span></p>
 
     <table>
       <tr>
@@ -246,7 +250,7 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
       </tr>
       <tr>
         <td>Vinculado a</td>
-        <td>{nome_vinc}{f" ({tipo_vinc})" if tipo_vinc else ""}</td>
+        <td>{vinc_str}</td>
       </tr>
       <tr>
         <td>Valor</td>
@@ -269,7 +273,7 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
   </div>
 
   <div class="rodape">
-    FielMordomo — Sistema de Gestao Financeira para Igrejas &nbsp;|&nbsp;
+    FielMordomo - Sistema de Gestao Financeira para Igrejas |
     Documento gerado em {data_emissao}
   </div>
 
@@ -297,42 +301,72 @@ def render():
 
     # ── Novo lancamento ──────────────────────────────────────────────────
     with st.expander("Novo lancamento", expanded=False):
-        with st.form("form_lanc", clear_on_submit=True):
-            data_l = st.date_input("Data", value=datetime.date.today(), format="DD/MM/YYYY")
-            tipo   = st.selectbox("Tipo", ["Entrada", "Saida"])
-            cat    = st.selectbox("Categoria", CATEGORIAS_ENTRADA) if tipo == "Entrada" else "Despesa"
-            if tipo == "Saida":
-                st.text_input("Categoria", value="Despesa", disabled=True)
+        data_l = st.date_input("Data", value=datetime.date.today(),
+                               format="DD/MM/YYYY", key="nl_data")
+        tipo   = st.selectbox("Tipo", ["Entrada", "Saida"], key="nl_tipo")
 
-            vinc_pad = "Membro" if (tipo == "Entrada" and cat == "Dizimo") else "Fornecedor" if tipo == "Saida" else "Nenhum"
-            vincular = st.selectbox("Vincular a", ["Nenhum", "Membro", "Fornecedor"],
-                                    index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad))
+        if tipo == "Entrada":
+            cat = st.selectbox("Categoria", CATEGORIAS_ENTRADA, key="nl_cat")
+        else:
+            cat = "Despesa"
+            st.text_input("Categoria", value="Despesa", disabled=True, key="nl_cat_d")
 
-            id_cad, nome_cad, tipo_cad = None, "", ""
-            if vincular == "Membro" and not membros.empty:
+        if tipo == "Entrada" and cat == "Dizimo":
+            vinc_pad = "Membro"
+        elif tipo == "Saida":
+            vinc_pad = "Fornecedor"
+        else:
+            vinc_pad = "Nenhum"
+
+        vincular = st.selectbox(
+            "Vincular a",
+            ["Nenhum", "Membro", "Fornecedor"],
+            index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad),
+            key="nl_vincular",
+        )
+
+        id_cad, nome_cad, tipo_cad = None, "", ""
+
+        if vincular == "Membro":
+            if membros.empty:
+                st.warning("Nenhum membro ativo cadastrado. Cadastre membros primeiro.")
+            else:
                 opc = montar_opcoes(membros)
-                esc = st.selectbox("Membro", list(opc.keys()))
-                l = opc[esc]; id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
-            elif vincular == "Fornecedor" and not fornec.empty:
+                esc = st.selectbox("Membro", list(opc.keys()), key="nl_membro")
+                l = opc[esc]
+                id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+
+        elif vincular == "Fornecedor":
+            if fornec.empty:
+                st.warning("Nenhum fornecedor ativo cadastrado. Cadastre fornecedores primeiro.")
+            else:
                 opc = montar_opcoes(fornec)
-                esc = st.selectbox("Fornecedor", list(opc.keys()))
-                l = opc[esc]; id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+                esc = st.selectbox("Fornecedor", list(opc.keys()), key="nl_fornecedor")
+                l = opc[esc]
+                id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
-            desc  = st.text_input("Descricao")
-            valor = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
+        desc  = st.text_input("Descricao", key="nl_desc")
+        valor = st.number_input("Valor (R$)", min_value=0.0,
+                                step=0.01, format="%.2f", key="nl_valor")
 
-            if st.form_submit_button("Salvar lancamento", type="primary"):
-                lanc = Lancamento(data=data_l, tipo=tipo, categoria=cat,
-                                  valor=valor, descricao=desc,
-                                  id_cadastro=id_cad, nome_cadastro=nome_cad, tipo_cadastro=tipo_cad)
-                erros = lanc.validar()
-                if erros:
-                    for e in erros: st.error(e)
-                else:
-                    inserir_lancamento(slug, lanc)
-                    _invalida()
-                    st.toast("Lancamento salvo!")
-                    st.rerun()
+        if st.button("Salvar lancamento", type="primary", key="nl_salvar"):
+            lanc = Lancamento(
+                data=data_l, tipo=tipo, categoria=cat,
+                valor=valor, descricao=desc,
+                id_cadastro=id_cad, nome_cadastro=nome_cad, tipo_cadastro=tipo_cad,
+            )
+            erros = lanc.validar()
+            if vincular == "Membro" and membros.empty:
+                erros.append("Nenhum membro ativo disponivel.")
+            if vincular == "Fornecedor" and fornec.empty:
+                erros.append("Nenhum fornecedor ativo disponivel.")
+            if erros:
+                for e in erros: st.error(e)
+            else:
+                inserir_lancamento(slug, lanc)
+                _invalida()
+                st.toast("Lancamento salvo!")
+                st.rerun()
 
     # ── Tabela ────────────────────────────────────────────────────────────
     total = len(df_lanc)
@@ -426,7 +460,8 @@ def render():
             esc    = st.selectbox("Membro", chaves,
                                   index=chaves.index(chave) if chave in chaves else 0,
                                   key="edit_mem")
-            l = opc[esc]; id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+            l = opc[esc]
+            id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
         elif vincular_e == "Fornecedor" and not fornec.empty:
             opc    = montar_opcoes(fornec)
             chave  = encontrar_chave(opc, sel["id_cadastro"])
@@ -434,7 +469,8 @@ def render():
             esc    = st.selectbox("Fornecedor", chaves,
                                   index=chaves.index(chave) if chave in chaves else 0,
                                   key="edit_forn")
-            l = opc[esc]; id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+            l = opc[esc]
+            id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
         else:
             st.text_input("Nome", value="", disabled=True, key="edit_nome_vazio")
 
