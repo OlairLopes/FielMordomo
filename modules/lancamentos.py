@@ -41,7 +41,7 @@ def _logo_base64(slug: str):
     if resultado:
         dados, ext = resultado
         b64 = base64.b64encode(dados).decode()
-        mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+        mime = "image/jpeg" if ext in ("jpg", "jpeg", "png") else f"image/{ext}"
         return f"data:{mime};base64,{b64}"
     return None
 
