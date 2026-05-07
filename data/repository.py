@@ -31,11 +31,14 @@ def _data_dir() -> Path:
     return p
 
 
-DATA_DIR   = _data_dir()
-MASTER_DB  = DATA_DIR / "master.db"
+DATA_DIR    = _data_dir()
+MASTER_DB   = DATA_DIR / "master.db"
 TENANTS_DIR = DATA_DIR / "tenants"
+LOGOS_DIR   = DATA_DIR / "logos"
+BACKUP_DIR  = DATA_DIR / "backups"
+
 TENANTS_DIR.mkdir(exist_ok=True)
-BACKUP_DIR = DATA_DIR / "backups"
+LOGOS_DIR.mkdir(exist_ok=True)
 BACKUP_DIR.mkdir(exist_ok=True)
 
 
@@ -67,6 +70,44 @@ def _fazer_backup(db_path: Path):
     backups = sorted(BACKUP_DIR.glob(f"{db_path.stem}_*.db"))
     for antigo in backups[:-20]:
         antigo.unlink()
+
+
+# ── logos ─────────────────────────────────────────────────────────────────
+
+def salvar_logo_sistema(dados: bytes, extensao: str) -> Path:
+    """Salva o logo do FielMordomo."""
+    for f in LOGOS_DIR.glob("sistema.*"):
+        f.unlink()
+    caminho = LOGOS_DIR / f"sistema.{extensao}"
+    caminho.write_bytes(dados)
+    return caminho
+
+
+def obter_logo_sistema():
+    """Retorna (bytes, extensao) do logo do sistema, ou None."""
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = LOGOS_DIR / f"sistema.{ext}"
+        if p.exists():
+            return p.read_bytes(), ext
+    return None
+
+
+def salvar_logo_igreja(slug: str, dados: bytes, extensao: str) -> Path:
+    """Salva o logo de uma igreja especifica."""
+    for f in LOGOS_DIR.glob(f"{slug}.*"):
+        f.unlink()
+    caminho = LOGOS_DIR / f"{slug}.{extensao}"
+    caminho.write_bytes(dados)
+    return caminho
+
+
+def obter_logo_igreja(slug: str):
+    """Retorna (bytes, extensao) do logo da igreja, ou None."""
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = LOGOS_DIR / f"{slug}.{ext}"
+        if p.exists():
+            return p.read_bytes(), ext
+    return None
 
 
 # ── conexao ───────────────────────────────────────────────────────────────
@@ -112,7 +153,6 @@ def inicializar_master():
                 senha_hash TEXT NOT NULL
             );
         """)
-        # Cria super admin padrao se nao existir
         existe = conn.execute("SELECT 1 FROM super_admin LIMIT 1").fetchone()
         if not existe:
             conn.execute(
