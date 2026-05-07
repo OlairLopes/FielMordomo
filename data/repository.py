@@ -38,8 +38,6 @@ LOGOS_DIR.mkdir(exist_ok=True)
 BACKUP_DIR.mkdir(exist_ok=True)
 
 
-# ── helpers ───────────────────────────────────────────────────────────────
-
 def hash_senha(senha: str) -> str:
     return hashlib.sha256(senha.encode()).hexdigest()
 
@@ -67,8 +65,6 @@ def _fazer_backup(db_path: Path):
     for antigo in backups[:-20]:
         antigo.unlink()
 
-
-# ── logos ─────────────────────────────────────────────────────────────────
 
 def salvar_logo_sistema(dados: bytes, extensao: str) -> Path:
     for f in LOGOS_DIR.glob("sistema.*"):
@@ -102,8 +98,6 @@ def obter_logo_igreja(slug: str):
     return None
 
 
-# ── conexao ───────────────────────────────────────────────────────────────
-
 @contextmanager
 def _conn(db_path: Path):
     conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -123,8 +117,6 @@ def _conn(db_path: Path):
 def _tenant_db(slug: str) -> Path:
     return TENANTS_DIR / f"{slug}.db"
 
-
-# ── inicializacao ─────────────────────────────────────────────────────────
 
 def inicializar_master():
     with _conn(MASTER_DB) as conn:
@@ -158,19 +150,20 @@ def inicializar_tenant(slug: str):
     with _conn(db) as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS cadastros (
-                id_cadastro   INTEGER PRIMARY KEY AUTOINCREMENT,
-                tipo_cadastro TEXT NOT NULL,
-                nome          TEXT NOT NULL,
-                funcao        TEXT DEFAULT '',
-                congregacao   TEXT DEFAULT '',
-                cpf           TEXT DEFAULT '',
-                telefone      TEXT DEFAULT '',
-                logradouro    TEXT DEFAULT '',
-                numero        TEXT DEFAULT '',
-                bairro        TEXT DEFAULT '',
-                cidade        TEXT DEFAULT '',
-                cep           TEXT DEFAULT '',
-                situacao      TEXT DEFAULT 'Ativo'
+                id_cadastro      INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo_cadastro    TEXT NOT NULL,
+                nome             TEXT NOT NULL,
+                funcao           TEXT DEFAULT '',
+                congregacao      TEXT DEFAULT '',
+                cpf              TEXT DEFAULT '',
+                data_nascimento  TEXT DEFAULT '',
+                telefone         TEXT DEFAULT '',
+                logradouro       TEXT DEFAULT '',
+                numero           TEXT DEFAULT '',
+                bairro           TEXT DEFAULT '',
+                cidade           TEXT DEFAULT '',
+                cep              TEXT DEFAULT '',
+                situacao         TEXT DEFAULT 'Ativo'
             );
             CREATE TABLE IF NOT EXISTS lancamentos (
                 id_lancamento   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -186,8 +179,6 @@ def inicializar_tenant(slug: str):
             );
         """)
 
-
-# ── master: igrejas ───────────────────────────────────────────────────────
 
 def listar_igrejas() -> pd.DataFrame:
     with _conn(MASTER_DB) as conn:
@@ -242,8 +233,6 @@ def excluir_igreja(id_igreja: int, slug: str):
         conn.execute("DELETE FROM igrejas WHERE id=?", (id_igreja,))
 
 
-# ── autenticacao ──────────────────────────────────────────────────────────
-
 def autenticar_super_admin(usuario: str, senha: str) -> bool:
     with _conn(MASTER_DB) as conn:
         row = conn.execute(
@@ -269,8 +258,6 @@ def alterar_senha_super_admin(usuario: str, nova_senha: str):
             (hash_senha(nova_senha), usuario),
         )
 
-
-# ── tenant: cadastros ─────────────────────────────────────────────────────
 
 def carregar_cadastros(slug: str) -> pd.DataFrame:
     db = _tenant_db(slug)
@@ -308,10 +295,11 @@ def inserir_cadastro(slug: str, c) -> int:
         cur = conn.execute(
             """INSERT INTO cadastros
                (tipo_cadastro, nome, funcao, congregacao, cpf,
-                telefone, logradouro, numero, bairro, cidade, cep, situacao)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                data_nascimento, telefone, logradouro, numero, bairro, cidade, cep, situacao)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
              sanitizar(c.congregacao), cpf_limpo,
+             sanitizar(c.data_nascimento) if hasattr(c, "data_nascimento") else "",
              sanitizar(c.telefone), sanitizar(c.logradouro),
              sanitizar(c.numero), sanitizar(c.bairro),
              sanitizar(c.cidade), cep_limpo, c.situacao),
@@ -326,24 +314,26 @@ def atualizar_cadastro(slug: str, c):
     with _conn(db) as conn:
         cols = [r[1] for r in conn.execute("PRAGMA table_info(cadastros)").fetchall()]
         for col, tipo in [
-            ("cpf",        "TEXT DEFAULT ''"),
-            ("telefone",   "TEXT DEFAULT ''"),
-            ("logradouro", "TEXT DEFAULT ''"),
-            ("numero",     "TEXT DEFAULT ''"),
-            ("bairro",     "TEXT DEFAULT ''"),
-            ("cidade",     "TEXT DEFAULT ''"),
-            ("cep",        "TEXT DEFAULT ''"),
+            ("cpf",             "TEXT DEFAULT ''"),
+            ("data_nascimento", "TEXT DEFAULT ''"),
+            ("telefone",        "TEXT DEFAULT ''"),
+            ("logradouro",      "TEXT DEFAULT ''"),
+            ("numero",          "TEXT DEFAULT ''"),
+            ("bairro",          "TEXT DEFAULT ''"),
+            ("cidade",          "TEXT DEFAULT ''"),
+            ("cep",             "TEXT DEFAULT ''"),
         ]:
             if col not in cols:
                 conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
         conn.execute(
             """UPDATE cadastros
                SET tipo_cadastro=?, nome=?, funcao=?, congregacao=?, cpf=?,
-                   telefone=?, logradouro=?, numero=?, bairro=?, cidade=?, cep=?,
-                   situacao=?
+                   data_nascimento=?, telefone=?, logradouro=?, numero=?,
+                   bairro=?, cidade=?, cep=?, situacao=?
                WHERE id_cadastro=?""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
              sanitizar(c.congregacao), cpf_limpo,
+             sanitizar(c.data_nascimento) if hasattr(c, "data_nascimento") else "",
              sanitizar(c.telefone), sanitizar(c.logradouro),
              sanitizar(c.numero), sanitizar(c.bairro),
              sanitizar(c.cidade), cep_limpo,
@@ -366,8 +356,6 @@ def cadastro_em_uso(slug: str, id_cadastro: int) -> bool:
         ).fetchone()
     return row is not None
 
-
-# ── tenant: lancamentos ───────────────────────────────────────────────────
 
 def carregar_lancamentos(slug: str) -> pd.DataFrame:
     db = _tenant_db(slug)
