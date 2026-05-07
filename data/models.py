@@ -33,6 +33,7 @@ class Cadastro:
     funcao: str = ""
     congregacao: str = ""
     cpf: str = ""
+    data_nascimento: str = ""
     telefone: str = ""
     logradouro: str = ""
     numero: str = ""
