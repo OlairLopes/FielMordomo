@@ -6,7 +6,9 @@ from data.repository import (
     carregar_cadastros, inserir_cadastro, atualizar_cadastro,
     excluir_cadastro, cadastro_em_uso,
 )
-from utils.helpers import preparar_df, confirmar_exclusao, slug_da_sessao
+from utils.helpers import (
+    preparar_df, confirmar_exclusao, slug_da_sessao, solicitar_autorizacao,
+)
 
 FUNCOES = [
     "Membro", "Congregado", "Auxiliar", "Pastor", "Diacono", "Diaconisa",
@@ -14,10 +16,10 @@ FUNCOES = [
     "Secretario", "Tesoureiro", "Professor", "Lider", "",
 ]
 
-# ── Edite aqui com os nomes reais das suas congregacoes ──────────────────
 CONGREGACOES = [
     "AD Serrinha",
     "AD Paraiso",
+    "AD Vila Nova",
     "",
 ]
 
@@ -70,7 +72,7 @@ def render():
         else:
             st.dataframe(preparar_df(df), use_container_width=True)
 
-    # ── Editar / Excluir (oculto por padrao) ─────────────────────────────
+    # ── Editar / Excluir (requer autorizacao) ────────────────────────────
     with st.expander("Editar ou excluir cadastro", expanded=False):
         if df.empty:
             st.info("Nenhum cadastro ainda.")
@@ -106,9 +108,12 @@ def render():
                                 index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
                                 key="e_sit")
 
+        st.divider()
         c1, c2 = st.columns(2)
+
         with c1:
-            if st.button("Salvar alteracoes", type="primary", key="btn_salvar_cad"):
+            st.caption("Editar cadastro")
+            if solicitar_autorizacao("salvar_cad", "editar"):
                 c = Cadastro(id_cadastro=id_sel, nome=nome_edit, tipo_cadastro=tipo_edit,
                              funcao=funcao_edit, congregacao=cong_edit, situacao=sit_edit)
                 erros = c.validar()
@@ -117,14 +122,17 @@ def render():
                 else:
                     atualizar_cadastro(slug, c)
                     _invalida(slug)
-                    st.toast("Alterado!")
+                    st.toast("Cadastro alterado!")
                     st.rerun()
+
         with c2:
-            if confirmar_exclusao("del_cad", "Excluir cadastro"):
+            st.caption("Excluir cadastro")
+            if solicitar_autorizacao("excluir_cad", "excluir"):
                 if cadastro_em_uso(slug, id_sel):
                     st.error("Cadastro vinculado a lancamento. Nao e possivel excluir.")
                 else:
-                    excluir_cadastro(slug, id_sel)
-                    _invalida(slug)
-                    st.toast("Excluido.")
-                    st.rerun()
+                    if confirmar_exclusao("del_cad_final", "Confirmar exclusao"):
+                        excluir_cadastro(slug, id_sel)
+                        _invalida(slug)
+                        st.toast("Excluido.")
+                        st.rerun()
