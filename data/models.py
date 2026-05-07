@@ -32,6 +32,13 @@ class Cadastro:
     situacao: str
     funcao: str = ""
     congregacao: str = ""
+    cpf: str = ""
+    telefone: str = ""
+    logradouro: str = ""
+    numero: str = ""
+    bairro: str = ""
+    cidade: str = ""
+    cep: str = ""
     id_cadastro: Optional[int] = None
 
     def validar(self) -> list[str]:
@@ -40,6 +47,14 @@ class Cadastro:
             erros.append("Nome e obrigatorio.")
         if self.tipo_cadastro not in ("Membro", "Fornecedor"):
             erros.append("Tipo de cadastro invalido.")
+        if self.cpf.strip():
+            cpf_limpo = "".join(c for c in self.cpf if c.isdigit())
+            if len(cpf_limpo) != 11:
+                erros.append("CPF invalido. Informe 11 digitos.")
+        if self.cep.strip():
+            cep_limpo = "".join(c for c in self.cep if c.isdigit())
+            if len(cep_limpo) != 8:
+                erros.append("CEP invalido. Informe 8 digitos.")
         return erros
 
 
