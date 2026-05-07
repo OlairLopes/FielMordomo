@@ -1,4 +1,4 @@
-"""Painel do super admin — gerencia igrejas, planos e senhas."""
+"""Painel do super admin — gerencia igrejas, planos, senhas e logos."""
 
 import streamlit as st
 import pandas as pd
@@ -8,6 +8,8 @@ from data.repository import (
     listar_igrejas, criar_igreja, atualizar_igreja,
     excluir_igreja, redefinir_senha_igreja,
     slugify, hash_senha, alterar_senha_super_admin,
+    salvar_logo_sistema, obter_logo_sistema,
+    salvar_logo_igreja, obter_logo_igreja,
 )
 from utils.helpers import confirmar_exclusao
 
@@ -18,15 +20,17 @@ def render():
     st.title("FielMordomo — Painel Admin")
     st.caption("Gerenciamento de igrejas e planos")
 
-    aba1, aba2, aba3 = st.tabs(["Igrejas", "Nova igreja", "Configuracoes"])
+    aba1, aba2, aba3, aba4 = st.tabs([
+        "Igrejas", "Nova igreja", "Logos", "Configuracoes"
+    ])
 
     with aba1:
         _listar_igrejas()
-
     with aba2:
         _criar_igreja()
-
     with aba3:
+        _gerenciar_logos()
+    with aba4:
         _configuracoes()
 
 
@@ -45,15 +49,22 @@ def _listar_igrejas():
     st.subheader("Editar igreja")
 
     rotuloslist = df.apply(
-        lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}', axis=1
+        lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}',
+        axis=1,
     ).tolist()
     rotulo = st.selectbox("Selecione a igreja", rotuloslist)
-    sel    = df[df.apply(lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}' == rotulo, axis=1)].iloc[0]
+    sel    = df[df.apply(
+        lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}' == rotulo,
+        axis=1,
+    )].iloc[0]
     id_ig  = int(sel["id"])
+    slug   = str(sel["slug"])
 
-    nome_e  = st.text_input("Nome da igreja",   value=str(sel["nome"]),        key="ae_nome")
-    email_e = st.text_input("E-mail do admin",  value=str(sel["email_admin"]), key="ae_email")
-    plano_e = st.selectbox("Plano", PLANOS, index=PLANOS.index(sel["plano"]) if sel["plano"] in PLANOS else 0, key="ae_plano")
+    nome_e  = st.text_input("Nome da igreja",  value=str(sel["nome"]),        key="ae_nome")
+    email_e = st.text_input("E-mail do admin", value=str(sel["email_admin"]), key="ae_email")
+    plano_e = st.selectbox("Plano", PLANOS,
+                           index=PLANOS.index(sel["plano"]) if sel["plano"] in PLANOS else 0,
+                           key="ae_plano")
     ativa_e = st.toggle("Igreja ativa", value=bool(sel["ativa"]), key="ae_ativa")
 
     c1, c2, c3 = st.columns(3)
@@ -76,7 +87,7 @@ def _listar_igrejas():
 
     with c3:
         if confirmar_exclusao(f"del_ig_{id_ig}", "Excluir igreja"):
-            excluir_igreja(id_ig, str(sel["slug"]))
+            excluir_igreja(id_ig, slug)
             st.toast("Igreja excluida.")
             st.rerun()
 
@@ -86,8 +97,11 @@ def _criar_igreja():
 
     with st.form("form_nova_ig", clear_on_submit=True):
         nome  = st.text_input("Nome da igreja")
-        slug_sugerido = st.text_input("Identificador (slug)", placeholder="ex: ad-serrinha",
-                                       help="Letras minusculas, numeros e hifens. Sera o login da igreja.")
+        slug_sugerido = st.text_input(
+            "Identificador (slug)",
+            placeholder="ex: ad-serrinha",
+            help="Letras minusculas, numeros e hifens. Sera o login da igreja.",
+        )
         email = st.text_input("E-mail do tesoureiro")
         senha = st.text_input("Senha inicial", type="password")
         plano = st.selectbox("Plano", PLANOS)
@@ -107,12 +121,76 @@ def _criar_igreja():
                 try:
                     id_novo = criar_igreja(ig)
                     st.success(f"Igreja criada! ID: {id_novo} | Slug: {slug}")
-                    st.info(f"O tesoureiro acessa com: **{slug}** + senha definida acima.")
+                    st.info(f"Tesoureiro acessa com: **{slug}** + senha definida acima.")
                 except Exception as ex:
                     if "UNIQUE" in str(ex):
                         st.error(f"Slug '{slug}' ja existe. Escolha outro identificador.")
                     else:
-                        st.error(f"Erro ao criar igreja: {ex}")
+                        st.error(f"Erro: {ex}")
+
+
+def _gerenciar_logos():
+    st.subheader("Logos do sistema")
+
+    # ── Logo do FielMordomo ───────────────────────────────────────────────
+    st.markdown("#### Logo do FielMordomo")
+    st.caption("Aparece na tela de login e na sidebar do administrador.")
+
+    logo_sis = obter_logo_sistema()
+    if logo_sis:
+        dados, ext = logo_sis
+        st.image(dados, width=200)
+        st.caption(f"Formato atual: {ext.upper()}")
+    else:
+        st.info("Nenhum logo do sistema cadastrado ainda.")
+
+    arquivo_sis = st.file_uploader(
+        "Enviar logo do FielMordomo",
+        type=["png", "jpg", "jpeg", "webp"],
+        key="upload_logo_sis",
+    )
+    if arquivo_sis:
+        ext = arquivo_sis.name.rsplit(".", 1)[-1].lower()
+        salvar_logo_sistema(arquivo_sis.read(), ext)
+        st.toast("Logo do sistema salvo!")
+        st.rerun()
+
+    st.divider()
+
+    # ── Logo por igreja ───────────────────────────────────────────────────
+    st.markdown("#### Logo por igreja")
+    st.caption("Aparece na sidebar apos o login da igreja.")
+
+    df = listar_igrejas()
+    if df.empty:
+        st.info("Nenhuma igreja cadastrada ainda.")
+        return
+
+    opcoes_ig = df.apply(
+        lambda r: f'{r["nome"]} ({r["slug"]})', axis=1
+    ).tolist()
+    ig_sel = st.selectbox("Selecione a igreja", opcoes_ig, key="sel_ig_logo")
+    idx    = opcoes_ig.index(ig_sel)
+    slug   = str(df.iloc[idx]["slug"])
+
+    logo_ig = obter_logo_igreja(slug)
+    if logo_ig:
+        dados, ext = logo_ig
+        st.image(dados, width=200)
+        st.caption(f"Formato atual: {ext.upper()}")
+    else:
+        st.info(f"Nenhum logo cadastrado para {ig_sel}.")
+
+    arquivo_ig = st.file_uploader(
+        f"Enviar logo para: {ig_sel}",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"upload_logo_ig_{slug}",
+    )
+    if arquivo_ig:
+        ext = arquivo_ig.name.rsplit(".", 1)[-1].lower()
+        salvar_logo_igreja(slug, arquivo_ig.read(), ext)
+        st.toast(f"Logo de {ig_sel} salvo!")
+        st.rerun()
 
 
 def _configuracoes():
