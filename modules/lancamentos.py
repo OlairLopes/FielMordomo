@@ -17,6 +17,7 @@ from utils.helpers import (
 )
 
 CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta"]
+FORMAS_PAGAMENTO   = ["Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque", "Cartao Debito", "Cartao Credito"]
 
 
 def _ck(sufixo): return f"df_{sufixo}_{slug_da_sessao()}"
@@ -36,7 +37,6 @@ def _get_lanc(slug):
 
 
 def _logo_base64(slug: str):
-    """Retorna o logo da igreja em base64 para embutir no HTML."""
     resultado = obter_logo_igreja(slug)
     if resultado:
         dados, ext = resultado
@@ -47,8 +47,6 @@ def _logo_base64(slug: str):
 
 
 def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
-    """Gera HTML completo do comprovante para impressao."""
-
     nome_igreja  = igreja.get("nome", "Igreja")
     data_fmt     = pd.to_datetime(lancamento.get("data"), errors="coerce")
     data_str     = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else "-"
@@ -60,6 +58,7 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
     valor        = formatar_moeda(lancamento.get("valor", 0))
     nome_vinc    = lancamento.get("nome_cadastro", "") or "Nao vinculado"
     tipo_vinc    = lancamento.get("tipo_cadastro", "") or ""
+    forma_pag    = lancamento.get("forma_pagamento", "Dinheiro") or "Dinheiro"
 
     cor_tipo = "#1D9E75" if tipo == "Entrada" else "#D85A30"
 
@@ -103,19 +102,14 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
       align-items: center;
       justify-content: space-between;
     }}
-    .cabecalho-dir {{
-      text-align: right;
-    }}
+    .cabecalho-dir {{ text-align: right; }}
     .cabecalho-dir h1 {{
       font-size: 1rem;
       font-weight: 700;
       color: #1a1a1a;
       margin-bottom: 4px;
     }}
-    .cabecalho-dir p {{
-      font-size: 0.75rem;
-      color: #666;
-    }}
+    .cabecalho-dir p {{ font-size: 0.75rem; color: #666; }}
     .titulo-comprovante {{
       background: {cor_tipo};
       color: white;
@@ -126,34 +120,18 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }}
-    .corpo {{
-      padding: 24px;
-    }}
+    .corpo {{ padding: 24px; }}
     .numero {{
       text-align: center;
       font-size: 0.75rem;
       color: #888;
       margin-bottom: 20px;
     }}
-    .numero span {{
-      font-weight: 700;
-      color: #1a1a1a;
-    }}
-    table {{
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-    }}
-    table tr {{
-      border-bottom: 1px solid #f0f0f0;
-    }}
-    table tr:last-child {{
-      border-bottom: none;
-    }}
-    table td {{
-      padding: 10px 8px;
-      vertical-align: top;
-    }}
+    .numero span {{ font-weight: 700; color: #1a1a1a; }}
+    table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+    table tr {{ border-bottom: 1px solid #f0f0f0; }}
+    table tr:last-child {{ border-bottom: none; }}
+    table td {{ padding: 10px 8px; vertical-align: top; }}
     table td:first-child {{
       width: 38%;
       font-weight: 600;
@@ -162,24 +140,14 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }}
-    table td:last-child {{
-      color: #1a1a1a;
-      font-size: 0.9rem;
-    }}
+    table td:last-child {{ color: #1a1a1a; font-size: 0.9rem; }}
     .valor-destaque {{
       font-size: 1.3rem;
       font-weight: 700;
       color: {cor_tipo};
     }}
-    .assinatura {{
-      margin-top: 30px;
-      display: flex;
-      gap: 40px;
-    }}
-    .campo-assinatura {{
-      flex: 1;
-      text-align: center;
-    }}
+    .assinatura {{ margin-top: 30px; display: flex; gap: 40px; }}
+    .campo-assinatura {{ flex: 1; text-align: center; }}
     .linha-assinatura {{
       border-top: 1px solid #1a1a1a;
       padding-top: 6px;
@@ -214,7 +182,6 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
 </div>
 
 <div class="comprovante">
-
   <div class="cabecalho">
     <div>{logo_tag}</div>
     <div class="cabecalho-dir">
@@ -224,45 +191,24 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
     </div>
   </div>
 
-  <div class="titulo-comprovante">
-    {tipo} - {categoria}
-  </div>
+  <div class="titulo-comprovante">{tipo} - {categoria}</div>
 
   <div class="corpo">
     <p class="numero">Comprovante N <span>#{id_lanc:04d}</span></p>
 
     <table>
-      <tr>
-        <td>Data do lancamento</td>
-        <td>{data_str}</td>
-      </tr>
-      <tr>
-        <td>Tipo</td>
-        <td>{tipo}</td>
-      </tr>
-      <tr>
-        <td>Categoria</td>
-        <td>{categoria}</td>
-      </tr>
-      <tr>
-        <td>Descricao</td>
-        <td>{descricao}</td>
-      </tr>
-      <tr>
-        <td>Vinculado a</td>
-        <td>{vinc_str}</td>
-      </tr>
-      <tr>
-        <td>Valor</td>
-        <td><span class="valor-destaque">{valor}</span></td>
-      </tr>
+      <tr><td>Data do lancamento</td><td>{data_str}</td></tr>
+      <tr><td>Tipo</td><td>{tipo}</td></tr>
+      <tr><td>Categoria</td><td>{categoria}</td></tr>
+      <tr><td>Descricao</td><td>{descricao}</td></tr>
+      <tr><td>Vinculado a</td><td>{vinc_str}</td></tr>
+      <tr><td>Forma de pagamento</td><td>{forma_pag}</td></tr>
+      <tr><td>Valor</td><td><span class="valor-destaque">{valor}</span></td></tr>
     </table>
 
     <div class="assinatura">
       <div class="campo-assinatura">
-        <div class="linha-assinatura">
-          Responsavel pelo lancamento
-        </div>
+        <div class="linha-assinatura">Responsavel pelo lancamento</div>
       </div>
       <div class="campo-assinatura">
         <div class="linha-assinatura">
@@ -276,7 +222,6 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
     FielMordomo - Sistema de Gestao Financeira para Igrejas |
     Documento gerado em {data_emissao}
   </div>
-
 </div>
 
 <script>
@@ -284,7 +229,6 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
     setTimeout(function() {{ window.print(); }}, 800);
   }};
 </script>
-
 </body>
 </html>
 """
@@ -345,14 +289,15 @@ def render():
                 l = opc[esc]
                 id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
-        desc  = st.text_input("Descricao", key="nl_desc")
-        valor = st.number_input("Valor (R$)", min_value=0.0,
-                                step=0.01, format="%.2f", key="nl_valor")
+        desc      = st.text_input("Descricao", key="nl_desc")
+        forma_pag = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO, key="nl_forma_pag")
+        valor     = st.number_input("Valor (R$)", min_value=0.0,
+                                    step=0.01, format="%.2f", key="nl_valor")
 
         if st.button("Salvar lancamento", type="primary", key="nl_salvar"):
             lanc = Lancamento(
                 data=data_l, tipo=tipo, categoria=cat,
-                valor=valor, descricao=desc,
+                valor=valor, descricao=desc, forma_pagamento=forma_pag,
                 id_cadastro=id_cad, nome_cadastro=nome_cad, tipo_cadastro=tipo_cad,
             )
             erros = lanc.validar()
@@ -394,14 +339,9 @@ def render():
                 ),
                 axis=1,
             )
-
-            rotulo_imp = st.selectbox(
-                "Selecione o lancamento para imprimir",
-                df_p["rotulo"].tolist(),
-                key="sel_imp",
-            )
+            rotulo_imp = st.selectbox("Selecione o lancamento para imprimir",
+                                      df_p["rotulo"].tolist(), key="sel_imp")
             sel_imp = df_p[df_p["rotulo"] == rotulo_imp].iloc[0]
-
             if st.button("Gerar comprovante", type="primary", key="btn_imprimir"):
                 html = _gerar_html_comprovante(dict(sel_imp), igreja, slug)
                 components.html(html, height=700, scrolling=True)
@@ -474,7 +414,11 @@ def render():
         else:
             st.text_input("Nome", value="", disabled=True, key="edit_nome_vazio")
 
-        desc_e  = st.text_input("Descricao", value=str(sel["descricao"]), key="edit_desc")
+        desc_e = st.text_input("Descricao", value=str(sel["descricao"]), key="edit_desc")
+        forma_pag_atual = str(sel.get("forma_pagamento", "Dinheiro")) if "forma_pagamento" in sel.index else "Dinheiro"
+        idx_fp = FORMAS_PAGAMENTO.index(forma_pag_atual) if forma_pag_atual in FORMAS_PAGAMENTO else 1
+        forma_pag_e = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO,
+                                   index=idx_fp, key="edit_forma_pag")
         valor_e = st.number_input("Valor (R$)", min_value=0.0, value=float(sel["valor"]),
                                   step=0.01, format="%.2f", key="edit_val")
 
@@ -486,6 +430,7 @@ def render():
             if solicitar_autorizacao("salvar_lanc", "editar"):
                 lanc = Lancamento(data=data_edit, tipo=tipo_e, categoria=cat_e,
                                   valor=valor_e, descricao=desc_e,
+                                  forma_pagamento=forma_pag_e,
                                   id_cadastro=id_e, nome_cadastro=nome_e,
                                   tipo_cadastro=tipo_e2, id_lancamento=id_lanc)
                 erros = lanc.validar()
