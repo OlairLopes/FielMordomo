@@ -9,7 +9,8 @@ from data.repository import (
 )
 from utils.helpers import (
     formatar_moeda, preparar_df, obter_ativos, montar_opcoes,
-    encontrar_chave, confirmar_exclusao, gerar_csv, slug_da_sessao,
+    encontrar_chave, confirmar_exclusao, gerar_csv,
+    slug_da_sessao, solicitar_autorizacao,
 )
 
 CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta"]
@@ -87,7 +88,7 @@ def render():
             csv = gerar_csv(preparar_df(df_lanc))
             st.download_button("Exportar CSV", csv, "lancamentos.csv", "text/csv")
 
-    # ── Editar / Excluir (oculto por padrao) ─────────────────────────────
+    # ── Editar / Excluir (requer autorizacao) ────────────────────────────
     with st.expander("Editar ou excluir lancamento", expanded=False):
         if df_lanc.empty:
             st.info("Nenhum lancamento ainda.")
@@ -140,9 +141,12 @@ def render():
         desc_e  = st.text_input("Descricao", value=str(sel["descricao"]), key="edit_desc")
         valor_e = st.number_input("Valor (R$)", min_value=0.0, value=float(sel["valor"]), step=0.01, format="%.2f", key="edit_val")
 
+        st.divider()
         c1, c2 = st.columns(2)
+
         with c1:
-            if st.button("Salvar alteracoes", type="primary", key="btn_salvar_lanc"):
+            st.caption("Editar lancamento")
+            if solicitar_autorizacao("salvar_lanc", "editar"):
                 lanc = Lancamento(data=data_edit, tipo=tipo_e, categoria=cat_e,
                                   valor=valor_e, descricao=desc_e,
                                   id_cadastro=id_e, nome_cadastro=nome_e, tipo_cadastro=tipo_e2,
@@ -153,11 +157,14 @@ def render():
                 else:
                     atualizar_lancamento(slug, lanc)
                     _invalida()
-                    st.toast("Alterado!")
+                    st.toast("Lancamento alterado!")
                     st.rerun()
+
         with c2:
-            if confirmar_exclusao("del_lanc", "Excluir lancamento"):
-                excluir_lancamento(slug, id_lanc)
-                _invalida()
-                st.toast("Excluido.")
-                st.rerun()
+            st.caption("Excluir lancamento")
+            if solicitar_autorizacao("excluir_lanc", "excluir"):
+                if confirmar_exclusao("del_lanc_final", "Confirmar exclusao"):
+                    excluir_lancamento(slug, id_lanc)
+                    _invalida()
+                    st.toast("Excluido.")
+                    st.rerun()
