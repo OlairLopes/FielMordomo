@@ -1,5 +1,8 @@
+import hashlib
 import pandas as pd
 import streamlit as st
+
+from data.repository import autenticar_igreja
 
 
 def formatar_moeda(valor) -> str:
@@ -55,6 +58,10 @@ def gerar_csv(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=False).encode("utf-8-sig")
 
 
+def slug_da_sessao() -> str:
+    return st.session_state.get("igreja", {}).get("slug", "")
+
+
 def confirmar_exclusao(key: str, label: str) -> bool:
     flag = f"_del_{key}"
     if st.button(label, key=key, type="secondary"):
@@ -72,5 +79,45 @@ def confirmar_exclusao(key: str, label: str) -> bool:
     return False
 
 
-def slug_da_sessao() -> str:
-    return st.session_state.get("igreja", {}).get("slug", "")
+def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
+    """
+    Exibe campo de senha e valida contra o login da igreja.
+    Retorna True apenas quando a senha for confirmada corretamente.
+    """
+    flag_mostrar = f"_auth_mostrar_{key}"
+    flag_ok      = f"_auth_ok_{key}"
+
+    if st.session_state.get(flag_ok):
+        st.session_state[flag_ok] = False
+        return True
+
+    if not st.session_state.get(flag_mostrar):
+        if st.button(f"Autorizar para {acao}", key=f"btn_auth_{key}", type="primary"):
+            st.session_state[flag_mostrar] = True
+            st.rerun()
+        return False
+
+    st.info("Digite a senha da igreja para autorizar esta acao.")
+    senha = st.text_input(
+        "Senha de autorizacao",
+        type="password",
+        key=f"senha_auth_{key}",
+        placeholder="Digite sua senha...",
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Confirmar", key=f"confirmar_auth_{key}", type="primary"):
+            slug = slug_da_sessao()
+            if autenticar_igreja(slug, senha):
+                st.session_state[flag_mostrar] = False
+                st.session_state[flag_ok] = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta. Tente novamente.")
+    with c2:
+        if st.button("Cancelar", key=f"cancelar_auth_{key}"):
+            st.session_state[flag_mostrar] = False
+            st.rerun()
+
+    return False
