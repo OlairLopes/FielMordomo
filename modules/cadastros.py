@@ -1,3 +1,4 @@
+import datetime
 import streamlit as st
 import pandas as pd
 
@@ -47,6 +48,13 @@ def _formatar_tel(tel: str) -> str:
     return tel
 
 
+def _formatar_data(data_str: str) -> str:
+    try:
+        return datetime.date.fromisoformat(data_str).strftime("%d/%m/%Y")
+    except Exception:
+        return data_str
+
+
 def _cache_key():
     return f"df_cad_{slug_da_sessao()}"
 
@@ -76,12 +84,14 @@ def render():
     with st.expander("Novo cadastro", expanded=False):
         with st.form("form_novo_cad", clear_on_submit=True):
             st.markdown("**Dados principais**")
-            tipo   = st.selectbox("Tipo", ["Membro", "Fornecedor"])
-            nome   = st.text_input("Nome completo")
-            cpf    = st.text_input("CPF", placeholder="000.000.000-00")
-            funcao = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
-            cong   = st.selectbox("Congregacao", CONGREGACOES)
-            sit    = st.selectbox("Situacao", ["Ativo", "Inativo"])
+            tipo    = st.selectbox("Tipo", ["Membro", "Fornecedor"])
+            nome    = st.text_input("Nome completo")
+            cpf     = st.text_input("CPF", placeholder="000.000.000-00")
+            dt_nasc = st.date_input("Data de nascimento", value=None,
+                                    format="DD/MM/YYYY", key="novo_dt_nasc")
+            funcao  = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
+            cong    = st.selectbox("Congregacao", CONGREGACOES)
+            sit     = st.selectbox("Situacao", ["Ativo", "Inativo"])
 
             st.markdown("**Contato**")
             telefone = st.text_input("Telefone / WhatsApp", placeholder="(00) 00000-0000")
@@ -101,9 +111,11 @@ def render():
                 cep = st.text_input("CEP", placeholder="00000-000")
 
             if st.form_submit_button("Salvar", type="primary"):
+                dn_str = dt_nasc.isoformat() if dt_nasc else ""
                 c = Cadastro(
                     nome=nome, tipo_cadastro=tipo, funcao=funcao,
                     congregacao=cong, cpf=cpf, situacao=sit,
+                    data_nascimento=dn_str,
                     telefone=telefone, logradouro=logradouro,
                     numero=numero, bairro=bairro,
                     cidade=cidade, cep=cep,
@@ -127,12 +139,13 @@ def render():
             st.info("Nenhum cadastro ainda.")
         else:
             df_view = df.copy()
-            for col in ["cpf","cep","telefone","logradouro","numero","bairro","cidade"]:
+            for col in ["cpf","cep","telefone","logradouro","numero","bairro","cidade","data_nascimento"]:
                 if col not in df_view.columns:
                     df_view[col] = ""
-            df_view["cpf"]      = df_view["cpf"].apply(lambda x: _formatar_cpf(str(x)) if str(x).strip() else "")
-            df_view["cep"]      = df_view["cep"].apply(lambda x: _formatar_cep(str(x)) if str(x).strip() else "")
-            df_view["telefone"] = df_view["telefone"].apply(lambda x: _formatar_tel(str(x)) if str(x).strip() else "")
+            df_view["cpf"]             = df_view["cpf"].apply(lambda x: _formatar_cpf(str(x)) if str(x).strip() else "")
+            df_view["cep"]             = df_view["cep"].apply(lambda x: _formatar_cep(str(x)) if str(x).strip() else "")
+            df_view["telefone"]        = df_view["telefone"].apply(lambda x: _formatar_tel(str(x)) if str(x).strip() else "")
+            df_view["data_nascimento"] = df_view["data_nascimento"].apply(lambda x: _formatar_data(str(x)) if str(x).strip() else "")
             st.dataframe(df_view, use_container_width=True)
 
     # ── Editar / Excluir ──────────────────────────────────────────────────
@@ -161,6 +174,15 @@ def render():
         cpf_edit  = st.text_input("CPF",
                                    value=_formatar_cpf(cpf_atual) if cpf_atual else "",
                                    placeholder="000.000.000-00", key="e_cpf")
+
+        # Data de nascimento
+        dn_atual = _val(sel, "data_nascimento")
+        try:
+            dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
+        except Exception:
+            dn_value = None
+        dt_nasc_edit = st.date_input("Data de nascimento", value=dn_value,
+                                     format="DD/MM/YYYY", key="e_dt_nasc")
 
         funcao_edit = (
             st.selectbox("Funcao", FUNCOES,
@@ -207,10 +229,12 @@ def render():
         with c1:
             st.caption("Editar cadastro")
             if solicitar_autorizacao("salvar_cad", "editar"):
+                dn_edit_str = dt_nasc_edit.isoformat() if dt_nasc_edit else ""
                 c = Cadastro(
                     id_cadastro=id_sel, nome=nome_edit, tipo_cadastro=tipo_edit,
                     funcao=funcao_edit, congregacao=cong_edit,
                     cpf=cpf_edit, situacao=sit_edit,
+                    data_nascimento=dn_edit_str,
                     telefone=tel_edit, logradouro=log_edit,
                     numero=num_edit, bairro=bai_edit,
                     cidade=cid_edit, cep=cep_edit,
