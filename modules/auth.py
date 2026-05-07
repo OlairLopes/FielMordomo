@@ -1,48 +1,63 @@
 """
 Autenticacao do FielMordomo.
-Dois tipos de acesso:
-  - Super admin: acesso ao painel de gestao de igrejas
-  - Tesoureiro: acesso aos dados financeiros de uma igreja especifica
 """
 
 import streamlit as st
-from data.repository import autenticar_super_admin, autenticar_igreja, inicializar_master
+from data.repository import (
+    autenticar_super_admin, autenticar_igreja,
+    inicializar_master, obter_logo_sistema,
+)
+
+
+def _exibir_logo_sistema():
+    resultado = obter_logo_sistema()
+    if resultado:
+        dados, ext = resultado
+        st.image(dados, width=180)
+    else:
+        st.markdown(
+            """
+            <div style="text-align:center;padding:1rem 0 0.5rem">
+              <span style="font-size:2.2rem;font-weight:600;
+                           color:var(--color-text-primary)">
+                FielMordomo
+              </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def tela_login():
-    """Exibe tela de login e retorna True se autenticado."""
     if st.session_state.get("autenticado"):
         return True
 
     inicializar_master()
 
-    st.markdown(
-        """
-        <div style="text-align:center;padding:2rem 0 1rem">
-          <div style="font-size:2.5rem;font-weight:500;color:var(--color-text-primary)">
-            FielMordomo
-          </div>
-          <div style="font-size:0.9rem;color:var(--color-text-secondary);margin-top:4px">
-            Gestao financeira para igrejas
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    _, col, _ = st.columns([1, 2, 1])
+    with col:
+        _exibir_logo_sistema()
 
-    st.divider()
+        st.markdown(
+            "<p style='text-align:center;color:var(--color-text-secondary);"
+            "font-size:0.9rem;margin-bottom:1.5rem'>"
+            "Gestao financeira para igrejas</p>",
+            unsafe_allow_html=True,
+        )
 
-    modo = st.radio(
-        "Tipo de acesso",
-        ["Igreja", "Administrador do sistema"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+        modo = st.radio(
+            "Tipo de acesso",
+            ["Igreja", "Administrador do sistema"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
 
-    if modo == "Igreja":
-        _login_igreja()
-    else:
-        _login_admin()
+        st.divider()
+
+        if modo == "Igreja":
+            _login_igreja()
+        else:
+            _login_admin()
 
     return False
 
@@ -67,9 +82,7 @@ def _login_igreja():
             else:
                 st.error("Identificador ou senha incorretos, ou igreja inativa.")
 
-    st.caption(
-        "Nao tem acesso? Entre em contato com o administrador do sistema para cadastrar sua igreja."
-    )
+    st.caption("Nao tem acesso? Entre em contato com o administrador do sistema.")
 
 
 def _login_admin():
