@@ -35,7 +35,7 @@ def _get_lanc(slug):
     return st.session_state[k]
 
 
-def _logo_base64(slug: str) -> str | None:
+def _logo_base64(slug: str):
     """Retorna o logo da igreja em base64 para embutir no HTML."""
     resultado = obter_logo_igreja(slug)
     if resultado:
