@@ -65,6 +65,7 @@ class Lancamento:
     categoria: str
     valor: float
     descricao: str = ""
+    forma_pagamento: str = "Dinheiro"
     id_cadastro: Optional[int] = None
     nome_cadastro: str = ""
     tipo_cadastro: str = ""
