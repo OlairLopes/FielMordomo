@@ -20,25 +20,30 @@ FUNCOES = [
 CONGREGACOES = [
     "AD Serrinha",
     "AD Paraiso",
-    "AD Vila Nova",
     "",
 ]
 
 BAIRROS_MINACU = [
+    "Buriti",
+    "Conj. Hab. Primavera",
     "Setor Central",
-    "Vila Sama",
+    "Ilson Vaz",
+    "Jardim Emília",
+    "Jardim Boa Vista",
+    "Jardim Floresta",
+    "Jardim dos Ipês",
+    "Jardim Arimatéia"
+    "Marajoara",
+    "Minaçu Norte",
+    "Nova Esperança",
+    "Rua Dezoito"
+    "Vila Residencial Sama",
     "Vila de Furnas",
-    "Setor Industrial",
-    "Setor Residencial",
-    "Setor Norte",
-    "Setor Sul",
-    "Setor Leste",
-    "Setor Oeste",
+    "Vila União",
     "Vila Nova",
-    "Jardim America",
-    "Jardim Goias",
-    "Parque das Nacoes",
-    "Zona Rural",
+    "Vila Manchester",
+    "Vila Popular",
+    "Vila são Geraldo",
     "",
 ]
 
