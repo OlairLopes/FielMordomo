@@ -45,7 +45,11 @@ BAIRROS_MINACU = [
     "Vila Popular",
     "Vila são Geraldo",
     "",
+
 ]
+
+CIDADES = ["Minacu-GO", "Outro"]
+CEPS    = ["76450-000", "Outro"]
 
 
 def _formatar_cpf(cpf: str) -> str:
@@ -135,9 +139,9 @@ def render():
             bairro = st.selectbox("Bairro", BAIRROS_MINACU)
             col3, col4 = st.columns([2, 1])
             with col3:
-                cidade = st.text_input("Cidade")
+                cidade = st.selectbox("Cidade", CIDADES)
             with col4:
-                cep = st.text_input("CEP", placeholder="00000-000")
+                cep = st.selectbox("CEP", CEPS)
 
             if st.form_submit_button("Salvar", type="primary"):
                 dn_str = dt_nasc.isoformat() if dt_nasc else ""
@@ -251,14 +255,15 @@ def render():
         idx_bairro   = BAIRROS_MINACU.index(bairro_atual) if bairro_atual in BAIRROS_MINACU else 0
         bai_edit     = st.selectbox("Bairro", BAIRROS_MINACU, index=idx_bairro, key="e_bai")
 
+        cid_atual = _val(sel, "cidade")
+        idx_cid   = CIDADES.index(cid_atual) if cid_atual in CIDADES else 0
         col3, col4 = st.columns([2, 1])
         with col3:
-            cid_edit = st.text_input("Cidade", value=_val(sel, "cidade"), key="e_cid")
+            cid_edit = st.selectbox("Cidade", CIDADES, index=idx_cid, key="e_cid")
         with col4:
-            cep_atual = _val(sel, "cep")
-            cep_edit  = st.text_input("CEP",
-                                       value=_formatar_cep(cep_atual) if cep_atual else "",
-                                       placeholder="00000-000", key="e_cep")
+            cep_atual = _formatar_cep(_val(sel, "cep")) if _val(sel, "cep") else "76450-000"
+            idx_cep   = CEPS.index(cep_atual) if cep_atual in CEPS else 0
+            cep_edit  = st.selectbox("CEP", CEPS, index=idx_cep, key="e_cep")
 
         st.divider()
         c1, c2 = st.columns(2)
