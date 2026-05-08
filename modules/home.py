@@ -69,6 +69,7 @@ def _cards_nav():
             with st.container(border=True):
                 st.markdown(f"### {title}")
                 st.caption(desc)
-                if st.button("Abrir", key=f"nav_{page}", use_container_width=True, type="primary"):
+                if st.button("Abrir", key=f"home_card_{page}",
+                             use_container_width=True, type="primary"):
                     st.session_state["pagina"] = page
                     st.rerun()
