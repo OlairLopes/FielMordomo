@@ -63,10 +63,43 @@ def _injetar_css():
         background: rgba(255,255,255,0.25);
         margin: 0 6px;
     }
+    #fm-navbar .fm-item {
+        padding: 5px 14px;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        color: rgba(255,255,255,0.85);
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    #fm-navbar .fm-item:hover {
+        background: rgba(255,255,255,0.12);
+        color: white;
+    }
+    #fm-navbar .fm-item.fm-ativo {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        font-weight: 700;
+    }
+    #fm-navbar .fm-sair {
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.85);
+        border: 1px solid rgba(255,255,255,0.3);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s;
+    }
+    #fm-navbar .fm-sair:hover {
+        background: rgba(255,255,255,0.15);
+        color: white;
+    }
     #fm-navbar .fm-info {
         margin-left: auto;
         text-align: right;
         line-height: 1.3;
+        margin-right: 12px;
     }
     #fm-navbar .fm-info-nome {
         font-size: 0.75rem;
@@ -77,6 +110,15 @@ def _injetar_css():
         font-size: 0.62rem;
         color: rgba(255,255,255,0.6);
     }
+
+    .fm-hidden-btns {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        height: 0;
+        overflow: hidden;
+    }
+
     .block-container {
         padding-top: 76px !important;
         padding-left: 2rem !important;
@@ -113,14 +155,16 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
 
     itens_html = '<div class="fm-sep"></div>'
     for key, (label, _) in paginas.items():
-        ativo = pagina_atual == key
-        bg    = "background:rgba(255,255,255,0.2);font-weight:700;" if ativo else ""
-        ic    = ICONES.get(key, "")
+        ativo   = " fm-ativo" if pagina_atual == key else ""
+        ic      = ICONES.get(key, "")
+        onclick = "document.getElementById('fmbtn_" + key + "').click()"
         itens_html += (
-            '<span style="padding:5px 12px;border-radius:6px;font-size:0.8rem;'
-            'color:white;white-space:nowrap;' + bg + '">'
+            '<span class="fm-item' + ativo + '" onclick="' + onclick + '">'
             + ic + " " + label + "</span>"
         )
+
+    onclick_sair = "document.getElementById('fmbtn_sair').click()"
+    sair_html    = '<span class="fm-sair" onclick="' + onclick_sair + '">Sair</span>'
 
     st.markdown(
         '<div id="fm-navbar">'
@@ -129,32 +173,45 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
         + '<div class="fm-info">'
         + '<div class="fm-info-nome">' + nome + '</div>'
         + '<div class="fm-info-plano">Plano ' + plano + '</div>'
-        + '</div></div>',
+        + '</div>'
+        + sair_html
+        + '</div>',
         unsafe_allow_html=True,
     )
 
-    # Botoes reais abaixo da navbar para navegacao funcionar
-    n    = len(paginas)
-    cols = st.columns([0.8] + [1] * n + [0.8])
+    # Botoes ocultos acionados pelo JS
+    st.markdown('<div class="fm-hidden-btns">', unsafe_allow_html=True)
 
-    with cols[0]:
-        st.write("")
+    for key, (label, _) in paginas.items():
+        st.markdown('<div id="fmbtn_' + key + '_wrap">', unsafe_allow_html=True)
+        if st.button(label, key="navbar_btn_" + key):
+            st.session_state["pagina"] = key
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    for i, (key, (label, _)) in enumerate(paginas.items()):
-        with cols[i + 1]:
-            ativo = pagina_atual == key
-            if st.button(
-                ICONES.get(key, "") + " " + label,
-                key="navbar_btn_" + key,
-                use_container_width=True,
-                type="primary" if ativo else "secondary",
-            ):
-                st.session_state["pagina"] = key
-                st.rerun()
+    st.markdown('<div id="fmbtn_sair_wrap">', unsafe_allow_html=True)
+    if st.button("Sair", key="navbar_btn_sair"):
+        logout()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    with cols[n + 1]:
-        if st.button("Sair", key="navbar_btn_sair", use_container_width=True):
-            logout()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # JS mapeia IDs aos botoes reais
+    st.markdown("""
+    <script>
+    function mapearBotoes() {
+        var wraps = document.querySelectorAll('[id$="_wrap"]');
+        wraps.forEach(function(wrap) {
+            var id = wrap.id.replace('_wrap', '');
+            var btn = wrap.querySelector('button');
+            if (btn) { btn.id = id; }
+        });
+    }
+    setTimeout(mapearBotoes, 300);
+    setTimeout(mapearBotoes, 800);
+    setTimeout(mapearBotoes, 1500);
+    </script>
+    """, unsafe_allow_html=True)
 
 
 def _navbar_admin():
@@ -165,17 +222,35 @@ def _navbar_admin():
     else:
         logo_html = '<span class="fm-logo">FielMordomo</span>'
 
+    onclick_sair = "document.getElementById('fmbtn_sair_admin').click()"
+
     st.markdown(
         '<div id="fm-navbar">'
         + logo_html
         + '<div class="fm-sep"></div>'
         + '<span style="color:rgba(255,255,255,0.85);font-size:0.85rem">Painel Administrador</span>'
-        + '</div>',
+        + '<div style="margin-left:auto">'
+        + '<span class="fm-sair" onclick="' + onclick_sair + '">Sair</span>'
+        + '</div></div>',
         unsafe_allow_html=True,
     )
 
+    st.markdown('<div class="fm-hidden-btns"><div id="fmbtn_sair_admin_wrap">', unsafe_allow_html=True)
     if st.button("Sair", key="navbar_btn_sair_admin"):
         logout()
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <script>
+    setTimeout(function() {
+        var wrap = document.getElementById('fmbtn_sair_admin_wrap');
+        if (wrap) {
+            var btn = wrap.querySelector('button');
+            if (btn) btn.id = 'fmbtn_sair_admin';
+        }
+    }, 500);
+    </script>
+    """, unsafe_allow_html=True)
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────
