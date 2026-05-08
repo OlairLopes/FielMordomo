@@ -5,7 +5,6 @@ SaaS multi-tenant com dados isolados por igreja
 
 import sys
 import os
-from pathlib import Path
 import base64
 
 _here = os.path.dirname(os.path.abspath(__file__))
@@ -24,96 +23,101 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-NAVBAR_CSS = """
-<style>
-[data-testid="collapsedControl"] { display: none; }
-header[data-testid="stHeader"]   { display: none; }
 
-.fm-navbar {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    z-index: 9999;
-    height: 56px;
-    background: #0F6E56;
-    display: flex;
-    align-items: center;
-    padding: 0 24px;
-    gap: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-}
-.fm-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-right: 16px;
-}
-.fm-brand-text {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: white;
-    letter-spacing: 0.02em;
-}
-.fm-sep {
-    width: 1px;
-    height: 24px;
-    background: rgba(255,255,255,0.2);
-    margin: 0 8px;
-}
-.fm-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: rgba(255,255,255,0.82);
-    cursor: pointer;
-    border: none;
-    background: transparent;
-    transition: background 0.15s, color 0.15s;
-    white-space: nowrap;
-}
-.fm-nav-item:hover {
-    background: rgba(255,255,255,0.12);
-    color: white;
-}
-.fm-nav-item.active {
-    background: rgba(255,255,255,0.18);
-    color: white;
-    font-weight: 600;
-}
-.fm-igreja-info {
-    margin-left: auto;
-    text-align: right;
-    line-height: 1.3;
-}
-.fm-igreja-nome {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: white;
-}
-.fm-igreja-plano {
-    font-size: 0.65rem;
-    color: rgba(255,255,255,0.6);
-}
-.fm-content-pad { padding-top: 68px; }
-.fm-logo-img {
-    height: 34px;
-    width: auto;
-    border-radius: 4px;
-    object-fit: contain;
-}
-</style>
-"""
+def _injetar_css():
+    st.markdown("""
+    <style>
+    [data-testid="collapsedControl"] { display: none !important; }
+    header[data-testid="stHeader"]   { display: none !important; }
+    #MainMenu                         { display: none !important; }
+    footer                            { display: none !important; }
+
+    .fm-navbar {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        z-index: 999999;
+        height: 56px;
+        background: #0F6E56;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        gap: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .fm-brand-text {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: white;
+        margin-right: 12px;
+        white-space: nowrap;
+    }
+    .fm-sep {
+        width: 1px;
+        height: 22px;
+        background: rgba(255,255,255,0.25);
+        margin: 0 8px;
+        flex-shrink: 0;
+    }
+    .fm-nav-item {
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: rgba(255,255,255,0.8);
+        white-space: nowrap;
+    }
+    .fm-nav-item.ativo {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        font-weight: 700;
+    }
+    .fm-right {
+        margin-left: auto;
+        text-align: right;
+        flex-shrink: 0;
+    }
+    .fm-igreja-nome {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: white;
+        white-space: nowrap;
+    }
+    .fm-igreja-plano {
+        font-size: 0.62rem;
+        color: rgba(255,255,255,0.6);
+    }
+    .fm-logo-img {
+        height: 32px;
+        width: auto;
+        border-radius: 4px;
+        object-fit: contain;
+        margin-right: 10px;
+        flex-shrink: 0;
+    }
+    .block-container {
+        padding-top: 70px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 
-def _img_base64(dados: bytes, ext: str) -> str:
-    mime = "image/jpeg" if ext in ("jpg","jpeg") else f"image/{ext}"
+def _img_b64(dados: bytes, ext: str) -> str:
+    mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
     return f"data:{mime};base64,{base64.b64encode(dados).decode()}"
 
 
-def _renderizar_navbar(pagina_atual: str, paginas: dict, igreja: dict, slug: str):
+def _logo_tag(slug: str = "") -> str:
+    if slug:
+        r = obter_logo_igreja(slug)
+        if r:
+            return f'<img src="{_img_b64(r[0],r[1])}" class="fm-logo-img"/>'
+    r = obter_logo_sistema()
+    if r:
+        return f'<img src="{_img_b64(r[0],r[1])}" class="fm-logo-img"/>'
+    return '<span class="fm-brand-text">FielMordomo</span>'
+
+
+def _navbar_igreja(pagina_atual: str, paginas: dict, igreja: dict, slug: str):
     ICONES = {
         "home":        "⛪",
         "cadastros":   "👤",
@@ -122,113 +126,6 @@ def _renderizar_navbar(pagina_atual: str, paginas: dict, igreja: dict, slug: str
         "dashboard":   "📊",
     }
 
-    logo_tag = ""
-    logo_ig  = obter_logo_igreja(slug)
-    logo_sis = obter_logo_sistema()
-    if logo_ig:
-        dados, ext = logo_ig
-        logo_tag = f'<img src="{_img_base64(dados,ext)}" class="fm-logo-img"/>'
-    elif logo_sis:
-        dados, ext = logo_sis
-        logo_tag = f'<img src="{_img_base64(dados,ext)}" class="fm-logo-img"/>'
-
-    itens_html = ""
+    itens = ""
     for key, (label, _) in paginas.items():
-        ativo = "active" if pagina_atual == key else ""
-        icone = ICONES.get(key, "")
-        itens_html += f'<span class="fm-nav-item {ativo}">{icone} {label}</span>'
-
-    nome_ig  = igreja.get("nome", "")
-    plano_ig = igreja.get("plano", "").capitalize()
-
-    html = f"""
-    {NAVBAR_CSS}
-    <div class="fm-navbar">
-        <div class="fm-brand">
-            {logo_tag if logo_tag else '<span class="fm-brand-text">FielMordomo</span>'}
-        </div>
-        <div class="fm-sep"></div>
-        {itens_html}
-        <div class="fm-igreja-info">
-            <div class="fm-igreja-nome">{nome_ig}</div>
-            <div class="fm-igreja-plano">Plano {plano_ig}</div>
-        </div>
-    </div>
-    <div class="fm-content-pad"></div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
-
-    cols = st.columns(len(paginas) + 1)
-    for i, (key, (label, _)) in enumerate(paginas.items()):
-        with cols[i]:
-            if st.button(label, key=f"nav_{key}", use_container_width=True,
-                         type="primary" if pagina_atual == key else "secondary"):
-                st.session_state["pagina"] = key
-                st.rerun()
-    with cols[len(paginas)]:
-        if st.button("Sair", key="nav_sair", use_container_width=True):
-            logout()
-
-
-def _renderizar_navbar_admin():
-    logo_sis = obter_logo_sistema()
-    logo_tag = ""
-    if logo_sis:
-        dados, ext = logo_sis
-        logo_tag = f'<img src="{_img_base64(dados,ext)}" class="fm-logo-img"/>'
-
-    html = f"""
-    {NAVBAR_CSS}
-    <div class="fm-navbar">
-        <div class="fm-brand">
-            {logo_tag if logo_tag else '<span class="fm-brand-text">FielMordomo</span>'}
-        </div>
-        <div class="fm-sep"></div>
-        <span class="fm-nav-item active">⚙️ Painel Administrador</span>
-    </div>
-    <div class="fm-content-pad"></div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
-
-    if st.button("Sair", key="nav_sair_admin"):
-        logout()
-
-
-inicializar_master()
-
-if not tela_login():
-    st.stop()
-
-modo = modo_atual()
-
-if modo == "admin":
-    from admin import painel
-    _renderizar_navbar_admin()
-    painel.render()
-
-elif modo == "igreja":
-    from modules import home, cadastros, lancamentos, relatorios, graficos
-
-    PAGINAS = {
-        "home":        ("Inicio",       home),
-        "cadastros":   ("Membros",      cadastros),
-        "lancamentos": ("Lancamentos",  lancamentos),
-        "relatorios":  ("Relatorios",   relatorios),
-        "dashboard":   ("Dashboard",    graficos),
-    }
-
-    if "pagina" not in st.session_state:
-        st.session_state["pagina"] = "home"
-
-    igreja = st.session_state.get("igreja", {})
-    slug   = igreja.get("slug", "")
-
-    _renderizar_navbar(
-        pagina_atual=st.session_state["pagina"],
-        paginas=PAGINAS,
-        igreja=igreja,
-        slug=slug,
-    )
-
-    _, modulo = PAGINAS.get(st.session_state["pagina"], PAGINAS["home"])
-    modulo.render()
+        css = "fm-nav-item ativo" if pagina_
