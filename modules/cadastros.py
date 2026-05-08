@@ -32,11 +32,11 @@ BAIRROS_MINACU = [
     "Jardim Boa Vista",
     "Jardim Floresta",
     "Jardim dos Ipês",
-    "Jardim Arimatéia"
+    "Jardim Arimatéia",
     "Marajoara",
     "Minaçu Norte",
     "Nova Esperança",
-    "Rua Dezoito"
+    "Rua Dezoito",
     "Vila Residencial Sama",
     "Vila de Furnas",
     "Vila União",
