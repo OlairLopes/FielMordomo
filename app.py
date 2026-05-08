@@ -1,5 +1,6 @@
 """
 FielMordomo - Gestao financeira para igrejas
+SaaS multi-tenant com dados isolados por igreja
 """
 
 import sys
@@ -30,73 +31,39 @@ def _injetar_css():
     header[data-testid="stHeader"]   { display: none !important; }
     #MainMenu { display: none !important; }
     footer    { display: none !important; }
-    .fm-navbar {
+
+    [data-testid="stHorizontalBlock"]:first-of-type {
+        background: #0F6E56;
+        padding: 6px 16px;
+        margin: 0 !important;
+        gap: 4px !important;
         position: fixed;
         top: 0; left: 0; right: 0;
-        z-index: 999999;
-        height: 56px;
-        background: #e6a50e;
-        display: flex;
-        align-items: center;
-        padding: 0 20px;
-        gap: 4px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        z-index: 99999;
     }
-    .fm-brand-text {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: white;
-        margin-right: 12px;
-        white-space: nowrap;
+    [data-testid="stHorizontalBlock"]:first-of-type button {
+        background: transparent !important;
+        border: none !important;
+        color: rgba(255,255,255,0.85) !important;
+        font-size: 0.82rem !important;
+        font-weight: 500 !important;
+        padding: 5px 12px !important;
+        border-radius: 6px !important;
     }
-    .fm-sep {
-        width: 1px;
-        height: 22px;
-        background: rgba(255,255,255,0.25);
-        margin: 0 8px;
-        flex-shrink: 0;
+    [data-testid="stHorizontalBlock"]:first-of-type button:hover {
+        background: rgba(255,255,255,0.12) !important;
+        color: white !important;
     }
-    .fm-nav-item {
-        padding: 5px 12px;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: rgba(255,255,255,0.8);
-        white-space: nowrap;
+    [data-testid="stHorizontalBlock"]:first-of-type button[kind="primary"] {
+        background: rgba(255,255,255,0.2) !important;
+        color: white !important;
+        font-weight: 700 !important;
     }
-    .fm-nav-ativo {
-        background: rgba(255,255,255,0.2);
-        color: white;
-        font-weight: 700;
-        padding: 5px 12px;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        white-space: nowrap;
+    .block-container {
+        padding-top: 80px !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
     }
-    .fm-right {
-        margin-left: auto;
-        text-align: right;
-        flex-shrink: 0;
-    }
-    .fm-igreja-nome {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: white;
-        white-space: nowrap;
-    }
-    .fm-igreja-plano {
-        font-size: 0.62rem;
-        color: rgba(255,255,255,0.6);
-    }
-    .fm-logo-img {
-        height: 32px;
-        width: auto;
-        border-radius: 4px;
-        object-fit: contain;
-        margin-right: 10px;
-        flex-shrink: 0;
-    }
-    .block-container { padding-top: 70px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -106,76 +73,99 @@ def _img_b64(dados, ext):
     return "data:" + mime + ";base64," + base64.b64encode(dados).decode()
 
 
-def _logo_tag(slug=""):
-    if slug:
-        r = obter_logo_igreja(slug)
-        if r:
-            return '<img src="' + _img_b64(r[0], r[1]) + '" class="fm-logo-img"/>'
-    r = obter_logo_sistema()
-    if r:
-        return '<img src="' + _img_b64(r[0], r[1]) + '" class="fm-logo-img"/>'
-    return '<span class="fm-brand-text">FielMordomo</span>'
-
-
 def _navbar_igreja(pagina_atual, paginas, igreja, slug):
     ICONES = {
-        "home":        "&#9962;",
-        "cadastros":   "&#128100;",
-        "lancamentos": "&#128181;",
-        "relatorios":  "&#128203;",
-        "dashboard":   "&#128202;",
+        "home":        "⛪",
+        "cadastros":   "👤",
+        "lancamentos": "💵",
+        "relatorios":  "📋",
+        "dashboard":   "📊",
     }
 
-    itens = ""
-    for key, (label, _) in paginas.items():
-        ic = ICONES.get(key, "")
-        if pagina_atual == key:
-            itens += '<span class="fm-nav-ativo">' + ic + " " + label + "</span>"
-        else:
-            itens += '<span class="fm-nav-item">' + ic + " " + label + "</span>"
-
-    nome  = igreja.get("nome", "")
+    nome  = igreja.get("nome", "FielMordomo")
     plano = igreja.get("plano", "").capitalize()
 
-    st.markdown(
-        '<div class="fm-navbar">'
-        + _logo_tag(slug)
-        + '<div class="fm-sep"></div>'
-        + itens
-        + '<div class="fm-right">'
-        + '<div class="fm-igreja-nome">' + nome + "</div>"
-        + '<div class="fm-igreja-plano">Plano ' + plano + "</div>"
-        + "</div></div>",
-        unsafe_allow_html=True,
-    )
+    logo_r = obter_logo_igreja(slug) or obter_logo_sistema()
 
-    ncols = len(paginas) + 1
-    cols  = st.columns(ncols)
+    n = len(paginas)
+    proporcoes = [1.5] + [1] * n + [2, 0.8]
+    cols = st.columns(proporcoes)
+
+    with cols[0]:
+        if logo_r:
+            dados, ext = logo_r
+            st.markdown(
+                '<img src="' + _img_b64(dados, ext) + '" style="height:36px;'
+                'object-fit:contain;margin-top:4px"/>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<span style="color:white;font-weight:700;font-size:1rem">'
+                'FielMordomo</span>',
+                unsafe_allow_html=True,
+            )
+
     for i, (key, (label, _)) in enumerate(paginas.items()):
-        with cols[i]:
-            tipo = "primary" if pagina_atual == key else "secondary"
-            if st.button(label, key="nav_" + key,
-                         use_container_width=True, type=tipo):
+        with cols[i + 1]:
+            ativo = pagina_atual == key
+            ic    = ICONES.get(key, "")
+            if st.button(
+                ic + " " + label,
+                key="navbar_btn_" + key,
+                use_container_width=True,
+                type="primary" if ativo else "secondary",
+            ):
                 st.session_state["pagina"] = key
                 st.rerun()
-    with cols[ncols - 1]:
-        if st.button("Sair", key="nav_sair", use_container_width=True):
+
+    with cols[n + 1]:
+        st.markdown(
+            '<div style="text-align:right;line-height:1.3;padding-top:6px">'
+            '<span style="color:white;font-size:0.75rem;font-weight:600">'
+            + nome + "</span><br>"
+            '<span style="color:rgba(255,255,255,0.6);font-size:0.65rem">'
+            "Plano " + plano + "</span></div>",
+            unsafe_allow_html=True,
+        )
+
+    with cols[n + 2]:
+        if st.button("Sair", key="navbar_btn_sair", use_container_width=True):
             logout()
 
 
 def _navbar_admin():
-    st.markdown(
-        '<div class="fm-navbar">'
-        + _logo_tag()
-        + '<div class="fm-sep"></div>'
-        + '<span class="fm-nav-ativo">Painel Administrador</span>'
-        + "</div>",
-        unsafe_allow_html=True,
-    )
-    if st.button("Sair", key="nav_sair_admin"):
-        logout()
+    logo_r = obter_logo_sistema()
+    cols   = st.columns([1.5, 4, 0.8])
+
+    with cols[0]:
+        if logo_r:
+            dados, ext = logo_r
+            st.markdown(
+                '<img src="' + _img_b64(dados, ext) + '" style="height:36px;'
+                'object-fit:contain;margin-top:4px"/>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<span style="color:white;font-weight:700;font-size:1rem">'
+                'FielMordomo</span>',
+                unsafe_allow_html=True,
+            )
+
+    with cols[1]:
+        st.markdown(
+            '<span style="color:rgba(255,255,255,0.85);font-size:0.85rem">'
+            '⚙️ Painel Administrador</span>',
+            unsafe_allow_html=True,
+        )
+
+    with cols[2]:
+        if st.button("Sair", key="navbar_btn_sair_admin", use_container_width=True):
+            logout()
 
 
+# ── Bootstrap ─────────────────────────────────────────────────────────────
 inicializar_master()
 
 if not tela_login():
