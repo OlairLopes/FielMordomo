@@ -38,12 +38,13 @@ def _injetar_css():
         top: 0; left: 0; right: 0;
         z-index: 999999;
         height: 52px;
-        background: #1b84e0;
+        background: #060b40;
         display: flex;
         align-items: center;
         padding: 0 20px;
         gap: 4px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        pointer-events: none;
     }
     #fm-navbar .fm-logo {
         font-size: 1rem;
@@ -64,39 +65,6 @@ def _injetar_css():
         margin: 0 8px;
         flex-shrink: 0;
     }
-    #fm-navbar .fm-item {
-        padding: 5px 13px;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        color: rgba(255,255,255,0.85);
-        white-space: nowrap;
-        cursor: pointer;
-        user-select: none;
-        text-decoration: none;
-    }
-    #fm-navbar .fm-item:hover {
-        background: rgba(255,255,255,0.12);
-        color: white;
-    }
-    #fm-navbar .fm-ativo {
-        background: rgba(255,255,255,0.2) !important;
-        color: white !important;
-        font-weight: 700;
-    }
-    #fm-navbar .fm-sair {
-        padding: 4px 12px;
-        border-radius: 6px;
-        font-size: 0.78rem;
-        color: rgba(255,255,255,0.85);
-        border: 1px solid rgba(255,255,255,0.35);
-        cursor: pointer;
-        white-space: nowrap;
-        text-decoration: none;
-    }
-    #fm-navbar .fm-sair:hover {
-        background: rgba(255,255,255,0.15);
-        color: white;
-    }
     #fm-navbar .fm-info {
         margin-left: auto;
         text-align: right;
@@ -114,6 +82,66 @@ def _injetar_css():
         font-size: 0.6rem;
         color: rgba(255,255,255,0.6);
     }
+
+    .fm-btn-container {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        z-index: 9999999;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        padding: 0 180px 0 160px;
+        gap: 2px;
+        pointer-events: none;
+    }
+    .fm-btn-container > div {
+        pointer-events: all;
+        flex: 1;
+    }
+    .fm-btn-container button {
+        height: 36px !important;
+        background: transparent !important;
+        border: none !important;
+        color: rgba(255,255,255,0.85) !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+        border-radius: 6px !important;
+        width: 100% !important;
+        cursor: pointer !important;
+        padding: 0 8px !important;
+    }
+    .fm-btn-container button:hover {
+        background: rgba(255,255,255,0.12) !important;
+        color: white !important;
+    }
+    .fm-btn-container button[kind="primary"] {
+        background: rgba(255,255,255,0.2) !important;
+        color: white !important;
+        font-weight: 700 !important;
+    }
+
+    .fm-btn-sair {
+        position: fixed;
+        top: 8px;
+        right: 20px;
+        z-index: 9999999;
+        pointer-events: all;
+    }
+    .fm-btn-sair button {
+        height: 36px !important;
+        background: transparent !important;
+        border: 1px solid rgba(255,255,255,0.35) !important;
+        color: rgba(255,255,255,0.85) !important;
+        font-size: 0.78rem !important;
+        border-radius: 6px !important;
+        cursor: pointer !important;
+        padding: 0 12px !important;
+    }
+    .fm-btn-sair button:hover {
+        background: rgba(255,255,255,0.15) !important;
+        color: white !important;
+    }
+
     .block-container {
         padding-top: 70px !important;
         padding-left: 2rem !important;
@@ -148,27 +176,40 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
     else:
         logo_html = '<span class="fm-logo">FielMordomo</span>'
 
-    itens_html = '<div class="fm-sep"></div>'
-    for key, (label, _) in paginas.items():
-        ativo = ' fm-ativo' if pagina_atual == key else ''
-        ic    = ICONES.get(key, '')
-        itens_html += (
-            '<a class="fm-item' + ativo + '" href="?page=' + key + '" target="_self">'
-            + ic + ' ' + label + '</a>'
-        )
-
+    # Navbar visual decorativa
     st.markdown(
         '<div id="fm-navbar">'
         + logo_html
-        + itens_html
+        + '<div class="fm-sep"></div>'
         + '<div class="fm-info">'
         + '<div class="fm-info-nome">' + nome + '</div>'
         + '<div class="fm-info-plano">Plano ' + plano + '</div>'
-        + '</div>'
-        + '<a class="fm-sair" href="?sair=1" target="_self">Sair</a>'
-        + '</div>',
+        + '</div></div>',
         unsafe_allow_html=True,
     )
+
+    # Botoes reais sobrepostos na navbar
+    st.markdown('<div class="fm-btn-container">', unsafe_allow_html=True)
+    cols = st.columns(len(paginas))
+    for i, (key, (label, _)) in enumerate(paginas.items()):
+        with cols[i]:
+            ic    = ICONES.get(key, "")
+            ativo = pagina_atual == key
+            if st.button(
+                ic + " " + label,
+                key="nb_" + key,
+                use_container_width=True,
+                type="primary" if ativo else "secondary",
+            ):
+                st.session_state["pagina"] = key
+                st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Botao sair fixo no canto direito
+    st.markdown('<div class="fm-btn-sair">', unsafe_allow_html=True)
+    if st.button("Sair", key="nb_sair"):
+        logout()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _navbar_admin():
@@ -184,11 +225,14 @@ def _navbar_admin():
         + logo_html
         + '<div class="fm-sep"></div>'
         + '<span style="color:rgba(255,255,255,0.85);font-size:0.85rem">Painel Administrador</span>'
-        + '<div style="margin-left:auto">'
-        + '<a class="fm-sair" href="?sair=1" target="_self">Sair</a>'
-        + '</div></div>',
+        + '</div>',
         unsafe_allow_html=True,
     )
+
+    st.markdown('<div class="fm-btn-sair">', unsafe_allow_html=True)
+    if st.button("Sair", key="nb_sair_admin"):
+        logout()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────
@@ -198,21 +242,6 @@ if not tela_login():
     st.stop()
 
 _injetar_css()
-
-# Navegacao via query params
-params = st.query_params
-
-if "sair" in params:
-    st.query_params.clear()
-    logout()
-
-if "page" in params:
-    pagina_req = params["page"]
-    paginas_validas = ["home", "cadastros", "lancamentos", "relatorios", "dashboard"]
-    if pagina_req in paginas_validas:
-        st.session_state["pagina"] = pagina_req
-    st.query_params.clear()
-    st.rerun()
 
 modo = modo_atual()
 
