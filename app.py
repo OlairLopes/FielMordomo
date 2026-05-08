@@ -35,7 +35,7 @@ def _injetar_css():
         top: 0; left: 0; right: 0;
         z-index: 999999;
         height: 56px;
-        background: #0F6E56;
+        background: ##e6a50e;
         display: flex;
         align-items: center;
         padding: 0 20px;
