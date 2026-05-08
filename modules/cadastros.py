@@ -84,14 +84,20 @@ def render():
     with st.expander("Novo cadastro", expanded=False):
         with st.form("form_novo_cad", clear_on_submit=True):
             st.markdown("**Dados principais**")
-            tipo    = st.selectbox("Tipo", ["Membro", "Fornecedor"])
-            nome    = st.text_input("Nome completo")
-            cpf     = st.text_input("CPF", placeholder="000.000.000-00")
-            dt_nasc = st.date_input("Data de nascimento", value=None,
-                                    format="DD/MM/YYYY", key="novo_dt_nasc")
-            funcao  = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
-            cong    = st.selectbox("Congregacao", CONGREGACOES)
-            sit     = st.selectbox("Situacao", ["Ativo", "Inativo"])
+            tipo   = st.selectbox("Tipo", ["Membro", "Fornecedor"])
+            nome   = st.text_input("Nome completo")
+            cpf    = st.text_input("CPF", placeholder="000.000.000-00")
+            dt_nasc = st.date_input(
+                "Data de nascimento",
+                value=None,
+                format="DD/MM/YYYY",
+                key="novo_dt_nasc",
+                min_value=datetime.date(1900, 1, 1),
+                max_value=datetime.date.today(),
+            )
+            funcao = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
+            cong   = st.selectbox("Congregacao", CONGREGACOES)
+            sit    = st.selectbox("Situacao", ["Ativo", "Inativo"])
 
             st.markdown("**Contato**")
             telefone = st.text_input("Telefone / WhatsApp", placeholder="(00) 00000-0000")
@@ -181,8 +187,14 @@ def render():
             dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
         except Exception:
             dn_value = None
-        dt_nasc_edit = st.date_input("Data de nascimento", value=dn_value,
-                                     format="DD/MM/YYYY", key="e_dt_nasc")
+        dt_nasc_edit = st.date_input(
+            "Data de nascimento",
+            value=dn_value,
+            format="DD/MM/YYYY",
+            key="e_dt_nasc",
+            min_value=datetime.date(1900, 1, 1),
+            max_value=datetime.date.today(),
+        )
 
         funcao_edit = (
             st.selectbox("Funcao", FUNCOES,
