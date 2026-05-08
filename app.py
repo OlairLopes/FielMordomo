@@ -31,42 +31,58 @@ def _injetar_css():
     header[data-testid="stHeader"]   { display: none !important; }
     #MainMenu { display: none !important; }
     footer    { display: none !important; }
+    section[data-testid="stSidebar"] { display: none !important; }
 
-    [data-testid="stHorizontalBlock"]:first-of-type {
-        background: #0F6E56;
-        padding: 6px 16px;
-        margin: 0 !important;
-        gap: 4px !important;
+    #fm-navbar {
         position: fixed;
         top: 0; left: 0; right: 0;
-        z-index: 99999;
+        z-index: 999999;
+        height: 56px;
+        background: #0F6E56;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        gap: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
-    [data-testid="stHorizontalBlock"]:first-of-type button {
-        background: transparent !important;
-        border: none !important;
-        color: rgba(255,255,255,0.85) !important;
-        font-size: 0.82rem !important;
-        font-weight: 500 !important;
-        padding: 5px 12px !important;
-        border-radius: 6px !important;
+    #fm-navbar .fm-logo {
+        font-size: 1rem;
+        font-weight: 700;
+        color: white;
+        margin-right: 12px;
+        white-space: nowrap;
     }
-    [data-testid="stHorizontalBlock"]:first-of-type button:hover {
-        background: rgba(255,255,255,0.12) !important;
-        color: white !important;
+    #fm-navbar img {
+        height: 34px;
+        object-fit: contain;
+        margin-right: 12px;
     }
-    [data-testid="stHorizontalBlock"]:first-of-type button[kind="primary"] {
-        background: rgba(255,255,255,0.2) !important;
-        color: white !important;
-        font-weight: 700 !important;
+    #fm-navbar .fm-sep {
+        width: 1px;
+        height: 20px;
+        background: rgba(255,255,255,0.25);
+        margin: 0 6px;
+    }
+    #fm-navbar .fm-info {
+        margin-left: auto;
+        text-align: right;
+        line-height: 1.3;
+    }
+    #fm-navbar .fm-info-nome {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: white;
+    }
+    #fm-navbar .fm-info-plano {
+        font-size: 0.62rem;
+        color: rgba(255,255,255,0.6);
     }
     .block-container {
-        padding-top: 90px !important;
+        padding-top: 76px !important;
         padding-left: 2rem !important;
         padding-right: 2rem !important;
         max-width: 100% !important;
     }
-    section[data-testid="stSidebar"] { display: none !important; }
-    div[data-testid="stForm"] { margin-top: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -85,36 +101,50 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
         "dashboard":   "📊",
     }
 
-    nome  = igreja.get("nome", "FielMordomo")
-    plano = igreja.get("plano", "").capitalize()
-
+    nome   = igreja.get("nome", "FielMordomo")
+    plano  = igreja.get("plano", "").capitalize()
     logo_r = obter_logo_igreja(slug) or obter_logo_sistema()
 
-    n = len(paginas)
-    proporcoes = [1.5] + [1] * n + [2, 0.8]
-    cols = st.columns(proporcoes)
+    if logo_r:
+        dados, ext = logo_r
+        logo_html = '<img src="' + _img_b64(dados, ext) + '"/>'
+    else:
+        logo_html = '<span class="fm-logo">FielMordomo</span>'
+
+    itens_html = '<div class="fm-sep"></div>'
+    for key, (label, _) in paginas.items():
+        ativo = pagina_atual == key
+        bg    = "background:rgba(255,255,255,0.2);font-weight:700;" if ativo else ""
+        ic    = ICONES.get(key, "")
+        itens_html += (
+            '<span style="padding:5px 12px;border-radius:6px;font-size:0.8rem;'
+            'color:white;white-space:nowrap;' + bg + '">'
+            + ic + " " + label + "</span>"
+        )
+
+    st.markdown(
+        '<div id="fm-navbar">'
+        + logo_html
+        + itens_html
+        + '<div class="fm-info">'
+        + '<div class="fm-info-nome">' + nome + '</div>'
+        + '<div class="fm-info-plano">Plano ' + plano + '</div>'
+        + '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Botoes reais abaixo da navbar para navegacao funcionar
+    n    = len(paginas)
+    cols = st.columns([0.8] + [1] * n + [0.8])
 
     with cols[0]:
-        if logo_r:
-            dados, ext = logo_r
-            st.markdown(
-                '<img src="' + _img_b64(dados, ext) + '" style="height:36px;'
-                'object-fit:contain;margin-top:4px"/>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<span style="color:white;font-weight:700;font-size:1rem">'
-                'FielMordomo</span>',
-                unsafe_allow_html=True,
-            )
+        st.write("")
 
     for i, (key, (label, _)) in enumerate(paginas.items()):
         with cols[i + 1]:
             ativo = pagina_atual == key
-            ic    = ICONES.get(key, "")
             if st.button(
-                ic + " " + label,
+                ICONES.get(key, "") + " " + label,
                 key="navbar_btn_" + key,
                 use_container_width=True,
                 type="primary" if ativo else "secondary",
@@ -123,49 +153,29 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
                 st.rerun()
 
     with cols[n + 1]:
-        st.markdown(
-            '<div style="text-align:right;line-height:1.3;padding-top:6px">'
-            '<span style="color:white;font-size:0.75rem;font-weight:600">'
-            + nome + "</span><br>"
-            '<span style="color:rgba(255,255,255,0.6);font-size:0.65rem">'
-            "Plano " + plano + "</span></div>",
-            unsafe_allow_html=True,
-        )
-
-    with cols[n + 2]:
         if st.button("Sair", key="navbar_btn_sair", use_container_width=True):
             logout()
 
 
 def _navbar_admin():
     logo_r = obter_logo_sistema()
-    cols   = st.columns([1.5, 4, 0.8])
+    if logo_r:
+        dados, ext = logo_r
+        logo_html = '<img src="' + _img_b64(dados, ext) + '" style="height:34px;margin-right:12px"/>'
+    else:
+        logo_html = '<span class="fm-logo">FielMordomo</span>'
 
-    with cols[0]:
-        if logo_r:
-            dados, ext = logo_r
-            st.markdown(
-                '<img src="' + _img_b64(dados, ext) + '" style="height:36px;'
-                'object-fit:contain;margin-top:4px"/>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                '<span style="color:white;font-weight:700;font-size:1rem">'
-                'FielMordomo</span>',
-                unsafe_allow_html=True,
-            )
+    st.markdown(
+        '<div id="fm-navbar">'
+        + logo_html
+        + '<div class="fm-sep"></div>'
+        + '<span style="color:rgba(255,255,255,0.85);font-size:0.85rem">Painel Administrador</span>'
+        + '</div>',
+        unsafe_allow_html=True,
+    )
 
-    with cols[1]:
-        st.markdown(
-            '<span style="color:rgba(255,255,255,0.85);font-size:0.85rem">'
-            '⚙️ Painel Administrador</span>',
-            unsafe_allow_html=True,
-        )
-
-    with cols[2]:
-        if st.button("Sair", key="navbar_btn_sair_admin", use_container_width=True):
-            logout()
+    if st.button("Sair", key="navbar_btn_sair_admin"):
+        logout()
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────
