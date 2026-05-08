@@ -24,6 +24,24 @@ CONGREGACOES = [
     "",
 ]
 
+BAIRROS_MINACU = [
+    "Setor Central",
+    "Vila Sama",
+    "Vila de Furnas",
+    "Setor Industrial",
+    "Setor Residencial",
+    "Setor Norte",
+    "Setor Sul",
+    "Setor Leste",
+    "Setor Oeste",
+    "Vila Nova",
+    "Jardim America",
+    "Jardim Goias",
+    "Parque das Nacoes",
+    "Zona Rural",
+    "",
+]
+
 
 def _formatar_cpf(cpf: str) -> str:
     digits = "".join(c for c in cpf if c.isdigit())
@@ -109,7 +127,7 @@ def render():
             with col2:
                 numero = st.text_input("Numero", placeholder="123")
 
-            bairro = st.text_input("Bairro")
+            bairro = st.selectbox("Bairro", BAIRROS_MINACU)
             col3, col4 = st.columns([2, 1])
             with col3:
                 cidade = st.text_input("Cidade")
@@ -181,7 +199,6 @@ def render():
                                    value=_formatar_cpf(cpf_atual) if cpf_atual else "",
                                    placeholder="000.000.000-00", key="e_cpf")
 
-        # Data de nascimento
         dn_atual = _val(sel, "data_nascimento")
         try:
             dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
@@ -225,7 +242,10 @@ def render():
         with col2:
             num_edit = st.text_input("Numero", value=_val(sel, "numero"), key="e_num")
 
-        bai_edit = st.text_input("Bairro", value=_val(sel, "bairro"), key="e_bai")
+        bairro_atual = _val(sel, "bairro")
+        idx_bairro   = BAIRROS_MINACU.index(bairro_atual) if bairro_atual in BAIRROS_MINACU else 0
+        bai_edit     = st.selectbox("Bairro", BAIRROS_MINACU, index=idx_bairro, key="e_bai")
+
         col3, col4 = st.columns([2, 1])
         with col3:
             cid_edit = st.text_input("Cidade", value=_val(sel, "cidade"), key="e_cid")
