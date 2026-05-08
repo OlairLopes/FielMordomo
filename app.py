@@ -60,10 +60,13 @@ def _injetar_css():
         font-weight: 700 !important;
     }
     .block-container {
-        padding-top: 80px !important;
+        padding-top: 90px !important;
         padding-left: 2rem !important;
         padding-right: 2rem !important;
+        max-width: 100% !important;
     }
+    section[data-testid="stSidebar"] { display: none !important; }
+    div[data-testid="stForm"] { margin-top: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
