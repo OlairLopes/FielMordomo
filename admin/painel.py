@@ -1,4 +1,4 @@
-"""Painel do super admin — gerencia igrejas, planos, senhas e logos."""
+"""Painel do super admin — gerencia igrejas, planos, senhas, logos e backup."""
 
 import streamlit as st
 import pandas as pd
@@ -20,8 +20,8 @@ def render():
     st.title("FielMordomo — Painel Admin")
     st.caption("Gerenciamento de igrejas e planos")
 
-    aba1, aba2, aba3, aba4 = st.tabs([
-        "Igrejas", "Nova igreja", "Logos", "Configuracoes"
+    aba1, aba2, aba3, aba4, aba5 = st.tabs([
+        "Igrejas", "Nova igreja", "Logos", "Backup", "Configuracoes"
     ])
 
     with aba1:
@@ -31,12 +31,13 @@ def render():
     with aba3:
         _gerenciar_logos()
     with aba4:
+        _backup_admin()
+    with aba5:
         _configuracoes()
 
 
 def _listar_igrejas():
     df = listar_igrejas()
-
     if df.empty:
         st.info("Nenhuma igreja cadastrada ainda.")
         return
@@ -49,13 +50,11 @@ def _listar_igrejas():
     st.subheader("Editar igreja")
 
     rotuloslist = df.apply(
-        lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}',
-        axis=1,
+        lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}', axis=1
     ).tolist()
     rotulo = st.selectbox("Selecione a igreja", rotuloslist)
     sel    = df[df.apply(
-        lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}' == rotulo,
-        axis=1,
+        lambda r: f'{int(r["id"])} | {r["nome"]} | {r["slug"]} | {r["plano"]}' == rotulo, axis=1
     )].iloc[0]
     id_ig  = int(sel["id"])
     slug   = str(sel["slug"])
@@ -132,7 +131,6 @@ def _criar_igreja():
 def _gerenciar_logos():
     st.subheader("Logos do sistema")
 
-    # ── Logo do FielMordomo ───────────────────────────────────────────────
     st.markdown("#### Logo do FielMordomo")
     st.caption("Aparece na tela de login e na sidebar do administrador.")
 
@@ -156,8 +154,6 @@ def _gerenciar_logos():
         st.rerun()
 
     st.divider()
-
-    # ── Logo por igreja ───────────────────────────────────────────────────
     st.markdown("#### Logo por igreja")
     st.caption("Aparece na sidebar apos o login da igreja.")
 
@@ -166,12 +162,10 @@ def _gerenciar_logos():
         st.info("Nenhuma igreja cadastrada ainda.")
         return
 
-    opcoes_ig = df.apply(
-        lambda r: f'{r["nome"]} ({r["slug"]})', axis=1
-    ).tolist()
-    ig_sel = st.selectbox("Selecione a igreja", opcoes_ig, key="sel_ig_logo")
-    idx    = opcoes_ig.index(ig_sel)
-    slug   = str(df.iloc[idx]["slug"])
+    opcoes_ig = df.apply(lambda r: f'{r["nome"]} ({r["slug"]})', axis=1).tolist()
+    ig_sel    = st.selectbox("Selecione a igreja", opcoes_ig, key="sel_ig_logo")
+    idx       = opcoes_ig.index(ig_sel)
+    slug      = str(df.iloc[idx]["slug"])
 
     logo_ig = obter_logo_igreja(slug)
     if logo_ig:
@@ -191,6 +185,66 @@ def _gerenciar_logos():
         salvar_logo_igreja(slug, arquivo_ig.read(), ext)
         st.toast(f"Logo de {ig_sel} salvo!")
         st.rerun()
+
+
+def _backup_admin():
+    import io, zipfile
+    from data.repository import carregar_cadastros, carregar_lancamentos, _tenant_db
+    import pandas as _pd
+
+    st.subheader("Backup de todas as igrejas")
+    df_igrejas = listar_igrejas()
+
+    if df_igrejas.empty:
+        st.info("Nenhuma igreja cadastrada.")
+        return
+
+    st.caption(f"{len(df_igrejas)} igreja(s) encontrada(s).")
+
+    if st.button("Gerar backup de todas as igrejas", type="primary", key="btn_backup_admin"):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for _, row in df_igrejas.iterrows():
+                slug = str(row["slug"])
+                try:
+                    df_c = carregar_cadastros(slug)
+                    zf.writestr(f"{slug}/cadastros.csv",
+                                df_c.to_csv(index=False, encoding="utf-8-sig"))
+                except Exception:
+                    pass
+                try:
+                    df_l = carregar_lancamentos(slug)
+                    if not df_l.empty and "data" in df_l.columns:
+                        df_l = df_l.copy()
+                        df_l["data"] = _pd.to_datetime(df_l["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+                    zf.writestr(f"{slug}/lancamentos.csv",
+                                df_l.to_csv(index=False, encoding="utf-8-sig"))
+                except Exception:
+                    pass
+                try:
+                    db = _tenant_db(slug)
+                    if db.exists():
+                        zf.writestr(f"{slug}/banco_{slug}.db", db.read_bytes())
+                except Exception:
+                    pass
+
+        buf.seek(0)
+        st.session_state["backup_admin_dados"] = buf.read()
+        st.session_state["backup_admin_nome"]  = (
+            f"backup_todas_igrejas_{_pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
+        st.toast("Backup gerado!")
+
+    if "backup_admin_dados" in st.session_state:
+        st.download_button(
+            "Baixar backup completo",
+            data=st.session_state["backup_admin_dados"],
+            file_name=st.session_state["backup_admin_nome"],
+            mime="application/zip",
+            key="dl_backup_admin",
+            type="primary",
+            use_container_width=True,
+        )
 
 
 def _configuracoes():
