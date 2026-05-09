@@ -16,122 +16,109 @@ from data.repository import (
 from utils.helpers import slug_da_sessao, formatar_moeda
 
 
-def _nome_arquivo(prefixo: str, ext: str, slug: str) -> str:
+def _nome_arquivo(prefixo, ext, slug):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefixo}_{slug}_{ts}.{ext}"
+    return prefixo + "_" + slug + "_" + ts + "." + ext
 
 
-def _gerar_zip_csv(slug: str) -> bytes:
-    df_cad  = carregar_cadastros(slug)
-    df_lanc = carregar_lancamentos(slug)
-
-    if not df_lanc.empty and "data" in df_lanc.columns:
-        df_lanc = df_lanc.copy()
-        df_lanc["data"] = pd.to_datetime(df_lanc["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"cadastros_{slug}.csv",
-                    df_cad.to_csv(index=False, encoding="utf-8-sig"))
-        zf.writestr(f"lancamentos_{slug}.csv",
-                    df_lanc.to_csv(index=False, encoding="utf-8-sig"))
-        zf.writestr(f"resumo_{slug}.txt", _gerar_resumo(df_cad, df_lanc, slug))
-
-    buf.seek(0)
-    return buf.read()
-
-
-def _gerar_sqlite(slug: str) -> bytes:
+def _gerar_sqlite(slug):
     db_path = _tenant_db(slug)
     if db_path.exists():
         return db_path.read_bytes()
     return b""
 
 
-def _gerar_zip_completo(slug: str) -> bytes:
-    df_cad  = carregar_cadastros(slug)
-    df_lanc = carregar_lancamentos(slug)
-
-    if not df_lanc.empty and "data" in df_lanc.columns:
-        df_lanc = df_lanc.copy()
-        df_lanc["data"] = pd.to_datetime(df_lanc["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"cadastros_{slug}.csv",
-                    df_cad.to_csv(index=False, encoding="utf-8-sig"))
-        zf.writestr(f"lancamentos_{slug}.csv",
-                    df_lanc.to_csv(index=False, encoding="utf-8-sig"))
-        zf.writestr(f"resumo_{slug}.txt", _gerar_resumo(df_cad, df_lanc, slug))
-        db_bytes = _gerar_sqlite(slug)
-        if db_bytes:
-            zf.writestr(f"banco_{slug}.db", db_bytes)
-
-    buf.seek(0)
-    return buf.read()
-
-
-def _gerar_resumo(df_cad: pd.DataFrame, df_lanc: pd.DataFrame, slug: str) -> str:
+def _gerar_resumo(df_cad, df_lanc, slug):
     agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     linhas = [
         "=" * 50,
-        "FIELMORDOMO — RESUMO DO BACKUP",
+        "FIELMORDOMO - RESUMO DO BACKUP",
         "=" * 50,
-        f"Igreja: {slug}",
-        f"Data/hora: {agora}",
+        "Igreja: " + slug,
+        "Data/hora: " + agora,
         "",
         "--- CADASTROS ---",
-        f"Total: {len(df_cad)} registros",
+        "Total: " + str(len(df_cad)) + " registros",
     ]
 
     if not df_cad.empty and "tipo_cadastro" in df_cad.columns:
         membros      = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "MEMBRO"])
         fornecedores = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "FORNECEDOR"])
-        linhas.append(f"  Membros: {membros}")
-        linhas.append(f"  Fornecedores: {fornecedores}")
+        linhas.append("  Membros: " + str(membros))
+        linhas.append("  Fornecedores: " + str(fornecedores))
 
-    linhas += ["", "--- LANCAMENTOS ---", f"Total: {len(df_lanc)} registros"]
+    linhas += ["", "--- LANCAMENTOS ---", "Total: " + str(len(df_lanc)) + " registros"]
 
     if not df_lanc.empty:
-        if "valor" in df_lanc.columns:
-            df_lanc = df_lanc.copy()
-            df_lanc["valor"] = pd.to_numeric(df_lanc["valor"], errors="coerce").fillna(0)
-        if "tipo" in df_lanc.columns:
-            entradas = df_lanc[df_lanc["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-            saidas   = df_lanc[df_lanc["tipo"].str.upper() == "SAIDA"]["valor"].sum()
-            linhas.append(f"  Total entradas: {formatar_moeda(entradas)}")
-            linhas.append(f"  Total saidas:   {formatar_moeda(saidas)}")
-            linhas.append(f"  Saldo:          {formatar_moeda(entradas - saidas)}")
+        df_l = df_lanc.copy()
+        if "valor" in df_l.columns:
+            df_l["valor"] = pd.to_numeric(df_l["valor"], errors="coerce").fillna(0)
+        if "tipo" in df_l.columns:
+            entradas = df_l[df_l["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+            saidas   = df_l[df_l["tipo"].str.upper() == "SAIDA"]["valor"].sum()
+            linhas.append("  Total entradas: " + formatar_moeda(entradas))
+            linhas.append("  Total saidas:   " + formatar_moeda(saidas))
+            linhas.append("  Saldo:          " + formatar_moeda(entradas - saidas))
 
     linhas += [
         "",
         "=" * 50,
-        "FielMordomo — Sistema de Gestao Financeira",
+        "FielMordomo - Sistema de Gestao Financeira",
         "=" * 50,
     ]
     return "\n".join(linhas)
 
 
-def _verificar_backup_automatico(slug: str):
+def _gerar_zip_completo(slug):
+    df_cad  = carregar_cadastros(slug)
+    df_lanc = carregar_lancamentos(slug)
+
+    if not df_lanc.empty and "data" in df_lanc.columns:
+        df_lanc = df_lanc.copy()
+        df_lanc["data"] = pd.to_datetime(
+            df_lanc["data"], errors="coerce"
+        ).dt.strftime("%d/%m/%Y").fillna("")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(
+            "cadastros_" + slug + ".csv",
+            df_cad.to_csv(index=False, encoding="utf-8-sig"),
+        )
+        zf.writestr(
+            "lancamentos_" + slug + ".csv",
+            df_lanc.to_csv(index=False, encoding="utf-8-sig"),
+        )
+        zf.writestr(
+            "resumo_" + slug + ".txt",
+            _gerar_resumo(df_cad, df_lanc, slug),
+        )
+        db_bytes = _gerar_sqlite(slug)
+        if db_bytes:
+            zf.writestr("banco_" + slug + ".db", db_bytes)
+
+    buf.seek(0)
+    return buf.read()
+
+
+def _verificar_backup_automatico(slug):
     agora = datetime.datetime.now()
     hoje  = agora.date()
 
-    # Backup diario
-    ultimo_diario = st.session_state.get(f"backup_diario_{slug}")
+    ultimo_diario = st.session_state.get("backup_diario_" + slug)
     if ultimo_diario != hoje:
         dados = _gerar_zip_completo(slug)
-        st.session_state[f"backup_diario_{slug}"]       = hoje
-        st.session_state[f"backup_diario_dados_{slug}"] = dados
-        st.session_state[f"backup_diario_nome_{slug}"]  = _nome_arquivo("backup_diario", "zip", slug)
+        st.session_state["backup_diario_" + slug]       = hoje
+        st.session_state["backup_diario_dados_" + slug] = dados
+        st.session_state["backup_diario_nome_" + slug]  = _nome_arquivo("backup_diario", "zip", slug)
 
-    # Backup semanal
     semana_atual   = agora.isocalendar()[1]
-    ultimo_semanal = st.session_state.get(f"backup_semanal_{slug}")
+    ultimo_semanal = st.session_state.get("backup_semanal_" + slug)
     if ultimo_semanal != semana_atual:
         dados = _gerar_zip_completo(slug)
-        st.session_state[f"backup_semanal_{slug}"]       = semana_atual
-        st.session_state[f"backup_semanal_dados_{slug}"] = dados
-        st.session_state[f"backup_semanal_nome_{slug}"]  = _nome_arquivo("backup_semanal", "zip", slug)
+        st.session_state["backup_semanal_" + slug]       = semana_atual
+        st.session_state["backup_semanal_dados_" + slug] = dados
+        st.session_state["backup_semanal_nome_" + slug]  = _nome_arquivo("backup_semanal", "zip", slug)
 
 
 def render():
@@ -148,7 +135,7 @@ def render():
 
         with c1:
             st.markdown("**CSV (planilhas)**")
-            st.caption("Cadastros e lancamentos em formato CSV — abre no Excel.")
+            st.caption("Cadastros e lancamentos em CSV — abre no Excel.")
             if st.button("Gerar CSV", key="btn_csv", use_container_width=True):
                 dados = _gerar_zip_completo(slug)
                 st.session_state["backup_manual_csv"]      = dados
@@ -213,10 +200,10 @@ def render():
 
         with c1:
             st.markdown("**Backup diario**")
-            ultimo = st.session_state.get(f"backup_diario_{slug}")
-            st.caption(f"Gerado em: {ultimo.strftime('%d/%m/%Y') if ultimo else '-'}")
-            dados_d = st.session_state.get(f"backup_diario_dados_{slug}")
-            nome_d  = st.session_state.get(f"backup_diario_nome_{slug}", "backup_diario.zip")
+            ultimo = st.session_state.get("backup_diario_" + slug)
+            st.caption("Gerado em: " + (ultimo.strftime("%d/%m/%Y") if ultimo else "-"))
+            dados_d = st.session_state.get("backup_diario_dados_" + slug)
+            nome_d  = st.session_state.get("backup_diario_nome_" + slug, "backup_diario.zip")
             if dados_d:
                 st.download_button(
                     "Baixar backup diario",
@@ -232,10 +219,10 @@ def render():
 
         with c2:
             st.markdown("**Backup semanal**")
-            semana = st.session_state.get(f"backup_semanal_{slug}")
-            st.caption(f"Semana: {semana if semana else '-'}")
-            dados_s = st.session_state.get(f"backup_semanal_dados_{slug}")
-            nome_s  = st.session_state.get(f"backup_semanal_nome_{slug}", "backup_semanal.zip")
+            semana = st.session_state.get("backup_semanal_" + slug)
+            st.caption("Semana: " + (str(semana) if semana else "-"))
+            dados_s = st.session_state.get("backup_semanal_dados_" + slug)
+            nome_s  = st.session_state.get("backup_semanal_nome_" + slug, "backup_semanal.zip")
             if dados_s:
                 st.download_button(
                     "Baixar backup semanal",
