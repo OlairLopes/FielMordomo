@@ -38,7 +38,7 @@ def _injetar_css():
         top: 0; left: 0; right: 0;
         z-index: 999999;
         height: 52px;
-        background: #060b40;
+        background: #0F6E56;
         display: flex;
         align-items: center;
         padding: 0 20px;
@@ -82,7 +82,6 @@ def _injetar_css():
         font-size: 0.6rem;
         color: rgba(255,255,255,0.6);
     }
-
     .fm-btn-container {
         position: fixed;
         top: 0; left: 0; right: 0;
@@ -119,7 +118,6 @@ def _injetar_css():
         color: white !important;
         font-weight: 700 !important;
     }
-
     .fm-btn-sair {
         position: fixed;
         top: 8px;
@@ -141,7 +139,6 @@ def _injetar_css():
         background: rgba(255,255,255,0.15) !important;
         color: white !important;
     }
-
     .block-container {
         padding-top: 70px !important;
         padding-left: 2rem !important;
@@ -164,6 +161,7 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
         "lancamentos": "💵",
         "relatorios":  "📋",
         "dashboard":   "📊",
+        "backup":      "💾",
     }
 
     nome   = igreja.get("nome", "FielMordomo")
@@ -176,7 +174,6 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
     else:
         logo_html = '<span class="fm-logo">FielMordomo</span>'
 
-    # Navbar visual decorativa
     st.markdown(
         '<div id="fm-navbar">'
         + logo_html
@@ -188,7 +185,6 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
         unsafe_allow_html=True,
     )
 
-    # Botoes reais sobrepostos na navbar
     st.markdown('<div class="fm-btn-container">', unsafe_allow_html=True)
     cols = st.columns(len(paginas))
     for i, (key, (label, _)) in enumerate(paginas.items()):
@@ -205,7 +201,6 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Botao sair fixo no canto direito
     st.markdown('<div class="fm-btn-sair">', unsafe_allow_html=True)
     if st.button("Sair", key="nb_sair"):
         logout()
@@ -251,7 +246,7 @@ if modo == "admin":
     painel.render()
 
 elif modo == "igreja":
-    from modules import home, cadastros, lancamentos, relatorios, graficos
+    from modules import home, cadastros, lancamentos, relatorios, graficos, backup
 
     PAGINAS = {
         "home":        ("Inicio",      home),
@@ -259,6 +254,7 @@ elif modo == "igreja":
         "lancamentos": ("Lancamentos", lancamentos),
         "relatorios":  ("Relatorios",  relatorios),
         "dashboard":   ("Dashboard",   graficos),
+        "backup":      ("Backup",      backup),
     }
 
     if "pagina" not in st.session_state:
