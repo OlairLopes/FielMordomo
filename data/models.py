@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Optional
 
@@ -48,10 +48,21 @@ class Cadastro:
             erros.append("Nome e obrigatorio.")
         if self.tipo_cadastro not in ("Membro", "Fornecedor"):
             erros.append("Tipo de cadastro invalido.")
-        if self.cpf.strip():
+
+        if self.tipo_cadastro == "Membro":
             cpf_limpo = "".join(c for c in self.cpf if c.isdigit())
-            if len(cpf_limpo) != 11:
+            if not cpf_limpo:
+                erros.append("CPF e obrigatorio para membros.")
+            elif len(cpf_limpo) != 11:
                 erros.append("CPF invalido. Informe 11 digitos.")
+
+        if self.tipo_cadastro == "Fornecedor":
+            cnpj_limpo = "".join(c for c in self.cpf if c.isdigit())
+            if not cnpj_limpo:
+                erros.append("CNPJ e obrigatorio para fornecedores.")
+            elif len(cnpj_limpo) != 14:
+                erros.append("CNPJ invalido. Informe 14 digitos.")
+
         if self.cep.strip():
             cep_limpo = "".join(c for c in self.cep if c.isdigit())
             if len(cep_limpo) != 8:
