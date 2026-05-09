@@ -269,20 +269,21 @@ def carregar_cadastros(slug: str) -> pd.DataFrame:
 
 
 def cpf_existe(slug: str, cpf: str, id_excluir: int = None) -> bool:
+    """Verifica se CPF ou CNPJ ja esta cadastrado."""
     if not cpf.strip():
         return False
-    cpf_limpo = "".join(c for c in cpf if c.isdigit())
+    doc_limpo = "".join(c for c in cpf if c.isdigit())
     db = _tenant_db(slug)
     with _conn(db) as conn:
         if id_excluir:
             row = conn.execute(
                 "SELECT 1 FROM cadastros WHERE cpf=? AND id_cadastro!=? LIMIT 1",
-                (cpf_limpo, id_excluir),
+                (doc_limpo, id_excluir),
             ).fetchone()
         else:
             row = conn.execute(
                 "SELECT 1 FROM cadastros WHERE cpf=? LIMIT 1",
-                (cpf_limpo,),
+                (doc_limpo,),
             ).fetchone()
     return row is not None
 
