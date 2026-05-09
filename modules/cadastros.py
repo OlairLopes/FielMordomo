@@ -1,4 +1,4 @@
-import datetime
+"import datetime
 import streamlit as st
 import pandas as pd
 
@@ -20,28 +20,38 @@ FUNCOES = [
 CONGREGACOES = [
     "AD Serrinha",
     "AD Paraiso",
-    "AD Vila Nova",
     "",
 ]
 
 BAIRROS_MINACU = [
-    "Setor Central",
-    "Vila Sama",
+    "Centro",
+    "Nova Esperança",
+    "Jardim Arimatéia",
+    "Jardim Boa Vista",
+    "Jardim Brasil",
+    "Jardim Emília",
+    "Jardim Floresta",
+    "Jardim Floresta II",
+    "Conj. Hab. Primavera",
+    "Minaçu Norte",
+    "Patrimônio do Trevo",
+    "Patrimônio do Vicente",
+    "Residencial Cana Brava",
+    "Residencial Tocantins",
+    "Marajoara",
+    "Serrinha",
+    "Vila Batista",
+    "Vila Residencial Sama",
     "Vila de Furnas",
-    "Setor Industrial",
-    "Setor Residencial",
-    "Setor Norte",
-    "Setor Sul",
-    "Setor Leste",
-    "Setor Oeste",
-    "Vila Nova",
-    "Jardim America",
-    "Jardim Goias",
-    "Parque das Nacoes",
-    "Zona Rural",
+    "Vila de Malta",
+    "Vila Manchester",
+    "Vila Menezes",
+    "Vila Moraes",
+    "Vila São Geraldo",
+    "Vila União",
+    "Wilson Vaz",
     "",
 ]
-
 
 def _formatar_cpf(cpf: str) -> str:
     digits = "".join(c for c in cpf if c.isdigit())
