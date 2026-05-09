@@ -47,187 +47,226 @@ def _logo_base64(slug: str):
 
 
 def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
+    """Gera comprovante no estilo cupom fiscal para impressao."""
+
     nome_igreja  = igreja.get("nome", "Igreja")
     data_fmt     = pd.to_datetime(lancamento.get("data"), errors="coerce")
     data_str     = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else "-"
-    data_emissao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-    id_lanc      = lancamento.get("id_lancamento", "-")
+    data_emissao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    id_lanc      = lancamento.get("id_lancamento", 0)
     tipo         = lancamento.get("tipo", "-")
     categoria    = lancamento.get("categoria", "-")
-    descricao    = lancamento.get("descricao", "-") or "-"
+    descricao    = lancamento.get("descricao", "") or ""
     valor        = formatar_moeda(lancamento.get("valor", 0))
     nome_vinc    = lancamento.get("nome_cadastro", "") or "Nao vinculado"
     tipo_vinc    = lancamento.get("tipo_cadastro", "") or ""
     forma_pag    = lancamento.get("forma_pagamento", "Dinheiro") or "Dinheiro"
 
-    cor_tipo = "#1D9E75" if tipo == "Entrada" else "#D85A30"
-
     logo_b64 = _logo_base64(slug)
     if logo_b64:
-        logo_tag = f'<img src="{logo_b64}" style="max-height:80px;max-width:200px;object-fit:contain"/>'
+        logo_html = (
+            '<div style="text-align:center;margin-bottom:6px">'
+            '<img src="' + logo_b64 + '" style="max-height:60px;max-width:160px;'
+            'object-fit:contain"/></div>'
+        )
     else:
-        logo_tag = '<span style="font-size:1.4rem;font-weight:700;color:#1D9E75">FielMordomo</span>'
+        logo_html = ""
+
+    sep  = "-" * 40
+    sep2 = "=" * 40
 
     vinc_str = nome_vinc
     if tipo_vinc:
         vinc_str = nome_vinc + " (" + tipo_vinc + ")"
 
-    html = f"""
+    nome_assinatura = ("Pr. " + nome_vinc) if nome_vinc != "Nao vinculado" else "Assinatura"
+
+    html = """
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8"/>
-  <title>Comprovante #{id_lanc}</title>
+  <title>Cupom #""" + str(id_lanc).zfill(6) + """</title>
   <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{
-      font-family: Arial, sans-serif;
-      font-size: 13px;
-      color: #1a1a1a;
-      background: #fff;
-      padding: 20px;
-    }}
-    .comprovante {{
-      max-width: 680px;
-      margin: 0 auto;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      overflow: hidden;
-    }}
-    .cabecalho {{
-      background: #f8f9fa;
-      border-bottom: 2px solid #1D9E75;
-      padding: 20px 24px;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #f0f0f0;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }}
-    .cabecalho-dir {{ text-align: right; }}
-    .cabecalho-dir h1 {{
-      font-size: 1rem;
-      font-weight: 700;
-      color: #1a1a1a;
+      justify-content: center;
+      padding: 20px;
+    }
+    .cupom {
+      background: white;
+      width: 320px;
+      padding: 16px 14px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      color: #111;
+      box-shadow: 2px 2px 8px rgba(0,0,0,0.15);
+    }
+    .cupom::before, .cupom::after {
+      content: '';
+      display: block;
+      height: 10px;
+      background:
+        radial-gradient(circle at 50% 0%, white 6px, #f0f0f0 6px) 0 0 / 16px 10px repeat-x;
+    }
+    .cupom::after {
+      background:
+        radial-gradient(circle at 50% 100%, white 6px, #f0f0f0 6px) 0 100% / 16px 10px repeat-x;
+      margin-top: 8px;
+    }
+    .centro { text-align: center; }
+    .nome-igreja {
+      font-size: 14px;
+      font-weight: bold;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 6px 0 2px;
+    }
+    .subtitulo {
+      text-align: center;
+      font-size: 10px;
+      color: #555;
       margin-bottom: 4px;
-    }}
-    .cabecalho-dir p {{ font-size: 0.75rem; color: #666; }}
-    .titulo-comprovante {{
-      background: {cor_tipo};
-      color: white;
+    }
+    .sep  { color: #aaa; margin: 6px 0; letter-spacing: -1px; }
+    .sep2 { color: #333; margin: 6px 0; letter-spacing: -1px; }
+    .linha {
+      display: flex;
+      justify-content: space-between;
+      margin: 3px 0;
+      font-size: 11px;
+    }
+    .linha .label { color: #555; }
+    .linha .valor { font-weight: 600; text-align: right; max-width: 55%; word-break: break-word; }
+    .tipo-badge {
       text-align: center;
-      padding: 10px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }}
-    .corpo {{ padding: 24px; }}
-    .numero {{
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 0.1em;
+      padding: 4px 0;
+      margin: 4px 0;
+    }
+    .valor-total {
       text-align: center;
-      font-size: 0.75rem;
-      color: #888;
-      margin-bottom: 20px;
-    }}
-    .numero span {{ font-weight: 700; color: #1a1a1a; }}
-    table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-    table tr {{ border-bottom: 1px solid #f0f0f0; }}
-    table tr:last-child {{ border-bottom: none; }}
-    table td {{ padding: 10px 8px; vertical-align: top; }}
-    table td:first-child {{
-      width: 38%;
-      font-weight: 600;
+      font-size: 20px;
+      font-weight: bold;
+      margin: 8px 0 4px;
+      letter-spacing: 0.02em;
+    }
+    .cupom-num {
+      text-align: center;
+      font-size: 10px;
+      color: #777;
+      margin-bottom: 4px;
+    }
+    .assinatura-bloco {
+      margin-top: 12px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+    .assinatura-item {
+      flex: 1;
+      max-width: 45%;
+    }
+    .assinatura-linha {
+      border-top: 1px dashed #aaa;
+      margin-top: 28px;
+      padding-top: 4px;
+      text-align: center;
+      font-size: 10px;
       color: #555;
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }}
-    table td:last-child {{ color: #1a1a1a; font-size: 0.9rem; }}
-    .valor-destaque {{
-      font-size: 1.3rem;
-      font-weight: 700;
-      color: {cor_tipo};
-    }}
-    .assinatura {{ margin-top: 30px; display: flex; gap: 40px; }}
-    .campo-assinatura {{ flex: 1; text-align: center; }}
-    .linha-assinatura {{
-      border-top: 1px solid #1a1a1a;
-      padding-top: 6px;
-      margin-top: 48px;
-      font-size: 0.75rem;
-      color: #555;
-    }}
-    .rodape {{
-      background: #f8f9fa;
-      border-top: 1px solid #ddd;
-      padding: 12px 24px;
+      width: 80%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .rodape {
       text-align: center;
-      font-size: 0.7rem;
+      font-size: 9px;
       color: #888;
-    }}
-    @media print {{
-      body {{ padding: 0; }}
-      .comprovante {{ border: none; border-radius: 0; }}
-      .btn-imprimir {{ display: none !important; }}
-    }}
+      margin-top: 8px;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .cupom { box-shadow: none; width: 100%; max-width: 320px; margin: 0 auto; }
+      .btn-imprimir { display: none !important; }
+    }
   </style>
 </head>
 <body>
 
-<div style="text-align:center;margin-bottom:16px">
-  <button class="btn-imprimir"
-    onclick="window.print()"
-    style="background:#1D9E75;color:white;border:none;padding:10px 28px;
-           border-radius:6px;font-size:14px;cursor:pointer;font-weight:600">
-    Imprimir comprovante
+<div style="text-align:center;margin-bottom:12px">
+  <button class="btn-imprimir" onclick="window.print()"
+    style="background:#0F6E56;color:white;border:none;padding:8px 24px;
+           border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">
+    Imprimir cupom
   </button>
 </div>
 
-<div class="comprovante">
-  <div class="cabecalho">
-    <div>{logo_tag}</div>
-    <div class="cabecalho-dir">
-      <h1>{nome_igreja}</h1>
-      <p>Comprovante de lancamento</p>
-      <p>Emitido em: {data_emissao}</p>
+<div class="cupom">
+  """ + logo_html + """
+  <div class="nome-igreja">""" + nome_igreja + """</div>
+  <div class="subtitulo">Comprovante de Lancamento</div>
+  <div class="sep centro">""" + sep + """</div>
+
+  <div class="cupom-num">CUPOM N: """ + str(id_lanc).zfill(6) + """</div>
+  <div class="cupom-num">Emitido: """ + data_emissao + """</div>
+
+  <div class="sep centro">""" + sep + """</div>
+
+  <div class="tipo-badge">*** """ + tipo.upper() + """ - """ + categoria.upper() + """ ***</div>
+
+  <div class="sep centro">""" + sep + """</div>
+
+  <div class="linha">
+    <span class="label">Data</span>
+    <span class="valor">""" + data_str + """</span>
+  </div>
+  <div class="linha">
+    <span class="label">Categoria</span>
+    <span class="valor">""" + categoria + """</span>
+  </div>
+  <div class="linha">
+    <span class="label">Vinculado</span>
+    <span class="valor">""" + vinc_str + """</span>
+  </div>
+  <div class="linha">
+    <span class="label">Descricao</span>
+    <span class="valor">""" + (descricao if descricao else "-") + """</span>
+  </div>
+  <div class="linha">
+    <span class="label">Pagamento</span>
+    <span class="valor">""" + forma_pag + """</span>
+  </div>
+
+  <div class="sep2 centro">""" + sep2 + """</div>
+
+  <div class="subtitulo">VALOR TOTAL</div>
+  <div class="valor-total">""" + valor + """</div>
+
+  <div class="sep2 centro">""" + sep2 + """</div>
+
+  <div class="assinatura-bloco">
+    <div class="assinatura-item">
+      <div class="assinatura-linha">Tesoureiro</div>
+    </div>
+    <div class="assinatura-item">
+      <div class="assinatura-linha">""" + nome_assinatura + """</div>
     </div>
   </div>
 
-  <div class="titulo-comprovante">{tipo} - {categoria}</div>
-
-  <div class="corpo">
-    <p class="numero">Comprovante N <span>#{id_lanc:04d}</span></p>
-
-    <table>
-      <tr><td>Data do lancamento</td><td>{data_str}</td></tr>
-      <tr><td>Tipo</td><td>{tipo}</td></tr>
-      <tr><td>Categoria</td><td>{categoria}</td></tr>
-      <tr><td>Descricao</td><td>{descricao}</td></tr>
-      <tr><td>Vinculado a</td><td>{vinc_str}</td></tr>
-      <tr><td>Forma de pagamento</td><td>{forma_pag}</td></tr>
-      <tr><td>Valor</td><td><span class="valor-destaque">{valor}</span></td></tr>
-    </table>
-
-    <div class="assinatura">
-      <div class="campo-assinatura">
-        <div class="linha-assinatura">Responsavel pelo lancamento</div>
-      </div>
-      <div class="campo-assinatura">
-        <div class="linha-assinatura">
-          {nome_vinc if nome_vinc != "Nao vinculado" else "Assinatura"}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="rodape">
-    FielMordomo - Sistema de Gestao Financeira para Igrejas |
-    Documento gerado em {data_emissao}
-  </div>
+  <div class="sep centro">""" + sep + """</div>
+  <div class="rodape">FielMordomo - Sistema de Gestao Financeira</div>
+  <div class="rodape">para Igrejas</div>
 </div>
 
 <script>
-  window.onload = function() {{
-    setTimeout(function() {{ window.print(); }}, 800);
-  }};
+  window.onload = function() {
+    setTimeout(function() { window.print(); }, 800);
+  };
 </script>
 </body>
 </html>
@@ -342,7 +381,7 @@ def render():
             rotulo_imp = st.selectbox("Selecione o lancamento para imprimir",
                                       df_p["rotulo"].tolist(), key="sel_imp")
             sel_imp = df_p[df_p["rotulo"] == rotulo_imp].iloc[0]
-            if st.button("Gerar comprovante", type="primary", key="btn_imprimir"):
+            if st.button("Gerar cupom", type="primary", key="btn_imprimir"):
                 html = _gerar_html_comprovante(dict(sel_imp), igreja, slug)
                 components.html(html, height=700, scrolling=True)
 
