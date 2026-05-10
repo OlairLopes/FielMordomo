@@ -20,22 +20,23 @@ FUNCOES = [
 CONGREGACOES = [
     "AD Serrinha",
     "AD Paraiso",
+    "AD Vila Nova",
     "",
 ]
 
 BAIRROS_MINACU = [
     "Setor Central",
-    "Nova Esperança",
-    "Jardim Arimatéia",
+    "Nova Esperanca",
+    "Jardim Arimateia",
     "Jardim Boa Vista",
     "Jardim Brasil",
-    "Jardim Emília",
-    "Jardim Floresta", 
+    "Jardim Emilia",
+    "Jardim Floresta",
     "Jardim Floresta II",
     "Habitacional Primavera",
-    "Minaçu Norte",
-    "Patrimônio do Trevo", 
-    "Patrimônio do Vicente",
+    "Minacu Norte",
+    "Patrimonio do Trevo",
+    "Patrimonio do Vicente",
     "Residencial Cana Brava",
     "Residencial Tocantins",
     "Marajoara",
@@ -47,42 +48,44 @@ BAIRROS_MINACU = [
     "Vila Manchester",
     "Vila Menezes",
     "Vila Moraes",
-    "Vila São Geraldo",
-    "Vila União",
+    "Vila Sao Geraldo",
+    "Vila Uniao",
     "Wilson Vaz",
     "",
 ]
+
 CIDADES = ["Minacu"]
 CEPS    = ["76450-000"]
 
-def _formatar_cpf(cpf: str) -> str:
+
+def _formatar_cpf(cpf):
     digits = "".join(c for c in cpf if c.isdigit())
     if len(digits) == 11:
         return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}"
     return cpf
 
 
-def _formatar_cnpj(cnpj: str) -> str:
+def _formatar_cnpj(cnpj):
     digits = "".join(c for c in cnpj if c.isdigit())
     if len(digits) == 14:
         return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
     return cnpj
 
 
-def _formatar_doc(doc: str, tipo: str) -> str:
+def _formatar_doc(doc, tipo):
     if tipo == "Fornecedor":
         return _formatar_cnpj(doc)
     return _formatar_cpf(doc)
 
 
-def _formatar_cep(cep: str) -> str:
+def _formatar_cep(cep):
     digits = "".join(c for c in cep if c.isdigit())
     if len(digits) == 8:
         return f"{digits[:5]}-{digits[5:]}"
     return cep
 
 
-def _formatar_tel(tel: str) -> str:
+def _formatar_tel(tel):
     digits = "".join(c for c in tel if c.isdigit())
     if len(digits) == 11:
         return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
@@ -91,7 +94,7 @@ def _formatar_tel(tel: str) -> str:
     return tel
 
 
-def _formatar_data(data_str: str) -> str:
+def _formatar_data(data_str):
     try:
         return datetime.date.fromisoformat(data_str).strftime("%d/%m/%Y")
     except Exception:
@@ -127,16 +130,12 @@ def render():
     with st.expander("Novo cadastro", expanded=False):
         with st.form("form_novo_cad", clear_on_submit=True):
             st.markdown("**Dados principais**")
-            tipo   = st.selectbox("Tipo", ["Membro", "Fornecedor"])
-            nome   = st.text_input("Nome completo")
+            tipo = st.selectbox("Tipo", ["Membro", "Fornecedor"])
+            nome = st.text_input("Nome completo")
 
             doc_label       = "CPF *" if tipo == "Membro" else "CNPJ *"
             doc_placeholder = "000.000.000-00" if tipo == "Membro" else "00.000.000/0000-00"
-            cpf = st.text_input(
-                doc_label,
-                placeholder=doc_placeholder,
-                help="Obrigatorio.",
-            )
+            cpf = st.text_input(doc_label, placeholder=doc_placeholder, help="Obrigatorio.")
 
             dt_nasc = st.date_input(
                 "Data de nascimento",
@@ -163,9 +162,9 @@ def render():
             bairro = st.selectbox("Bairro", BAIRROS_MINACU)
             col3, col4 = st.columns([2, 1])
             with col3:
-                cidade = st.text_input("Cidade")
+                cidade = st.selectbox("Cidade", CIDADES)
             with col4:
-                cep = st.text_input("CEP", placeholder="00000-000")
+                cep = st.selectbox("CEP", CEPS)
 
             if st.form_submit_button("Salvar", type="primary"):
                 dn_str = dt_nasc.isoformat() if dt_nasc else ""
@@ -294,12 +293,14 @@ def render():
 
         col3, col4 = st.columns([2, 1])
         with col3:
-            cid_edit = st.text_input("Cidade", value=_val(sel, "cidade"), key="e_cid")
+            cid_atual = _val(sel, "cidade")
+            idx_cid   = CIDADES.index(cid_atual) if cid_atual in CIDADES else 0
+            cid_edit  = st.selectbox("Cidade", CIDADES, index=idx_cid, key="e_cid")
         with col4:
             cep_atual = _val(sel, "cep")
-            cep_edit  = st.text_input("CEP",
-                                       value=_formatar_cep(cep_atual) if cep_atual else "",
-                                       placeholder="00000-000", key="e_cep")
+            cep_fmt   = _formatar_cep(cep_atual) if cep_atual else ""
+            idx_cep   = CEPS.index(cep_fmt) if cep_fmt in CEPS else 0
+            cep_edit  = st.selectbox("CEP", CEPS, index=idx_cep, key="e_cep")
 
         st.divider()
         c1, c2 = st.columns(2)
