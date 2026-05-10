@@ -8,14 +8,14 @@ from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
 T = "plotly_white"
 COR = {"Entrada": "#1D9E75", "Saida": "#D85A30", "saldo": "#185FA5",
-       "dizimo": "#185FA5", "despesa": "#D85A30", "funcao": "#534AB7"}
+       "dizimo": "#185FA5", "despesa": "#D85A30", "funcao": "#534AB7",
+       "qtd_dizimo": "#3DBE99"}
 
 MARGIN_PADRAO = dict(t=10, b=0, l=0, r=0)
 MARGIN_PIZZA  = dict(t=10, b=10, l=10, r=10)
 
 
 def _base_layout(margin=None, **kw):
-    """Layout base sem conflito de chaves duplicadas."""
     return dict(
         template=T,
         margin=margin if margin is not None else MARGIN_PADRAO,
@@ -121,9 +121,9 @@ def render():
             ))
             st.plotly_chart(fig2, **OPC)
 
-    # ── Grafico 3: Dizimos por membro ─────────────────────────────────────
+    # ── Grafico 3: Dizimos por membro (valor) ─────────────────────────────
     with c2:
-        st.caption("Dizimos por membro - top 8")
+        st.caption("Dizimos por membro - top 8 (valor)")
         diz = df_f[(df_f["categoria"].str.upper() == "DIZIMO") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")]
         if diz.empty:
             st.info("Sem dizimos.")
@@ -141,6 +141,38 @@ def render():
                 yaxis=dict(showgrid=False),
             ))
             st.plotly_chart(fig3, **OPC)
+
+    # ── NOVO Grafico: Quantidade de dizimos por membro ────────────────────
+    st.caption("Quantidade de dizimos lancados por membro - top 10")
+    diz_qtd = df_f[(df_f["categoria"].str.upper() == "DIZIMO") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")]
+    if diz_qtd.empty:
+        st.info("Sem dizimos no periodo.")
+    else:
+        dq = (
+            diz_qtd.groupby("nome_cadastro", as_index=False)
+            .size()
+            .rename(columns={"size": "quantidade"})
+            .sort_values("quantidade", ascending=False)
+            .head(10)
+        )
+        pares_q = sorted(zip(dq["quantidade"], dq["nome_cadastro"]))
+        fig_qtd = go.Figure(go.Bar(
+            x=[p[0] for p in pares_q], y=[p[1] for p in pares_q], orientation="h",
+            marker_color=COR["qtd_dizimo"],
+            text=[str(p[0]) for p in pares_q], textposition="outside",
+        ))
+        fig_qtd.update_layout(**_base_layout(
+            height=max(220, len(dq) * 40),
+            xaxis=dict(showticklabels=False, showgrid=False, title="Quantidade"),
+            yaxis=dict(showgrid=False),
+        ))
+        st.plotly_chart(fig_qtd, **OPC)
+
+        # Metricas resumo
+        km1, km2, km3 = st.columns(3)
+        km1.metric("Total de dizimos", str(len(diz_qtd)))
+        km2.metric("Membros dizimistas", str(len(dq)))
+        km3.metric("Media por membro", f"{len(diz_qtd) / max(len(dq), 1):.1f}")
 
     c3, c4 = st.columns(2)
 
