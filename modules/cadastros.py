@@ -1,4 +1,4 @@
-"import datetime
+import datetime
 import streamlit as st
 import pandas as pd
 
@@ -20,38 +20,28 @@ FUNCOES = [
 CONGREGACOES = [
     "AD Serrinha",
     "AD Paraiso",
+    "AD Vila Nova",
     "",
 ]
 
 BAIRROS_MINACU = [
-    "Centro",
-    "Nova Esperança",
-    "Jardim Arimatéia",
-    "Jardim Boa Vista",
-    "Jardim Brasil",
-    "Jardim Emília",
-    "Jardim Floresta",
-    "Jardim Floresta II",
-    "Conj. Hab. Primavera",
-    "Minaçu Norte",
-    "Patrimônio do Trevo",
-    "Patrimônio do Vicente",
-    "Residencial Cana Brava",
-    "Residencial Tocantins",
-    "Marajoara",
-    "Serrinha",
-    "Vila Batista",
-    "Vila Residencial Sama",
+    "Setor Central",
+    "Vila Sama",
     "Vila de Furnas",
-    "Vila de Malta",
-    "Vila Manchester",
-    "Vila Menezes",
-    "Vila Moraes",
-    "Vila São Geraldo",
-    "Vila União",
-    "Wilson Vaz",
+    "Setor Industrial",
+    "Setor Residencial",
+    "Setor Norte",
+    "Setor Sul",
+    "Setor Leste",
+    "Setor Oeste",
+    "Vila Nova",
+    "Jardim America",
+    "Jardim Goias",
+    "Parque das Nacoes",
+    "Zona Rural",
     "",
 ]
+
 
 def _formatar_cpf(cpf: str) -> str:
     digits = "".join(c for c in cpf if c.isdigit())
@@ -198,3 +188,144 @@ def render():
             for col in ["cpf","cep","telefone","logradouro","numero","bairro","cidade","data_nascimento"]:
                 if col not in df_view.columns:
                     df_view[col] = ""
+            if "tipo_cadastro" in df_view.columns:
+                df_view["cpf"] = df_view.apply(
+                    lambda r: _formatar_doc(str(r["cpf"]), str(r["tipo_cadastro"])) if str(r["cpf"]).strip() else "",
+                    axis=1,
+                )
+            else:
+                df_view["cpf"] = df_view["cpf"].apply(lambda x: _formatar_cpf(str(x)) if str(x).strip() else "")
+            df_view["cep"]             = df_view["cep"].apply(lambda x: _formatar_cep(str(x)) if str(x).strip() else "")
+            df_view["telefone"]        = df_view["telefone"].apply(lambda x: _formatar_tel(str(x)) if str(x).strip() else "")
+            df_view["data_nascimento"] = df_view["data_nascimento"].apply(lambda x: _formatar_data(str(x)) if str(x).strip() else "")
+            st.dataframe(df_view, use_container_width=True)
+
+    # ── Editar / Excluir ──────────────────────────────────────────────────
+    with st.expander("Editar ou excluir cadastro", expanded=False):
+        if df.empty:
+            st.info("Nenhum cadastro ainda.")
+            return
+
+        df_r = df.reset_index(drop=True)
+        df_r["rotulo"] = df_r.apply(
+            lambda r: f'{int(r["id_cadastro"])} | {r["tipo_cadastro"]} | {r["nome"]} | {r["situacao"]}',
+            axis=1,
+        )
+        rotulo = st.selectbox("Selecione", df_r["rotulo"].tolist())
+        sel    = df_r[df_r["rotulo"] == rotulo].iloc[0]
+        id_sel = int(sel["id_cadastro"])
+
+        st.markdown("**Dados principais**")
+        tipo_opc  = ["Membro", "Fornecedor"]
+        tipo_edit = st.selectbox("Tipo", tipo_opc,
+                                 index=tipo_opc.index(sel["tipo_cadastro"]) if sel["tipo_cadastro"] in tipo_opc else 0,
+                                 key="e_tipo")
+        nome_edit = st.text_input("Nome completo", value=_val(sel, "nome"), key="e_nome")
+
+        cpf_atual         = _val(sel, "cpf")
+        doc_label_e       = "CPF *" if tipo_edit == "Membro" else "CNPJ *"
+        doc_placeholder_e = "000.000.000-00" if tipo_edit == "Membro" else "00.000.000/0000-00"
+        cpf_edit = st.text_input(
+            doc_label_e,
+            value=_formatar_doc(cpf_atual, tipo_edit) if cpf_atual else "",
+            placeholder=doc_placeholder_e,
+            key="e_cpf",
+            help="Obrigatorio.",
+        )
+
+        dn_atual = _val(sel, "data_nascimento")
+        try:
+            dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
+        except Exception:
+            dn_value = None
+        dt_nasc_edit = st.date_input(
+            "Data de nascimento",
+            value=dn_value,
+            format="DD/MM/YYYY",
+            key="e_dt_nasc",
+            min_value=datetime.date(1900, 1, 1),
+            max_value=datetime.date.today(),
+        )
+
+        funcao_edit = (
+            st.selectbox("Funcao", FUNCOES,
+                         index=FUNCOES.index(_val(sel,"funcao")) if _val(sel,"funcao") in FUNCOES else 0,
+                         key="e_funcao")
+            if tipo_edit == "Membro" else ""
+        )
+
+        cong_atual = _val(sel, "congregacao")
+        idx_cong   = CONGREGACOES.index(cong_atual) if cong_atual in CONGREGACOES else 0
+        cong_edit  = st.selectbox("Congregacao", CONGREGACOES, index=idx_cong, key="e_cong")
+
+        sit_opc  = ["Ativo", "Inativo"]
+        sit_edit = st.selectbox("Situacao", sit_opc,
+                                index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
+                                key="e_sit")
+
+        st.markdown("**Contato**")
+        tel_atual = _val(sel, "telefone")
+        tel_edit  = st.text_input("Telefone / WhatsApp",
+                                   value=_formatar_tel(tel_atual) if tel_atual else "",
+                                   placeholder="(00) 00000-0000", key="e_tel")
+
+        st.markdown("**Endereco**")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            log_edit = st.text_input("Rua / Avenida", value=_val(sel, "logradouro"), key="e_log")
+        with col2:
+            num_edit = st.text_input("Numero", value=_val(sel, "numero"), key="e_num")
+
+        bairro_atual = _val(sel, "bairro")
+        idx_bairro   = BAIRROS_MINACU.index(bairro_atual) if bairro_atual in BAIRROS_MINACU else 0
+        bai_edit     = st.selectbox("Bairro", BAIRROS_MINACU, index=idx_bairro, key="e_bai")
+
+        col3, col4 = st.columns([2, 1])
+        with col3:
+            cid_edit = st.text_input("Cidade", value=_val(sel, "cidade"), key="e_cid")
+        with col4:
+            cep_atual = _val(sel, "cep")
+            cep_edit  = st.text_input("CEP",
+                                       value=_formatar_cep(cep_atual) if cep_atual else "",
+                                       placeholder="00000-000", key="e_cep")
+
+        st.divider()
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.caption("Editar cadastro")
+            if solicitar_autorizacao("salvar_cad", "editar"):
+                dn_edit_str = dt_nasc_edit.isoformat() if dt_nasc_edit else ""
+                c = Cadastro(
+                    id_cadastro=id_sel, nome=nome_edit, tipo_cadastro=tipo_edit,
+                    funcao=funcao_edit, congregacao=cong_edit,
+                    cpf=cpf_edit, situacao=sit_edit,
+                    data_nascimento=dn_edit_str,
+                    telefone=tel_edit, logradouro=log_edit,
+                    numero=num_edit, bairro=bai_edit,
+                    cidade=cid_edit, cep=cep_edit,
+                )
+                erros = c.validar()
+                doc_limpo_e = "".join(d for d in cpf_edit if d.isdigit())
+                if doc_limpo_e and cpf_existe(slug, doc_limpo_e, id_excluir=id_sel):
+                    doc_tipo_e = "CPF" if tipo_edit == "Membro" else "CNPJ"
+                    erros.append(doc_tipo_e + " ja cadastrado em outro registro.")
+                if erros:
+                    for e in erros: st.error(e)
+                else:
+                    atualizar_cadastro(slug, c)
+                    _invalida(slug)
+                    st.toast("Cadastro alterado!")
+                    st.rerun()
+
+        with c2:
+            st.caption("Excluir cadastro")
+            if solicitar_autorizacao("excluir_cad", "excluir"):
+                if cadastro_em_uso(slug, id_sel):
+                    st.error("Cadastro vinculado a lancamento. Nao e possivel excluir.")
+                else:
+                    if confirmar_exclusao("del_cad_final", "Confirmar exclusao"):
+                        excluir_cadastro(slug, id_sel)
+                        _invalida(slug)
+                        st.toast("Excluido.")
+                        st.rerun()
