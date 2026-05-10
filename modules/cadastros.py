@@ -52,7 +52,8 @@ BAIRROS_MINACU = [
     "Wilson Vaz",
     "",
 ]
-
+CIDADES = ["Minacu"]
+CEPS    = ["76450-000"]
 
 def _formatar_cpf(cpf: str) -> str:
     digits = "".join(c for c in cpf if c.isdigit())
