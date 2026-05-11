@@ -14,6 +14,15 @@ COR = {"Entrada": "#1D9E75", "Saida": "#D85A30", "saldo": "#185FA5",
 MARGIN_PADRAO = dict(t=10, b=0, l=0, r=0)
 MARGIN_PIZZA  = dict(t=10, b=10, l=10, r=10)
 
+# Config para celular/desktop — desativa interacoes problematicas
+CONFIG_PLOTLY = {
+    "displayModeBar": False,
+    "staticPlot": True,          # remove hover/zoom/pan no mobile
+    "responsive": True,
+    "scrollZoom": False,
+    "doubleClick": False,
+}
+
 
 def _base_layout(margin=None, **kw):
     return dict(
@@ -21,8 +30,14 @@ def _base_layout(margin=None, **kw):
         margin=margin if margin is not None else MARGIN_PADRAO,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        hovermode=False,
+        dragmode=False,
         **kw,
     )
+
+
+def _eixo_fixo():
+    return dict(fixedrange=True)
 
 
 def render():
@@ -70,7 +85,7 @@ def render():
     k4.metric("Lancamentos", str(len(df_f)))
 
     st.divider()
-    OPC = dict(use_container_width=True, config={"displayModeBar": False})
+    OPC = dict(use_container_width=True, config=CONFIG_PLOTLY)
 
     # ── Grafico 1: Evolucao mensal ────────────────────────────────────────
     st.caption("Evolucao mensal")
@@ -87,16 +102,21 @@ def render():
 
     fig1 = go.Figure([
         go.Bar(name="Entradas", x=labels, y=e_vals, marker_color=COR["Entrada"],
-               text=[formatar_moeda(v) for v in e_vals], textposition="outside", textfont_size=10),
+               text=[formatar_moeda(v) for v in e_vals], textposition="outside", textfont_size=10,
+               hoverinfo="skip"),
         go.Bar(name="Saidas",   x=labels, y=s_vals, marker_color=COR["Saida"],
-               text=[formatar_moeda(v) for v in s_vals], textposition="outside", textfont_size=10),
+               text=[formatar_moeda(v) for v in s_vals], textposition="outside", textfont_size=10,
+               hoverinfo="skip"),
         go.Scatter(name="Saldo", x=labels, y=sal_vals, mode="lines+markers",
-                   line=dict(color=COR["saldo"], width=2, dash="dot"), marker=dict(size=5)),
+                   line=dict(color=COR["saldo"], width=2, dash="dot"), marker=dict(size=5),
+                   hoverinfo="skip"),
     ])
     fig1.update_layout(**_base_layout(
         barmode="group", height=280,
         margin=dict(t=40, b=0, l=0, r=0),
         legend=dict(orientation="h", y=1.1, x=0),
+        xaxis=_eixo_fixo(),
+        yaxis=_eixo_fixo(),
     ))
     st.plotly_chart(fig1, **OPC)
 
@@ -112,8 +132,7 @@ def render():
             fig2 = go.Figure(go.Pie(
                 labels=ent_cat["categoria"], values=ent_cat["valor"], hole=0.5,
                 textinfo="percent+label", textfont_size=12,
-                hovertemplate="%{label}: %{customdata}<extra></extra>",
-                customdata=[formatar_moeda(v) for v in ent_cat["valor"]],
+                hoverinfo="skip",
             ))
             fig2.update_layout(**_base_layout(
                 showlegend=False, height=260,
@@ -134,15 +153,16 @@ def render():
                 x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
                 marker_color=COR["dizimo"],
                 text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
+                hoverinfo="skip",
             ))
             fig3.update_layout(**_base_layout(
                 height=max(200, len(d) * 44),
-                xaxis=dict(showticklabels=False, showgrid=False),
-                yaxis=dict(showgrid=False),
+                xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
+                yaxis=dict(showgrid=False, fixedrange=True),
             ))
             st.plotly_chart(fig3, **OPC)
 
-    # ── NOVO Grafico: Quantidade de dizimos por membro ────────────────────
+    # ── Quantidade de dizimos por membro ──────────────────────────────────
     st.caption("Quantidade de dizimos lancados por membro - top 10")
     diz_qtd = df_f[(df_f["categoria"].str.upper() == "DIZIMO") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")]
     if diz_qtd.empty:
@@ -160,15 +180,15 @@ def render():
             x=[p[0] for p in pares_q], y=[p[1] for p in pares_q], orientation="h",
             marker_color=COR["qtd_dizimo"],
             text=[str(p[0]) for p in pares_q], textposition="outside",
+            hoverinfo="skip",
         ))
         fig_qtd.update_layout(**_base_layout(
             height=max(220, len(dq) * 40),
-            xaxis=dict(showticklabels=False, showgrid=False, title="Quantidade"),
-            yaxis=dict(showgrid=False),
+            xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True, title="Quantidade"),
+            yaxis=dict(showgrid=False, fixedrange=True),
         ))
         st.plotly_chart(fig_qtd, **OPC)
 
-        # Metricas resumo
         km1, km2, km3 = st.columns(3)
         km1.metric("Total de dizimos", str(len(diz_qtd)))
         km2.metric("Membros dizimistas", str(len(dq)))
@@ -189,11 +209,12 @@ def render():
                 x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
                 marker_color=COR["despesa"],
                 text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
+                hoverinfo="skip",
             ))
             fig4.update_layout(**_base_layout(
                 height=max(200, len(d2) * 44),
-                xaxis=dict(showticklabels=False, showgrid=False),
-                yaxis=dict(showgrid=False),
+                xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
+                yaxis=dict(showgrid=False, fixedrange=True),
             ))
             st.plotly_chart(fig4, **OPC)
 
@@ -211,11 +232,12 @@ def render():
                 x=rf["funcao"], y=rf["valor"],
                 marker_color=COR["funcao"],
                 text=[formatar_moeda(v) for v in rf["valor"]], textposition="outside",
+                hoverinfo="skip",
             ))
             fig5.update_layout(**_base_layout(
                 height=260,
-                yaxis=dict(showticklabels=False, showgrid=False),
-                xaxis=dict(showgrid=False),
+                yaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
+                xaxis=dict(showgrid=False, fixedrange=True),
             ))
             st.plotly_chart(fig5, **OPC)
 
