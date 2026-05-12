@@ -82,13 +82,14 @@ def confirmar_exclusao(key: str, label: str) -> bool:
 def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
     """
     Exibe campo de senha e valida contra o login da igreja.
-    Retorna True apenas quando a senha for confirmada corretamente.
+    A autorizacao persiste ate ser explicitamente revogada,
+    permitindo encadear com outras confirmacoes.
     """
     flag_mostrar = f"_auth_mostrar_{key}"
     flag_ok      = f"_auth_ok_{key}"
 
+    # Ja autorizado anteriormente — mantem True para fluxos encadeados
     if st.session_state.get(flag_ok):
-        st.session_state[flag_ok] = False
         return True
 
     if not st.session_state.get(flag_mostrar):
@@ -111,7 +112,7 @@ def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
             slug = slug_da_sessao()
             if autenticar_igreja(slug, senha):
                 st.session_state[flag_mostrar] = False
-                st.session_state[flag_ok] = True
+                st.session_state[flag_ok]      = True
                 st.rerun()
             else:
                 st.error("Senha incorreta. Tente novamente.")
