@@ -95,9 +95,6 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
     .cupom { background: white; width: 320px; padding: 16px 14px;
              font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #111;
              box-shadow: 2px 2px 8px rgba(0,0,0,0.15); }
-    .cupom::before, .cupom::after { content: ''; display: block; height: 10px;
-      background: radial-gradient(circle at 50% 0%, white 6px, #f0f0f0 6px) 0 0 / 16px 10px repeat-x; }
-    .cupom::after { background: radial-gradient(circle at 50% 100%, white 6px, #f0f0f0 6px) 0 100% / 16px 10px repeat-x; margin-top: 8px; }
     .centro { text-align: center; }
     .nome-igreja { font-size: 14px; font-weight: bold; text-align: center;
                    text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 2px; }
@@ -174,6 +171,142 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
     return html
 
 
+def _gerar_html_comprovante_lote(itens: list, igreja: dict, slug: str,
+                                  data_str: str, vinc_str: str,
+                                  nome_vinc: str, forma_pag: str,
+                                  numero_lote: str) -> str:
+    """Gera comprovante consolidado para multiplos lancamentos."""
+    nome_igreja  = igreja.get("nome", "Igreja")
+    data_emissao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    total        = sum(item["valor"] for item in itens)
+
+    logo_b64 = _logo_base64(slug)
+    if logo_b64:
+        logo_html = (
+            '<div style="text-align:center;margin-bottom:6px">'
+            '<img src="' + logo_b64 + '" style="max-height:60px;max-width:160px;'
+            'object-fit:contain"/></div>'
+        )
+    else:
+        logo_html = ""
+
+    sep  = "-" * 40
+    sep2 = "=" * 40
+
+    nome_assinatura = ("Pr. " + nome_vinc) if nome_vinc and nome_vinc != "Nao vinculado" else "Assinatura"
+
+    # Lista de itens em HTML
+    itens_html = ""
+    for it in itens:
+        desc_extra = " - " + it["descricao"] if it.get("descricao") else ""
+        itens_html += (
+            '<div class="linha">'
+            '<span class="label">' + it["categoria"] + desc_extra + '</span>'
+            '<span class="valor">' + formatar_moeda(it["valor"]) + '</span>'
+            '</div>'
+        )
+
+    html = """
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Cupom Lote #""" + numero_lote + """</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f0f0f0; display: flex; justify-content: center; padding: 20px; }
+    .cupom { background: white; width: 340px; padding: 16px 14px;
+             font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #111;
+             box-shadow: 2px 2px 8px rgba(0,0,0,0.15); }
+    .centro { text-align: center; }
+    .nome-igreja { font-size: 14px; font-weight: bold; text-align: center;
+                   text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 2px; }
+    .subtitulo { text-align: center; font-size: 10px; color: #555; margin-bottom: 4px; }
+    .sep  { color: #aaa; margin: 6px 0; letter-spacing: -1px; }
+    .sep2 { color: #333; margin: 6px 0; letter-spacing: -1px; }
+    .linha { display: flex; justify-content: space-between; margin: 3px 0; font-size: 11px; }
+    .linha .label { color: #555; flex: 1; padding-right: 8px; }
+    .linha .valor { font-weight: 600; text-align: right; white-space: nowrap; }
+    .tipo-badge { text-align: center; font-size: 12px; font-weight: bold;
+                  letter-spacing: 0.1em; padding: 4px 0; margin: 4px 0; }
+    .valor-total { text-align: center; font-size: 20px; font-weight: bold;
+                   margin: 8px 0 4px; letter-spacing: 0.02em; }
+    .cupom-num { text-align: center; font-size: 10px; color: #777; margin-bottom: 4px; }
+    .info-bloco { font-size: 11px; margin: 4px 0; }
+    .info-bloco .label { color: #555; }
+    .assinatura-bloco { margin-top: 12px; display: flex; justify-content: center; gap: 20px; }
+    .assinatura-item { flex: 1; max-width: 45%; }
+    .assinatura-linha { border-top: 1px dashed #aaa; margin-top: 28px; padding-top: 4px;
+                        text-align: center; font-size: 10px; color: #555;
+                        width: 80%; margin-left: auto; margin-right: auto; }
+    .rodape { text-align: center; font-size: 9px; color: #888; margin-top: 8px; }
+    @media print {
+      body { background: white; padding: 0; }
+      .cupom { box-shadow: none; width: 100%; max-width: 340px; margin: 0 auto; }
+      .btn-imprimir { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div style="text-align:center;margin-bottom:12px">
+  <button class="btn-imprimir" onclick="window.print()"
+    style="background:#0F6E56;color:white;border:none;padding:8px 24px;
+           border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">
+    Imprimir cupom
+  </button>
+</div>
+
+<div class="cupom">
+  """ + logo_html + """
+  <div class="nome-igreja">""" + nome_igreja + """</div>
+  <div class="subtitulo">Comprovante Consolidado</div>
+  <div class="sep centro">""" + sep + """</div>
+
+  <div class="cupom-num">LOTE: """ + numero_lote + """</div>
+  <div class="cupom-num">Emitido: """ + data_emissao + """</div>
+
+  <div class="sep centro">""" + sep + """</div>
+
+  <div class="info-bloco">
+    <div class="linha"><span class="label">Data</span><span class="valor">""" + data_str + """</span></div>
+    <div class="linha"><span class="label">Vinculado</span><span class="valor">""" + vinc_str + """</span></div>
+    <div class="linha"><span class="label">Pagamento</span><span class="valor">""" + forma_pag + """</span></div>
+    <div class="linha"><span class="label">Itens</span><span class="valor">""" + str(len(itens)) + """</span></div>
+  </div>
+
+  <div class="sep centro">""" + sep + """</div>
+  <div class="tipo-badge">*** DETALHAMENTO ***</div>
+  <div class="sep centro">""" + sep + """</div>
+
+  """ + itens_html + """
+
+  <div class="sep2 centro">""" + sep2 + """</div>
+  <div class="subtitulo">VALOR TOTAL</div>
+  <div class="valor-total">""" + formatar_moeda(total) + """</div>
+  <div class="sep2 centro">""" + sep2 + """</div>
+
+  <div class="assinatura-bloco">
+    <div class="assinatura-item"><div class="assinatura-linha">Tesoureiro</div></div>
+    <div class="assinatura-item"><div class="assinatura-linha">""" + nome_assinatura + """</div></div>
+  </div>
+
+  <div class="sep centro">""" + sep + """</div>
+  <div class="rodape">FielMordomo - Sistema de Gestao Financeira</div>
+  <div class="rodape">para Igrejas</div>
+</div>
+
+<script>
+  window.onload = function() {
+    setTimeout(function() { window.print(); }, 800);
+  };
+</script>
+</body>
+</html>
+"""
+    return html
+
+
 def render():
     slug    = slug_da_sessao()
     df_cad  = _get_cad(slug)
@@ -182,7 +315,7 @@ def render():
     fornec  = obter_ativos(df_cad, "FORNECEDOR")
     igreja  = st.session_state.get("igreja", {})
 
-    # ── Novo lancamento ──────────────────────────────────────────────────
+    # ── Novo lancamento (1 item) ─────────────────────────────────────────
     with st.expander("Novo lancamento", expanded=False):
         data_l = st.date_input("Data", value=datetime.date.today(),
                                format="DD/MM/YYYY", key="nl_data")
@@ -251,6 +384,169 @@ def render():
                 st.toast("Lancamento salvo!")
                 st.rerun()
 
+    # ── Lancamento em LOTE (multiplos itens) ─────────────────────────────
+    with st.expander("Lancamento em lote (multiplos itens)", expanded=False):
+        st.caption("Lance varios itens (dizimo + oferta + missao etc) "
+                   "compartilhando data, membro/fornecedor e forma de pagamento.")
+
+        # Inicializa lista de itens no session_state
+        if "lote_itens" not in st.session_state:
+            st.session_state["lote_itens"] = []
+
+        # ─── Dados compartilhados ───
+        st.markdown("**Dados compartilhados**")
+        data_lote = st.date_input("Data", value=datetime.date.today(),
+                                   format="DD/MM/YYYY", key="lote_data")
+        tipo_lote = st.selectbox("Tipo", ["Entrada", "Saida"], key="lote_tipo")
+
+        if tipo_lote == "Entrada":
+            vinc_pad_l = "Membro"
+        else:
+            vinc_pad_l = "Fornecedor"
+
+        vincular_lote = st.selectbox(
+            "Vincular a",
+            ["Nenhum", "Membro", "Fornecedor"],
+            index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_l),
+            key="lote_vincular",
+        )
+
+        id_cad_l, nome_cad_l, tipo_cad_l = None, "", ""
+
+        if vincular_lote == "Membro":
+            if membros.empty:
+                st.warning("Nenhum membro ativo cadastrado.")
+            else:
+                opc = montar_opcoes(membros)
+                esc = st.selectbox("Membro", list(opc.keys()), key="lote_membro")
+                l = opc[esc]
+                id_cad_l, nome_cad_l, tipo_cad_l = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+        elif vincular_lote == "Fornecedor":
+            if fornec.empty:
+                st.warning("Nenhum fornecedor ativo cadastrado.")
+            else:
+                opc = montar_opcoes(fornec)
+                esc = st.selectbox("Fornecedor", list(opc.keys()), key="lote_fornecedor")
+                l = opc[esc]
+                id_cad_l, nome_cad_l, tipo_cad_l = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
+
+        forma_pag_lote = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO, key="lote_forma_pag")
+
+        st.divider()
+        st.markdown("**Adicionar item**")
+
+        if tipo_lote == "Entrada":
+            cat_lote_item = st.selectbox("Categoria", CATEGORIAS_ENTRADA, key="lote_cat_item")
+        else:
+            cat_lote_item = "Despesa"
+            st.text_input("Categoria", value="Despesa", disabled=True, key="lote_cat_d_item")
+
+        desc_lote_item  = st.text_input("Descricao", key="lote_desc_item")
+        valor_lote_item = st.number_input("Valor (R$)", min_value=0.0,
+                                          step=0.01, format="%.2f", key="lote_valor_item")
+
+        if st.button("Adicionar item ao lote", key="lote_add_item"):
+            if valor_lote_item <= 0:
+                st.error("Informe um valor maior que zero.")
+            else:
+                st.session_state["lote_itens"].append({
+                    "categoria": cat_lote_item,
+                    "descricao": desc_lote_item,
+                    "valor": float(valor_lote_item),
+                })
+                st.toast("Item adicionado!")
+                st.rerun()
+
+        # ─── Lista dos itens adicionados ───
+        if st.session_state["lote_itens"]:
+            st.divider()
+            st.markdown("**Itens do lote**")
+
+            total_lote = sum(it["valor"] for it in st.session_state["lote_itens"])
+
+            for i, item in enumerate(st.session_state["lote_itens"]):
+                col1, col2, col3, col4 = st.columns([3, 4, 2, 1])
+                with col1:
+                    st.write(f"**{item['categoria']}**")
+                with col2:
+                    st.write(item['descricao'] or "—")
+                with col3:
+                    st.write(formatar_moeda(item['valor']))
+                with col4:
+                    if st.button("X", key=f"lote_del_{i}", help="Remover item"):
+                        st.session_state["lote_itens"].pop(i)
+                        st.rerun()
+
+            st.markdown(f"### Total: {formatar_moeda(total_lote)}")
+            st.caption(f"{len(st.session_state['lote_itens'])} item(ns) no lote")
+
+            st.divider()
+            c_salvar, c_limpar = st.columns(2)
+
+            with c_salvar:
+                if st.button("Salvar todos os lancamentos", type="primary", key="lote_salvar"):
+                    if vincular_lote == "Membro" and not id_cad_l:
+                        st.error("Selecione um membro para vincular.")
+                    elif vincular_lote == "Fornecedor" and not id_cad_l:
+                        st.error("Selecione um fornecedor para vincular.")
+                    else:
+                        itens_salvos = []
+                        for item in st.session_state["lote_itens"]:
+                            lanc = Lancamento(
+                                data=data_lote,
+                                tipo=tipo_lote,
+                                categoria=item["categoria"],
+                                valor=item["valor"],
+                                descricao=item["descricao"],
+                                forma_pagamento=forma_pag_lote,
+                                id_cadastro=id_cad_l,
+                                nome_cadastro=nome_cad_l,
+                                tipo_cadastro=tipo_cad_l,
+                            )
+                            if not lanc.validar():
+                                inserir_lancamento(slug, lanc)
+                                itens_salvos.append(item)
+
+                        if itens_salvos:
+                            # Gera comprovante consolidado
+                            vinc_str = nome_cad_l
+                            if tipo_cad_l:
+                                vinc_str = nome_cad_l + " (" + tipo_cad_l + ")"
+                            if not vinc_str:
+                                vinc_str = "Nao vinculado"
+
+                            numero_lote = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                            html_comp = _gerar_html_comprovante_lote(
+                                itens=itens_salvos,
+                                igreja=igreja,
+                                slug=slug,
+                                data_str=data_lote.strftime("%d/%m/%Y"),
+                                vinc_str=vinc_str,
+                                nome_vinc=nome_cad_l,
+                                forma_pag=forma_pag_lote,
+                                numero_lote=numero_lote,
+                            )
+                            st.session_state["lote_comprovante_html"] = html_comp
+                            st.session_state["lote_itens"] = []
+                            _invalida()
+                            st.toast(f"{len(itens_salvos)} lancamentos salvos!")
+                            st.rerun()
+
+            with c_limpar:
+                if st.button("Limpar lote", key="lote_limpar"):
+                    st.session_state["lote_itens"] = []
+                    st.toast("Lote limpo.")
+                    st.rerun()
+
+        # Mostra comprovante consolidado se acabou de salvar
+        if "lote_comprovante_html" in st.session_state:
+            st.divider()
+            st.success("Lancamentos salvos! Comprovante consolidado:")
+            components.html(st.session_state["lote_comprovante_html"], height=700, scrolling=True)
+            if st.button("Fechar comprovante", key="lote_fechar_comp"):
+                st.session_state.pop("lote_comprovante_html", None)
+                st.rerun()
+
     # ── Tabela ────────────────────────────────────────────────────────────
     total = len(df_lanc)
     with st.expander(f"Ver lancamentos ({total} registros)", expanded=False):
@@ -306,7 +602,6 @@ def render():
         sel     = df_e[df_e["rotulo"] == rotulo].iloc[0]
         id_lanc = int(sel["id_lancamento"])
 
-        # CHAVE DINAMICA — quando muda a selecao, todos os widgets sao recriados
         kp = f"_edit_{id_lanc}_"
 
         data_base = pd.to_datetime(sel["data"], errors="coerce")
