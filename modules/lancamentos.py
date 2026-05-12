@@ -25,11 +25,6 @@ def _ck(sufixo): return f"df_{sufixo}_{slug_da_sessao()}"
 
 def _invalida():
     """Limpa TODO cache de dados — força recarregar do banco em qualquer modulo."""
-    slug = slug_da_sessao()
-    # Limpa caches conhecidos
-    for s in ("cad", "lanc"):
-        st.session_state.pop(_ck(s), None)
-    # Limpa qualquer outra chave que comece com df_
     keys_to_remove = [k for k in list(st.session_state.keys()) if k.startswith("df_")]
     for k in keys_to_remove:
         st.session_state.pop(k, None)
@@ -43,10 +38,8 @@ def _get_cad(slug):
 
 
 def _get_lanc(slug):
-    k = _ck("lanc")
-    if k not in st.session_state:
-        st.session_state[k] = carregar_lancamentos(slug)
-    return st.session_state[k]
+    """Le sempre do banco — sem cache — para evitar mostrar lancamentos excluidos."""
+    return carregar_lancamentos(slug)
 
 
 def _logo_base64(slug: str):
@@ -397,7 +390,7 @@ def render():
                 if confirmar_exclusao("del_lanc_final", "Confirmar exclusao"):
                     excluir_lancamento(slug, id_lanc)
                     _invalida()
-                    # Limpa flags de confirmacao e autorizacao para forçar reset da UI
+                    # Limpa flags de UI para forçar reset do estado
                     for k in ["del_lanc_final", "del_lanc_final_confirm",
                               "excluir_lanc_auth", "excluir_lanc_senha",
                               "sel_lanc_edit"]:
