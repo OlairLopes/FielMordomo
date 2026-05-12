@@ -381,6 +381,10 @@ def render():
                 else:
                     atualizar_lancamento(slug, lanc)
                     _invalida()
+                    # Revoga autorizacao apos editar
+                    for k in list(st.session_state.keys()):
+                        if k.startswith("_auth_"):
+                            st.session_state.pop(k, None)
                     st.toast("Lancamento alterado!")
                     st.rerun()
 
@@ -390,10 +394,10 @@ def render():
                 if confirmar_exclusao("del_lanc_final", "Confirmar exclusao"):
                     excluir_lancamento(slug, id_lanc)
                     _invalida()
-                    # Limpa flags de UI para forçar reset do estado
-                    for k in ["del_lanc_final", "del_lanc_final_confirm",
-                              "excluir_lanc_auth", "excluir_lanc_senha",
-                              "sel_lanc_edit"]:
-                        st.session_state.pop(k, None)
+                    # Revoga autorizacao e limpa flags da UI
+                    for k in list(st.session_state.keys()):
+                        if (k.startswith("_auth_") or k.startswith("_del_")
+                            or k == "sel_lanc_edit"):
+                            st.session_state.pop(k, None)
                     st.toast("Lancamento excluido!")
                     st.rerun()
