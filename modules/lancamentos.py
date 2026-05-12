@@ -24,7 +24,6 @@ def _ck(sufixo): return f"df_{sufixo}_{slug_da_sessao()}"
 
 
 def _invalida():
-    """Limpa TODO cache de dados — força recarregar do banco em qualquer modulo."""
     keys_to_remove = [k for k in list(st.session_state.keys()) if k.startswith("df_")]
     for k in keys_to_remove:
         st.session_state.pop(k, None)
@@ -38,7 +37,6 @@ def _get_cad(slug):
 
 
 def _get_lanc(slug):
-    """Le sempre do banco — sem cache — para evitar mostrar lancamentos excluidos."""
     return carregar_lancamentos(slug)
 
 
@@ -53,8 +51,6 @@ def _logo_base64(slug: str):
 
 
 def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
-    """Gera comprovante no estilo cupom fiscal para impressao."""
-
     nome_igreja  = igreja.get("nome", "Igreja")
     data_fmt     = pd.to_datetime(lancamento.get("data"), errors="coerce")
     data_str     = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else "-"
@@ -310,20 +306,27 @@ def render():
         sel     = df_e[df_e["rotulo"] == rotulo].iloc[0]
         id_lanc = int(sel["id_lancamento"])
 
+        # CHAVE DINAMICA — quando muda a selecao, todos os widgets sao recriados
+        kp = f"_edit_{id_lanc}_"
+
         data_base = pd.to_datetime(sel["data"], errors="coerce")
         data_edit = st.date_input("Data",
                                   value=data_base.date() if pd.notna(data_base) else datetime.date.today(),
-                                  format="DD/MM/YYYY", key="edit_data")
+                                  format="DD/MM/YYYY", key=kp + "data")
 
         tipo_opc = ["Entrada", "Saida"]
         tipo_e   = st.selectbox("Tipo", tipo_opc,
                                 index=tipo_opc.index(sel["tipo"]) if sel["tipo"] in tipo_opc else 0,
-                                key="edit_tipo")
-        cat_e    = st.selectbox("Categoria", CATEGORIAS_ENTRADA,
-                                index=CATEGORIAS_ENTRADA.index(sel["categoria"]) if sel["categoria"] in CATEGORIAS_ENTRADA else 0,
-                                key="edit_cat") if tipo_e == "Entrada" else "Despesa"
-        if tipo_e == "Saida":
-            st.text_input("Categoria", value="Despesa", disabled=True, key="edit_cat_d")
+                                key=kp + "tipo")
+
+        if tipo_e == "Entrada":
+            cat_atual = sel["categoria"] if sel["categoria"] in CATEGORIAS_ENTRADA else CATEGORIAS_ENTRADA[0]
+            cat_e = st.selectbox("Categoria", CATEGORIAS_ENTRADA,
+                                 index=CATEGORIAS_ENTRADA.index(cat_atual),
+                                 key=kp + "cat")
+        else:
+            cat_e = "Despesa"
+            st.text_input("Categoria", value="Despesa", disabled=True, key=kp + "cat_d")
 
         vinc_str   = str(sel["tipo_cadastro"]).strip().upper()
         vinc_pad_e = ("Membro" if (tipo_e == "Entrada" and cat_e == "Dizimo")
@@ -332,7 +335,7 @@ def render():
                       else "Nenhum")
         vincular_e = st.selectbox("Vincular a", ["Nenhum", "Membro", "Fornecedor"],
                                   index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_e),
-                                  key="edit_vinc")
+                                  key=kp + "vinc")
 
         id_e, nome_e, tipo_e2 = None, "", ""
         if vincular_e == "Membro" and not membros.empty:
@@ -341,7 +344,7 @@ def render():
             chaves = list(opc.keys())
             esc    = st.selectbox("Membro", chaves,
                                   index=chaves.index(chave) if chave in chaves else 0,
-                                  key="edit_mem")
+                                  key=kp + "mem")
             l = opc[esc]
             id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
         elif vincular_e == "Fornecedor" and not fornec.empty:
@@ -350,19 +353,21 @@ def render():
             chaves = list(opc.keys())
             esc    = st.selectbox("Fornecedor", chaves,
                                   index=chaves.index(chave) if chave in chaves else 0,
-                                  key="edit_forn")
+                                  key=kp + "forn")
             l = opc[esc]
             id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
         else:
-            st.text_input("Nome", value="", disabled=True, key="edit_nome_vazio")
+            st.text_input("Nome", value="", disabled=True, key=kp + "nome_vazio")
 
-        desc_e = st.text_input("Descricao", value=str(sel["descricao"]), key="edit_desc")
+        desc_e = st.text_input("Descricao", value=str(sel["descricao"]), key=kp + "desc")
+
         forma_pag_atual = str(sel.get("forma_pagamento", "Dinheiro")) if "forma_pagamento" in sel.index else "Dinheiro"
         idx_fp = FORMAS_PAGAMENTO.index(forma_pag_atual) if forma_pag_atual in FORMAS_PAGAMENTO else 1
         forma_pag_e = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO,
-                                   index=idx_fp, key="edit_forma_pag")
+                                   index=idx_fp, key=kp + "forma_pag")
+
         valor_e = st.number_input("Valor (R$)", min_value=0.0, value=float(sel["valor"]),
-                                  step=0.01, format="%.2f", key="edit_val")
+                                  step=0.01, format="%.2f", key=kp + "val")
 
         st.divider()
         c1, c2 = st.columns(2)
@@ -381,9 +386,8 @@ def render():
                 else:
                     atualizar_lancamento(slug, lanc)
                     _invalida()
-                    # Revoga autorizacao apos editar
                     for k in list(st.session_state.keys()):
-                        if k.startswith("_auth_"):
+                        if k.startswith("_auth_") or k.startswith("_edit_"):
                             st.session_state.pop(k, None)
                     st.toast("Lancamento alterado!")
                     st.rerun()
@@ -394,10 +398,9 @@ def render():
                 if confirmar_exclusao("del_lanc_final", "Confirmar exclusao"):
                     excluir_lancamento(slug, id_lanc)
                     _invalida()
-                    # Revoga autorizacao e limpa flags da UI
                     for k in list(st.session_state.keys()):
                         if (k.startswith("_auth_") or k.startswith("_del_")
-                            or k == "sel_lanc_edit"):
+                            or k.startswith("_edit_") or k == "sel_lanc_edit"):
                             st.session_state.pop(k, None)
                     st.toast("Lancamento excluido!")
                     st.rerun()
