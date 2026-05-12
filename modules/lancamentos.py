@@ -21,14 +21,27 @@ FORMAS_PAGAMENTO   = ["Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque", "C
 
 
 def _ck(sufixo): return f"df_{sufixo}_{slug_da_sessao()}"
+
+
 def _invalida():
+    """Limpa TODO cache de dados — força recarregar do banco em qualquer modulo."""
+    slug = slug_da_sessao()
+    # Limpa caches conhecidos
     for s in ("cad", "lanc"):
         st.session_state.pop(_ck(s), None)
+    # Limpa qualquer outra chave que comece com df_
+    keys_to_remove = [k for k in list(st.session_state.keys()) if k.startswith("df_")]
+    for k in keys_to_remove:
+        st.session_state.pop(k, None)
+
+
 def _get_cad(slug):
     k = _ck("cad")
     if k not in st.session_state:
         st.session_state[k] = carregar_cadastros(slug)
     return st.session_state[k]
+
+
 def _get_lanc(slug):
     k = _ck("lanc")
     if k not in st.session_state:
@@ -89,106 +102,33 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
   <title>Cupom #""" + str(id_lanc).zfill(6) + """</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #f0f0f0;
-      display: flex;
-      justify-content: center;
-      padding: 20px;
-    }
-    .cupom {
-      background: white;
-      width: 320px;
-      padding: 16px 14px;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 12px;
-      color: #111;
-      box-shadow: 2px 2px 8px rgba(0,0,0,0.15);
-    }
-    .cupom::before, .cupom::after {
-      content: '';
-      display: block;
-      height: 10px;
-      background:
-        radial-gradient(circle at 50% 0%, white 6px, #f0f0f0 6px) 0 0 / 16px 10px repeat-x;
-    }
-    .cupom::after {
-      background:
-        radial-gradient(circle at 50% 100%, white 6px, #f0f0f0 6px) 0 100% / 16px 10px repeat-x;
-      margin-top: 8px;
-    }
+    body { background: #f0f0f0; display: flex; justify-content: center; padding: 20px; }
+    .cupom { background: white; width: 320px; padding: 16px 14px;
+             font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #111;
+             box-shadow: 2px 2px 8px rgba(0,0,0,0.15); }
+    .cupom::before, .cupom::after { content: ''; display: block; height: 10px;
+      background: radial-gradient(circle at 50% 0%, white 6px, #f0f0f0 6px) 0 0 / 16px 10px repeat-x; }
+    .cupom::after { background: radial-gradient(circle at 50% 100%, white 6px, #f0f0f0 6px) 0 100% / 16px 10px repeat-x; margin-top: 8px; }
     .centro { text-align: center; }
-    .nome-igreja {
-      font-size: 14px;
-      font-weight: bold;
-      text-align: center;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 6px 0 2px;
-    }
-    .subtitulo {
-      text-align: center;
-      font-size: 10px;
-      color: #555;
-      margin-bottom: 4px;
-    }
+    .nome-igreja { font-size: 14px; font-weight: bold; text-align: center;
+                   text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 2px; }
+    .subtitulo { text-align: center; font-size: 10px; color: #555; margin-bottom: 4px; }
     .sep  { color: #aaa; margin: 6px 0; letter-spacing: -1px; }
     .sep2 { color: #333; margin: 6px 0; letter-spacing: -1px; }
-    .linha {
-      display: flex;
-      justify-content: space-between;
-      margin: 3px 0;
-      font-size: 11px;
-    }
+    .linha { display: flex; justify-content: space-between; margin: 3px 0; font-size: 11px; }
     .linha .label { color: #555; }
     .linha .valor { font-weight: 600; text-align: right; max-width: 55%; word-break: break-word; }
-    .tipo-badge {
-      text-align: center;
-      font-size: 13px;
-      font-weight: bold;
-      letter-spacing: 0.1em;
-      padding: 4px 0;
-      margin: 4px 0;
-    }
-    .valor-total {
-      text-align: center;
-      font-size: 20px;
-      font-weight: bold;
-      margin: 8px 0 4px;
-      letter-spacing: 0.02em;
-    }
-    .cupom-num {
-      text-align: center;
-      font-size: 10px;
-      color: #777;
-      margin-bottom: 4px;
-    }
-    .assinatura-bloco {
-      margin-top: 12px;
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-    }
-    .assinatura-item {
-      flex: 1;
-      max-width: 45%;
-    }
-    .assinatura-linha {
-      border-top: 1px dashed #aaa;
-      margin-top: 28px;
-      padding-top: 4px;
-      text-align: center;
-      font-size: 10px;
-      color: #555;
-      width: 80%;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .rodape {
-      text-align: center;
-      font-size: 9px;
-      color: #888;
-      margin-top: 8px;
-    }
+    .tipo-badge { text-align: center; font-size: 13px; font-weight: bold;
+                  letter-spacing: 0.1em; padding: 4px 0; margin: 4px 0; }
+    .valor-total { text-align: center; font-size: 20px; font-weight: bold;
+                   margin: 8px 0 4px; letter-spacing: 0.02em; }
+    .cupom-num { text-align: center; font-size: 10px; color: #777; margin-bottom: 4px; }
+    .assinatura-bloco { margin-top: 12px; display: flex; justify-content: center; gap: 20px; }
+    .assinatura-item { flex: 1; max-width: 45%; }
+    .assinatura-linha { border-top: 1px dashed #aaa; margin-top: 28px; padding-top: 4px;
+                        text-align: center; font-size: 10px; color: #555;
+                        width: 80%; margin-left: auto; margin-right: auto; }
+    .rodape { text-align: center; font-size: 9px; color: #888; margin-top: 8px; }
     @media print {
       body { background: white; padding: 0; }
       .cupom { box-shadow: none; width: 100%; max-width: 320px; margin: 0 auto; }
@@ -211,53 +151,24 @@ def _gerar_html_comprovante(lancamento: dict, igreja: dict, slug: str) -> str:
   <div class="nome-igreja">""" + nome_igreja + """</div>
   <div class="subtitulo">Comprovante de Lancamento</div>
   <div class="sep centro">""" + sep + """</div>
-
   <div class="cupom-num">CUPOM N: """ + str(id_lanc).zfill(6) + """</div>
   <div class="cupom-num">Emitido: """ + data_emissao + """</div>
-
   <div class="sep centro">""" + sep + """</div>
-
   <div class="tipo-badge">*** """ + tipo.upper() + """ - """ + categoria.upper() + """ ***</div>
-
   <div class="sep centro">""" + sep + """</div>
-
-  <div class="linha">
-    <span class="label">Data</span>
-    <span class="valor">""" + data_str + """</span>
-  </div>
-  <div class="linha">
-    <span class="label">Categoria</span>
-    <span class="valor">""" + categoria + """</span>
-  </div>
-  <div class="linha">
-    <span class="label">Vinculado</span>
-    <span class="valor">""" + vinc_str + """</span>
-  </div>
-  <div class="linha">
-    <span class="label">Descricao</span>
-    <span class="valor">""" + (descricao if descricao else "-") + """</span>
-  </div>
-  <div class="linha">
-    <span class="label">Pagamento</span>
-    <span class="valor">""" + forma_pag + """</span>
-  </div>
-
+  <div class="linha"><span class="label">Data</span><span class="valor">""" + data_str + """</span></div>
+  <div class="linha"><span class="label">Categoria</span><span class="valor">""" + categoria + """</span></div>
+  <div class="linha"><span class="label">Vinculado</span><span class="valor">""" + vinc_str + """</span></div>
+  <div class="linha"><span class="label">Descricao</span><span class="valor">""" + (descricao if descricao else "-") + """</span></div>
+  <div class="linha"><span class="label">Pagamento</span><span class="valor">""" + forma_pag + """</span></div>
   <div class="sep2 centro">""" + sep2 + """</div>
-
   <div class="subtitulo">VALOR TOTAL</div>
   <div class="valor-total">""" + valor + """</div>
-
   <div class="sep2 centro">""" + sep2 + """</div>
-
   <div class="assinatura-bloco">
-    <div class="assinatura-item">
-      <div class="assinatura-linha">Tesoureiro</div>
-    </div>
-    <div class="assinatura-item">
-      <div class="assinatura-linha">""" + nome_assinatura + """</div>
-    </div>
+    <div class="assinatura-item"><div class="assinatura-linha">Tesoureiro</div></div>
+    <div class="assinatura-item"><div class="assinatura-linha">""" + nome_assinatura + """</div></div>
   </div>
-
   <div class="sep centro">""" + sep + """</div>
   <div class="rodape">FielMordomo - Sistema de Gestao Financeira</div>
   <div class="rodape">para Igrejas</div>
@@ -312,16 +223,15 @@ def render():
 
         if vincular == "Membro":
             if membros.empty:
-                st.warning("Nenhum membro ativo cadastrado. Cadastre membros primeiro.")
+                st.warning("Nenhum membro ativo cadastrado.")
             else:
                 opc = montar_opcoes(membros)
                 esc = st.selectbox("Membro", list(opc.keys()), key="nl_membro")
                 l = opc[esc]
                 id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
-
         elif vincular == "Fornecedor":
             if fornec.empty:
-                st.warning("Nenhum fornecedor ativo cadastrado. Cadastre fornecedores primeiro.")
+                st.warning("Nenhum fornecedor ativo cadastrado.")
             else:
                 opc = montar_opcoes(fornec)
                 esc = st.selectbox("Fornecedor", list(opc.keys()), key="nl_fornecedor")
@@ -487,5 +397,10 @@ def render():
                 if confirmar_exclusao("del_lanc_final", "Confirmar exclusao"):
                     excluir_lancamento(slug, id_lanc)
                     _invalida()
-                    st.toast("Excluido.")
+                    # Limpa flags de confirmacao e autorizacao para forçar reset da UI
+                    for k in ["del_lanc_final", "del_lanc_final_confirm",
+                              "excluir_lanc_auth", "excluir_lanc_senha",
+                              "sel_lanc_edit"]:
+                        st.session_state.pop(k, None)
+                    st.toast("Lancamento excluido!")
                     st.rerun()
