@@ -246,8 +246,7 @@ if modo == "admin":
     painel.render()
 
 elif modo == "igreja":
-    from modules import home, cadastros, lancamentos, relatorios, graficos, backup
-
+    from modules import home, cadastros, lancamentos, relatorios, graficos, backup, aniversariantes
     PAGINAS = {
     "home":            ("Inicio",       home),
     "cadastros":       ("Membros",      cadastros),
