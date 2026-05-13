@@ -59,13 +59,14 @@ def render():
     _cards_nav()
 
 
-NAV = [
-    ("cadastros",   "Membros e fornecedores", "Gerencie o cadastro de membros e fornecedores."),
-    ("lancamentos", "Lancamentos",            "Registre entradas e saidas financeiras."),
-    ("relatorios",  "Relatorios",             "Filtre e exporte dados por periodo."),
-    ("dashboard",   "Dashboard",              "Graficos e indicadores visuais."),
-]
 
+NAV = [
+    ("cadastros",       "Membros e fornecedores", "Gerencie o cadastro de membros e fornecedores."),
+    ("lancamentos",     "Lancamentos",            "Registre entradas e saidas financeiras."),
+    ("relatorios",      "Relatorios",             "Filtre e exporte dados por periodo."),
+    ("dashboard",       "Dashboard",              "Graficos e indicadores visuais."),
+    ("aniversariantes", "🎂 Aniversariantes",      "Veja quem faz aniversario hoje, na semana ou no mes."),
+]
 
 def _cards_nav():
     st.subheader("Ir para")
