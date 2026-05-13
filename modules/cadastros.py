@@ -10,6 +10,7 @@ from data.repository import (
 from utils.helpers import (
     preparar_df, confirmar_exclusao, slug_da_sessao, solicitar_autorizacao,
 )
+from utils.planos import plano_da_igreja, pode_cadastrar, limite_cadastros
 
 FUNCOES = [
     "Membro", "Congregado", "Auxiliar", "Pastor", "Diacono", "Diaconisa",
@@ -17,9 +18,7 @@ FUNCOES = [
     "Secretario", "Tesoureiro", "Professor", "Lider", "",
 ]
 
-CONGREGACOES = [
-    "AD Serrinha", "AD Paraiso", "AD Vila Nova", "",
-]
+CONGREGACOES = ["AD Serrinha", "AD Paraiso", "AD Vila Nova", ""]
 
 BAIRROS_MINACU = [
     "Setor Central", "Nova Esperanca", "Jardim Arimateia", "Jardim Boa Vista",
@@ -31,9 +30,9 @@ BAIRROS_MINACU = [
     "Vila Moraes", "Vila Sao Geraldo", "Vila Uniao", "Wilson Vaz", "",
 ]
 
-CIDADES   = ["Minacu"]
-CEPS      = ["76450-000"]
-SEXO_OPC  = ["Masculino", "Feminino", ""]
+CIDADES  = ["Minacu"]
+CEPS     = ["76450-000"]
+SEXO_OPC = ["Masculino", "Feminino", ""]
 
 
 def _formatar_cpf(cpf):
@@ -101,11 +100,42 @@ def _val(row, col):
 
 def render():
     slug = slug_da_sessao()
+    igreja = st.session_state.get("igreja", {})
+    plano = plano_da_igreja(igreja)
+
     st.subheader("Membros e fornecedores")
     df = _get(slug)
 
+    # ─── Contador de uso vs limite ───
+    qtd_membros = len(df[df["tipo_cadastro"].str.upper() == "MEMBRO"]) if not df.empty else 0
+    lim = limite_cadastros(igreja)
+
+    if lim is not None:
+        pct = (qtd_membros / lim) * 100 if lim > 0 else 0
+        if pct >= 100:
+            st.error(f"⚠️ Limite atingido: {qtd_membros} de {lim} membros (plano {plano['nome']}). "
+                     f"Faca upgrade para cadastrar mais.")
+        elif pct >= 80:
+            st.warning(f"⚠️ {qtd_membros} de {lim} membros cadastrados (plano {plano['nome']}). "
+                       f"Voce esta proximo do limite.")
+        else:
+            st.caption(f"📊 {qtd_membros} de {lim} membros cadastrados (plano {plano['nome']})")
+    else:
+        st.caption(f"📊 {qtd_membros} membros cadastrados (plano {plano['nome']} - ilimitado)")
+
     # ── Novo cadastro ────────────────────────────────────────────────────
     with st.expander("Novo cadastro", expanded=False):
+        # Verificacao de limite (apenas para MEMBRO)
+        bloqueado = (lim is not None and qtd_membros >= lim)
+
+        if bloqueado:
+            st.error(
+                f"🚫 **Limite atingido no plano {plano['nome']}**\n\n"
+                f"Voce ja cadastrou {qtd_membros} de {lim} membros permitidos. "
+                f"Para cadastrar mais membros, faca upgrade para um plano superior."
+            )
+            st.info("💡 Voce ainda pode cadastrar FORNECEDORES (sem limite).")
+
         with st.form("form_novo_cad", clear_on_submit=True):
             st.markdown("**Dados principais**")
             tipo = st.selectbox("Tipo", ["Membro", "Fornecedor"])
@@ -116,9 +146,7 @@ def render():
             cpf = st.text_input(doc_label, placeholder=doc_placeholder, help="Obrigatorio.")
 
             dt_nasc = st.date_input(
-                "Data de nascimento",
-                value=None,
-                format="DD/MM/YYYY",
+                "Data de nascimento", value=None, format="DD/MM/YYYY",
                 key="novo_dt_nasc",
                 min_value=datetime.date(1900, 1, 1),
                 max_value=datetime.date.today(),
@@ -151,27 +179,31 @@ def render():
                 cep = st.selectbox("CEP", CEPS)
 
             if st.form_submit_button("Salvar", type="primary"):
-                dn_str = dt_nasc.isoformat() if dt_nasc else ""
-                c = Cadastro(
-                    nome=nome, tipo_cadastro=tipo, funcao=funcao,
-                    congregacao=cong, cpf=cpf, situacao=sit,
-                    data_nascimento=dn_str, sexo=sexo,
-                    telefone=telefone, logradouro=logradouro,
-                    numero=numero, bairro=bairro,
-                    cidade=cidade, cep=cep,
-                )
-                erros = c.validar()
-                doc_limpo = "".join(d for d in cpf if d.isdigit())
-                if doc_limpo and cpf_existe(slug, doc_limpo):
-                    doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
-                    erros.append(doc_tipo + " ja cadastrado. Verifique se este cadastro ja existe.")
-                if erros:
-                    for e in erros: st.error(e)
+                # Bloqueia se for membro e limite atingido
+                if tipo == "Membro" and not pode_cadastrar(igreja, qtd_membros):
+                    st.error(f"🚫 Limite de {lim} membros atingido. Faca upgrade do plano.")
                 else:
-                    inserir_cadastro(slug, c)
-                    _invalida(slug)
-                    st.toast("Cadastro salvo!")
-                    st.rerun()
+                    dn_str = dt_nasc.isoformat() if dt_nasc else ""
+                    c = Cadastro(
+                        nome=nome, tipo_cadastro=tipo, funcao=funcao,
+                        congregacao=cong, cpf=cpf, situacao=sit,
+                        data_nascimento=dn_str, sexo=sexo,
+                        telefone=telefone, logradouro=logradouro,
+                        numero=numero, bairro=bairro,
+                        cidade=cidade, cep=cep,
+                    )
+                    erros = c.validar()
+                    doc_limpo = "".join(d for d in cpf if d.isdigit())
+                    if doc_limpo and cpf_existe(slug, doc_limpo):
+                        doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
+                        erros.append(doc_tipo + " ja cadastrado. Verifique se este cadastro ja existe.")
+                    if erros:
+                        for e in erros: st.error(e)
+                    else:
+                        inserir_cadastro(slug, c)
+                        _invalida(slug)
+                        st.toast("Cadastro salvo!")
+                        st.rerun()
 
     # ── Tabela ────────────────────────────────────────────────────────────
     total = len(df)
@@ -188,8 +220,6 @@ def render():
                     lambda r: _formatar_doc(str(r["cpf"]), str(r["tipo_cadastro"])) if str(r["cpf"]).strip() else "",
                     axis=1,
                 )
-            else:
-                df_view["cpf"] = df_view["cpf"].apply(lambda x: _formatar_cpf(str(x)) if str(x).strip() else "")
             df_view["cep"]             = df_view["cep"].apply(lambda x: _formatar_cep(str(x)) if str(x).strip() else "")
             df_view["telefone"]        = df_view["telefone"].apply(lambda x: _formatar_tel(str(x)) if str(x).strip() else "")
             df_view["data_nascimento"] = df_view["data_nascimento"].apply(lambda x: _formatar_data(str(x)) if str(x).strip() else "")
@@ -220,27 +250,19 @@ def render():
         cpf_atual         = _val(sel, "cpf")
         doc_label_e       = "CPF *" if tipo_edit == "Membro" else "CNPJ *"
         doc_placeholder_e = "000.000.000-00" if tipo_edit == "Membro" else "00.000.000/0000-00"
-        cpf_edit = st.text_input(
-            doc_label_e,
+        cpf_edit = st.text_input(doc_label_e,
             value=_formatar_doc(cpf_atual, tipo_edit) if cpf_atual else "",
-            placeholder=doc_placeholder_e,
-            key="e_cpf",
-            help="Obrigatorio.",
-        )
+            placeholder=doc_placeholder_e, key="e_cpf", help="Obrigatorio.")
 
         dn_atual = _val(sel, "data_nascimento")
         try:
             dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
         except Exception:
             dn_value = None
-        dt_nasc_edit = st.date_input(
-            "Data de nascimento",
-            value=dn_value,
-            format="DD/MM/YYYY",
-            key="e_dt_nasc",
+        dt_nasc_edit = st.date_input("Data de nascimento", value=dn_value,
+            format="DD/MM/YYYY", key="e_dt_nasc",
             min_value=datetime.date(1900, 1, 1),
-            max_value=datetime.date.today(),
-        )
+            max_value=datetime.date.today())
 
         if tipo_edit == "Membro":
             sexo_atual = _val(sel, "sexo")
