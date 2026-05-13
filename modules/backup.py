@@ -1,7 +1,6 @@
 """
 Modulo de backup — exportacao e download de dados da igreja.
-Suporta: CSV (cadastros + lancamentos) e SQLite completo.
-Backup automatico: diario e semanal com controle por session_state.
+Backup automatico apenas em planos Profissional e Premium.
 """
 
 import io
@@ -14,137 +13,110 @@ from data.repository import (
     carregar_cadastros, carregar_lancamentos, _tenant_db,
 )
 from utils.helpers import slug_da_sessao, formatar_moeda
+from utils.planos import tem_backup_automatico, obter_plano, proximo_plano
 
 
-def _nome_arquivo(prefixo: str, ext: str, slug: str) -> str:
+def _nome_arquivo(prefixo, ext, slug):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefixo}_{slug}_{ts}.{ext}"
+    return prefixo + "_" + slug + "_" + ts + "." + ext
 
 
-def _gerar_zip_csv(slug: str) -> bytes:
-    """Gera ZIP com CSV de cadastros e lancamentos."""
-    df_cad  = carregar_cadastros(slug)
-    df_lanc = carregar_lancamentos(slug)
-
-    # Formata datas para exibicao
-    if not df_lanc.empty and "data" in df_lanc.columns:
-        df_lanc = df_lanc.copy()
-        df_lanc["data"] = pd.to_datetime(df_lanc["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(
-            f"cadastros_{slug}.csv",
-            df_cad.to_csv(index=False, encoding="utf-8-sig"),
-        )
-        zf.writestr(
-            f"lancamentos_{slug}.csv",
-            df_lanc.to_csv(index=False, encoding="utf-8-sig"),
-        )
-        # Adiciona um resumo
-        resumo = _gerar_resumo(df_cad, df_lanc, slug)
-        zf.writestr(f"resumo_{slug}.txt", resumo)
-
-    buf.seek(0)
-    return buf.read()
-
-
-def _gerar_sqlite(slug: str) -> bytes:
-    """Retorna os bytes do banco SQLite da igreja."""
+def _gerar_sqlite(slug):
     db_path = _tenant_db(slug)
     if db_path.exists():
         return db_path.read_bytes()
     return b""
 
 
-def _gerar_zip_completo(slug: str) -> bytes:
-    """Gera ZIP com CSV + SQLite."""
+def _gerar_resumo(df_cad, df_lanc, slug):
+    agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    linhas = [
+        "=" * 50,
+        "FIELMORDOMO - RESUMO DO BACKUP",
+        "=" * 50,
+        "Igreja: " + slug,
+        "Data/hora: " + agora,
+        "",
+        "--- CADASTROS ---",
+        "Total: " + str(len(df_cad)) + " registros",
+    ]
+
+    if not df_cad.empty and "tipo_cadastro" in df_cad.columns:
+        membros      = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "MEMBRO"])
+        fornecedores = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "FORNECEDOR"])
+        linhas.append("  Membros: " + str(membros))
+        linhas.append("  Fornecedores: " + str(fornecedores))
+
+    linhas += ["", "--- LANCAMENTOS ---", "Total: " + str(len(df_lanc)) + " registros"]
+
+    if not df_lanc.empty:
+        df_l = df_lanc.copy()
+        if "valor" in df_l.columns:
+            df_l["valor"] = pd.to_numeric(df_l["valor"], errors="coerce").fillna(0)
+        if "tipo" in df_l.columns:
+            entradas = df_l[df_l["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+            saidas   = df_l[df_l["tipo"].str.upper() == "SAIDA"]["valor"].sum()
+            linhas.append("  Total entradas: " + formatar_moeda(entradas))
+            linhas.append("  Total saidas:   " + formatar_moeda(saidas))
+            linhas.append("  Saldo:          " + formatar_moeda(entradas - saidas))
+
+    linhas += ["", "=" * 50,
+               "FielMordomo - Sistema de Gestao Financeira",
+               "=" * 50]
+    return "\n".join(linhas)
+
+
+def _gerar_zip_completo(slug):
     df_cad  = carregar_cadastros(slug)
     df_lanc = carregar_lancamentos(slug)
 
     if not df_lanc.empty and "data" in df_lanc.columns:
         df_lanc = df_lanc.copy()
-        df_lanc["data"] = pd.to_datetime(df_lanc["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+        df_lanc["data"] = pd.to_datetime(
+            df_lanc["data"], errors="coerce"
+        ).dt.strftime("%d/%m/%Y").fillna("")
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        # CSVs
-        zf.writestr(f"cadastros_{slug}.csv",
+        zf.writestr("cadastros_" + slug + ".csv",
                     df_cad.to_csv(index=False, encoding="utf-8-sig"))
-        zf.writestr(f"lancamentos_{slug}.csv",
+        zf.writestr("lancamentos_" + slug + ".csv",
                     df_lanc.to_csv(index=False, encoding="utf-8-sig"))
-        # Resumo
-        zf.writestr(f"resumo_{slug}.txt", _gerar_resumo(df_cad, df_lanc, slug))
-        # SQLite
+        zf.writestr("resumo_" + slug + ".txt",
+                    _gerar_resumo(df_cad, df_lanc, slug))
         db_bytes = _gerar_sqlite(slug)
         if db_bytes:
-            zf.writestr(f"banco_{slug}.db", db_bytes)
+            zf.writestr("banco_" + slug + ".db", db_bytes)
 
     buf.seek(0)
     return buf.read()
 
 
-def _gerar_resumo(df_cad: pd.DataFrame, df_lanc: pd.DataFrame, slug: str) -> str:
-    """Gera arquivo de resumo do backup."""
-    agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    linhas = [
-        "=" * 50,
-        "FIELMORDOMO — RESUMO DO BACKUP",
-        "=" * 50,
-        f"Igreja: {slug}",
-        f"Data/hora: {agora}",
-        "",
-        "--- CADASTROS ---",
-        f"Total: {len(df_cad)} registros",
-    ]
+def _verificar_backup_automatico(slug):
+    """Gera backups automaticos apenas para planos Profissional e Premium."""
+    igreja = st.session_state.get("igreja", {})
+    plano  = igreja.get("plano", "basico")
 
-    if not df_cad.empty:
-        if "tipo_cadastro" in df_cad.columns:
-            membros   = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "MEMBRO"])
-            fornecedores = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "FORNECEDOR"])
-            linhas.append(f"  Membros: {membros}")
-            linhas.append(f"  Fornecedores: {fornecedores}")
+    if not tem_backup_automatico(plano):
+        return
 
-    linhas += ["", "--- LANCAMENTOS ---", f"Total: {len(df_lanc)} registros"]
-
-    if not df_lanc.empty:
-        if "valor" in df_lanc.columns:
-            df_lanc["valor"] = pd.to_numeric(df_lanc["valor"], errors="coerce").fillna(0)
-        if "tipo" in df_lanc.columns:
-            entradas = df_lanc[df_lanc["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-            saidas   = df_lanc[df_lanc["tipo"].str.upper() == "SAIDA"]["valor"].sum()
-            linhas.append(f"  Total entradas: {formatar_moeda(entradas)}")
-            linhas.append(f"  Total saidas:   {formatar_moeda(saidas)}")
-            linhas.append(f"  Saldo:          {formatar_moeda(entradas - saidas)}")
-
-    linhas += ["", "=" * 50, "FielMordomo — Sistema de Gestao Financeira", "=" * 50]
-    return "\n".join(linhas)
-
-
-def _verificar_backup_automatico(slug: str):
-    """
-    Verifica se e hora de fazer backup automatico.
-    Diario: uma vez por dia. Semanal: uma vez por semana (domingo).
-    """
     agora = datetime.datetime.now()
     hoje  = agora.date()
 
-    # Backup diario
-    ultimo_diario = st.session_state.get(f"backup_diario_{slug}")
+    ultimo_diario = st.session_state.get("backup_diario_" + slug)
     if ultimo_diario != hoje:
         dados = _gerar_zip_completo(slug)
-        st.session_state[f"backup_diario_{slug}"]  = hoje
-        st.session_state[f"backup_diario_dados_{slug}"] = dados
-        st.session_state[f"backup_diario_nome_{slug}"]  = _nome_arquivo("backup_diario", "zip", slug)
+        st.session_state["backup_diario_" + slug]       = hoje
+        st.session_state["backup_diario_dados_" + slug] = dados
+        st.session_state["backup_diario_nome_" + slug]  = _nome_arquivo("backup_diario", "zip", slug)
 
-    # Backup semanal (domingo = weekday 6)
-    ultimo_semanal = st.session_state.get(f"backup_semanal_{slug}")
-    semana_atual   = agora.isocalendar()[1]  # numero da semana
+    semana_atual   = agora.isocalendar()[1]
+    ultimo_semanal = st.session_state.get("backup_semanal_" + slug)
     if ultimo_semanal != semana_atual:
         dados = _gerar_zip_completo(slug)
-        st.session_state[f"backup_semanal_{slug}"]      = semana_atual
-        st.session_state[f"backup_semanal_dados_{slug}"] = dados
-        st.session_state[f"backup_semanal_nome_{slug}"]  = _nome_arquivo("backup_semanal", "zip", slug)
+        st.session_state["backup_semanal_" + slug]       = semana_atual
+        st.session_state["backup_semanal_dados_" + slug] = dados
+        st.session_state["backup_semanal_nome_" + slug]  = _nome_arquivo("backup_semanal", "zip", slug)
 
 
 def render():
@@ -152,33 +124,30 @@ def render():
     st.subheader("Backup de dados")
     st.caption("Exporte e baixe os dados da sua igreja para guardar em seguranca.")
 
-    # Verifica backups automaticos
+    igreja = st.session_state.get("igreja", {})
+    plano  = igreja.get("plano", "basico")
+
     _verificar_backup_automatico(slug)
 
-    # ── Backup manual ─────────────────────────────────────────────────────
+    # ── Backup manual (disponivel para todos) ─────────────────────────────
     with st.expander("Backup manual", expanded=True):
         st.markdown("Escolha o formato e clique para baixar:")
-
         c1, c2, c3 = st.columns(3)
 
         with c1:
             st.markdown("**CSV (planilhas)**")
-            st.caption("Cadastros e lancamentos em formato CSV — abre no Excel.")
+            st.caption("Cadastros e lancamentos em CSV — abre no Excel.")
             if st.button("Gerar CSV", key="btn_csv", use_container_width=True):
                 dados = _gerar_zip_completo(slug)
-                st.session_state["backup_manual_csv"]  = dados
+                st.session_state["backup_manual_csv"]      = dados
                 st.session_state["backup_manual_csv_nome"] = _nome_arquivo("backup_csv", "zip", slug)
                 st.toast("CSV gerado!")
-
             if "backup_manual_csv" in st.session_state:
                 st.download_button(
-                    "Baixar CSV",
-                    data=st.session_state["backup_manual_csv"],
+                    "Baixar CSV", data=st.session_state["backup_manual_csv"],
                     file_name=st.session_state["backup_manual_csv_nome"],
-                    mime="application/zip",
-                    key="dl_csv",
-                    use_container_width=True,
-                    type="primary",
+                    mime="application/zip", key="dl_csv",
+                    use_container_width=True, type="primary",
                 )
 
         with c2:
@@ -192,16 +161,12 @@ def render():
                     st.toast("Banco gerado!")
                 else:
                     st.error("Banco nao encontrado.")
-
             if "backup_manual_db" in st.session_state:
                 st.download_button(
-                    "Baixar SQLite",
-                    data=st.session_state["backup_manual_db"],
+                    "Baixar SQLite", data=st.session_state["backup_manual_db"],
                     file_name=st.session_state["backup_manual_db_nome"],
-                    mime="application/octet-stream",
-                    key="dl_sqlite",
-                    use_container_width=True,
-                    type="primary",
+                    mime="application/octet-stream", key="dl_sqlite",
+                    use_container_width=True, type="primary",
                 )
 
         with c3:
@@ -212,61 +177,61 @@ def render():
                 st.session_state["backup_manual_completo"]      = dados
                 st.session_state["backup_manual_completo_nome"] = _nome_arquivo("backup_completo", "zip", slug)
                 st.toast("Backup completo gerado!")
-
             if "backup_manual_completo" in st.session_state:
                 st.download_button(
-                    "Baixar backup completo",
-                    data=st.session_state["backup_manual_completo"],
+                    "Baixar backup completo", data=st.session_state["backup_manual_completo"],
                     file_name=st.session_state["backup_manual_completo_nome"],
-                    mime="application/zip",
-                    key="dl_completo",
-                    use_container_width=True,
-                    type="primary",
+                    mime="application/zip", key="dl_completo",
+                    use_container_width=True, type="primary",
                 )
 
-    # ── Backups automaticos ───────────────────────────────────────────────
-    with st.expander("Backups automaticos", expanded=False):
-        st.markdown("Gerados automaticamente ao acessar o sistema.")
+    # ── Backups automaticos (Profissional e Premium) ─────────────────────
+    if tem_backup_automatico(plano):
+        with st.expander("Backups automaticos", expanded=False):
+            st.markdown("Gerados automaticamente ao acessar o sistema.")
+            c1, c2 = st.columns(2)
 
-        c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Backup diario**")
+                ultimo = st.session_state.get("backup_diario_" + slug)
+                st.caption("Gerado em: " + (ultimo.strftime("%d/%m/%Y") if ultimo else "-"))
+                dados_d = st.session_state.get("backup_diario_dados_" + slug)
+                nome_d  = st.session_state.get("backup_diario_nome_" + slug, "backup_diario.zip")
+                if dados_d:
+                    st.download_button(
+                        "Baixar backup diario", data=dados_d, file_name=nome_d,
+                        mime="application/zip", key="dl_auto_diario",
+                        use_container_width=True, type="primary",
+                    )
+                else:
+                    st.info("Nenhum backup diario disponivel.")
 
-        with c1:
-            st.markdown("**Backup diario**")
-            ultimo = st.session_state.get(f"backup_diario_{slug}")
-            st.caption(f"Gerado em: {ultimo.strftime('%d/%m/%Y') if ultimo else '-'}")
-            dados_d = st.session_state.get(f"backup_diario_dados_{slug}")
-            nome_d  = st.session_state.get(f"backup_diario_nome_{slug}", "backup_diario.zip")
-            if dados_d:
-                st.download_button(
-                    "Baixar backup diario",
-                    data=dados_d,
-                    file_name=nome_d,
-                    mime="application/zip",
-                    key="dl_auto_diario",
-                    use_container_width=True,
-                    type="primary",
-                )
-            else:
-                st.info("Nenhum backup diario disponivel.")
-
-        with c2:
-            st.markdown("**Backup semanal**")
-            semana = st.session_state.get(f"backup_semanal_{slug}")
-            st.caption(f"Semana: {semana if semana else '-'}")
-            dados_s = st.session_state.get(f"backup_semanal_dados_{slug}")
-            nome_s  = st.session_state.get(f"backup_semanal_nome_{slug}", "backup_semanal.zip")
-            if dados_s:
-                st.download_button(
-                    "Baixar backup semanal",
-                    data=dados_s,
-                    file_name=nome_s,
-                    mime="application/zip",
-                    key="dl_auto_semanal",
-                    use_container_width=True,
-                    type="primary",
-                )
-            else:
-                st.info("Nenhum backup semanal disponivel.")
+            with c2:
+                st.markdown("**Backup semanal**")
+                semana = st.session_state.get("backup_semanal_" + slug)
+                st.caption("Semana: " + (str(semana) if semana else "-"))
+                dados_s = st.session_state.get("backup_semanal_dados_" + slug)
+                nome_s  = st.session_state.get("backup_semanal_nome_" + slug, "backup_semanal.zip")
+                if dados_s:
+                    st.download_button(
+                        "Baixar backup semanal", data=dados_s, file_name=nome_s,
+                        mime="application/zip", key="dl_auto_semanal",
+                        use_container_width=True, type="primary",
+                    )
+                else:
+                    st.info("Nenhum backup semanal disponivel.")
+    else:
+        p_info = obter_plano(plano)
+        with st.expander("🔒 Backups automaticos (apenas Profissional e Premium)", expanded=False):
+            st.warning(
+                f"Backup automatico esta disponivel apenas nos planos "
+                f"**Profissional** e **Premium**. Seu plano atual: **{p_info['nome']}**."
+            )
+            st.caption("Voce continua tendo acesso ao backup manual acima.")
+            st.info(
+                f"Upgrade para **{proximo_plano(plano).capitalize()}** "
+                f"para ter backups diarios e semanais automaticos."
+            )
 
     # ── Resumo dos dados ──────────────────────────────────────────────────
     with st.expander("Resumo dos dados", expanded=False):
