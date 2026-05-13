@@ -66,7 +66,7 @@ def _fazer_backup(db_path: Path):
         antigo.unlink()
 
 
-def salvar_logo_sistema(dados: bytes, extensao: str) -> Path:
+def salvar_logo_sistema(dados, extensao):
     for f in LOGOS_DIR.glob("sistema.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"sistema.{extensao}"
@@ -82,7 +82,7 @@ def obter_logo_sistema():
     return None
 
 
-def salvar_logo_igreja(slug: str, dados: bytes, extensao: str) -> Path:
+def salvar_logo_igreja(slug, dados, extensao):
     for f in LOGOS_DIR.glob(f"{slug}.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"{slug}.{extensao}"
@@ -90,7 +90,7 @@ def salvar_logo_igreja(slug: str, dados: bytes, extensao: str) -> Path:
     return caminho
 
 
-def obter_logo_igreja(slug: str):
+def obter_logo_igreja(slug):
     for ext in ("png", "jpg", "jpeg", "webp"):
         p = LOGOS_DIR / f"{slug}.{ext}"
         if p.exists():
@@ -99,7 +99,7 @@ def obter_logo_igreja(slug: str):
 
 
 @contextmanager
-def _conn(db_path: Path):
+def _conn(db_path):
     conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -114,7 +114,7 @@ def _conn(db_path: Path):
         conn.close()
 
 
-def _tenant_db(slug: str) -> Path:
+def _tenant_db(slug):
     return TENANTS_DIR / f"{slug}.db"
 
 
@@ -145,7 +145,7 @@ def inicializar_master():
             )
 
 
-def inicializar_tenant(slug: str):
+def inicializar_tenant(slug):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         conn.executescript("""
@@ -157,6 +157,7 @@ def inicializar_tenant(slug: str):
                 congregacao      TEXT DEFAULT '',
                 cpf              TEXT DEFAULT '',
                 data_nascimento  TEXT DEFAULT '',
+                sexo             TEXT DEFAULT '',
                 telefone         TEXT DEFAULT '',
                 logradouro       TEXT DEFAULT '',
                 numero           TEXT DEFAULT '',
@@ -180,37 +181,33 @@ def inicializar_tenant(slug: str):
         """)
 
 
-def listar_igrejas() -> pd.DataFrame:
+def listar_igrejas():
     with _conn(MASTER_DB) as conn:
-        df = pd.read_sql_query(
+        return pd.read_sql_query(
             "SELECT id, nome, slug, email_admin, plano, ativa, criada_em FROM igrejas ORDER BY nome",
             conn,
         )
-    return df
 
 
-def buscar_igreja_por_slug(slug: str):
+def buscar_igreja_por_slug(slug):
     with _conn(MASTER_DB) as conn:
-        row = conn.execute(
-            "SELECT * FROM igrejas WHERE slug=? AND ativa=1", (slug,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM igrejas WHERE slug=? AND ativa=1", (slug,)).fetchone()
     return dict(row) if row else None
 
 
-def criar_igreja(igreja) -> int:
+def criar_igreja(igreja):
     with _conn(MASTER_DB) as conn:
         cur = conn.execute(
             """INSERT INTO igrejas (nome, slug, email_admin, senha_hash, plano)
                VALUES (?, ?, ?, ?, ?)""",
-            (sanitizar(igreja.nome), igreja.slug,
-             sanitizar(igreja.email_admin), igreja.senha_hash, igreja.plano),
+            (sanitizar(igreja.nome), igreja.slug, sanitizar(igreja.email_admin),
+             igreja.senha_hash, igreja.plano),
         )
-        slug = igreja.slug
-    inicializar_tenant(slug)
+    inicializar_tenant(igreja.slug)
     return cur.lastrowid
 
 
-def atualizar_igreja(id_igreja: int, nome: str, email: str, plano: str, ativa: bool):
+def atualizar_igreja(id_igreja, nome, email, plano, ativa):
     with _conn(MASTER_DB) as conn:
         conn.execute(
             "UPDATE igrejas SET nome=?, email_admin=?, plano=?, ativa=? WHERE id=?",
@@ -218,22 +215,20 @@ def atualizar_igreja(id_igreja: int, nome: str, email: str, plano: str, ativa: b
         )
 
 
-def redefinir_senha_igreja(id_igreja: int, nova_senha: str):
+def redefinir_senha_igreja(id_igreja, nova_senha):
     with _conn(MASTER_DB) as conn:
-        conn.execute(
-            "UPDATE igrejas SET senha_hash=? WHERE id=?",
-            (hash_senha(nova_senha), id_igreja),
-        )
+        conn.execute("UPDATE igrejas SET senha_hash=? WHERE id=?",
+                     (hash_senha(nova_senha), id_igreja))
 
 
-def excluir_igreja(id_igreja: int, slug: str):
+def excluir_igreja(id_igreja, slug):
     _fazer_backup(MASTER_DB)
     _fazer_backup(_tenant_db(slug))
     with _conn(MASTER_DB) as conn:
         conn.execute("DELETE FROM igrejas WHERE id=?", (id_igreja,))
 
 
-def autenticar_super_admin(usuario: str, senha: str) -> bool:
+def autenticar_super_admin(usuario, senha):
     with _conn(MASTER_DB) as conn:
         row = conn.execute(
             "SELECT 1 FROM super_admin WHERE usuario=? AND senha_hash=?",
@@ -242,7 +237,7 @@ def autenticar_super_admin(usuario: str, senha: str) -> bool:
     return row is not None
 
 
-def autenticar_igreja(slug: str, senha: str):
+def autenticar_igreja(slug, senha):
     with _conn(MASTER_DB) as conn:
         row = conn.execute(
             "SELECT * FROM igrejas WHERE slug=? AND senha_hash=? AND ativa=1",
@@ -251,15 +246,13 @@ def autenticar_igreja(slug: str, senha: str):
     return dict(row) if row else None
 
 
-def alterar_senha_super_admin(usuario: str, nova_senha: str):
+def alterar_senha_super_admin(usuario, nova_senha):
     with _conn(MASTER_DB) as conn:
-        conn.execute(
-            "UPDATE super_admin SET senha_hash=? WHERE usuario=?",
-            (hash_senha(nova_senha), usuario),
-        )
+        conn.execute("UPDATE super_admin SET senha_hash=? WHERE usuario=?",
+                     (hash_senha(nova_senha), usuario))
 
 
-def carregar_cadastros(slug: str) -> pd.DataFrame:
+def carregar_cadastros(slug):
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
@@ -268,8 +261,7 @@ def carregar_cadastros(slug: str) -> pd.DataFrame:
     return df
 
 
-def cpf_existe(slug: str, cpf: str, id_excluir: int = None) -> bool:
-    """Verifica se CPF ou CNPJ ja esta cadastrado."""
+def cpf_existe(slug, cpf, id_excluir=None):
     if not cpf.strip():
         return False
     doc_limpo = "".join(c for c in cpf if c.isdigit())
@@ -282,25 +274,43 @@ def cpf_existe(slug: str, cpf: str, id_excluir: int = None) -> bool:
             ).fetchone()
         else:
             row = conn.execute(
-                "SELECT 1 FROM cadastros WHERE cpf=? LIMIT 1",
-                (doc_limpo,),
+                "SELECT 1 FROM cadastros WHERE cpf=? LIMIT 1", (doc_limpo,)
             ).fetchone()
     return row is not None
 
 
-def inserir_cadastro(slug: str, c) -> int:
+def _garantir_colunas_cadastros(conn):
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(cadastros)").fetchall()]
+    for col, tipo in [
+        ("cpf",             "TEXT DEFAULT ''"),
+        ("data_nascimento", "TEXT DEFAULT ''"),
+        ("sexo",            "TEXT DEFAULT ''"),
+        ("telefone",        "TEXT DEFAULT ''"),
+        ("logradouro",      "TEXT DEFAULT ''"),
+        ("numero",          "TEXT DEFAULT ''"),
+        ("bairro",          "TEXT DEFAULT ''"),
+        ("cidade",          "TEXT DEFAULT ''"),
+        ("cep",             "TEXT DEFAULT ''"),
+    ]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
+
+
+def inserir_cadastro(slug, c):
     db = _tenant_db(slug)
     cpf_limpo = "".join(d for d in c.cpf if d.isdigit()) if c.cpf else ""
     cep_limpo = "".join(d for d in c.cep if d.isdigit()) if c.cep else ""
     with _conn(db) as conn:
+        _garantir_colunas_cadastros(conn)
         cur = conn.execute(
             """INSERT INTO cadastros
                (tipo_cadastro, nome, funcao, congregacao, cpf,
-                data_nascimento, telefone, logradouro, numero, bairro, cidade, cep, situacao)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                data_nascimento, sexo, telefone, logradouro, numero, bairro, cidade, cep, situacao)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
              sanitizar(c.congregacao), cpf_limpo,
-             sanitizar(c.data_nascimento) if hasattr(c, "data_nascimento") else "",
+             sanitizar(getattr(c, "data_nascimento", "")),
+             sanitizar(getattr(c, "sexo", "")),
              sanitizar(c.telefone), sanitizar(c.logradouro),
              sanitizar(c.numero), sanitizar(c.bairro),
              sanitizar(c.cidade), cep_limpo, c.situacao),
@@ -308,33 +318,22 @@ def inserir_cadastro(slug: str, c) -> int:
         return cur.lastrowid
 
 
-def atualizar_cadastro(slug: str, c):
+def atualizar_cadastro(slug, c):
     db = _tenant_db(slug)
     cpf_limpo = "".join(d for d in c.cpf if d.isdigit()) if c.cpf else ""
     cep_limpo = "".join(d for d in c.cep if d.isdigit()) if c.cep else ""
     with _conn(db) as conn:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(cadastros)").fetchall()]
-        for col, tipo in [
-            ("cpf",             "TEXT DEFAULT ''"),
-            ("data_nascimento", "TEXT DEFAULT ''"),
-            ("telefone",        "TEXT DEFAULT ''"),
-            ("logradouro",      "TEXT DEFAULT ''"),
-            ("numero",          "TEXT DEFAULT ''"),
-            ("bairro",          "TEXT DEFAULT ''"),
-            ("cidade",          "TEXT DEFAULT ''"),
-            ("cep",             "TEXT DEFAULT ''"),
-        ]:
-            if col not in cols:
-                conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
+        _garantir_colunas_cadastros(conn)
         conn.execute(
             """UPDATE cadastros
                SET tipo_cadastro=?, nome=?, funcao=?, congregacao=?, cpf=?,
-                   data_nascimento=?, telefone=?, logradouro=?, numero=?,
+                   data_nascimento=?, sexo=?, telefone=?, logradouro=?, numero=?,
                    bairro=?, cidade=?, cep=?, situacao=?
                WHERE id_cadastro=?""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
              sanitizar(c.congregacao), cpf_limpo,
-             sanitizar(c.data_nascimento) if hasattr(c, "data_nascimento") else "",
+             sanitizar(getattr(c, "data_nascimento", "")),
+             sanitizar(getattr(c, "sexo", "")),
              sanitizar(c.telefone), sanitizar(c.logradouro),
              sanitizar(c.numero), sanitizar(c.bairro),
              sanitizar(c.cidade), cep_limpo,
@@ -342,14 +341,14 @@ def atualizar_cadastro(slug: str, c):
         )
 
 
-def excluir_cadastro(slug: str, id_cadastro: int):
+def excluir_cadastro(slug, id_cadastro):
     _fazer_backup(_tenant_db(slug))
     db = _tenant_db(slug)
     with _conn(db) as conn:
         conn.execute("DELETE FROM cadastros WHERE id_cadastro=?", (id_cadastro,))
 
 
-def cadastro_em_uso(slug: str, id_cadastro: int) -> bool:
+def cadastro_em_uso(slug, id_cadastro):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         row = conn.execute(
@@ -358,7 +357,7 @@ def cadastro_em_uso(slug: str, id_cadastro: int) -> bool:
     return row is not None
 
 
-def carregar_lancamentos(slug: str) -> pd.DataFrame:
+def carregar_lancamentos(slug):
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
@@ -372,7 +371,7 @@ def carregar_lancamentos(slug: str) -> pd.DataFrame:
     return df
 
 
-def inserir_lancamento(slug: str, l) -> int:
+def inserir_lancamento(slug, l):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
@@ -396,7 +395,7 @@ def inserir_lancamento(slug: str, l) -> int:
         return cur.lastrowid
 
 
-def atualizar_lancamento(slug: str, l):
+def atualizar_lancamento(slug, l):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
@@ -419,7 +418,7 @@ def atualizar_lancamento(slug: str, l):
         )
 
 
-def excluir_lancamento(slug: str, id_lancamento: int):
+def excluir_lancamento(slug, id_lancamento):
     _fazer_backup(_tenant_db(slug))
     db = _tenant_db(slug)
     with _conn(db) as conn:
