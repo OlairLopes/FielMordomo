@@ -71,7 +71,7 @@ NAV = [
 def _cards_nav():
     st.subheader("Ir para")
     c1, c2 = st.columns(2)
-    cols = [c1, c2, c1, c2]
+    cols = [c1, c2] * ((len(NAV) + 1) // 2)
     for (page, title, desc), col in zip(NAV, cols):
         with col:
             with st.container(border=True):
