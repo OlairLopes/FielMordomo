@@ -156,14 +156,14 @@ def _img_b64(dados, ext):
 
 def _navbar_igreja(pagina_atual, paginas, igreja, slug):
     ICONES = {
-        "home":        "⛪",
-        "cadastros":   "👤",
-        "lancamentos": "💵",
-        "relatorios":  "📋",
-        "dashboard":   "📊",
-        "backup":      "💾",
-    }
-
+    "home":            "⛪",
+    "cadastros":       "👤",
+    "lancamentos":     "💵",
+    "relatorios":      "📋",
+    "dashboard":       "📊",
+    "aniversariantes": "🎂",
+    "backup":          "💾",
+}
     nome   = igreja.get("nome", "FielMordomo")
     plano  = igreja.get("plano", "").capitalize()
     logo_r = obter_logo_igreja(slug) or obter_logo_sistema()
@@ -249,12 +249,13 @@ elif modo == "igreja":
     from modules import home, cadastros, lancamentos, relatorios, graficos, backup
 
     PAGINAS = {
-        "home":        ("Inicio",      home),
-        "cadastros":   ("Membros",     cadastros),
-        "lancamentos": ("Lancamentos", lancamentos),
-        "relatorios":  ("Relatorios",  relatorios),
-        "dashboard":   ("Dashboard",   graficos),
-        "backup":      ("Backup",      backup),
+    "home":            ("Inicio",       home),
+    "cadastros":       ("Membros",      cadastros),
+    "lancamentos":     ("Lancamentos",  lancamentos),
+    "relatorios":      ("Relatorios",   relatorios),
+    "dashboard":       ("Dashboard",    graficos),
+    "aniversariantes": ("Aniversarios", aniversariantes),
+    "backup":          ("Backup",       backup),
     }
 
     if "pagina" not in st.session_state:
