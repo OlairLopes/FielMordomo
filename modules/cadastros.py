@@ -18,44 +18,22 @@ FUNCOES = [
 ]
 
 CONGREGACOES = [
-    "AD Serrinha",
-    "AD Paraiso",
-    "AD Vila Nova",
-    "",
+    "AD Serrinha", "AD Paraiso", "AD Vila Nova", "",
 ]
 
 BAIRROS_MINACU = [
-    "Setor Central",
-    "Nova Esperanca",
-    "Jardim Arimateia",
-    "Jardim Boa Vista",
-    "Jardim Brasil",
-    "Jardim Emilia",
-    "Jardim Floresta",
-    "Jardim Floresta II",
-    "Habitacional Primavera",
-    "Minacu Norte",
-    "Patrimonio do Trevo",
-    "Patrimonio do Vicente",
-    "Residencial Cana Brava",
-    "Residencial Tocantins",
-    "Marajoara",
-    "Setor Serrinha",
-    "Vila Batista",
-    "Vila Residencial Sama",
-    "Vila de Furnas",
-    "Vila de Malta",
-    "Vila Manchester",
-    "Vila Menezes",
-    "Vila Moraes",
-    "Vila Sao Geraldo",
-    "Vila Uniao",
-    "Wilson Vaz",
-    "",
+    "Setor Central", "Nova Esperanca", "Jardim Arimateia", "Jardim Boa Vista",
+    "Jardim Brasil", "Jardim Emilia", "Jardim Floresta", "Jardim Floresta II",
+    "Habitacional Primavera", "Minacu Norte", "Patrimonio do Trevo",
+    "Patrimonio do Vicente", "Residencial Cana Brava", "Residencial Tocantins",
+    "Marajoara", "Setor Serrinha", "Vila Batista", "Vila Residencial Sama",
+    "Vila de Furnas", "Vila de Malta", "Vila Manchester", "Vila Menezes",
+    "Vila Moraes", "Vila Sao Geraldo", "Vila Uniao", "Wilson Vaz", "",
 ]
 
-CIDADES = ["Minacu"]
-CEPS    = ["76450-000"]
+CIDADES   = ["Minacu"]
+CEPS      = ["76450-000"]
+SEXO_OPC  = ["Masculino", "Feminino", ""]
 
 
 def _formatar_cpf(cpf):
@@ -145,9 +123,15 @@ def render():
                 min_value=datetime.date(1900, 1, 1),
                 max_value=datetime.date.today(),
             )
-            funcao = st.selectbox("Funcao", FUNCOES) if tipo == "Membro" else ""
-            cong   = st.selectbox("Congregacao", CONGREGACOES)
-            sit    = st.selectbox("Situacao", ["Ativo", "Inativo"])
+
+            if tipo == "Membro":
+                sexo   = st.selectbox("Sexo", SEXO_OPC, key="novo_sexo")
+                funcao = st.selectbox("Funcao", FUNCOES, key="novo_funcao")
+            else:
+                sexo, funcao = "", ""
+
+            cong = st.selectbox("Congregacao", CONGREGACOES)
+            sit  = st.selectbox("Situacao", ["Ativo", "Inativo"])
 
             st.markdown("**Contato**")
             telefone = st.text_input("Telefone / WhatsApp", placeholder="(00) 00000-0000")
@@ -171,7 +155,7 @@ def render():
                 c = Cadastro(
                     nome=nome, tipo_cadastro=tipo, funcao=funcao,
                     congregacao=cong, cpf=cpf, situacao=sit,
-                    data_nascimento=dn_str,
+                    data_nascimento=dn_str, sexo=sexo,
                     telefone=telefone, logradouro=logradouro,
                     numero=numero, bairro=bairro,
                     cidade=cidade, cep=cep,
@@ -196,7 +180,7 @@ def render():
             st.info("Nenhum cadastro ainda.")
         else:
             df_view = df.copy()
-            for col in ["cpf","cep","telefone","logradouro","numero","bairro","cidade","data_nascimento"]:
+            for col in ["cpf","cep","telefone","logradouro","numero","bairro","cidade","data_nascimento","sexo"]:
                 if col not in df_view.columns:
                     df_view[col] = ""
             if "tipo_cadastro" in df_view.columns:
@@ -258,12 +242,17 @@ def render():
             max_value=datetime.date.today(),
         )
 
-        funcao_edit = (
-            st.selectbox("Funcao", FUNCOES,
-                         index=FUNCOES.index(_val(sel,"funcao")) if _val(sel,"funcao") in FUNCOES else 0,
-                         key="e_funcao")
-            if tipo_edit == "Membro" else ""
-        )
+        if tipo_edit == "Membro":
+            sexo_atual = _val(sel, "sexo")
+            idx_sexo   = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
+            sexo_edit  = st.selectbox("Sexo", SEXO_OPC, index=idx_sexo, key="e_sexo")
+
+            funcao_atual = _val(sel, "funcao")
+            funcao_edit  = st.selectbox("Funcao", FUNCOES,
+                                         index=FUNCOES.index(funcao_atual) if funcao_atual in FUNCOES else 0,
+                                         key="e_funcao")
+        else:
+            sexo_edit, funcao_edit = "", ""
 
         cong_atual = _val(sel, "congregacao")
         idx_cong   = CONGREGACOES.index(cong_atual) if cong_atual in CONGREGACOES else 0
@@ -313,7 +302,7 @@ def render():
                     id_cadastro=id_sel, nome=nome_edit, tipo_cadastro=tipo_edit,
                     funcao=funcao_edit, congregacao=cong_edit,
                     cpf=cpf_edit, situacao=sit_edit,
-                    data_nascimento=dn_edit_str,
+                    data_nascimento=dn_edit_str, sexo=sexo_edit,
                     telefone=tel_edit, logradouro=log_edit,
                     numero=num_edit, bairro=bai_edit,
                     cidade=cid_edit, cep=cep_edit,
@@ -328,6 +317,9 @@ def render():
                 else:
                     atualizar_cadastro(slug, c)
                     _invalida(slug)
+                    for k in list(st.session_state.keys()):
+                        if k.startswith("_auth_"):
+                            st.session_state.pop(k, None)
                     st.toast("Cadastro alterado!")
                     st.rerun()
 
@@ -340,5 +332,8 @@ def render():
                     if confirmar_exclusao("del_cad_final", "Confirmar exclusao"):
                         excluir_cadastro(slug, id_sel)
                         _invalida(slug)
+                        for k in list(st.session_state.keys()):
+                            if k.startswith("_auth_") or k.startswith("_del_"):
+                                st.session_state.pop(k, None)
                         st.toast("Excluido.")
                         st.rerun()
