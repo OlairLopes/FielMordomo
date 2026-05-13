@@ -34,6 +34,7 @@ class Cadastro:
     congregacao: str = ""
     cpf: str = ""
     data_nascimento: str = ""
+    sexo: str = ""
     telefone: str = ""
     logradouro: str = ""
     numero: str = ""
