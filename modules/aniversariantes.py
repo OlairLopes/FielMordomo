@@ -8,6 +8,7 @@ import json
 import calendar
 import datetime
 import urllib.parse
+
 import requests
 import pandas as pd
 import streamlit as st
@@ -604,6 +605,7 @@ def _renderizar_resultados_envio(resultados):
     qtd_ign = int((df_res["status"] == "ignorado").sum())
 
     c1, c2, c3, c4 = st.columns(4)
+
     c1.metric("Enviados", qtd_enviado)
     c2.metric("Erros", qtd_erro)
     c3.metric("Já enviados", qtd_ja)
@@ -660,12 +662,15 @@ def _card_aniv(nome, data_str, idade, telefone, nome_igreja, sexo="", classe="")
 
 def _renderizar_calendario(df_aniv, ano, mes):
     hoje = datetime.date.today()
-    dias_com_aniv = set(df_aniv[df_aniv["mes_aniv"] == mes]["dia_aniv"].tolist())
+    dias_com_aniv = set(
+        df_aniv[df_aniv["mes_aniv"] == mes]["dia_aniv"].tolist()
+    )
 
     cal = calendar.Calendar(firstweekday=0)
     dias_mes = cal.monthdayscalendar(ano, mes)
 
     nome_mes = MESES_PT[mes]
+
     st.markdown(
         f'<div class="cal-titulo">{nome_mes} {ano}</div>',
         unsafe_allow_html=True,
@@ -694,8 +699,10 @@ def _renderizar_calendario(df_aniv, ano, mes):
                     if dia in dias_com_aniv else ""
                 )
 
+                classe_css = " ".join(classes)
+
                 html += (
-                    f'<div class="{" ".join(classes)}">'
+                    f'<div class="{classe_css}">'
                     f'<div>{dia}</div>{marcador}</div>'
                 )
 
@@ -731,7 +738,7 @@ def render():
 
     cfg_whats = _config_whatsapp()
 
-    # Envio automatico ao abrir o modulo, se habilitado no secrets.
+    # Envio automático ao abrir o módulo, se habilitado no secrets.
     if cfg_whats["auto_enviar"]:
         if _whatsapp_api_configurada():
             resultados_auto = _executar_envio_aniversariantes_hoje(
@@ -863,7 +870,7 @@ def render():
                 "text/csv",
             )
 
-    # ── ABA: MES ─────────────────────────────────────────────────────────
+    # ── ABA: MÊS ─────────────────────────────────────────────────────────
     with aba_mes:
         st.markdown(f"Mes de **{MESES_PT[hoje.month]}/{hoje.year}**")
 
@@ -909,7 +916,7 @@ def render():
                 "text/csv",
             )
 
-    # ── ABA: CALENDARIO ──────────────────────────────────────────────────
+    # ── ABA: CALENDÁRIO ──────────────────────────────────────────────────
     with aba_cal:
         c1, c2 = st.columns(2)
 
@@ -978,6 +985,7 @@ def render():
         else:
             tabela_hoje = hoje_df[["nome", "aniv_str", "idade", "telefone"]].copy()
             tabela_hoje.columns = ["Nome", "Data", "Idade", "Telefone"]
+
             st.dataframe(tabela_hoje, use_container_width=True, hide_index=True)
 
             st.divider()
@@ -1038,3 +1046,25 @@ access_token = "SEU_TOKEN_META"
 phone_number_id = "SEU_PHONE_NUMBER_ID"
 api_version = "v20.0"
 modo_envio = "text"
+```
+
+Para usar template aprovado pela Meta, altere para:
+
+```toml
+[whatsapp]
+auto_enviar = true
+access_token = "SEU_TOKEN_META"
+phone_number_id = "SEU_PHONE_NUMBER_ID"
+api_version = "v20.0"
+modo_envio = "template"
+template_name = "feliz_aniversario"
+language_code = "pt_BR"
+```
+
+Observações:
+
+- `auto_enviar = true` ativa o envio automático quando o módulo for aberto.
+- `modo_envio = "text"` envia mensagem livre, quando permitido pela janela de conversa.
+- `modo_envio = "template"` usa modelo aprovado previamente na Meta.
+- O controle interno evita reenviar a mesma mensagem para o mesmo aniversariante no mesmo dia.
+""")
