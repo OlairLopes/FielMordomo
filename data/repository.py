@@ -423,3 +423,44 @@ def excluir_lancamento(slug, id_lancamento):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         conn.execute("DELETE FROM lancamentos WHERE id_lancamento=?", (id_lancamento,))
+
+# ── Configuracoes gerais do sistema ───────────────────────────────────────
+
+def _garantir_tabela_config(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS config_sistema (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+        )
+    """)
+
+
+def obter_config(chave: str, padrao: str = "") -> str:
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_config(conn)
+        row = conn.execute(
+            "SELECT valor FROM config_sistema WHERE chave=?", (chave,)
+        ).fetchone()
+    return row["valor"] if row else padrao
+
+
+def salvar_config(chave: str, valor: str):
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_config(conn)
+        conn.execute(
+            "INSERT OR REPLACE INTO config_sistema (chave, valor) VALUES (?, ?)",
+            (chave, valor),
+        )
+
+
+def igreja_alterar_senha(slug: str, senha_atual: str, nova_senha: str) -> bool:
+    """Permite igreja trocar a propria senha validando a atual."""
+    igreja = autenticar_igreja(slug, senha_atual)
+    if not igreja:
+        return False
+    with _conn(MASTER_DB) as conn:
+        conn.execute(
+            "UPDATE igrejas SET senha_hash=? WHERE slug=?",
+            (hash_senha(nova_senha), slug),
+        )
+    return True
