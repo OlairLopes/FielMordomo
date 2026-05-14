@@ -12,6 +12,7 @@ from utils.helpers import (
 )
 from utils.planos import obter_plano, pode_cadastrar_membro, proximo_plano
 
+
 FUNCOES = [
     "Membro", "Congregado", "Auxiliar", "Pastor", "Diacono", "Diaconisa",
     "Presbitero", "Evangelista", "Cooperador", "Dirigente",
@@ -96,6 +97,26 @@ def _val(row, col):
     return str(v).strip() if v else ""
 
 
+def _congregacao_da_sessao(slug, igreja):
+    """
+    Retorna o identificador/slug da igreja logada.
+
+    Prioridade:
+    1. Campo 'identificador' salvo em st.session_state["igreja"]
+    2. Campo 'slug' salvo em st.session_state["igreja"]
+    3. Slug atual da sessao
+    """
+    if not isinstance(igreja, dict):
+        igreja = {}
+
+    return str(
+        igreja.get("identificador")
+        or igreja.get("slug")
+        or slug
+        or ""
+    ).strip()
+
+
 def render():
     slug = slug_da_sessao()
     st.subheader("Membros e fornecedores")
@@ -105,8 +126,8 @@ def render():
     plano  = igreja.get("plano", "basico")
     p_info = obter_plano(plano)
 
-    # Congregacao FIXA = nome da igreja
-    congregacao_fixa = igreja.get("nome", "").strip()
+    # Congregacao FIXA = identificador/slug da igreja logada
+    congregacao_fixa = _congregacao_da_sessao(slug, igreja)
 
     if not df.empty and "tipo_cadastro" in df.columns:
         qtd_membros = len(df[df["tipo_cadastro"].str.upper() == "MEMBRO"])
@@ -147,12 +168,20 @@ def render():
                 st.form_submit_button("Salvar", type="primary", disabled=True)
             else:
                 nome = st.text_input("Nome completo")
+
                 doc_label       = "CPF *" if tipo == "Membro" else "CNPJ *"
                 doc_placeholder = "000.000.000-00" if tipo == "Membro" else "00.000.000/0000-00"
-                cpf = st.text_input(doc_label, placeholder=doc_placeholder, help="Obrigatorio.")
+
+                cpf = st.text_input(
+                    doc_label,
+                    placeholder=doc_placeholder,
+                    help="Obrigatorio."
+                )
 
                 dt_nasc = st.date_input(
-                    "Data de nascimento", value=None, format="DD/MM/YYYY",
+                    "Data de nascimento",
+                    value=None,
+                    format="DD/MM/YYYY",
                     key="novo_dt_nasc",
                     min_value=datetime.date(1900, 1, 1),
                     max_value=datetime.date.today(),
@@ -165,46 +194,79 @@ def render():
                     sexo, funcao = "", ""
 
                 cong = congregacao_fixa
-                st.text_input("Congregacao", value=congregacao_fixa,
-                              disabled=True, key="novo_cong_fixo",
-                              help="Definida automaticamente pela igreja logada.")
 
-                sit  = st.selectbox("Situacao", ["Ativo", "Inativo"])
+                st.text_input(
+                    "Congregacao",
+                    value=congregacao_fixa,
+                    disabled=True,
+                    key="novo_cong_fixo",
+                    help="Definida automaticamente pelo identificador da igreja logada."
+                )
+
+                sit = st.selectbox("Situacao", ["Ativo", "Inativo"])
 
                 st.markdown("**Contato**")
-                telefone = st.text_input("Telefone / WhatsApp", placeholder="(00) 00000-0000")
+                telefone = st.text_input(
+                    "Telefone / WhatsApp",
+                    placeholder="(00) 00000-0000"
+                )
 
                 st.markdown("**Endereco**")
                 col1, col2 = st.columns([3, 1])
+
                 with col1:
-                    logradouro = st.text_input("Rua / Avenida", placeholder="Ex: Rua das Flores")
+                    logradouro = st.text_input(
+                        "Rua / Avenida",
+                        placeholder="Ex: Rua das Flores"
+                    )
+
                 with col2:
-                    numero = st.text_input("Numero", placeholder="123")
+                    numero = st.text_input(
+                        "Numero",
+                        placeholder="123"
+                    )
 
                 bairro = st.selectbox("Bairro", BAIRROS_MINACU)
+
                 col3, col4 = st.columns([2, 1])
+
                 with col3:
                     cidade = st.selectbox("Cidade", CIDADES)
+
                 with col4:
                     cep = st.selectbox("CEP", CEPS)
 
                 if st.form_submit_button("Salvar", type="primary"):
                     dn_str = dt_nasc.isoformat() if dt_nasc else ""
+
                     c = Cadastro(
-                        nome=nome, tipo_cadastro=tipo, funcao=funcao,
-                        congregacao=cong, cpf=cpf, situacao=sit,
-                        data_nascimento=dn_str, sexo=sexo,
-                        telefone=telefone, logradouro=logradouro,
-                        numero=numero, bairro=bairro,
-                        cidade=cidade, cep=cep,
+                        nome=nome,
+                        tipo_cadastro=tipo,
+                        funcao=funcao,
+                        congregacao=cong,
+                        cpf=cpf,
+                        situacao=sit,
+                        data_nascimento=dn_str,
+                        sexo=sexo,
+                        telefone=telefone,
+                        logradouro=logradouro,
+                        numero=numero,
+                        bairro=bairro,
+                        cidade=cidade,
+                        cep=cep,
                     )
+
                     erros = c.validar()
+
                     doc_limpo = "".join(d for d in cpf if d.isdigit())
+
                     if doc_limpo and cpf_existe(slug, doc_limpo):
                         doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
                         erros.append(doc_tipo + " ja cadastrado.")
+
                     if erros:
-                        for e in erros: st.error(e)
+                        for e in erros:
+                            st.error(e)
                     else:
                         inserir_cadastro(slug, c)
                         _invalida(slug)
@@ -213,24 +275,45 @@ def render():
 
     # ── Tabela ────────────────────────────────────────────────────────────
     total = len(df)
+
     with st.expander(f"Ver cadastros ({total} registros)", expanded=False):
         if df.empty:
             st.info("Nenhum cadastro ainda.")
         else:
             df_view = df.copy()
-            for col in ["cpf","cep","telefone","logradouro","numero","bairro","cidade","data_nascimento","sexo"]:
+
+            for col in [
+                "cpf", "cep", "telefone", "logradouro", "numero", "bairro",
+                "cidade", "data_nascimento", "sexo"
+            ]:
                 if col not in df_view.columns:
                     df_view[col] = ""
+
             if "tipo_cadastro" in df_view.columns:
                 df_view["cpf"] = df_view.apply(
-                    lambda r: _formatar_doc(str(r["cpf"]), str(r["tipo_cadastro"])) if str(r["cpf"]).strip() else "",
+                    lambda r: _formatar_doc(
+                        str(r["cpf"]),
+                        str(r["tipo_cadastro"])
+                    ) if str(r["cpf"]).strip() else "",
                     axis=1,
                 )
             else:
-                df_view["cpf"] = df_view["cpf"].apply(lambda x: _formatar_cpf(str(x)) if str(x).strip() else "")
-            df_view["cep"]             = df_view["cep"].apply(lambda x: _formatar_cep(str(x)) if str(x).strip() else "")
-            df_view["telefone"]        = df_view["telefone"].apply(lambda x: _formatar_tel(str(x)) if str(x).strip() else "")
-            df_view["data_nascimento"] = df_view["data_nascimento"].apply(lambda x: _formatar_data(str(x)) if str(x).strip() else "")
+                df_view["cpf"] = df_view["cpf"].apply(
+                    lambda x: _formatar_cpf(str(x)) if str(x).strip() else ""
+                )
+
+            df_view["cep"] = df_view["cep"].apply(
+                lambda x: _formatar_cep(str(x)) if str(x).strip() else ""
+            )
+
+            df_view["telefone"] = df_view["telefone"].apply(
+                lambda x: _formatar_tel(str(x)) if str(x).strip() else ""
+            )
+
+            df_view["data_nascimento"] = df_view["data_nascimento"].apply(
+                lambda x: _formatar_data(str(x)) if str(x).strip() else ""
+            )
+
             st.dataframe(df_view, use_container_width=True)
 
     # ── Editar / Excluir ──────────────────────────────────────────────────
@@ -240,11 +323,18 @@ def render():
             return
 
         df_r = df.reset_index(drop=True)
+
         df_r["rotulo"] = df_r.apply(
             lambda r: f'{int(r["id_cadastro"])} | {r["tipo_cadastro"]} | {r["nome"]} | {r["situacao"]}',
             axis=1,
         )
-        rotulo = st.selectbox("Selecione", df_r["rotulo"].tolist(), key="sel_cad_edit")
+
+        rotulo = st.selectbox(
+            "Selecione",
+            df_r["rotulo"].tolist(),
+            key="sel_cad_edit"
+        )
+
         sel    = df_r[df_r["rotulo"] == rotulo].iloc[0]
         id_sel = int(sel["id_cadastro"])
 
@@ -252,28 +342,46 @@ def render():
         kp = f"_edit_cad_{id_sel}_"
 
         st.markdown("**Dados principais**")
-        tipo_opc  = ["Membro", "Fornecedor"]
-        tipo_edit = st.selectbox("Tipo", tipo_opc,
-                                 index=tipo_opc.index(sel["tipo_cadastro"]) if sel["tipo_cadastro"] in tipo_opc else 0,
-                                 key=kp + "tipo")
-        nome_edit = st.text_input("Nome completo", value=_val(sel, "nome"), key=kp + "nome")
+
+        tipo_opc = ["Membro", "Fornecedor"]
+
+        tipo_edit = st.selectbox(
+            "Tipo",
+            tipo_opc,
+            index=tipo_opc.index(sel["tipo_cadastro"])
+            if sel["tipo_cadastro"] in tipo_opc else 0,
+            key=kp + "tipo"
+        )
+
+        nome_edit = st.text_input(
+            "Nome completo",
+            value=_val(sel, "nome"),
+            key=kp + "nome"
+        )
 
         cpf_atual         = _val(sel, "cpf")
         doc_label_e       = "CPF *" if tipo_edit == "Membro" else "CNPJ *"
         doc_placeholder_e = "000.000.000-00" if tipo_edit == "Membro" else "00.000.000/0000-00"
+
         cpf_edit = st.text_input(
             doc_label_e,
             value=_formatar_doc(cpf_atual, tipo_edit) if cpf_atual else "",
-            placeholder=doc_placeholder_e, key=kp + "cpf", help="Obrigatorio.",
+            placeholder=doc_placeholder_e,
+            key=kp + "cpf",
+            help="Obrigatorio.",
         )
 
         dn_atual = _val(sel, "data_nascimento")
+
         try:
             dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
         except Exception:
             dn_value = None
+
         dt_nasc_edit = st.date_input(
-            "Data de nascimento", value=dn_value, format="DD/MM/YYYY",
+            "Data de nascimento",
+            value=dn_value,
+            format="DD/MM/YYYY",
             key=kp + "dt_nasc",
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date.today(),
@@ -282,87 +390,163 @@ def render():
         if tipo_edit == "Membro":
             sexo_atual = _val(sel, "sexo")
             idx_sexo   = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
-            sexo_edit  = st.selectbox("Sexo", SEXO_OPC, index=idx_sexo, key=kp + "sexo")
+
+            sexo_edit = st.selectbox(
+                "Sexo",
+                SEXO_OPC,
+                index=idx_sexo,
+                key=kp + "sexo"
+            )
 
             funcao_atual = _val(sel, "funcao")
-            funcao_edit  = st.selectbox("Funcao", FUNCOES,
-                                         index=FUNCOES.index(funcao_atual) if funcao_atual in FUNCOES else 0,
-                                         key=kp + "funcao")
+
+            funcao_edit = st.selectbox(
+                "Funcao",
+                FUNCOES,
+                index=FUNCOES.index(funcao_atual)
+                if funcao_atual in FUNCOES else 0,
+                key=kp + "funcao"
+            )
         else:
             sexo_edit, funcao_edit = "", ""
 
         cong_edit = congregacao_fixa
-        st.text_input("Congregacao", value=congregacao_fixa,
-                      disabled=True, key=kp + "cong_fixo",
-                      help="Definida automaticamente pela igreja logada.")
 
-        sit_opc  = ["Ativo", "Inativo"]
-        sit_edit = st.selectbox("Situacao", sit_opc,
-                                index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
-                                key=kp + "sit")
+        st.text_input(
+            "Congregacao",
+            value=congregacao_fixa,
+            disabled=True,
+            key=kp + "cong_fixo",
+            help="Definida automaticamente pelo identificador da igreja logada."
+        )
+
+        sit_opc = ["Ativo", "Inativo"]
+
+        sit_edit = st.selectbox(
+            "Situacao",
+            sit_opc,
+            index=sit_opc.index(sel["situacao"])
+            if sel["situacao"] in sit_opc else 0,
+            key=kp + "sit"
+        )
 
         st.markdown("**Contato**")
+
         tel_atual = _val(sel, "telefone")
-        tel_edit  = st.text_input("Telefone / WhatsApp",
-                                   value=_formatar_tel(tel_atual) if tel_atual else "",
-                                   placeholder="(00) 00000-0000", key=kp + "tel")
+
+        tel_edit = st.text_input(
+            "Telefone / WhatsApp",
+            value=_formatar_tel(tel_atual) if tel_atual else "",
+            placeholder="(00) 00000-0000",
+            key=kp + "tel"
+        )
 
         st.markdown("**Endereco**")
+
         col1, col2 = st.columns([3, 1])
+
         with col1:
-            log_edit = st.text_input("Rua / Avenida", value=_val(sel, "logradouro"), key=kp + "log")
+            log_edit = st.text_input(
+                "Rua / Avenida",
+                value=_val(sel, "logradouro"),
+                key=kp + "log"
+            )
+
         with col2:
-            num_edit = st.text_input("Numero", value=_val(sel, "numero"), key=kp + "num")
+            num_edit = st.text_input(
+                "Numero",
+                value=_val(sel, "numero"),
+                key=kp + "num"
+            )
 
         bairro_atual = _val(sel, "bairro")
         idx_bairro   = BAIRROS_MINACU.index(bairro_atual) if bairro_atual in BAIRROS_MINACU else 0
-        bai_edit     = st.selectbox("Bairro", BAIRROS_MINACU, index=idx_bairro, key=kp + "bai")
+
+        bai_edit = st.selectbox(
+            "Bairro",
+            BAIRROS_MINACU,
+            index=idx_bairro,
+            key=kp + "bai"
+        )
 
         col3, col4 = st.columns([2, 1])
+
         with col3:
             cid_atual = _val(sel, "cidade")
             idx_cid   = CIDADES.index(cid_atual) if cid_atual in CIDADES else 0
-            cid_edit  = st.selectbox("Cidade", CIDADES, index=idx_cid, key=kp + "cid")
+
+            cid_edit = st.selectbox(
+                "Cidade",
+                CIDADES,
+                index=idx_cid,
+                key=kp + "cid"
+            )
+
         with col4:
             cep_atual = _val(sel, "cep")
             cep_fmt   = _formatar_cep(cep_atual) if cep_atual else ""
             idx_cep   = CEPS.index(cep_fmt) if cep_fmt in CEPS else 0
-            cep_edit  = st.selectbox("CEP", CEPS, index=idx_cep, key=kp + "cep")
+
+            cep_edit = st.selectbox(
+                "CEP",
+                CEPS,
+                index=idx_cep,
+                key=kp + "cep"
+            )
 
         st.divider()
+
         c1, c2 = st.columns(2)
 
         with c1:
             st.caption("Editar cadastro")
+
             if solicitar_autorizacao("salvar_cad", "editar"):
                 dn_edit_str = dt_nasc_edit.isoformat() if dt_nasc_edit else ""
+
                 c = Cadastro(
-                    id_cadastro=id_sel, nome=nome_edit, tipo_cadastro=tipo_edit,
-                    funcao=funcao_edit, congregacao=cong_edit,
-                    cpf=cpf_edit, situacao=sit_edit,
-                    data_nascimento=dn_edit_str, sexo=sexo_edit,
-                    telefone=tel_edit, logradouro=log_edit,
-                    numero=num_edit, bairro=bai_edit,
-                    cidade=cid_edit, cep=cep_edit,
+                    id_cadastro=id_sel,
+                    nome=nome_edit,
+                    tipo_cadastro=tipo_edit,
+                    funcao=funcao_edit,
+                    congregacao=cong_edit,
+                    cpf=cpf_edit,
+                    situacao=sit_edit,
+                    data_nascimento=dn_edit_str,
+                    sexo=sexo_edit,
+                    telefone=tel_edit,
+                    logradouro=log_edit,
+                    numero=num_edit,
+                    bairro=bai_edit,
+                    cidade=cid_edit,
+                    cep=cep_edit,
                 )
+
                 erros = c.validar()
+
                 doc_limpo_e = "".join(d for d in cpf_edit if d.isdigit())
+
                 if doc_limpo_e and cpf_existe(slug, doc_limpo_e, id_excluir=id_sel):
                     doc_tipo_e = "CPF" if tipo_edit == "Membro" else "CNPJ"
                     erros.append(doc_tipo_e + " ja cadastrado em outro registro.")
+
                 if erros:
-                    for e in erros: st.error(e)
+                    for e in erros:
+                        st.error(e)
                 else:
                     atualizar_cadastro(slug, c)
                     _invalida(slug)
+
                     for k in list(st.session_state.keys()):
                         if k.startswith("_auth_") or k.startswith("_edit_cad_"):
                             st.session_state.pop(k, None)
+
                     st.toast("Cadastro alterado!")
                     st.rerun()
 
         with c2:
             st.caption("Excluir cadastro")
+
             if solicitar_autorizacao("excluir_cad", "excluir"):
                 if cadastro_em_uso(slug, id_sel):
                     st.error("Cadastro vinculado a lancamento. Nao e possivel excluir.")
@@ -370,9 +554,15 @@ def render():
                     if confirmar_exclusao("del_cad_final", "Confirmar exclusao"):
                         excluir_cadastro(slug, id_sel)
                         _invalida(slug)
+
                         for k in list(st.session_state.keys()):
-                            if (k.startswith("_auth_") or k.startswith("_del_")
-                                or k.startswith("_edit_cad_") or k == "sel_cad_edit"):
+                            if (
+                                k.startswith("_auth_")
+                                or k.startswith("_del_")
+                                or k.startswith("_edit_cad_")
+                                or k == "sel_cad_edit"
+                            ):
                                 st.session_state.pop(k, None)
+
                         st.toast("Excluido.")
                         st.rerun()
