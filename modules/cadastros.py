@@ -18,8 +18,6 @@ FUNCOES = [
     "Secretario", "Tesoureiro", "Professor", "Lider", "",
 ]
 
-CONGREGACOES = ["AD Serrinha", "AD Paraiso", "AD Vila Nova", ""]
-
 BAIRROS_MINACU = [
     "Setor Central", "Nova Esperanca", "Jardim Arimateia", "Jardim Boa Vista",
     "Jardim Brasil", "Jardim Emilia", "Jardim Floresta", "Jardim Floresta II",
@@ -107,6 +105,9 @@ def render():
     plano  = igreja.get("plano", "basico")
     p_info = obter_plano(plano)
 
+    # Congregacao FIXA = nome da igreja (sem opcao de alteracao)
+    congregacao_fixa = igreja.get("slug", "").strip()
+
     # Conta apenas membros (nao fornecedores)
     if not df.empty and "tipo_cadastro" in df.columns:
         qtd_membros = len(df[df["tipo_cadastro"].str.upper() == "MEMBRO"])
@@ -165,7 +166,12 @@ def render():
                 else:
                     sexo, funcao = "", ""
 
-                cong = st.selectbox("Congregacao", CONGREGACOES, index=idx_cong
+                # Congregacao fixa — apenas exibe
+                cong = congregacao_fixa
+                st.text_input("Congregacao", value=congregacao_fixa,
+                              disabled=True, key="novo_cong_fixo",
+                              help="Definida automaticamente pela igreja logada.")
+
                 sit  = st.selectbox("Situacao", ["Ativo", "Inativo"])
 
                 st.markdown("**Contato**")
@@ -285,9 +291,11 @@ def render():
         else:
             sexo_edit, funcao_edit = "", ""
 
-        cong_atual = _val(sel, "congregacao")
-        idx_cong   = CONGREGACOES.index(cong_atual) if cong_atual in CONGREGACOES else 0
-        cong_edit  = st.selectbox("Congregacao", CONGREGACOES, index=idx_cong, key="e_cong")
+        # Congregacao fixa na edicao tambem — apenas exibe
+        cong_edit = congregacao_fixa
+        st.text_input("Congregacao", value=congregacao_fixa,
+                      disabled=True, key="e_cong_fixo",
+                      help="Definida automaticamente pela igreja logada.")
 
         sit_opc  = ["Ativo", "Inativo"]
         sit_edit = st.selectbox("Situacao", sit_opc,
