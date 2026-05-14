@@ -16,7 +16,7 @@ from utils.planos import obter_plano, pode_cadastrar_membro, proximo_plano
 FUNCOES = [
     "Membro", "Congregado", "Auxiliar", "Pastor", "Diacono", "Diaconisa",
     "Presbitero", "Evangelista", "Cooperador", "Dirigente",
-    "Secretario", "Tesoureiro", "Professor", "Lider", "",
+    "Secretario", "Tesoureiro", "Professor", "Lider", "Missionário (a)", "",
 ]
 
 BAIRROS_MINACU = [
