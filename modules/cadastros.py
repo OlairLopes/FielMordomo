@@ -165,7 +165,7 @@ def render():
                 else:
                     sexo, funcao = "", ""
 
-                cong = st.selectbox("Congregacao", CONGREGACOES)
+                cong = st.selectbox("Congregacao", CONGREGACOES, index=idx_cong
                 sit  = st.selectbox("Situacao", ["Ativo", "Inativo"])
 
                 st.markdown("**Contato**")
