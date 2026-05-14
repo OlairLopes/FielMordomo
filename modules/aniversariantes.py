@@ -187,11 +187,14 @@ def _montar_mensagem_aniversario(nome, idade, nome_igreja, sexo=""):
 
     return (
         f"A paz do Senhor, {tratamento} {nome}! 🙏\n\n"
-        f"Neste dia especial, a família {identificador} se alegra com sua vida "
+        f"Neste dia especial, a família {identificador} se alegra por sua vida "
         f"e deseja a você um feliz aniversário.\n\n"
         f"Nossa oração é que Deus continue conduzindo seus passos, "
         f"fortalecendo sua fé e concedendo saúde, paz e alegria.\n\n"
         f"Parabéns pelos seus {idade} {ano_str} de vida! 🎉🎂"
+
+        f"Mensagem enviada automaticamente pela secretaria da igreja"
+        f"Pr. Olair Lopes
     )
 
 
