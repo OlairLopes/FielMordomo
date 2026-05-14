@@ -182,14 +182,17 @@ def _montar_mensagem_aniversario(nome, idade, nome_igreja, sexo=""):
     tratamento = _tratamento_por_sexo(sexo)
     ano_str = "anos" if idade != 1 else "ano"
 
+    # Busca o identificador/slug somente para usar na mensagem do aniversariante
+    identificador = slug_da_sessao()
+
     return (
-       f"A paz do Senhor {tratamento} {nome}! 🙏\n\n"
-    f"Neste dia especial, a familia {identificador} se alegra por sua vida "
-    f"e deseja a você um feliz aniversário.\n\n"
-    f"Nossa oracâo é para que Deus continue conduzindo seus passos, "
-    f"fortalecendo sua fe e concedendo saúde, paz e alegria.\n\n"
-    f"Parabens pelos seus {idade} {ano_str} de vida! 🎉🎂"
-)
+        f"A paz do Senhor, {tratamento} {nome}! 🙏\n\n"
+        f"Neste dia especial, a família {identificador} se alegra com sua vida "
+        f"e deseja a você um feliz aniversário.\n\n"
+        f"Nossa oração é que Deus continue conduzindo seus passos, "
+        f"fortalecendo sua fé e concedendo saúde, paz e alegria.\n\n"
+        f"Parabéns pelos seus {idade} {ano_str} de vida! 🎉🎂"
+    )
 
 
 # ─────────────────────────────────────────────────────────────
