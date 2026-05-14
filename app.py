@@ -38,7 +38,7 @@ def _injetar_css():
         top: 0; left: 0; right: 0;
         z-index: 999999;
         height: 52px;
-        background: #050c3b;
+        background: #0F6E56;
         display: flex;
         align-items: center;
         padding: 0 20px;
@@ -155,16 +155,17 @@ def _img_b64(dados, ext):
 
 
 def _navbar_igreja(pagina_atual, paginas, igreja, slug):
-   ICONES = {
-    "home":            "⛪",
-    "cadastros":       "👤",
-    "lancamentos":     "💵",
-    "relatorios":      "📋",
-    "dashboard":       "📊",
-    "aniversariantes": "🎂",
-    "backup":          "💾",
-    "minha_conta":     "⚙️",
-}
+    ICONES = {
+        "home":            "⛪",
+        "cadastros":       "👤",
+        "lancamentos":     "💵",
+        "relatorios":      "📋",
+        "dashboard":       "📊",
+        "aniversariantes": "🎂",
+        "backup":          "💾",
+        "minha_conta":     "⚙️",
+    }
+
     nome   = igreja.get("nome", "FielMordomo")
     plano  = igreja.get("plano", "").capitalize()
     logo_r = obter_logo_igreja(slug) or obter_logo_sistema()
@@ -247,17 +248,21 @@ if modo == "admin":
     painel.render()
 
 elif modo == "igreja":
-    from modules import home, cadastros, lancamentos, relatorios, graficos, backup, aniversariantes, minha_conta
-   PAGINAS = {
-    "home":            ("Inicio",       home),
-    "cadastros":       ("Membros",      cadastros),
-    "lancamentos":     ("Lancamentos",  lancamentos),
-    "relatorios":      ("Relatorios",   relatorios),
-    "dashboard":       ("Dashboard",    graficos),
-    "aniversariantes": ("Aniversarios", aniversariantes),
-    "backup":          ("Backup",       backup),
-    "minha_conta":     ("Minha conta",  minha_conta),
-}
+    from modules import (
+        home, cadastros, lancamentos, relatorios,
+        graficos, backup, aniversariantes, minha_conta,
+    )
+
+    PAGINAS = {
+        "home":            ("Inicio",       home),
+        "cadastros":       ("Membros",      cadastros),
+        "lancamentos":     ("Lancamentos",  lancamentos),
+        "relatorios":      ("Relatorios",   relatorios),
+        "dashboard":       ("Dashboard",    graficos),
+        "aniversariantes": ("Aniversarios", aniversariantes),
+        "backup":          ("Backup",       backup),
+        "minha_conta":     ("Minha conta",  minha_conta),
+    }
 
     if "pagina" not in st.session_state:
         st.session_state["pagina"] = "home"
