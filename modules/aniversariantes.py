@@ -183,12 +183,13 @@ def _montar_mensagem_aniversario(nome, idade, nome_igreja, sexo=""):
     ano_str = "anos" if idade != 1 else "ano"
 
     return (
-        f"A paz do Senhor, {tratamento} {nome}! 🙏\n\n"
-        f"A família {nome_igreja} deseja a você um feliz aniversário!\n\n"
-        f"Oramos para que Deus continue te abençoando ricamente, concedendo "
-        f"saúde, paz, alegria, felicidade e muitas realizações.\n\n"
-        f"Parabéns pelos seus {idade} {ano_str} de vida! 🎉🎂"
-    )
+       f"A paz do Senhor {tratamento} {nome}! 🙏\n\n"
+    f"Neste dia especial, a familia {identificador} se alegra por sua vida "
+    f"e deseja a você um feliz aniversário.\n\n"
+    f"Nossa oracâo é para que Deus continue conduzindo seus passos, "
+    f"fortalecendo sua fe e concedendo saúde, paz e alegria.\n\n"
+    f"Parabens pelos seus {idade} {ano_str} de vida! 🎉🎂"
+)
 
 
 # ─────────────────────────────────────────────────────────────
