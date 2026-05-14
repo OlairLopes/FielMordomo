@@ -194,7 +194,7 @@ def _montar_mensagem_aniversario(nome, idade, nome_igreja, sexo=""):
         f"Parabéns pelos seus {idade} {ano_str} de vida! 🎉🎂"
 
         f"Mensagem enviada automaticamente pela secretaria da igreja"
-        f"Pr. Olair Lopes
+        f"Pr. Olair Pereira Lopes."
     )
 
 
