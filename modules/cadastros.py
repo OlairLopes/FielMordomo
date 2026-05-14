@@ -105,10 +105,9 @@ def render():
     plano  = igreja.get("plano", "basico")
     p_info = obter_plano(plano)
 
-    # Congregacao FIXA = nome da igreja (sem opcao de alteracao)
-    congregacao_fixa = igreja.get("slug", "").strip()
+    # Congregacao FIXA = nome da igreja
+    congregacao_fixa = igreja.get("nome", "").strip()
 
-    # Conta apenas membros (nao fornecedores)
     if not df.empty and "tipo_cadastro" in df.columns:
         qtd_membros = len(df[df["tipo_cadastro"].str.upper() == "MEMBRO"])
     else:
@@ -117,7 +116,6 @@ def render():
     limite    = p_info["limite_membros"]
     bloqueado = not pode_cadastrar_membro(plano, qtd_membros)
 
-    # Indicador de uso
     if limite:
         pct = min(100, int((qtd_membros / limite) * 100))
         cor_barra = "#D85A30" if pct >= 90 else ("#F5A623" if pct >= 70 else "#1D9E75")
@@ -166,7 +164,6 @@ def render():
                 else:
                     sexo, funcao = "", ""
 
-                # Congregacao fixa — apenas exibe
                 cong = congregacao_fixa
                 st.text_input("Congregacao", value=congregacao_fixa,
                               disabled=True, key="novo_cong_fixo",
@@ -247,16 +244,19 @@ def render():
             lambda r: f'{int(r["id_cadastro"])} | {r["tipo_cadastro"]} | {r["nome"]} | {r["situacao"]}',
             axis=1,
         )
-        rotulo = st.selectbox("Selecione", df_r["rotulo"].tolist())
+        rotulo = st.selectbox("Selecione", df_r["rotulo"].tolist(), key="sel_cad_edit")
         sel    = df_r[df_r["rotulo"] == rotulo].iloc[0]
         id_sel = int(sel["id_cadastro"])
+
+        # CHAVE DINAMICA — quando muda a selecao, todos os widgets sao recriados
+        kp = f"_edit_cad_{id_sel}_"
 
         st.markdown("**Dados principais**")
         tipo_opc  = ["Membro", "Fornecedor"]
         tipo_edit = st.selectbox("Tipo", tipo_opc,
                                  index=tipo_opc.index(sel["tipo_cadastro"]) if sel["tipo_cadastro"] in tipo_opc else 0,
-                                 key="e_tipo")
-        nome_edit = st.text_input("Nome completo", value=_val(sel, "nome"), key="e_nome")
+                                 key=kp + "tipo")
+        nome_edit = st.text_input("Nome completo", value=_val(sel, "nome"), key=kp + "nome")
 
         cpf_atual         = _val(sel, "cpf")
         doc_label_e       = "CPF *" if tipo_edit == "Membro" else "CNPJ *"
@@ -264,7 +264,7 @@ def render():
         cpf_edit = st.text_input(
             doc_label_e,
             value=_formatar_doc(cpf_atual, tipo_edit) if cpf_atual else "",
-            placeholder=doc_placeholder_e, key="e_cpf", help="Obrigatorio.",
+            placeholder=doc_placeholder_e, key=kp + "cpf", help="Obrigatorio.",
         )
 
         dn_atual = _val(sel, "data_nascimento")
@@ -274,7 +274,7 @@ def render():
             dn_value = None
         dt_nasc_edit = st.date_input(
             "Data de nascimento", value=dn_value, format="DD/MM/YYYY",
-            key="e_dt_nasc",
+            key=kp + "dt_nasc",
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date.today(),
         )
@@ -282,53 +282,52 @@ def render():
         if tipo_edit == "Membro":
             sexo_atual = _val(sel, "sexo")
             idx_sexo   = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
-            sexo_edit  = st.selectbox("Sexo", SEXO_OPC, index=idx_sexo, key="e_sexo")
+            sexo_edit  = st.selectbox("Sexo", SEXO_OPC, index=idx_sexo, key=kp + "sexo")
 
             funcao_atual = _val(sel, "funcao")
             funcao_edit  = st.selectbox("Funcao", FUNCOES,
                                          index=FUNCOES.index(funcao_atual) if funcao_atual in FUNCOES else 0,
-                                         key="e_funcao")
+                                         key=kp + "funcao")
         else:
             sexo_edit, funcao_edit = "", ""
 
-        # Congregacao fixa na edicao tambem — apenas exibe
         cong_edit = congregacao_fixa
         st.text_input("Congregacao", value=congregacao_fixa,
-                      disabled=True, key="e_cong_fixo",
+                      disabled=True, key=kp + "cong_fixo",
                       help="Definida automaticamente pela igreja logada.")
 
         sit_opc  = ["Ativo", "Inativo"]
         sit_edit = st.selectbox("Situacao", sit_opc,
                                 index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
-                                key="e_sit")
+                                key=kp + "sit")
 
         st.markdown("**Contato**")
         tel_atual = _val(sel, "telefone")
         tel_edit  = st.text_input("Telefone / WhatsApp",
                                    value=_formatar_tel(tel_atual) if tel_atual else "",
-                                   placeholder="(00) 00000-0000", key="e_tel")
+                                   placeholder="(00) 00000-0000", key=kp + "tel")
 
         st.markdown("**Endereco**")
         col1, col2 = st.columns([3, 1])
         with col1:
-            log_edit = st.text_input("Rua / Avenida", value=_val(sel, "logradouro"), key="e_log")
+            log_edit = st.text_input("Rua / Avenida", value=_val(sel, "logradouro"), key=kp + "log")
         with col2:
-            num_edit = st.text_input("Numero", value=_val(sel, "numero"), key="e_num")
+            num_edit = st.text_input("Numero", value=_val(sel, "numero"), key=kp + "num")
 
         bairro_atual = _val(sel, "bairro")
         idx_bairro   = BAIRROS_MINACU.index(bairro_atual) if bairro_atual in BAIRROS_MINACU else 0
-        bai_edit     = st.selectbox("Bairro", BAIRROS_MINACU, index=idx_bairro, key="e_bai")
+        bai_edit     = st.selectbox("Bairro", BAIRROS_MINACU, index=idx_bairro, key=kp + "bai")
 
         col3, col4 = st.columns([2, 1])
         with col3:
             cid_atual = _val(sel, "cidade")
             idx_cid   = CIDADES.index(cid_atual) if cid_atual in CIDADES else 0
-            cid_edit  = st.selectbox("Cidade", CIDADES, index=idx_cid, key="e_cid")
+            cid_edit  = st.selectbox("Cidade", CIDADES, index=idx_cid, key=kp + "cid")
         with col4:
             cep_atual = _val(sel, "cep")
             cep_fmt   = _formatar_cep(cep_atual) if cep_atual else ""
             idx_cep   = CEPS.index(cep_fmt) if cep_fmt in CEPS else 0
-            cep_edit  = st.selectbox("CEP", CEPS, index=idx_cep, key="e_cep")
+            cep_edit  = st.selectbox("CEP", CEPS, index=idx_cep, key=kp + "cep")
 
         st.divider()
         c1, c2 = st.columns(2)
@@ -357,7 +356,7 @@ def render():
                     atualizar_cadastro(slug, c)
                     _invalida(slug)
                     for k in list(st.session_state.keys()):
-                        if k.startswith("_auth_"):
+                        if k.startswith("_auth_") or k.startswith("_edit_cad_"):
                             st.session_state.pop(k, None)
                     st.toast("Cadastro alterado!")
                     st.rerun()
@@ -372,7 +371,8 @@ def render():
                         excluir_cadastro(slug, id_sel)
                         _invalida(slug)
                         for k in list(st.session_state.keys()):
-                            if k.startswith("_auth_") or k.startswith("_del_"):
+                            if (k.startswith("_auth_") or k.startswith("_del_")
+                                or k.startswith("_edit_cad_") or k == "sel_cad_edit"):
                                 st.session_state.pop(k, None)
                         st.toast("Excluido.")
                         st.rerun()
