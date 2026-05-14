@@ -155,7 +155,7 @@ def _img_b64(dados, ext):
 
 
 def _navbar_igreja(pagina_atual, paginas, igreja, slug):
-    ICONES = {
+   ICONES = {
     "home":            "⛪",
     "cadastros":       "👤",
     "lancamentos":     "💵",
@@ -163,6 +163,7 @@ def _navbar_igreja(pagina_atual, paginas, igreja, slug):
     "dashboard":       "📊",
     "aniversariantes": "🎂",
     "backup":          "💾",
+    "minha_conta":     "⚙️",
 }
     nome   = igreja.get("nome", "FielMordomo")
     plano  = igreja.get("plano", "").capitalize()
@@ -246,8 +247,8 @@ if modo == "admin":
     painel.render()
 
 elif modo == "igreja":
-    from modules import home, cadastros, lancamentos, relatorios, graficos, backup, aniversariantes
-    PAGINAS = {
+    from modules import home, cadastros, lancamentos, relatorios, graficos, backup, aniversariantes, minha_conta
+   PAGINAS = {
     "home":            ("Inicio",       home),
     "cadastros":       ("Membros",      cadastros),
     "lancamentos":     ("Lancamentos",  lancamentos),
@@ -255,7 +256,8 @@ elif modo == "igreja":
     "dashboard":       ("Dashboard",    graficos),
     "aniversariantes": ("Aniversarios", aniversariantes),
     "backup":          ("Backup",       backup),
-    }
+    "minha_conta":     ("Minha conta",  minha_conta),
+}
 
     if "pagina" not in st.session_state:
         st.session_state["pagina"] = "home"
