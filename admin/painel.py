@@ -265,7 +265,44 @@ def _backup_admin():
 
 
 def _configuracoes():
-    st.subheader("Alterar senha do administrador")
+    from data.repository import obter_config, salvar_config
+
+    st.subheader("Configuracoes do sistema")
+
+    # ── Contato para recuperacao de senha ────────────────────────────────
+    st.markdown("#### Contato para recuperacao de senha")
+    st.caption("Estas informacoes aparecem na tela de login quando o usuario clica em 'Esqueci minha senha'.")
+
+    contato_email    = obter_config("contato_email", "admin@fielmordomo.com")
+    contato_whatsapp = obter_config("contato_whatsapp", "")
+    contato_mensagem = obter_config(
+        "contato_mensagem",
+        "Entre em contato com o administrador do sistema para redefinir sua senha."
+    )
+
+    with st.form("form_contato"):
+        email_novo = st.text_input("E-mail de contato",
+                                    value=contato_email,
+                                    placeholder="admin@fielmordomo.com")
+        wpp_novo   = st.text_input("WhatsApp (com DDD)",
+                                    value=contato_whatsapp,
+                                    placeholder="62999999999",
+                                    help="Apenas numeros, ex: 62999999999")
+        msg_nova   = st.text_area("Mensagem na tela de login",
+                                   value=contato_mensagem,
+                                   height=80)
+
+        if st.form_submit_button("Salvar configuracoes", type="primary"):
+            salvar_config("contato_email", email_novo.strip())
+            salvar_config("contato_whatsapp", "".join(c for c in wpp_novo if c.isdigit()))
+            salvar_config("contato_mensagem", msg_nova.strip())
+            st.toast("Configuracoes salvas!")
+            st.rerun()
+
+    st.divider()
+
+    # ── Alterar senha do administrador ───────────────────────────────────
+    st.markdown("#### Alterar senha do administrador")
 
     with st.form("form_senha_admin"):
         nova = st.text_input("Nova senha", type="password")
