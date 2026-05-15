@@ -22,7 +22,7 @@ FUNCOES = [
 BAIRROS_MINACU = [
     "Setor Central", "Nova Esperanca", "Jardim Arimateia", "Jardim Boa Vista",
     "Jardim Brasil", "Jardim Emilia", "Jardim Floresta", "Jardim Floresta II",
-    "Habitacional Primavera", "Minacu Norte", "Patrimonio do Trevo",
+    "Jardim dos Ipês", "Habitacional Primavera", "Minacu Norte", "Patrimonio do Trevo",
     "Patrimonio do Vicente", "Residencial Cana Brava", "Residencial Tocantins",
     "Marajoara", "Setor Serrinha", "Vila Batista", "Vila Residencial Sama",
     "Vila de Furnas", "Vila de Malta", "Vila Manchester", "Vila Menezes",
