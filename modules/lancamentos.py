@@ -334,6 +334,10 @@ def render():
             else:
                 inserir_lancamento(slug, lanc)
                 _invalida()
+                # Limpa campos especificos apos salvar
+                for k in ["nl_membro", "nl_fornecedor", "nl_forma_pag",
+                          "nl_valor", "nl_desc"]:
+                    st.session_state.pop(k, None)
                 st.toast("Lancamento salvo!")
                 st.rerun()
 
