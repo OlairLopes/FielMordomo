@@ -31,9 +31,93 @@ def _injetar_css():
     #MainMenu { display: none !important; }
     footer    { display: none !important; }
 
-    section[data-testid="stSidebar"] {
-        background: #0F6E56 !important;
+    def _injetar_css():
+    st.markdown("""
+    <style>
+    /* Esconde header padrao e menu */
+    header[data-testid="stHeader"] { display: none !important; }
+    #MainMenu { display: none !important; }
+    footer    { display: none !important; }
+
+    /* Botao hamburguer SEMPRE visivel */
+    [data-testid="stSidebarCollapsedControl"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 999999 !important;
+        background: #061B44 !important;
+        border-radius: 8px !important;
+        padding: 6px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
     }
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="stSidebarCollapsedControl"] button {
+        color: white !important;
+        fill: white !important;
+    }
+
+    /* Sidebar verde */
+    section[data-testid="stSidebar"] {
+        background: #061B44 !important;
+    }
+    section[data-testid="stSidebar"] * {
+        color: white !important;
+    }
+    section[data-testid="stSidebar"] .stButton button {
+        width: 100%;
+        background: transparent !important;
+        border: none !important;
+        color: rgba(255,255,255,0.9) !important;
+        text-align: left !important;
+        padding: 10px 14px !important;
+        font-size: 0.95rem !important;
+        border-radius: 8px !important;
+        margin-bottom: 2px !important;
+    }
+    section[data-testid="stSidebar"] .stButton button:hover {
+        background: rgba(255,255,255,0.12) !important;
+        color: white !important;
+    }
+    section[data-testid="stSidebar"] .stButton button[kind="primary"] {
+        background: rgba(255,255,255,0.22) !important;
+        color: white !important;
+        font-weight: 700 !important;
+    }
+    .sidebar-logo {
+        text-align: center;
+        padding: 10px 0 16px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.18);
+        margin-bottom: 14px;
+    }
+    .sidebar-logo img {
+        max-width: 130px;
+        max-height: 80px;
+        object-fit: contain;
+    }
+    .sidebar-info {
+        text-align: center;
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.85) !important;
+        margin: 0 0 14px 0;
+        padding: 0 6px;
+    }
+    .sidebar-info b { color: white !important; }
+    .sidebar-info .plano {
+        font-size: 0.68rem;
+        color: rgba(255,255,255,0.6) !important;
+        margin-top: 2px;
+    }
+    .block-container {
+        padding-top: 3.5rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 100% !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     section[data-testid="stSidebar"] * {
         color: white !important;
     }
