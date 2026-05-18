@@ -19,7 +19,7 @@ from utils.planos import tem_backup_automatico, obter_plano, proximo_plano
 
 def _nome_arquivo(prefixo, ext, slug):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return prefixo + "_" + slug + "_" + ts + "." + ext
+    return f"{prefixo}_{slug}_{ts}.{ext}"
 
 
 def _gerar_sqlite(slug):
@@ -66,7 +66,6 @@ def _enviar_backup_onedrive(nome_arquivo, dados):
 
     resp = requests.put(url, headers=headers, data=dados, timeout=120)
     resp.raise_for_status()
-
     return resp.json()
 
 
@@ -77,24 +76,23 @@ def _gerar_resumo(df_cad, df_lanc, slug):
         "=" * 50,
         "FIELMORDOMO - RESUMO DO BACKUP",
         "=" * 50,
-        "Igreja: " + slug,
-        "Data/hora: " + agora,
+        f"Igreja: {slug}",
+        f"Data/hora: {agora}",
         "",
         "--- CADASTROS ---",
-        "Total: " + str(len(df_cad)) + " registros",
+        f"Total: {len(df_cad)} registros",
     ]
 
     if not df_cad.empty and "tipo_cadastro" in df_cad.columns:
         membros = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "MEMBRO"])
         fornecedores = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "FORNECEDOR"])
-
-        linhas.append("  Membros: " + str(membros))
-        linhas.append("  Fornecedores: " + str(fornecedores))
+        linhas.append(f"  Membros: {membros}")
+        linhas.append(f"  Fornecedores: {fornecedores}")
 
     linhas += [
         "",
         "--- LANCAMENTOS ---",
-        "Total: " + str(len(df_lanc)) + " registros",
+        f"Total: {len(df_lanc)} registros",
     ]
 
     if not df_lanc.empty:
@@ -103,7 +101,7 @@ def _gerar_resumo(df_cad, df_lanc, slug):
         if "valor" in df_l.columns:
             df_l["valor"] = pd.to_numeric(df_l["valor"], errors="coerce").fillna(0)
 
-        if "tipo" in df_l.columns:
+        if "tipo" in df_l.columns and "valor" in df_l.columns:
             entradas = df_l[df_l["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
             saidas = df_l[df_l["tipo"].str.upper() == "SAIDA"]["valor"].sum()
 
@@ -128,32 +126,31 @@ def _gerar_zip_completo(slug):
     if not df_lanc.empty and "data" in df_lanc.columns:
         df_lanc = df_lanc.copy()
         df_lanc["data"] = pd.to_datetime(
-            df_lanc["data"],
-            errors="coerce",
+            df_lanc["data"], errors="coerce"
         ).dt.strftime("%d/%m/%Y").fillna("")
 
     buf = io.BytesIO()
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(
-            "cadastros_" + slug + ".csv",
+            f"cadastros_{slug}.csv",
             df_cad.to_csv(index=False, encoding="utf-8-sig"),
         )
 
         zf.writestr(
-            "lancamentos_" + slug + ".csv",
+            f"lancamentos_{slug}.csv",
             df_lanc.to_csv(index=False, encoding="utf-8-sig"),
         )
 
         zf.writestr(
-            "resumo_" + slug + ".txt",
+            f"resumo_{slug}.txt",
             _gerar_resumo(df_cad, df_lanc, slug),
         )
 
         db_bytes = _gerar_sqlite(slug)
 
         if db_bytes:
-            zf.writestr("banco_" + slug + ".db", db_bytes)
+            zf.writestr(f"banco_{slug}.db", db_bytes)
 
     buf.seek(0)
     return buf.read()
@@ -192,12 +189,7 @@ def _verificar_backup_automatico(slug):
         st.session_state["backup_diario_dados_" + slug] = dados
         st.session_state["backup_diario_nome_" + slug] = nome
 
-        _tentar_enviar_onedrive(
-            slug=slug,
-            nome=nome,
-            dados=dados,
-            tipo="backup_diario",
-        )
+        _tentar_enviar_onedrive(slug, nome, dados, "backup_diario")
 
     semana_atual = agora.isocalendar()[1]
     ultimo_semanal = st.session_state.get("backup_semanal_" + slug)
@@ -210,19 +202,14 @@ def _verificar_backup_automatico(slug):
         st.session_state["backup_semanal_dados_" + slug] = dados
         st.session_state["backup_semanal_nome_" + slug] = nome
 
-        _tentar_enviar_onedrive(
-            slug=slug,
-            nome=nome,
-            dados=dados,
-            tipo="backup_semanal",
-        )
+        _tentar_enviar_onedrive(slug, nome, dados, "backup_semanal")
 
 
 def _extrair_sqlite_do_zip(dados_zip, slug):
     try:
         with zipfile.ZipFile(io.BytesIO(dados_zip), "r") as zf:
             arquivos = zf.namelist()
-            nome_esperado = "banco_" + slug + ".db"
+            nome_esperado = f"banco_{slug}.db"
 
             if nome_esperado in arquivos:
                 return zf.read(nome_esperado)
@@ -243,10 +230,7 @@ def _obter_ultimo_backup_para_restaurar(slug):
     if st.session_state.get("backup_manual_completo"):
         opcoes.append({
             "tipo": "Backup completo manual",
-            "nome": st.session_state.get(
-                "backup_manual_completo_nome",
-                "backup_completo.zip",
-            ),
+            "nome": st.session_state.get("backup_manual_completo_nome", "backup_completo.zip"),
             "dados": st.session_state.get("backup_manual_completo"),
             "formato": "zip",
             "prioridade": 4,
@@ -255,10 +239,7 @@ def _obter_ultimo_backup_para_restaurar(slug):
     if st.session_state.get("backup_diario_dados_" + slug):
         opcoes.append({
             "tipo": "Backup diario automatico",
-            "nome": st.session_state.get(
-                "backup_diario_nome_" + slug,
-                "backup_diario.zip",
-            ),
+            "nome": st.session_state.get("backup_diario_nome_" + slug, "backup_diario.zip"),
             "dados": st.session_state.get("backup_diario_dados_" + slug),
             "formato": "zip",
             "prioridade": 3,
@@ -267,10 +248,7 @@ def _obter_ultimo_backup_para_restaurar(slug):
     if st.session_state.get("backup_semanal_dados_" + slug):
         opcoes.append({
             "tipo": "Backup semanal automatico",
-            "nome": st.session_state.get(
-                "backup_semanal_nome_" + slug,
-                "backup_semanal.zip",
-            ),
+            "nome": st.session_state.get("backup_semanal_nome_" + slug, "backup_semanal.zip"),
             "dados": st.session_state.get("backup_semanal_dados_" + slug),
             "formato": "zip",
             "prioridade": 2,
@@ -279,10 +257,7 @@ def _obter_ultimo_backup_para_restaurar(slug):
     if st.session_state.get("backup_manual_db"):
         opcoes.append({
             "tipo": "SQLite manual",
-            "nome": st.session_state.get(
-                "backup_manual_db_nome",
-                "banco.db",
-            ),
+            "nome": st.session_state.get("backup_manual_db_nome", "banco.db"),
             "dados": st.session_state.get("backup_manual_db"),
             "formato": "db",
             "prioridade": 1,
@@ -294,6 +269,26 @@ def _obter_ultimo_backup_para_restaurar(slug):
     return sorted(opcoes, key=lambda x: x["prioridade"], reverse=True)[0]
 
 
+def _salvar_backup_seguro_atual(slug, prefixo):
+    db_path = _tenant_db(slug)
+
+    if db_path.exists():
+        nome_seguro = _nome_arquivo(prefixo, "db", slug)
+        db_seguro = db_path.with_name(nome_seguro)
+        db_seguro.write_bytes(db_path.read_bytes())
+
+
+def _restaurar_db_bytes(slug, db_bytes):
+    if not db_bytes:
+        return False, "Arquivo de backup invalido."
+
+    db_path = _tenant_db(slug)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.write_bytes(db_bytes)
+
+    return True, "Banco de dados restaurado com sucesso."
+
+
 def _recuperar_pelo_ultimo_backup(slug):
     backup = _obter_ultimo_backup_para_restaurar(slug)
 
@@ -301,8 +296,6 @@ def _recuperar_pelo_ultimo_backup(slug):
         return False, "Nenhum backup disponivel para recuperacao."
 
     try:
-        db_path = _tenant_db(slug)
-
         if backup["formato"] == "zip":
             db_bytes = _extrair_sqlite_do_zip(backup["dados"], slug)
         else:
@@ -311,20 +304,18 @@ def _recuperar_pelo_ultimo_backup(slug):
         if not db_bytes:
             return False, "O backup selecionado nao possui banco SQLite valido."
 
-        if db_path.exists():
-            nome_seguro = _nome_arquivo("backup_antes_restauracao", "db", slug)
-            db_seguro = db_path.with_name(nome_seguro)
-            db_seguro.write_bytes(db_path.read_bytes())
+        _salvar_backup_seguro_atual(slug, "backup_antes_restauracao")
+        sucesso, mensagem = _restaurar_db_bytes(slug, db_bytes)
 
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        db_path.write_bytes(db_bytes)
+        if sucesso:
+            return True, (
+                "Sistema recuperado com sucesso a partir de: "
+                + backup["tipo"]
+                + " — "
+                + backup["nome"]
+            )
 
-        return True, (
-            "Sistema recuperado com sucesso a partir de: "
-            + backup["tipo"]
-            + " — "
-            + backup["nome"]
-        )
+        return False, mensagem
 
     except Exception as e:
         return False, "Erro ao recuperar o sistema: " + str(e)
@@ -346,31 +337,15 @@ def _validar_e_obter_db_do_upload(arquivo, slug):
         if db_bytes:
             return True, db_bytes, "Backup ZIP valido."
 
-        return False, b"", "O ZIP enviado nao possui arquivo .db valido."
+        return False, b"", "O arquivo ZIP nao possui banco SQLite valido."
 
     return False, b"", "Formato invalido. Envie um arquivo .zip ou .db."
 
 
 def _recuperar_por_upload(slug, db_bytes):
     try:
-        db_path = _tenant_db(slug)
-
-        if not db_bytes:
-            return False, "Arquivo de backup invalido."
-
-        if db_path.exists():
-            nome_seguro = _nome_arquivo(
-                "backup_antes_upload_restauracao",
-                "db",
-                slug,
-            )
-            db_seguro = db_path.with_name(nome_seguro)
-            db_seguro.write_bytes(db_path.read_bytes())
-
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        db_path.write_bytes(db_bytes)
-
-        return True, "Sistema recuperado com sucesso pelo backup enviado."
+        _salvar_backup_seguro_atual(slug, "backup_antes_upload_restauracao")
+        return _restaurar_db_bytes(slug, db_bytes)
 
     except Exception as e:
         return False, "Erro ao recuperar backup enviado: " + str(e)
@@ -402,9 +377,7 @@ def render():
                 dados = _gerar_zip_completo(slug)
                 st.session_state["backup_manual_csv"] = dados
                 st.session_state["backup_manual_csv_nome"] = _nome_arquivo(
-                    "backup_csv",
-                    "zip",
-                    slug,
+                    "backup_csv", "zip", slug
                 )
                 st.toast("CSV gerado!")
 
@@ -429,9 +402,7 @@ def render():
                 if dados:
                     st.session_state["backup_manual_db"] = dados
                     st.session_state["backup_manual_db_nome"] = _nome_arquivo(
-                        "banco",
-                        "db",
-                        slug,
+                        "banco", "db", slug
                     )
                     st.toast("Banco gerado!")
                 else:
@@ -483,24 +454,23 @@ def render():
 
         if "backup_manual_completo" not in st.session_state:
             st.info("Gere primeiro um backup completo manual.")
-
         else:
             st.info(
                 "Arquivo pronto para envio: "
-                + st.session_state.get(
-                    "backup_manual_completo_nome",
-                    "backup_completo.zip",
-                )
+                + st.session_state.get("backup_manual_completo_nome", "backup_completo.zip")
             )
 
-            if st.button("Enviar ultimo backup completo ao OneDrive", use_container_width=True):
+            if st.button(
+                "Enviar ultimo backup completo ao OneDrive",
+                key="btn_enviar_manual_onedrive",
+                use_container_width=True,
+            ):
                 try:
                     _enviar_backup_onedrive(
                         st.session_state["backup_manual_completo_nome"],
                         st.session_state["backup_manual_completo"],
                     )
                     st.success("Backup enviado ao OneDrive com sucesso.")
-
                 except Exception as e:
                     st.error("Erro ao enviar backup ao OneDrive: " + str(e))
 
@@ -517,8 +487,7 @@ def render():
 
                 ultimo = st.session_state.get("backup_diario_" + slug)
                 st.caption(
-                    "Gerado em: "
-                    + (ultimo.strftime("%d/%m/%Y") if ultimo else "-")
+                    "Gerado em: " + (ultimo.strftime("%d/%m/%Y") if ultimo else "-")
                 )
 
                 dados_d = st.session_state.get("backup_diario_dados_" + slug)
@@ -541,9 +510,7 @@ def render():
                     if st.session_state.get("backup_diario_onedrive_" + slug):
                         st.success("Enviado ao OneDrive.")
                     else:
-                        erro = st.session_state.get(
-                            "backup_diario_onedrive_erro_" + slug
-                        )
+                        erro = st.session_state.get("backup_diario_onedrive_erro_" + slug)
                         if erro:
                             st.warning("Nao foi enviado ao OneDrive.")
                             st.caption(erro)
@@ -576,9 +543,7 @@ def render():
                     if st.session_state.get("backup_semanal_onedrive_" + slug):
                         st.success("Enviado ao OneDrive.")
                     else:
-                        erro = st.session_state.get(
-                            "backup_semanal_onedrive_erro_" + slug
-                        )
+                        erro = st.session_state.get("backup_semanal_onedrive_erro_" + slug)
                         if erro:
                             st.warning("Nao foi enviado ao OneDrive.")
                             st.caption(erro)
@@ -637,9 +602,7 @@ def render():
 
                 if sucesso:
                     st.success(mensagem)
-                    st.info(
-                        "Recarregue a pagina ou reinicie o aplicativo para atualizar os dados."
-                    )
+                    st.info("Recarregue a pagina ou reinicie o aplicativo para atualizar os dados.")
                 else:
                     st.error(mensagem)
 
@@ -682,15 +645,12 @@ def render():
 
                 if not valido:
                     st.error(msg_validacao)
-
                 else:
                     sucesso, mensagem = _recuperar_por_upload(slug, db_bytes)
 
                     if sucesso:
                         st.success(mensagem)
-                        st.info(
-                            "Recarregue a pagina ou reinicie o aplicativo para atualizar os dados."
-                        )
+                        st.info("Recarregue a pagina ou reinicie o aplicativo para atualizar os dados.")
                     else:
                         st.error(mensagem)
 
