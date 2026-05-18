@@ -159,8 +159,9 @@ def render():
     periodo_sel = st.session_state["db_periodo"]
 
     # Variaveis dos filtros adicionais (definidas no modo Personalizado)
-    membro_sel = "Todos"
-    funcao_sel = "Todas"
+    membro_sel    = "Todos"
+    funcao_sel    = "Todas"
+    categoria_sel = "Todas"
 
     if periodo_sel == "Personalizado":
         dv = df["data"].dropna()
@@ -178,19 +179,27 @@ def render():
         df_f = df[(df["data"] >= pd.Timestamp(d_ini)) & (df["data"] <= pd.Timestamp(d_fim))].copy()
 
         st.markdown("**Filtros adicionais**")
-        fc1, fc2 = st.columns(2)
+        fc1, fc2, fc3 = st.columns(3)
 
+        # Membros disponiveis no periodo
         membros_disp = sorted([
             n for n in df_f["nome_cadastro"].dropna().unique()
             if str(n).strip() and str(n).strip() != "nan"
         ])
 
+        # Funcoes disponiveis (vem do cadastro)
         funcoes_disp = []
         if not df_cad.empty and "funcao" in df_cad.columns:
             funcoes_disp = sorted([
                 f for f in df_cad["funcao"].dropna().unique()
                 if str(f).strip()
             ])
+
+        # Categorias de entrada disponiveis no periodo
+        categorias_disp = sorted([
+            c for c in df_f[df_f["tipo"].str.upper() == "ENTRADA"]["categoria"].dropna().unique()
+            if str(c).strip()
+        ])
 
         with fc1:
             membro_sel = st.selectbox(
@@ -206,6 +215,14 @@ def render():
                 key="db_funcao_filtro",
             )
 
+        with fc3:
+            categoria_sel = st.selectbox(
+                "Categoria entrada",
+                ["Todas"] + categorias_disp,
+                key="db_categoria_filtro",
+            )
+
+        # Aplica filtros
         if membro_sel != "Todos":
             df_f = df_f[df_f["nome_cadastro"].fillna("").str.strip() == membro_sel]
 
@@ -215,11 +232,17 @@ def render():
             ]["id_cadastro"].tolist()
             df_f = df_f[df_f["id_cadastro"].isin(ids_funcao)]
 
+        if categoria_sel != "Todas":
+            df_f = df_f[df_f["categoria"].fillna("").str.strip() == categoria_sel]
+
+        # Mostra resumo dos filtros aplicados
         filtros_ativos = []
         if membro_sel != "Todos":
             filtros_ativos.append(f"Membro: **{membro_sel}**")
         if funcao_sel != "Todas":
             filtros_ativos.append(f"Funcao: **{funcao_sel}**")
+        if categoria_sel != "Todas":
+            filtros_ativos.append(f"Categoria: **{categoria_sel}**")
         if filtros_ativos:
             st.info("🔍 Filtros: " + " | ".join(filtros_ativos))
 
@@ -339,13 +362,11 @@ def render():
     # ── 3. Percentual de dizimistas ───────────────────────────────────────
     st.markdown('<div class="grafico-titulo">📈 Percentual de dizimistas em relacao aos membros</div>', unsafe_allow_html=True)
 
-    # Conta membros ativos do cadastro
     df_membros_ativos = df_cad[
         (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
         (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
     ].copy()
 
-    # Aplica filtros do modo Personalizado
     if periodo_sel == "Personalizado" and funcao_sel != "Todas":
         df_membros_ativos = df_membros_ativos[
             df_membros_ativos["funcao"].fillna("").str.strip() == funcao_sel
@@ -358,7 +379,6 @@ def render():
 
     total_membros = len(df_membros_ativos)
 
-    # Membros que dizimaram no periodo
     diz_periodo = df_f[
         (df_f["categoria"].str.upper() == "DIZIMO") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
@@ -375,7 +395,6 @@ def render():
     else:
         pct_dizimistas = (qtd_dizimistas / total_membros) * 100
 
-        # Grafico de rosca
         fig_pct = go.Figure(go.Pie(
             labels=["Dizimistas", "Nao dizimistas"],
             values=[qtd_dizimistas, qtd_nao_dizimistas],
@@ -386,7 +405,6 @@ def render():
             hoverinfo="skip",
         ))
 
-        # Texto central com percentual
         fig_pct.add_annotation(
             text=f"<b>{pct_dizimistas:.1f}%</b>",
             x=0.5, y=0.55, font_size=28,
@@ -408,7 +426,6 @@ def render():
         ))
         st.plotly_chart(fig_pct, **OPC)
 
-        # 3 metricas resumo
         km_a, km_b, km_c = st.columns(3)
         km_a.metric("Membros ativos", str(total_membros))
         km_b.metric("Dizimistas", str(qtd_dizimistas),
@@ -416,7 +433,6 @@ def render():
         km_c.metric("Nao dizimistas", str(qtd_nao_dizimistas),
                     delta=f"-{100 - pct_dizimistas:.1f}%", delta_color="inverse")
 
-        # Barra visual de progresso
         st.markdown(f"""
         <div style="background:#f0f0f0;height:24px;border-radius:12px;overflow:hidden;
                     margin-top:8px;position:relative">
