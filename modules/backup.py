@@ -84,8 +84,9 @@ def _gerar_resumo(df_cad, df_lanc, slug):
     ]
 
     if not df_cad.empty and "tipo_cadastro" in df_cad.columns:
-        membros = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "MEMBRO"])
-        fornecedores = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "FORNECEDOR"])
+        tipo = df_cad["tipo_cadastro"].astype(str).str.upper()
+        membros = len(df_cad[tipo == "MEMBRO"])
+        fornecedores = len(df_cad[tipo == "FORNECEDOR"])
         linhas.append(f"  Membros: {membros}")
         linhas.append(f"  Fornecedores: {fornecedores}")
 
@@ -102,8 +103,9 @@ def _gerar_resumo(df_cad, df_lanc, slug):
             df_l["valor"] = pd.to_numeric(df_l["valor"], errors="coerce").fillna(0)
 
         if "tipo" in df_l.columns and "valor" in df_l.columns:
-            entradas = df_l[df_l["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-            saidas = df_l[df_l["tipo"].str.upper() == "SAIDA"]["valor"].sum()
+            tipo = df_l["tipo"].astype(str).str.upper()
+            entradas = df_l[tipo == "ENTRADA"]["valor"].sum()
+            saidas = df_l[tipo == "SAIDA"]["valor"].sum()
 
             linhas.append("  Total entradas: " + formatar_moeda(entradas))
             linhas.append("  Total saidas:   " + formatar_moeda(saidas))
@@ -215,7 +217,7 @@ def _extrair_sqlite_do_zip(dados_zip, slug):
                 return zf.read(nome_esperado)
 
             for nome in arquivos:
-                if nome.endswith(".db"):
+                if nome.lower().endswith(".db"):
                     return zf.read(nome)
 
         return b""
@@ -321,18 +323,17 @@ def _recuperar_pelo_ultimo_backup(slug):
         return False, "Erro ao recuperar o sistema: " + str(e)
 
 
-def _validar_e_obter_db_do_upload(arquivo, slug):
-    if arquivo is None:
-        return False, b"", "Nenhum arquivo enviado."
+def _validar_e_obter_db_do_upload(nome_arquivo, dados_arquivo, slug):
+    if not dados_arquivo:
+        return False, b"", "Nenhum arquivo enviado ou arquivo vazio."
 
-    nome = arquivo.name.lower()
-    dados = arquivo.read()
+    nome = nome_arquivo.lower().strip()
 
     if nome.endswith(".db"):
-        return True, dados, "Arquivo SQLite valido."
+        return True, dados_arquivo, "Arquivo SQLite valido."
 
     if nome.endswith(".zip"):
-        db_bytes = _extrair_sqlite_do_zip(dados, slug)
+        db_bytes = _extrair_sqlite_do_zip(dados_arquivo, slug)
 
         if db_bytes:
             return True, db_bytes, "Backup ZIP valido."
@@ -618,7 +619,21 @@ def render():
         )
 
         if arquivo_backup is not None:
-            st.info("Arquivo selecionado: " + arquivo_backup.name)
+            st.session_state["upload_backup_nome"] = arquivo_backup.name
+            st.session_state["upload_backup_dados"] = arquivo_backup.getvalue()
+
+            tamanho_kb = len(st.session_state["upload_backup_dados"]) / 1024
+
+            st.success(
+                f"Arquivo carregado: {st.session_state['upload_backup_nome']} "
+                f"({tamanho_kb:.1f} KB)"
+            )
+
+        elif st.session_state.get("upload_backup_dados"):
+            st.info(
+                "Arquivo carregado anteriormente: "
+                + st.session_state.get("upload_backup_nome", "backup")
+            )
 
         confirmar_upload = st.checkbox(
             "Confirmo que desejo substituir os dados atuais pelo arquivo enviado.",
@@ -631,7 +646,10 @@ def render():
             use_container_width=True,
             type="primary",
         ):
-            if arquivo_backup is None:
+            nome_upload = st.session_state.get("upload_backup_nome")
+            dados_upload = st.session_state.get("upload_backup_dados")
+
+            if not dados_upload:
                 st.warning("Envie um arquivo de backup antes de restaurar.")
 
             elif not confirmar_upload:
@@ -639,7 +657,8 @@ def render():
 
             else:
                 valido, db_bytes, msg_validacao = _validar_e_obter_db_do_upload(
-                    arquivo_backup,
+                    nome_upload,
+                    dados_upload,
                     slug,
                 )
 
@@ -651,6 +670,9 @@ def render():
                     if sucesso:
                         st.success(mensagem)
                         st.info("Recarregue a pagina ou reinicie o aplicativo para atualizar os dados.")
+
+                        st.session_state.pop("upload_backup_nome", None)
+                        st.session_state.pop("upload_backup_dados", None)
                     else:
                         st.error(mensagem)
 
