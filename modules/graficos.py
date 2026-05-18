@@ -7,16 +7,26 @@ from data.repository import carregar_lancamentos, carregar_cadastros
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
 T = "plotly_white"
+
+# ── PALETA DE CORES ───────────────────────────────────────────────────────
 COR = {
-    "Entrada":    "#1D9E75",
-    "Saida":      "#D85A30",
-    "saldo":      "#0F6E56",
-    "dizimo":     "#1D9E75",
-    "despesa":    "#D85A30",
-    "funcao":     "#0F6E56",
-    "qtd_dizimo": "#3DBE99",
-    "secundaria": "#F5A623",
-    "neutro":     "#6c757d",
+    "Entrada":    "#1E73BE",   # AZUL — entradas em geral
+    "Saida":      "#C62828",   # VERMELHO — despesas/saidas
+    "saldo":      "#0F6E56",   # VERDE escuro — linha de saldo
+    "dizimo":     "#1E73BE",   # AZUL
+    "missao":     "#F57C00",   # LARANJA
+    "campanha":   "#7B1FA2",   # ROXO
+    "oferta":     "#BA68C8",   # LILAS
+    "despesa":    "#C62828",   # VERMELHO
+    "qtd_dizimo": "#1E73BE",   # AZUL (frequencia de dizimos)
+    "funcao":     "#1E73BE",   # AZUL (entradas por funcao)
+}
+
+CORES_CATEGORIA = {
+    "DIZIMO":   "#1E73BE",
+    "MISSAO":   "#F57C00",
+    "CAMPANHA": "#7B1FA2",
+    "OFERTA":   "#BA68C8",
 }
 
 CONFIG_PLOTLY = {
@@ -39,10 +49,8 @@ def _base_layout(margin=None, **kw):
 
 
 def _injetar_css_dashboard():
-    """CSS dos cards estilo Power BI."""
     st.markdown("""
     <style>
-    /* KPI Cards */
     .kpi-card {
         background: white;
         border-radius: 12px;
@@ -51,10 +59,10 @@ def _injetar_css_dashboard():
         border-left: 4px solid #0F6E56;
         height: 100%;
     }
-    .kpi-card.entrada  { border-left-color: #1D9E75; }
-    .kpi-card.saida    { border-left-color: #D85A30; }
+    .kpi-card.entrada  { border-left-color: #1E73BE; }
+    .kpi-card.saida    { border-left-color: #C62828; }
     .kpi-card.saldo    { border-left-color: #0F6E56; }
-    .kpi-card.lanc     { border-left-color: #F5A623; }
+    .kpi-card.lanc     { border-left-color: #F57C00; }
 
     .kpi-label {
         font-size: 0.72rem;
@@ -75,37 +83,22 @@ def _injetar_css_dashboard():
         color: #6c757d;
         margin-top: 4px;
     }
-    .kpi-extra.positivo { color: #1D9E75; }
-    .kpi-extra.negativo { color: #D85A30; }
+    .kpi-extra.positivo { color: #1E73BE; }
+    .kpi-extra.negativo { color: #C62828; }
 
-    /* Container de grafico */
-    .grafico-box {
-        background: white;
-        border-radius: 12px;
-        padding: 16px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-        margin-bottom: 12px;
-    }
     .grafico-titulo {
-        font-size: 0.9rem;
-        font-weight: 600;
+        font-size: 0.95rem;
+        font-weight: 700;
         color: #1a1a1a;
-        margin-bottom: 8px;
+        margin: 16px 0 8px 0;
         padding-bottom: 6px;
-        border-bottom: 1px solid #eee;
-    }
-
-    /* Filtros de periodo */
-    div[data-testid="stHorizontalBlock"] button {
-        font-size: 0.78rem !important;
-        padding: 4px 10px !important;
+        border-bottom: 2px solid #0F6E56;
     }
     </style>
     """, unsafe_allow_html=True)
 
 
 def _aplicar_filtro_periodo(df, periodo):
-    """Aplica filtro pre-definido de periodo no DataFrame."""
     hoje = datetime.date.today()
     if periodo == "Hoje":
         ini = fim = hoje
@@ -147,10 +140,10 @@ def render():
     df_cad["funcao"] = df_cad["funcao"].fillna("").astype(str)
     df_cad["id_cadastro"] = pd.to_numeric(df_cad["id_cadastro"], errors="coerce")
 
-    # ── Filtros de periodo (botoes) ───────────────────────────────────────
     st.markdown("### Dashboard")
     st.caption("Visao geral das financas da igreja")
 
+    # ── Filtros de periodo ────────────────────────────────────────────────
     if "db_periodo" not in st.session_state:
         st.session_state["db_periodo"] = "Mes"
 
@@ -165,9 +158,10 @@ def render():
 
     periodo_sel = st.session_state["db_periodo"]
 
-    # Aplica filtro
     if periodo_sel == "Personalizado":
         dv = df["data"].dropna()
+
+        # Filtros de periodo
         cp1, cp2 = st.columns(2)
         with cp1:
             d_ini = st.date_input("De", value=dv.min().date() if not dv.empty else datetime.date.today(),
@@ -179,6 +173,58 @@ def render():
             st.error("Data inicial maior que data final.")
             return
         df_f = df[(df["data"] >= pd.Timestamp(d_ini)) & (df["data"] <= pd.Timestamp(d_fim))].copy()
+
+        # Filtros extras: Membro e Funcao
+        st.markdown("**Filtros adicionais**")
+        fc1, fc2 = st.columns(2)
+
+        # Membros disponiveis no periodo
+        membros_disp = sorted([
+            n for n in df_f["nome_cadastro"].dropna().unique()
+            if str(n).strip() and str(n).strip() != "nan"
+        ])
+
+        # Funcoes disponiveis (vem do cadastro)
+        funcoes_disp = []
+        if not df_cad.empty and "funcao" in df_cad.columns:
+            funcoes_disp = sorted([
+                f for f in df_cad["funcao"].dropna().unique()
+                if str(f).strip()
+            ])
+
+        with fc1:
+            membro_sel = st.selectbox(
+                "Membro / Fornecedor",
+                ["Todos"] + membros_disp,
+                key="db_membro_filtro",
+            )
+
+        with fc2:
+            funcao_sel = st.selectbox(
+                "Funcao",
+                ["Todas"] + funcoes_disp,
+                key="db_funcao_filtro",
+            )
+
+        # Aplica filtros
+        if membro_sel != "Todos":
+            df_f = df_f[df_f["nome_cadastro"].fillna("").str.strip() == membro_sel]
+
+        if funcao_sel != "Todas":
+            ids_funcao = df_cad[
+                df_cad["funcao"].fillna("").str.strip() == funcao_sel
+            ]["id_cadastro"].tolist()
+            df_f = df_f[df_f["id_cadastro"].isin(ids_funcao)]
+
+        # Mostra resumo dos filtros aplicados
+        filtros_ativos = []
+        if membro_sel != "Todos":
+            filtros_ativos.append(f"Membro: **{membro_sel}**")
+        if funcao_sel != "Todas":
+            filtros_ativos.append(f"Funcao: **{funcao_sel}**")
+        if filtros_ativos:
+            st.info("🔍 Filtros: " + " | ".join(filtros_ativos))
+
     else:
         df_f, d_ini, d_fim = _aplicar_filtro_periodo(df, periodo_sel)
         if d_ini and d_fim:
@@ -201,7 +247,7 @@ def render():
         st.markdown(f"""
         <div class="kpi-card saldo">
             <div class="kpi-label">Saldo</div>
-            <div class="kpi-value" style="color:{'#1D9E75' if sal >= 0 else '#D85A30'}">{formatar_moeda(sal)}</div>
+            <div class="kpi-value" style="color:{'#1E73BE' if sal >= 0 else '#C62828'}">{formatar_moeda(sal)}</div>
             <div class="kpi-extra">No periodo selecionado</div>
         </div>
         """, unsafe_allow_html=True)
@@ -210,7 +256,7 @@ def render():
         st.markdown(f"""
         <div class="kpi-card entrada">
             <div class="kpi-label">Entradas</div>
-            <div class="kpi-value" style="color:#1D9E75">{formatar_moeda(ent)}</div>
+            <div class="kpi-value" style="color:#1E73BE">{formatar_moeda(ent)}</div>
             <div class="kpi-extra positivo">↑ Total arrecadado</div>
         </div>
         """, unsafe_allow_html=True)
@@ -219,7 +265,7 @@ def render():
         st.markdown(f"""
         <div class="kpi-card saida">
             <div class="kpi-label">Saidas</div>
-            <div class="kpi-value" style="color:#D85A30">{formatar_moeda(sai)}</div>
+            <div class="kpi-value" style="color:#C62828">{formatar_moeda(sai)}</div>
             <div class="kpi-extra negativo">↓ Total gasto</div>
         </div>
         """, unsafe_allow_html=True)
@@ -228,7 +274,7 @@ def render():
         st.markdown(f"""
         <div class="kpi-card lanc">
             <div class="kpi-label">Lancamentos</div>
-            <div class="kpi-value" style="color:#F5A623">{n_lanc}</div>
+            <div class="kpi-value" style="color:#F57C00">{n_lanc}</div>
             <div class="kpi-extra">Total de registros</div>
         </div>
         """, unsafe_allow_html=True)
@@ -236,7 +282,7 @@ def render():
     st.markdown("")
     OPC = dict(use_container_width=True, config=CONFIG_PLOTLY)
 
-    # ── Linha 1: Evolucao mensal (full width) ─────────────────────────────
+    # ── 1. Evolucao mensal ────────────────────────────────────────────────
     st.markdown('<div class="grafico-titulo">📊 Evolucao mensal — Entradas x Saidas</div>', unsafe_allow_html=True)
 
     res   = df_f.groupby(["mes", "mes_label", "tipo"], as_index=False)["valor"].sum().sort_values("mes")
@@ -262,7 +308,7 @@ def render():
                    hoverinfo="skip"),
     ])
     fig1.update_layout(**_base_layout(
-        barmode="group", height=320,
+        barmode="group", height=350,
         margin=dict(t=30, b=0, l=0, r=0),
         legend=dict(orientation="h", y=1.15, x=0),
         xaxis=dict(fixedrange=True),
@@ -270,99 +316,81 @@ def render():
     ))
     st.plotly_chart(fig1, **OPC)
 
-    # ── Linha 2: Pizza + Top dizimistas ───────────────────────────────────
-    c1, c2 = st.columns(2)
+    # ── 2. Distribuicao das entradas (pizza) ──────────────────────────────
+    st.markdown('<div class="grafico-titulo">🥧 Distribuicao das entradas</div>', unsafe_allow_html=True)
+    ent_cat = df_f[df_f["tipo"].str.upper() == "ENTRADA"].groupby("categoria", as_index=False)["valor"].sum()
+    if ent_cat.empty:
+        st.info("Sem entradas.")
+    else:
+        cores_pizza = [
+            CORES_CATEGORIA.get(str(c).upper(), "#999999")
+            for c in ent_cat["categoria"]
+        ]
+        fig2 = go.Figure(go.Pie(
+            labels=ent_cat["categoria"], values=ent_cat["valor"], hole=0.55,
+            textinfo="percent+label", textfont_size=14,
+            marker=dict(colors=cores_pizza),
+            hoverinfo="skip",
+        ))
+        fig2.update_layout(**_base_layout(
+            showlegend=False, height=380,
+            margin=dict(t=10, b=10, l=10, r=10),
+        ))
+        st.plotly_chart(fig2, **OPC)
 
-    with c1:
-        st.markdown('<div class="grafico-titulo">🥧 Distribuicao das entradas</div>', unsafe_allow_html=True)
-        ent_cat = df_f[df_f["tipo"].str.upper() == "ENTRADA"].groupby("categoria", as_index=False)["valor"].sum()
-        if ent_cat.empty:
-            st.info("Sem entradas.")
-        else:
-            fig2 = go.Figure(go.Pie(
-                labels=ent_cat["categoria"], values=ent_cat["valor"], hole=0.55,
-                textinfo="percent+label", textfont_size=12,
-                marker=dict(colors=["#1D9E75", "#0F6E56", "#3DBE99", "#7FDABC"]),
-                hoverinfo="skip",
-            ))
-            fig2.update_layout(**_base_layout(
-                showlegend=False, height=300,
-                margin=dict(t=10, b=10, l=10, r=10),
-            ))
-            st.plotly_chart(fig2, **OPC)
+    # ── 3. Frequencia de dizimos (qtd) ────────────────────────────────────
+    st.markdown('<div class="grafico-titulo">🔢 Frequencia de dizimos (qtd de lancamentos)</div>', unsafe_allow_html=True)
+    diz = df_f[(df_f["categoria"].str.upper() == "DIZIMO") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")]
+    if diz.empty:
+        st.info("Sem dizimos no periodo.")
+    else:
+        dq = (
+            diz.groupby("nome_cadastro", as_index=False)
+            .size()
+            .rename(columns={"size": "quantidade"})
+            .sort_values("quantidade", ascending=False)
+            .head(10)
+        )
+        pares_q = sorted(zip(dq["quantidade"], dq["nome_cadastro"]))
+        fig_qtd = go.Figure(go.Bar(
+            x=[p[0] for p in pares_q], y=[p[1] for p in pares_q], orientation="h",
+            marker_color=COR["qtd_dizimo"],
+            text=[str(p[0]) for p in pares_q], textposition="outside",
+            hoverinfo="skip",
+        ))
+        fig_qtd.update_layout(**_base_layout(
+            height=max(280, len(dq) * 42),
+            xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True, title="Quantidade"),
+            yaxis=dict(showgrid=False, fixedrange=True),
+        ))
+        st.plotly_chart(fig_qtd, **OPC)
 
-    with c2:
-        st.markdown('<div class="grafico-titulo">💰 Top 8 dizimistas (valor)</div>', unsafe_allow_html=True)
-        diz = df_f[(df_f["categoria"].str.upper() == "DIZIMO") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")]
-        if diz.empty:
-            st.info("Sem dizimos.")
-        else:
-            d = diz.groupby("nome_cadastro", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(8)
-            pares = sorted(zip(d["valor"], d["nome_cadastro"]))
-            fig3 = go.Figure(go.Bar(
-                x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
-                marker_color=COR["dizimo"],
-                text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
-                hoverinfo="skip",
-            ))
-            fig3.update_layout(**_base_layout(
-                height=max(220, len(d) * 38),
-                xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
-                yaxis=dict(showgrid=False, fixedrange=True),
-            ))
-            st.plotly_chart(fig3, **OPC)
+        km1, km2, km3 = st.columns(3)
+        km1.metric("Total de dizimos", str(len(diz)))
+        km2.metric("Membros dizimistas", str(len(dq)))
+        km3.metric("Media por membro", f"{len(diz) / max(len(dq), 1):.1f}")
 
-    # ── Linha 3: Frequencia + Despesas ────────────────────────────────────
-    c3, c4 = st.columns(2)
+    # ── 4. Top dizimistas (valor) ─────────────────────────────────────────
+    st.markdown('<div class="grafico-titulo">💰 Top 10 dizimistas (valor)</div>', unsafe_allow_html=True)
+    if diz.empty:
+        st.info("Sem dizimos.")
+    else:
+        d = diz.groupby("nome_cadastro", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(10)
+        pares = sorted(zip(d["valor"], d["nome_cadastro"]))
+        fig3 = go.Figure(go.Bar(
+            x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
+            marker_color=COR["dizimo"],
+            text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
+            hoverinfo="skip",
+        ))
+        fig3.update_layout(**_base_layout(
+            height=max(280, len(d) * 42),
+            xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
+            yaxis=dict(showgrid=False, fixedrange=True),
+        ))
+        st.plotly_chart(fig3, **OPC)
 
-    with c3:
-        st.markdown('<div class="grafico-titulo">🔢 Frequencia de dizimos (qtd lancamentos)</div>', unsafe_allow_html=True)
-        if diz.empty:
-            st.info("Sem dizimos no periodo.")
-        else:
-            dq = (
-                diz.groupby("nome_cadastro", as_index=False)
-                .size()
-                .rename(columns={"size": "quantidade"})
-                .sort_values("quantidade", ascending=False)
-                .head(10)
-            )
-            pares_q = sorted(zip(dq["quantidade"], dq["nome_cadastro"]))
-            fig_qtd = go.Figure(go.Bar(
-                x=[p[0] for p in pares_q], y=[p[1] for p in pares_q], orientation="h",
-                marker_color=COR["qtd_dizimo"],
-                text=[str(p[0]) for p in pares_q], textposition="outside",
-                hoverinfo="skip",
-            ))
-            fig_qtd.update_layout(**_base_layout(
-                height=max(220, len(dq) * 38),
-                xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
-                yaxis=dict(showgrid=False, fixedrange=True),
-            ))
-            st.plotly_chart(fig_qtd, **OPC)
-
-    with c4:
-        st.markdown('<div class="grafico-titulo">📉 Top 8 despesas</div>', unsafe_allow_html=True)
-        desp = df_f[df_f["categoria"].str.upper() == "DESPESA"]
-        if desp.empty:
-            st.info("Sem despesas.")
-        else:
-            d2 = desp.groupby("descricao", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(8)
-            pares = sorted(zip(d2["valor"], d2["descricao"]))
-            fig4 = go.Figure(go.Bar(
-                x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
-                marker_color=COR["despesa"],
-                text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
-                hoverinfo="skip",
-            ))
-            fig4.update_layout(**_base_layout(
-                height=max(220, len(d2) * 38),
-                xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
-                yaxis=dict(showgrid=False, fixedrange=True),
-            ))
-            st.plotly_chart(fig4, **OPC)
-
-    # ── Linha 4: Entradas por funcao ──────────────────────────────────────
+    # ── 5. Entradas por funcao ────────────────────────────────────────────
     st.markdown('<div class="grafico-titulo">👥 Entradas por funcao do membro</div>', unsafe_allow_html=True)
     ent_m = df_f[(df_f["tipo"].str.upper() == "ENTRADA") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")].copy()
     if ent_m.empty:
@@ -378,11 +406,32 @@ def render():
             hoverinfo="skip",
         ))
         fig5.update_layout(**_base_layout(
-            height=280,
+            height=320,
             yaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
             xaxis=dict(showgrid=False, fixedrange=True),
         ))
         st.plotly_chart(fig5, **OPC)
+
+    # ── 6. Top despesas ───────────────────────────────────────────────────
+    st.markdown('<div class="grafico-titulo">📉 Top 10 despesas</div>', unsafe_allow_html=True)
+    desp = df_f[df_f["categoria"].str.upper() == "DESPESA"]
+    if desp.empty:
+        st.info("Sem despesas.")
+    else:
+        d2 = desp.groupby("descricao", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(10)
+        pares = sorted(zip(d2["valor"], d2["descricao"]))
+        fig4 = go.Figure(go.Bar(
+            x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
+            marker_color=COR["despesa"],
+            text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
+            hoverinfo="skip",
+        ))
+        fig4.update_layout(**_base_layout(
+            height=max(280, len(d2) * 42),
+            xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
+            yaxis=dict(showgrid=False, fixedrange=True),
+        ))
+        st.plotly_chart(fig4, **OPC)
 
     # ── Exportacao ────────────────────────────────────────────────────────
     st.divider()
