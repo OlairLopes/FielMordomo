@@ -10,16 +10,16 @@ T = "plotly_white"
 
 # ── PALETA DE CORES ───────────────────────────────────────────────────────
 COR = {
-    "Entrada":    "#1E73BE",   # AZUL — entradas em geral
-    "Saida":      "#C62828",   # VERMELHO — despesas/saidas
-    "saldo":      "#0F6E56",   # VERDE escuro — linha de saldo
-    "dizimo":     "#1E73BE",   # AZUL
-    "missao":     "#F57C00",   # LARANJA
-    "campanha":   "#7B1FA2",   # ROXO
-    "oferta":     "#BA68C8",   # LILAS
-    "despesa":    "#C62828",   # VERMELHO
-    "qtd_dizimo": "#1E73BE",   # AZUL (frequencia de dizimos)
-    "funcao":     "#1E73BE",   # AZUL (entradas por funcao)
+    "Entrada":    "#1E73BE",
+    "Saida":      "#C62828",
+    "saldo":      "#0F6E56",
+    "dizimo":     "#1E73BE",
+    "missao":     "#F57C00",
+    "campanha":   "#7B1FA2",
+    "oferta":     "#BA68C8",
+    "despesa":    "#C62828",
+    "qtd_dizimo": "#1E73BE",
+    "funcao":     "#1E73BE",
 }
 
 CORES_CATEGORIA = {
@@ -158,10 +158,13 @@ def render():
 
     periodo_sel = st.session_state["db_periodo"]
 
+    # Variaveis dos filtros adicionais (definidas no modo Personalizado)
+    membro_sel = "Todos"
+    funcao_sel = "Todas"
+
     if periodo_sel == "Personalizado":
         dv = df["data"].dropna()
 
-        # Filtros de periodo
         cp1, cp2 = st.columns(2)
         with cp1:
             d_ini = st.date_input("De", value=dv.min().date() if not dv.empty else datetime.date.today(),
@@ -174,17 +177,14 @@ def render():
             return
         df_f = df[(df["data"] >= pd.Timestamp(d_ini)) & (df["data"] <= pd.Timestamp(d_fim))].copy()
 
-        # Filtros extras: Membro e Funcao
         st.markdown("**Filtros adicionais**")
         fc1, fc2 = st.columns(2)
 
-        # Membros disponiveis no periodo
         membros_disp = sorted([
             n for n in df_f["nome_cadastro"].dropna().unique()
             if str(n).strip() and str(n).strip() != "nan"
         ])
 
-        # Funcoes disponiveis (vem do cadastro)
         funcoes_disp = []
         if not df_cad.empty and "funcao" in df_cad.columns:
             funcoes_disp = sorted([
@@ -206,7 +206,6 @@ def render():
                 key="db_funcao_filtro",
             )
 
-        # Aplica filtros
         if membro_sel != "Todos":
             df_f = df_f[df_f["nome_cadastro"].fillna("").str.strip() == membro_sel]
 
@@ -216,7 +215,6 @@ def render():
             ]["id_cadastro"].tolist()
             df_f = df_f[df_f["id_cadastro"].isin(ids_funcao)]
 
-        # Mostra resumo dos filtros aplicados
         filtros_ativos = []
         if membro_sel != "Todos":
             filtros_ativos.append(f"Membro: **{membro_sel}**")
@@ -338,7 +336,106 @@ def render():
         ))
         st.plotly_chart(fig2, **OPC)
 
-    # ── 3. Frequencia de dizimos (qtd) ────────────────────────────────────
+    # ── 3. Percentual de dizimistas ───────────────────────────────────────
+    st.markdown('<div class="grafico-titulo">📈 Percentual de dizimistas em relacao aos membros</div>', unsafe_allow_html=True)
+
+    # Conta membros ativos do cadastro
+    df_membros_ativos = df_cad[
+        (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
+        (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
+    ].copy()
+
+    # Aplica filtros do modo Personalizado
+    if periodo_sel == "Personalizado" and funcao_sel != "Todas":
+        df_membros_ativos = df_membros_ativos[
+            df_membros_ativos["funcao"].fillna("").str.strip() == funcao_sel
+        ]
+
+    if periodo_sel == "Personalizado" and membro_sel != "Todos":
+        df_membros_ativos = df_membros_ativos[
+            df_membros_ativos["nome"].fillna("").str.strip() == membro_sel
+        ]
+
+    total_membros = len(df_membros_ativos)
+
+    # Membros que dizimaram no periodo
+    diz_periodo = df_f[
+        (df_f["categoria"].str.upper() == "DIZIMO") &
+        (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
+    ]
+    ids_membros_ativos = set(df_membros_ativos["id_cadastro"].dropna().astype(int).tolist())
+    ids_dizimistas     = set(diz_periodo["id_cadastro"].dropna().astype(int).tolist())
+
+    ids_dizimistas_validos = ids_dizimistas & ids_membros_ativos
+    qtd_dizimistas     = len(ids_dizimistas_validos)
+    qtd_nao_dizimistas = total_membros - qtd_dizimistas
+
+    if total_membros == 0:
+        st.info("Nenhum membro ativo encontrado para o filtro aplicado.")
+    else:
+        pct_dizimistas = (qtd_dizimistas / total_membros) * 100
+
+        # Grafico de rosca
+        fig_pct = go.Figure(go.Pie(
+            labels=["Dizimistas", "Nao dizimistas"],
+            values=[qtd_dizimistas, qtd_nao_dizimistas],
+            hole=0.65,
+            textinfo="label+percent",
+            textfont_size=14,
+            marker=dict(colors=["#1E73BE", "#E0E0E0"]),
+            hoverinfo="skip",
+        ))
+
+        # Texto central com percentual
+        fig_pct.add_annotation(
+            text=f"<b>{pct_dizimistas:.1f}%</b>",
+            x=0.5, y=0.55, font_size=28,
+            font_color="#1E73BE",
+            showarrow=False,
+        )
+        fig_pct.add_annotation(
+            text="dizimistas",
+            x=0.5, y=0.42, font_size=12,
+            font_color="#666",
+            showarrow=False,
+        )
+
+        fig_pct.update_layout(**_base_layout(
+            showlegend=True,
+            height=380,
+            margin=dict(t=10, b=10, l=10, r=10),
+            legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center"),
+        ))
+        st.plotly_chart(fig_pct, **OPC)
+
+        # 3 metricas resumo
+        km_a, km_b, km_c = st.columns(3)
+        km_a.metric("Membros ativos", str(total_membros))
+        km_b.metric("Dizimistas", str(qtd_dizimistas),
+                    delta=f"{pct_dizimistas:.1f}%")
+        km_c.metric("Nao dizimistas", str(qtd_nao_dizimistas),
+                    delta=f"-{100 - pct_dizimistas:.1f}%", delta_color="inverse")
+
+        # Barra visual de progresso
+        st.markdown(f"""
+        <div style="background:#f0f0f0;height:24px;border-radius:12px;overflow:hidden;
+                    margin-top:8px;position:relative">
+            <div style="background:linear-gradient(90deg,#1E73BE,#0F6E56);
+                        height:100%;width:{pct_dizimistas}%;
+                        display:flex;align-items:center;justify-content:flex-end;
+                        padding-right:10px;color:white;font-weight:700;font-size:0.85rem">
+                {pct_dizimistas:.1f}%
+            </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;
+                    color:#666;margin-top:4px">
+            <span>0%</span>
+            <span>50%</span>
+            <span>100%</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── 4. Frequencia de dizimos (qtd) ────────────────────────────────────
     st.markdown('<div class="grafico-titulo">🔢 Frequencia de dizimos (qtd de lancamentos)</div>', unsafe_allow_html=True)
     diz = df_f[(df_f["categoria"].str.upper() == "DIZIMO") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")]
     if diz.empty:
@@ -370,7 +467,7 @@ def render():
         km2.metric("Membros dizimistas", str(len(dq)))
         km3.metric("Media por membro", f"{len(diz) / max(len(dq), 1):.1f}")
 
-    # ── 4. Top dizimistas (valor) ─────────────────────────────────────────
+    # ── 5. Top dizimistas (valor) ─────────────────────────────────────────
     st.markdown('<div class="grafico-titulo">💰 Top 10 dizimistas (valor)</div>', unsafe_allow_html=True)
     if diz.empty:
         st.info("Sem dizimos.")
@@ -390,7 +487,7 @@ def render():
         ))
         st.plotly_chart(fig3, **OPC)
 
-    # ── 5. Entradas por funcao ────────────────────────────────────────────
+    # ── 6. Entradas por funcao ────────────────────────────────────────────
     st.markdown('<div class="grafico-titulo">👥 Entradas por funcao do membro</div>', unsafe_allow_html=True)
     ent_m = df_f[(df_f["tipo"].str.upper() == "ENTRADA") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")].copy()
     if ent_m.empty:
@@ -412,7 +509,7 @@ def render():
         ))
         st.plotly_chart(fig5, **OPC)
 
-    # ── 6. Top despesas ───────────────────────────────────────────────────
+    # ── 7. Top despesas ───────────────────────────────────────────────────
     st.markdown('<div class="grafico-titulo">📉 Top 10 despesas</div>', unsafe_allow_html=True)
     desp = df_f[df_f["categoria"].str.upper() == "DESPESA"]
     if desp.empty:
