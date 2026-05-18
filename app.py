@@ -29,7 +29,28 @@ def _injetar_css():
     <style>
     header[data-testid="stHeader"] { display: none !important; }
     #MainMenu { display: none !important; }
-    footer    { display: none !important; }
+    footer { display: none !important; }
+
+    /* Botao hamburguer sempre visivel */
+    [data-testid="stSidebarCollapsedControl"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 999999 !important;
+        background: #061B44 !important;
+        border-radius: 8px !important;
+        padding: 6px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
+    }
+
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="stSidebarCollapsedControl"] button {
+        color: white !important;
+        fill: white !important;
+    }
 
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%) !important;
@@ -95,7 +116,7 @@ def _injetar_css():
     }
 
     .block-container {
-        padding-top: 1.2rem !important;
+        padding-top: 3.5rem !important;
         padding-left: 2rem !important;
         padding-right: 2rem !important;
         max-width: 100% !important;
