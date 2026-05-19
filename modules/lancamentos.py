@@ -20,6 +20,9 @@ from utils.planos import tem_lancamento_lote, obter_plano, proximo_plano
 CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta"]
 FORMAS_PAGAMENTO   = ["Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque", "Cartao Debito", "Cartao Credito"]
 
+# Nome fixo do pastor responsavel pelos comprovantes
+NOME_PASTOR = "Pr. Olair Pereira Lopes"
+
 
 def _ck(sufixo): return f"df_{sufixo}_{slug_da_sessao()}"
 
@@ -76,7 +79,7 @@ def _gerar_html_comprovante(lancamento, igreja, slug):
     sep2 = "=" * 40
 
     vinc_str = nome_vinc + (" (" + tipo_vinc + ")" if tipo_vinc else "")
-    nome_assinatura = ("Pr. " + nome_vinc) if nome_vinc != "Nao vinculado" else "Assinatura"
+    nome_assinatura = NOME_PASTOR
 
     html = """
 <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
@@ -170,7 +173,7 @@ def _gerar_html_comprovante_lote(itens, igreja, slug, data_str, vinc_str,
 
     sep  = "-" * 40
     sep2 = "=" * 40
-    nome_assinatura = ("Pr. " + nome_vinc) if nome_vinc and nome_vinc != "Nao vinculado" else "Assinatura"
+    nome_assinatura = NOME_PASTOR
 
     itens_html = ""
     for it in itens:
