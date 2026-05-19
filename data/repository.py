@@ -66,6 +66,8 @@ def _fazer_backup(db_path: Path):
         antigo.unlink()
 
 
+# ── LOGO PRINCIPAL DO SISTEMA ─────────────────────────────────────────────
+
 def salvar_logo_sistema(dados, extensao):
     for f in LOGOS_DIR.glob("sistema.*"):
         f.unlink()
@@ -82,8 +84,13 @@ def obter_logo_sistema():
     return None
 
 
+# ── LOGO PRINCIPAL DA IGREJA ──────────────────────────────────────────────
+
 def salvar_logo_igreja(slug, dados, extensao):
     for f in LOGOS_DIR.glob(f"{slug}.*"):
+        # nao apaga arquivos do tipo sidebar_<slug>.*
+        if f.stem.startswith("sidebar_"):
+            continue
         f.unlink()
     caminho = LOGOS_DIR / f"{slug}.{extensao}"
     caminho.write_bytes(dados)
@@ -93,6 +100,44 @@ def salvar_logo_igreja(slug, dados, extensao):
 def obter_logo_igreja(slug):
     for ext in ("png", "jpg", "jpeg", "webp"):
         p = LOGOS_DIR / f"{slug}.{ext}"
+        if p.exists():
+            return p.read_bytes(), ext
+    return None
+
+
+# ── LOGO DA SIDEBAR (SISTEMA) ─────────────────────────────────────────────
+
+def salvar_logo_sidebar_sistema(dados, extensao):
+    """Salva o logo da barra lateral do sistema (fallback para igrejas sem logo proprio)."""
+    for f in LOGOS_DIR.glob("sidebar_sistema.*"):
+        f.unlink()
+    caminho = LOGOS_DIR / f"sidebar_sistema.{extensao}"
+    caminho.write_bytes(dados)
+    return caminho
+
+
+def obter_logo_sidebar_sistema():
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = LOGOS_DIR / f"sidebar_sistema.{ext}"
+        if p.exists():
+            return p.read_bytes(), ext
+    return None
+
+
+# ── LOGO DA SIDEBAR (IGREJA) ──────────────────────────────────────────────
+
+def salvar_logo_sidebar_igreja(slug, dados, extensao):
+    """Salva o logo da barra lateral especifico de uma igreja."""
+    for f in LOGOS_DIR.glob(f"sidebar_{slug}.*"):
+        f.unlink()
+    caminho = LOGOS_DIR / f"sidebar_{slug}.{extensao}"
+    caminho.write_bytes(dados)
+    return caminho
+
+
+def obter_logo_sidebar_igreja(slug):
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = LOGOS_DIR / f"sidebar_{slug}.{ext}"
         if p.exists():
             return p.read_bytes(), ext
     return None
@@ -423,6 +468,7 @@ def excluir_lancamento(slug, id_lancamento):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         conn.execute("DELETE FROM lancamentos WHERE id_lancamento=?", (id_lancamento,))
+
 
 # ── Configuracoes gerais do sistema ───────────────────────────────────────
 
