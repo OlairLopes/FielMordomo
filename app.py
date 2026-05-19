@@ -13,7 +13,11 @@ if _here not in sys.path:
 
 import streamlit as st
 
-from data.repository import inicializar_master, obter_logo_igreja, obter_logo_sistema
+from data.repository import (
+    inicializar_master,
+    obter_logo_igreja, obter_logo_sistema,
+    obter_logo_sidebar_igreja, obter_logo_sidebar_sistema,
+)
 from modules.auth import tela_login, logout, modo_atual
 
 st.set_page_config(
@@ -112,8 +116,8 @@ def _injetar_css():
     }
 
     .sidebar-logo img {
-        max-width: 130px;
-        max-height: 80px;
+        max-width: 140px;
+        max-height: 90px;
         object-fit: contain;
     }
 
@@ -151,6 +155,31 @@ def _img_b64(dados, ext):
     return "data:" + mime + ";base64," + base64.b64encode(dados).decode()
 
 
+def _logo_para_sidebar_igreja(slug):
+    """
+    Cascata de fallback para o logo da sidebar da igreja:
+    1. Logo sidebar especifico da igreja
+    2. Logo sidebar do sistema
+    3. Logo principal da igreja
+    4. Logo principal do sistema
+    """
+    return (
+        obter_logo_sidebar_igreja(slug)
+        or obter_logo_sidebar_sistema()
+        or obter_logo_igreja(slug)
+        or obter_logo_sistema()
+    )
+
+
+def _logo_para_sidebar_admin():
+    """
+    Cascata de fallback para a sidebar do admin:
+    1. Logo sidebar do sistema
+    2. Logo principal do sistema
+    """
+    return obter_logo_sidebar_sistema() or obter_logo_sistema()
+
+
 def _sidebar_igreja(pagina_atual, paginas, igreja, slug):
     ICONES = {
         "home": "🏠",
@@ -164,7 +193,7 @@ def _sidebar_igreja(pagina_atual, paginas, igreja, slug):
     }
 
     with st.sidebar:
-        logo_r = obter_logo_igreja(slug) or obter_logo_sistema()
+        logo_r = _logo_para_sidebar_igreja(slug)
 
         if logo_r:
             dados, ext = logo_r
@@ -216,7 +245,7 @@ def _sidebar_igreja(pagina_atual, paginas, igreja, slug):
 
 def _sidebar_admin():
     with st.sidebar:
-        logo_r = obter_logo_sistema()
+        logo_r = _logo_para_sidebar_admin()
 
         if logo_r:
             dados, ext = logo_r
