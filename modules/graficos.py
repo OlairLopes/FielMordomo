@@ -29,6 +29,18 @@ CORES_CATEGORIA = {
     "OFERTA":   "#BA68C8",
 }
 
+# ── ALTURAS ADAPTATIVAS ───────────────────────────────────────────────────
+# Graficos de comparacao (medio-confortavel)
+ALT_COMPARACAO = 480   # Evolucao mensal, pizza, percentual dizimistas
+
+# Graficos de ranking horizontal (cresce conforme itens)
+ALT_RANK_BASE   = 320  # altura minima
+ALT_POR_ITEM    = 55   # altura adicional por item no ranking
+
+# Grafico vertical de barras agrupadas (funcoes)
+ALT_BARRAS_VERT = 420
+
+
 CONFIG_PLOTLY = {
     "displayModeBar": False,
     "staticPlot": True,
@@ -36,10 +48,15 @@ CONFIG_PLOTLY = {
 }
 
 
+def _altura_ranking(qtd_itens):
+    """Calcula altura adaptativa para graficos de ranking horizontal."""
+    return max(ALT_RANK_BASE, qtd_itens * ALT_POR_ITEM + 80)
+
+
 def _base_layout(margin=None, **kw):
     return dict(
         template=T,
-        margin=margin if margin is not None else dict(t=10, b=0, l=0, r=0),
+        margin=margin if margin is not None else dict(t=20, b=20, l=10, r=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         hovermode=False,
@@ -87,12 +104,21 @@ def _injetar_css_dashboard():
     .kpi-extra.negativo { color: #C62828; }
 
     .grafico-titulo {
-        font-size: 0.95rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: #1a1a1a;
-        margin: 16px 0 8px 0;
-        padding-bottom: 6px;
+        margin: 28px 0 12px 0;
+        padding-bottom: 8px;
         border-bottom: 2px solid #0F6E56;
+    }
+
+    /* Container dos graficos com mais respiro */
+    .stPlotlyChart {
+        background: white;
+        border-radius: 12px;
+        padding: 16px 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        margin-bottom: 8px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -158,7 +184,6 @@ def render():
 
     periodo_sel = st.session_state["db_periodo"]
 
-    # Variaveis dos filtros adicionais (definidas no modo Personalizado)
     membro_sel    = "Todos"
     funcao_sel    = "Todas"
     categoria_sel = "Todas"
@@ -181,13 +206,11 @@ def render():
         st.markdown("**Filtros adicionais**")
         fc1, fc2, fc3 = st.columns(3)
 
-        # Membros disponiveis no periodo
         membros_disp = sorted([
             n for n in df_f["nome_cadastro"].dropna().unique()
             if str(n).strip() and str(n).strip() != "nan"
         ])
 
-        # Funcoes disponiveis (vem do cadastro)
         funcoes_disp = []
         if not df_cad.empty and "funcao" in df_cad.columns:
             funcoes_disp = sorted([
@@ -195,7 +218,6 @@ def render():
                 if str(f).strip()
             ])
 
-        # Categorias de entrada disponiveis no periodo
         categorias_disp = sorted([
             c for c in df_f[df_f["tipo"].str.upper() == "ENTRADA"]["categoria"].dropna().unique()
             if str(c).strip()
@@ -222,7 +244,6 @@ def render():
                 key="db_categoria_filtro",
             )
 
-        # Aplica filtros
         if membro_sel != "Todos":
             df_f = df_f[df_f["nome_cadastro"].fillna("").str.strip() == membro_sel]
 
@@ -235,7 +256,6 @@ def render():
         if categoria_sel != "Todas":
             df_f = df_f[df_f["categoria"].fillna("").str.strip() == categoria_sel]
 
-        # Mostra resumo dos filtros aplicados
         filtros_ativos = []
         if membro_sel != "Todos":
             filtros_ativos.append(f"Membro: **{membro_sel}**")
@@ -319,19 +339,19 @@ def render():
 
     fig1 = go.Figure([
         go.Bar(name="Entradas", x=labels, y=e_vals, marker_color=COR["Entrada"],
-               text=[formatar_moeda(v) for v in e_vals], textposition="outside", textfont_size=10,
+               text=[formatar_moeda(v) for v in e_vals], textposition="outside", textfont_size=11,
                hoverinfo="skip"),
         go.Bar(name="Saidas", x=labels, y=s_vals, marker_color=COR["Saida"],
-               text=[formatar_moeda(v) for v in s_vals], textposition="outside", textfont_size=10,
+               text=[formatar_moeda(v) for v in s_vals], textposition="outside", textfont_size=11,
                hoverinfo="skip"),
         go.Scatter(name="Saldo", x=labels, y=sal_vals, mode="lines+markers",
-                   line=dict(color=COR["saldo"], width=3), marker=dict(size=8),
+                   line=dict(color=COR["saldo"], width=3), marker=dict(size=9),
                    hoverinfo="skip"),
     ])
     fig1.update_layout(**_base_layout(
-        barmode="group", height=350,
-        margin=dict(t=30, b=0, l=0, r=0),
-        legend=dict(orientation="h", y=1.15, x=0),
+        barmode="group", height=ALT_COMPARACAO,
+        margin=dict(t=50, b=30, l=10, r=10),
+        legend=dict(orientation="h", y=1.12, x=0),
         xaxis=dict(fixedrange=True),
         yaxis=dict(fixedrange=True, gridcolor="#f0f0f0"),
     ))
@@ -349,13 +369,13 @@ def render():
         ]
         fig2 = go.Figure(go.Pie(
             labels=ent_cat["categoria"], values=ent_cat["valor"], hole=0.55,
-            textinfo="percent+label", textfont_size=14,
+            textinfo="percent+label", textfont_size=15,
             marker=dict(colors=cores_pizza),
             hoverinfo="skip",
         ))
         fig2.update_layout(**_base_layout(
-            showlegend=False, height=380,
-            margin=dict(t=10, b=10, l=10, r=10),
+            showlegend=False, height=ALT_COMPARACAO,
+            margin=dict(t=20, b=20, l=20, r=20),
         ))
         st.plotly_chart(fig2, **OPC)
 
@@ -400,28 +420,28 @@ def render():
             values=[qtd_dizimistas, qtd_nao_dizimistas],
             hole=0.65,
             textinfo="label+percent",
-            textfont_size=14,
+            textfont_size=15,
             marker=dict(colors=["#1E73BE", "#E0E0E0"]),
             hoverinfo="skip",
         ))
 
         fig_pct.add_annotation(
             text=f"<b>{pct_dizimistas:.1f}%</b>",
-            x=0.5, y=0.55, font_size=28,
+            x=0.5, y=0.55, font_size=34,
             font_color="#1E73BE",
             showarrow=False,
         )
         fig_pct.add_annotation(
             text="dizimistas",
-            x=0.5, y=0.42, font_size=12,
+            x=0.5, y=0.40, font_size=13,
             font_color="#666",
             showarrow=False,
         )
 
         fig_pct.update_layout(**_base_layout(
             showlegend=True,
-            height=380,
-            margin=dict(t=10, b=10, l=10, r=10),
+            height=ALT_COMPARACAO,
+            margin=dict(t=20, b=40, l=20, r=20),
             legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center"),
         ))
         st.plotly_chart(fig_pct, **OPC)
@@ -434,17 +454,17 @@ def render():
                     delta=f"-{100 - pct_dizimistas:.1f}%", delta_color="inverse")
 
         st.markdown(f"""
-        <div style="background:#f0f0f0;height:24px;border-radius:12px;overflow:hidden;
-                    margin-top:8px;position:relative">
+        <div style="background:#f0f0f0;height:28px;border-radius:14px;overflow:hidden;
+                    margin-top:12px;position:relative">
             <div style="background:linear-gradient(90deg,#1E73BE,#0F6E56);
                         height:100%;width:{pct_dizimistas}%;
                         display:flex;align-items:center;justify-content:flex-end;
-                        padding-right:10px;color:white;font-weight:700;font-size:0.85rem">
+                        padding-right:12px;color:white;font-weight:700;font-size:0.95rem">
                 {pct_dizimistas:.1f}%
             </div>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:0.78rem;
-                    color:#666;margin-top:4px">
+                    color:#666;margin-top:6px">
             <span>0%</span>
             <span>50%</span>
             <span>100%</span>
@@ -468,11 +488,11 @@ def render():
         fig_qtd = go.Figure(go.Bar(
             x=[p[0] for p in pares_q], y=[p[1] for p in pares_q], orientation="h",
             marker_color=COR["qtd_dizimo"],
-            text=[str(p[0]) for p in pares_q], textposition="outside",
+            text=[str(p[0]) for p in pares_q], textposition="outside", textfont_size=12,
             hoverinfo="skip",
         ))
         fig_qtd.update_layout(**_base_layout(
-            height=max(280, len(dq) * 42),
+            height=_altura_ranking(len(dq)),
             xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True, title="Quantidade"),
             yaxis=dict(showgrid=False, fixedrange=True),
         ))
@@ -493,11 +513,11 @@ def render():
         fig3 = go.Figure(go.Bar(
             x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
             marker_color=COR["dizimo"],
-            text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
+            text=[formatar_moeda(p[0]) for p in pares], textposition="outside", textfont_size=12,
             hoverinfo="skip",
         ))
         fig3.update_layout(**_base_layout(
-            height=max(280, len(d) * 42),
+            height=_altura_ranking(len(d)),
             xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
             yaxis=dict(showgrid=False, fixedrange=True),
         ))
@@ -515,11 +535,11 @@ def render():
         fig5 = go.Figure(go.Bar(
             x=rf["funcao"], y=rf["valor"],
             marker_color=COR["funcao"],
-            text=[formatar_moeda(v) for v in rf["valor"]], textposition="outside",
+            text=[formatar_moeda(v) for v in rf["valor"]], textposition="outside", textfont_size=12,
             hoverinfo="skip",
         ))
         fig5.update_layout(**_base_layout(
-            height=320,
+            height=ALT_BARRAS_VERT,
             yaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
             xaxis=dict(showgrid=False, fixedrange=True),
         ))
@@ -536,11 +556,11 @@ def render():
         fig4 = go.Figure(go.Bar(
             x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
             marker_color=COR["despesa"],
-            text=[formatar_moeda(p[0]) for p in pares], textposition="outside",
+            text=[formatar_moeda(p[0]) for p in pares], textposition="outside", textfont_size=12,
             hoverinfo="skip",
         ))
         fig4.update_layout(**_base_layout(
-            height=max(280, len(d2) * 42),
+            height=_altura_ranking(len(d2)),
             xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
             yaxis=dict(showgrid=False, fixedrange=True),
         ))
