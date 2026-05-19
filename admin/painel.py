@@ -10,6 +10,8 @@ from data.repository import (
     slugify, hash_senha, alterar_senha_super_admin,
     salvar_logo_sistema, obter_logo_sistema,
     salvar_logo_igreja, obter_logo_igreja,
+    salvar_logo_sidebar_sistema, obter_logo_sidebar_sistema,
+    salvar_logo_sidebar_igreja, obter_logo_sidebar_igreja,
 )
 from utils.helpers import confirmar_exclusao
 
@@ -201,8 +203,9 @@ def _criar_igreja():
 def _gerenciar_logos():
     st.subheader("Logos do sistema")
 
-    st.markdown("#### Logo do FielMordomo")
-    st.caption("Aparece na tela de login e na sidebar do administrador.")
+    # ═══ LOGO PRINCIPAL DO SISTEMA ═══════════════════════════════════════
+    st.markdown("#### Logo principal do FielMordomo")
+    st.caption("Aparece na tela de login e como fallback geral.")
 
     logo_sis = obter_logo_sistema()
 
@@ -211,13 +214,13 @@ def _gerenciar_logos():
         st.image(dados, width=200)
         st.caption(f"Formato atual: {ext.upper()}")
     else:
-        st.info("Nenhum logo do sistema cadastrado ainda.")
+        st.info("Nenhum logo principal cadastrado ainda.")
 
     if "logo_sis_counter" not in st.session_state:
         st.session_state["logo_sis_counter"] = 0
 
     arquivo_sis = st.file_uploader(
-        "Enviar logo do FielMordomo",
+        "Enviar logo principal",
         type=["png", "jpg", "jpeg", "webp"],
         key=f"upload_logo_sis_{st.session_state['logo_sis_counter']}",
     )
@@ -226,13 +229,47 @@ def _gerenciar_logos():
         ext = arquivo_sis.name.rsplit(".", 1)[-1].lower()
         salvar_logo_sistema(arquivo_sis.read(), ext)
 
-        st.toast("Logo do sistema salvo!")
+        st.toast("Logo principal salvo!")
         st.session_state["logo_sis_counter"] += 1
         st.rerun()
 
     st.divider()
-    st.markdown("#### Logo por igreja")
-    st.caption("Aparece na sidebar apos o login da igreja.")
+
+    # ═══ LOGO DA SIDEBAR (SISTEMA) ═══════════════════════════════════════
+    st.markdown("#### Logo da sidebar (sistema)")
+    st.caption(
+        "Logo padrao da barra lateral de menus. "
+        "Usado quando uma igreja nao tem seu proprio logo de sidebar."
+    )
+
+    logo_sb_sis = obter_logo_sidebar_sistema()
+
+    if logo_sb_sis:
+        dados, ext = logo_sb_sis
+        st.image(dados, width=160)
+        st.caption(f"Formato atual: {ext.upper()}")
+    else:
+        st.info("Nenhum logo de sidebar do sistema cadastrado.")
+
+    if "logo_sb_sis_counter" not in st.session_state:
+        st.session_state["logo_sb_sis_counter"] = 0
+
+    arquivo_sb_sis = st.file_uploader(
+        "Enviar logo da sidebar (sistema)",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"upload_logo_sb_sis_{st.session_state['logo_sb_sis_counter']}",
+    )
+
+    if arquivo_sb_sis:
+        ext = arquivo_sb_sis.name.rsplit(".", 1)[-1].lower()
+        salvar_logo_sidebar_sistema(arquivo_sb_sis.read(), ext)
+
+        st.toast("Logo da sidebar do sistema salvo!")
+        st.session_state["logo_sb_sis_counter"] += 1
+        st.rerun()
+
+    st.divider()
+    st.markdown("#### Logos por igreja")
 
     df = listar_igrejas()
 
@@ -250,6 +287,10 @@ def _gerenciar_logos():
     idx = opcoes_ig.index(ig_sel)
     slug = str(df.iloc[idx]["slug"])
 
+    # ═══ LOGO PRINCIPAL DA IGREJA ════════════════════════════════════════
+    st.markdown("##### Logo principal da igreja")
+    st.caption("Aparece na home grande e como fallback da sidebar.")
+
     logo_ig = obter_logo_igreja(slug)
 
     if logo_ig:
@@ -257,7 +298,7 @@ def _gerenciar_logos():
         st.image(dados, width=200)
         st.caption(f"Formato atual: {ext.upper()}")
     else:
-        st.info(f"Nenhum logo cadastrado para {ig_sel}.")
+        st.info(f"Nenhum logo principal cadastrado para {ig_sel}.")
 
     counter_key = f"logo_ig_counter_{slug}"
 
@@ -265,7 +306,7 @@ def _gerenciar_logos():
         st.session_state[counter_key] = 0
 
     arquivo_ig = st.file_uploader(
-        f"Enviar logo para: {ig_sel}",
+        f"Enviar logo principal de: {ig_sel}",
         type=["png", "jpg", "jpeg", "webp"],
         key=f"upload_logo_ig_{slug}_{st.session_state[counter_key]}",
     )
@@ -274,8 +315,45 @@ def _gerenciar_logos():
         ext = arquivo_ig.name.rsplit(".", 1)[-1].lower()
         salvar_logo_igreja(slug, arquivo_ig.read(), ext)
 
-        st.toast(f"Logo de {ig_sel} salvo!")
+        st.toast(f"Logo principal de {ig_sel} salvo!")
         st.session_state[counter_key] += 1
+        st.rerun()
+
+    st.divider()
+
+    # ═══ LOGO DA SIDEBAR (IGREJA) ════════════════════════════════════════
+    st.markdown("##### Logo da sidebar da igreja")
+    st.caption(
+        "Logo exibido na barra lateral apos o login desta igreja. "
+        "Se vazio, usa o logo da sidebar do sistema."
+    )
+
+    logo_sb_ig = obter_logo_sidebar_igreja(slug)
+
+    if logo_sb_ig:
+        dados, ext = logo_sb_ig
+        st.image(dados, width=160)
+        st.caption(f"Formato atual: {ext.upper()}")
+    else:
+        st.info(f"Nenhum logo de sidebar cadastrado para {ig_sel}.")
+
+    counter_sb_key = f"logo_sb_ig_counter_{slug}"
+
+    if counter_sb_key not in st.session_state:
+        st.session_state[counter_sb_key] = 0
+
+    arquivo_sb_ig = st.file_uploader(
+        f"Enviar logo da sidebar de: {ig_sel}",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"upload_logo_sb_ig_{slug}_{st.session_state[counter_sb_key]}",
+    )
+
+    if arquivo_sb_ig:
+        ext = arquivo_sb_ig.name.rsplit(".", 1)[-1].lower()
+        salvar_logo_sidebar_igreja(slug, arquivo_sb_ig.read(), ext)
+
+        st.toast(f"Logo da sidebar de {ig_sel} salvo!")
+        st.session_state[counter_sb_key] += 1
         st.rerun()
 
 
