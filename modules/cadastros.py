@@ -100,11 +100,6 @@ def _val(row, col):
 def _congregacao_da_sessao(slug, igreja):
     """
     Retorna o identificador/slug da igreja logada.
-
-    Prioridade:
-    1. Campo 'identificador' salvo em st.session_state["igreja"]
-    2. Campo 'slug' salvo em st.session_state["igreja"]
-    3. Slug atual da sessao
     """
     if not isinstance(igreja, dict):
         igreja = {}
@@ -154,19 +149,25 @@ def render():
 
     # ── Novo cadastro ────────────────────────────────────────────────────
     with st.expander("Novo cadastro", expanded=False):
-        with st.form("form_novo_cad", clear_on_submit=True):
-            st.markdown("**Dados principais**")
-            tipo = st.selectbox("Tipo", ["Membro", "Fornecedor"])
 
-            if tipo == "Membro" and bloqueado:
-                st.error(
-                    f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
-                    f"**{p_info['nome']}**. Faca upgrade para "
-                    f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
-                )
-                st.info("Entre em contato com o administrador para upgrade do plano.")
-                st.form_submit_button("Salvar", type="primary", disabled=True)
-            else:
+        # >>> TIPO FORA DO FORM <<< — atualiza dinamicamente os outros campos
+        st.markdown("**Dados principais**")
+        tipo = st.selectbox(
+            "Tipo",
+            ["Membro", "Fornecedor"],
+            key="novo_tipo",
+        )
+
+        if tipo == "Membro" and bloqueado:
+            st.error(
+                f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
+                f"**{p_info['nome']}**. Faca upgrade para "
+                f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
+            )
+            st.info("Entre em contato com o administrador para upgrade do plano.")
+        else:
+            # Form com os demais campos
+            with st.form("form_novo_cad", clear_on_submit=True):
                 nome = st.text_input("Nome completo")
 
                 doc_label       = "CPF *" if tipo == "Membro" else "CNPJ *"
@@ -179,7 +180,7 @@ def render():
                 )
 
                 dt_nasc = st.date_input(
-                    "Data de nascimento",
+                    "Data de nascimento" if tipo == "Membro" else "Data de fundacao",
                     value=None,
                     format="DD/MM/YYYY",
                     key="novo_dt_nasc",
@@ -260,6 +261,12 @@ def render():
 
                     doc_limpo = "".join(d for d in cpf if d.isdigit())
 
+                    # Valida tamanho conforme o tipo
+                    if tipo == "Membro" and doc_limpo and len(doc_limpo) != 11:
+                        erros.append("CPF deve ter 11 digitos.")
+                    elif tipo == "Fornecedor" and doc_limpo and len(doc_limpo) != 14:
+                        erros.append("CNPJ deve ter 14 digitos.")
+
                     if doc_limpo and cpf_existe(slug, doc_limpo):
                         doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
                         erros.append(doc_tipo + " ja cadastrado.")
@@ -313,6 +320,9 @@ def render():
             df_view["data_nascimento"] = df_view["data_nascimento"].apply(
                 lambda x: _formatar_data(str(x)) if str(x).strip() else ""
             )
+
+            # Renomeia coluna para "Documento" (mais generico)
+            df_view = df_view.rename(columns={"cpf": "documento"})
 
             st.dataframe(df_view, use_container_width=True)
 
@@ -379,7 +389,7 @@ def render():
             dn_value = None
 
         dt_nasc_edit = st.date_input(
-            "Data de nascimento",
+            "Data de nascimento" if tipo_edit == "Membro" else "Data de fundacao",
             value=dn_value,
             format="DD/MM/YYYY",
             key=kp + "dt_nasc",
@@ -525,6 +535,12 @@ def render():
                 erros = c.validar()
 
                 doc_limpo_e = "".join(d for d in cpf_edit if d.isdigit())
+
+                # Valida tamanho conforme o tipo
+                if tipo_edit == "Membro" and doc_limpo_e and len(doc_limpo_e) != 11:
+                    erros.append("CPF deve ter 11 digitos.")
+                elif tipo_edit == "Fornecedor" and doc_limpo_e and len(doc_limpo_e) != 14:
+                    erros.append("CNPJ deve ter 14 digitos.")
 
                 if doc_limpo_e and cpf_existe(slug, doc_limpo_e, id_excluir=id_sel):
                     doc_tipo_e = "CPF" if tipo_edit == "Membro" else "CNPJ"
