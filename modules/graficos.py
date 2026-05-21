@@ -11,9 +11,9 @@ T = "plotly_dark"
 
 # ── PALETA DE CORES (tema escuro) ─────────────────────────────────────────
 COR = {
-    "Entrada":    "#10B981",   # VERDE — entradas
-    "Saida":      "#EF4444",   # VERMELHO — saidas
-    "saldo":      "#3B82F6",   # AZUL — saldo
+    "Entrada":    "#10B981",
+    "Saida":      "#EF4444",
+    "saldo":      "#3B82F6",
     "dizimo":     "#10B981",
     "missao":     "#F59E0B",
     "campanha":   "#8B5CF6",
@@ -40,6 +40,9 @@ ALT_COMPARACAO  = 380
 ALT_RANK_BASE   = 320
 ALT_POR_ITEM    = 55
 ALT_BARRAS_VERT = 400
+
+# Mes minimo para series temporais (sistema entrou em operacao em jan/2026)
+MES_MINIMO_SISTEMA = pd.Period("2026-01", freq="M")
 
 CONFIG_PLOTLY = {
     "displayModeBar": False,
@@ -151,7 +154,6 @@ def _injetar_css_dashboard():
     [data-testid="stMetricValue"] { color: #F1F5F9 !important; }
     [data-testid="stMetricLabel"] { color: #94A3B8 !important; }
 
-    /* Selectbox e date_input no tema escuro */
     .stSelectbox label, .stDateInput label {
         color: #CBD5E1 !important;
     }
@@ -192,7 +194,7 @@ def _calc_variacao(atual, anterior):
 
 
 def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
-    cor_var = direcao  # 'up', 'down' ou 'flat'
+    cor_var = direcao
     html = f"""
     <div class="kpi-card-v2">
         <div class="kpi-icon" style="background:{cor_icone}33;color:{cor_icone}">
@@ -204,6 +206,46 @@ def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+
+
+def _calc_periodo_serie(df, mes_ref):
+    """
+    Calcula o periodo da serie temporal de ate 12 meses.
+
+    Regras:
+    - Inicio nao pode ser anterior a Jan/2026 (entrada do sistema em operacao)
+    - Inicio nao pode ser anterior ao primeiro mes com dados reais
+    - Maximo de 12 meses ate o mes de referencia
+    """
+    if df.empty or df["mes_periodo"].dropna().empty:
+        primeiro_mes_dados = mes_ref
+    else:
+        primeiro_mes_dados = df["mes_periodo"].dropna().min()
+
+    # Inicio efetivo: o mais recente entre Jan/2026 e primeiro mes com dados
+    ini_serie = max(primeiro_mes_dados, MES_MINIMO_SISTEMA)
+
+    # Nunca mais de 12 meses para tras do mes de referencia
+    ini_12m_limite = mes_ref - 11
+    ini_12m = max(ini_serie, ini_12m_limite)
+
+    fim_12m = mes_ref
+
+    # Se mes de referencia for anterior ao inicio calculado, ajusta
+    if fim_12m < ini_12m:
+        ini_12m = fim_12m
+
+    qtd_meses  = max(1, (fim_12m - ini_12m).n + 1)
+    meses_seq  = [(ini_12m + i) for i in range(qtd_meses)]
+    labels_12m = [m.strftime("%b/%y") for m in meses_seq]
+
+    titulo_periodo = (
+        f"{ini_12m.strftime('%b/%y')} a {fim_12m.strftime('%b/%y')}"
+        if qtd_meses > 1
+        else fim_12m.strftime('%b/%y')
+    )
+
+    return ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo
 
 
 def render():
@@ -242,11 +284,9 @@ def render():
         st.warning("Sem dados de data para os lancamentos.")
         return
 
-    # Periodos pre-existentes
     if "db_mes_ref" not in st.session_state:
         st.session_state["db_mes_ref"] = str(meses[0])
 
-    # Periodo de referencia (mes atual selecionado)
     meses_str = [str(m) for m in meses]
     meses_lbl = [m.strftime("%b/%Y") for m in meses]
     map_lbl   = dict(zip(meses_str, meses_lbl))
@@ -266,7 +306,6 @@ def render():
     mes_ref = pd.Period(mes_ref_str, freq="M")
     mes_anterior_padrao = _mes_anterior(mes_ref)
 
-    # Opcoes de comparacao: meses anteriores ao referencia
     meses_comp_str = [str(m) for m in meses if m < mes_ref] or [str(mes_anterior_padrao)]
     map_comp = {str(m): m.strftime("%b/%Y") for m in meses if m < mes_ref}
     if not map_comp:
@@ -297,11 +336,10 @@ def render():
             help="Ativa filtros avancados (periodo livre, membro, funcao, categoria)",
         )
 
-    # DataFrames pre-filtrados
     df_ref  = df[df["mes_periodo"] == mes_ref].copy()
     df_comp = df[df["mes_periodo"] == mes_comp].copy()
 
-    # ── Modo personalizado (sobrescreve a logica padrao) ──────────────────
+    # ── Modo personalizado ────────────────────────────────────────────────
     membro_sel    = "Todos"
     funcao_sel    = "Todas"
     categoria_sel = "Todas"
@@ -395,7 +433,6 @@ def render():
     sai_comp = df_comp[df_comp["tipo"].str.upper() == "SAIDA"]["valor"].sum()
     sal_comp = ent_comp - sai_comp
 
-    # Dizimistas no mes de referencia
     diz_ref = df_ref[
         (df_ref["categoria"].str.upper() == "DIZIMO") &
         (df_ref["tipo_cadastro"].str.upper() == "MEMBRO")
@@ -407,7 +444,6 @@ def render():
     qtd_diz_ref  = diz_ref["id_cadastro"].dropna().nunique()
     qtd_diz_comp = diz_comp["id_cadastro"].dropna().nunique()
 
-    # Taxa de fidelidade = dizimistas / membros ativos
     membros_ativos_n = len(df_cad[
         (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
         (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
@@ -415,7 +451,6 @@ def render():
     taxa_ref  = (qtd_diz_ref / membros_ativos_n * 100) if membros_ativos_n else 0
     taxa_comp = (qtd_diz_comp / membros_ativos_n * 100) if membros_ativos_n else 0
 
-    # Crescimento anual (ano atual vs ano anterior)
     ano_ref = mes_ref.year
     df_ano  = df[df["data"].dt.year == ano_ref]
     df_ano_ant = df[df["data"].dt.year == ano_ref - 1]
@@ -423,7 +458,6 @@ def render():
     ent_ano_ant = df_ano_ant[df_ano_ant["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
     cresc_pct  = ((ent_ano - ent_ano_ant) / abs(ent_ano_ant) * 100) if ent_ano_ant else 0
 
-    # Renderizar 6 cards em 2 linhas de 3 colunas (melhor no mobile)
     r1c1, r1c2, r1c3 = st.columns(3)
     r2c1, r2c2, r2c3 = st.columns(3)
 
@@ -487,19 +521,15 @@ def render():
         st.warning("Sem lancamentos no periodo selecionado.")
         return
 
-    # ── 1. Fluxo de caixa ultimos 12 meses ────────────────────────────────
+    # ── 1. Fluxo de caixa (a partir de Jan/2026 ou primeiro mes com dados) ──
+    ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo = _calc_periodo_serie(df, mes_ref)
+    df_12m = df[(df["mes_periodo"] >= ini_12m) & (df["mes_periodo"] <= fim_12m)].copy()
+
     st.markdown(
-        '<div class="grafico-titulo">📈 Fluxo de Caixa — Ultimos 12 meses'
-        '<span class="subtitulo">Entradas, Despesas e Saldo mes a mes</span></div>',
+        f'<div class="grafico-titulo">📈 Fluxo de Caixa — {titulo_periodo}'
+        f'<span class="subtitulo">Entradas, Despesas e Saldo mes a mes</span></div>',
         unsafe_allow_html=True,
     )
-
-    fim_12m = mes_ref
-    ini_12m = mes_ref - 11
-    df_12m  = df[(df["mes_periodo"] >= ini_12m) & (df["mes_periodo"] <= fim_12m)].copy()
-
-    meses_seq = [(ini_12m + i) for i in range(12)]
-    labels_12m = [m.strftime("%b/%y") for m in meses_seq]
 
     def _serie_12m(t):
         out = []
@@ -533,7 +563,7 @@ def render():
     ))
     st.plotly_chart(fig_fc, **OPC)
 
-    # ── 2 colunas: Entradas por categoria + Despesas por subcategoria ────
+    # ── 2 colunas: Entradas + Despesas ────────────────────────────────────
     g1, g2 = st.columns(2)
 
     with g1:
@@ -619,10 +649,10 @@ def render():
             ))
             st.plotly_chart(fig_dc, **OPC)
 
-    # ── Evolucao dos dizimos (12 meses, barras) ───────────────────────────
+    # ── Evolucao dos dizimos (mesmo periodo do fluxo de caixa) ────────────
     st.markdown(
-        '<div class="grafico-titulo">💰 Evolucao dos Dizimos — Ultimos 12 meses'
-        '<span class="subtitulo">Total arrecadado em dizimos mes a mes</span></div>',
+        f'<div class="grafico-titulo">💰 Evolucao dos Dizimos — {titulo_periodo}'
+        f'<span class="subtitulo">Total arrecadado em dizimos mes a mes</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -645,9 +675,7 @@ def render():
             hoverinfo="skip",
         ),
     ])
-    # Linha de tendencia simples (media movel)
     if len([v for v in d12 if v > 0]) >= 3:
-        # Media movel de 3 meses
         ma = []
         for i in range(len(d12)):
             ini = max(0, i - 2)
