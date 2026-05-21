@@ -30,14 +30,9 @@ CORES_CATEGORIA = {
 }
 
 # ── ALTURAS ADAPTATIVAS ───────────────────────────────────────────────────
-# Graficos de comparacao (medio-confortavel)
-ALT_COMPARACAO = 480   # Evolucao mensal, pizza, percentual dizimistas
-
-# Graficos de ranking horizontal (cresce conforme itens)
-ALT_RANK_BASE   = 320  # altura minima
-ALT_POR_ITEM    = 55   # altura adicional por item no ranking
-
-# Grafico vertical de barras agrupadas (funcoes)
+ALT_COMPARACAO  = 480
+ALT_RANK_BASE   = 320
+ALT_POR_ITEM    = 55
 ALT_BARRAS_VERT = 420
 
 
@@ -112,7 +107,6 @@ def _injetar_css_dashboard():
         border-bottom: 2px solid #0F6E56;
     }
 
-    /* Container dos graficos com mais respiro */
     .stPlotlyChart {
         background: white;
         border-radius: 12px;
@@ -160,6 +154,11 @@ def render():
     df["mes"]   = df["data"].dt.to_period("M").astype(str)
     df["mes_label"] = df["data"].dt.strftime("%b/%Y")
     df["id_cadastro"] = pd.to_numeric(df["id_cadastro"], errors="coerce")
+
+    # Garante coluna subcategoria para lancamentos antigos
+    if "subcategoria" not in df.columns:
+        df["subcategoria"] = ""
+    df["subcategoria"] = df["subcategoria"].fillna("").astype(str)
 
     if "funcao" not in df_cad.columns:
         df_cad["funcao"] = ""
@@ -545,14 +544,23 @@ def render():
         ))
         st.plotly_chart(fig5, **OPC)
 
-    # ── 7. Top despesas ───────────────────────────────────────────────────
-    st.markdown('<div class="grafico-titulo">📉 Top 10 despesas</div>', unsafe_allow_html=True)
-    desp = df_f[df_f["categoria"].str.upper() == "DESPESA"]
+    # ── 7. Top despesas por subcategoria ──────────────────────────────────
+    st.markdown('<div class="grafico-titulo">📉 Top 10 despesas por subcategoria</div>', unsafe_allow_html=True)
+    desp = df_f[df_f["tipo"].str.upper() == "SAIDA"].copy()
     if desp.empty:
         st.info("Sem despesas.")
     else:
-        d2 = desp.groupby("descricao", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(10)
-        pares = sorted(zip(d2["valor"], d2["descricao"]))
+        # Despesas sem subcategoria sao agrupadas como "Sem subcategoria"
+        desp["subcategoria"] = desp["subcategoria"].fillna("").astype(str).str.strip()
+        desp["subcategoria"] = desp["subcategoria"].replace("", "Sem subcategoria")
+
+        d2 = (
+            desp.groupby("subcategoria", as_index=False)["valor"]
+            .sum()
+            .sort_values("valor", ascending=False)
+            .head(10)
+        )
+        pares = sorted(zip(d2["valor"], d2["subcategoria"]))
         fig4 = go.Figure(go.Bar(
             x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
             marker_color=COR["despesa"],
@@ -565,6 +573,16 @@ def render():
             yaxis=dict(showgrid=False, fixedrange=True),
         ))
         st.plotly_chart(fig4, **OPC)
+
+        # 3 metricas resumo das despesas
+        total_desp = desp["valor"].sum()
+        qtd_subs   = desp["subcategoria"].nunique()
+        media_desp = total_desp / max(len(desp), 1)
+
+        kd1, kd2, kd3 = st.columns(3)
+        kd1.metric("Total despesas", formatar_moeda(total_desp))
+        kd2.metric("Subcategorias", str(qtd_subs))
+        kd3.metric("Despesa media", formatar_moeda(media_desp))
 
     # ── Exportacao ────────────────────────────────────────────────────────
     st.divider()
