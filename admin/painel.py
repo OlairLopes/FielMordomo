@@ -12,6 +12,8 @@ from data.repository import (
     salvar_logo_igreja, obter_logo_igreja,
     salvar_logo_sidebar_sistema, obter_logo_sidebar_sistema,
     salvar_logo_sidebar_igreja, obter_logo_sidebar_igreja,
+    listar_subcategorias_despesa, adicionar_subcategoria_despesa,
+    excluir_subcategoria_despesa,
 )
 from utils.helpers import confirmar_exclusao
 
@@ -22,8 +24,8 @@ def render():
     st.title("FielMordomo — Painel Admin")
     st.caption("Gerenciamento de igrejas e planos")
 
-    aba1, aba2, aba3, aba4, aba5 = st.tabs([
-        "Igrejas", "Nova igreja", "Logos", "Backup", "Configuracoes"
+    aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs([
+        "Igrejas", "Nova igreja", "Logos", "Subcategorias", "Backup", "Configuracoes"
     ])
 
     with aba1:
@@ -33,8 +35,10 @@ def render():
     with aba3:
         _gerenciar_logos()
     with aba4:
-        _backup_admin()
+        _gerenciar_subcategorias()
     with aba5:
+        _backup_admin()
+    with aba6:
         _configuracoes()
 
 
@@ -355,6 +359,66 @@ def _gerenciar_logos():
         st.toast(f"Logo da sidebar de {ig_sel} salvo!")
         st.session_state[counter_sb_key] += 1
         st.rerun()
+
+
+def _gerenciar_subcategorias():
+    st.subheader("Subcategorias de despesa")
+    st.caption(
+        "Estas subcategorias aparecem no lancamento de saidas (despesas) "
+        "para todas as igrejas. A categoria principal continua sendo 'Despesa'."
+    )
+
+    subcategorias = listar_subcategorias_despesa()
+
+    if subcategorias:
+        st.markdown(f"**{len(subcategorias)} subcategoria(s) cadastrada(s):**")
+        st.markdown("")
+
+        for sub in subcategorias:
+            col_nome, col_btn = st.columns([5, 1])
+
+            with col_nome:
+                st.markdown(
+                    f"<div style='background:#f8f9fa;padding:10px 14px;"
+                    f"border-radius:8px;margin-bottom:6px;"
+                    f"border-left:3px solid #C62828'>"
+                    f"📂 {sub}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            with col_btn:
+                st.markdown("<div style='margin-top:6px'></div>", unsafe_allow_html=True)
+                if st.button(
+                    "🗑️",
+                    key=f"del_sub_{sub}",
+                    help=f"Excluir '{sub}'",
+                    use_container_width=True,
+                ):
+                    excluir_subcategoria_despesa(sub)
+                    st.toast(f"Subcategoria '{sub}' excluida.")
+                    st.rerun()
+    else:
+        st.info("Nenhuma subcategoria cadastrada.")
+
+    st.divider()
+    st.markdown("**Adicionar nova subcategoria**")
+
+    with st.form("form_nova_sub", clear_on_submit=True):
+        nova_sub = st.text_input(
+            "Nome da subcategoria",
+            placeholder="Ex: Equipamentos de som",
+            help="Use letras, numeros e espacos. Sem acentos quando possivel.",
+        )
+
+        if st.form_submit_button("Adicionar", type="primary"):
+            if not nova_sub.strip():
+                st.error("Informe o nome da subcategoria.")
+            else:
+                if adicionar_subcategoria_despesa(nova_sub):
+                    st.toast(f"Subcategoria '{nova_sub}' adicionada!")
+                    st.rerun()
+                else:
+                    st.error("Esta subcategoria ja existe.")
 
 
 def _backup_admin():
