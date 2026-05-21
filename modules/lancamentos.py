@@ -8,7 +8,7 @@ from data.models import Lancamento
 from data.repository import (
     carregar_cadastros, carregar_lancamentos,
     inserir_lancamento, atualizar_lancamento, excluir_lancamento,
-    obter_logo_igreja,
+    obter_logo_igreja, listar_subcategorias_despesa,
 )
 from utils.helpers import (
     formatar_moeda, preparar_df, obter_ativos, montar_opcoes,
@@ -62,6 +62,7 @@ def _gerar_html_comprovante(lancamento, igreja, slug):
     id_lanc      = lancamento.get("id_lancamento", 0)
     tipo         = lancamento.get("tipo", "-")
     categoria    = lancamento.get("categoria", "-")
+    subcategoria = lancamento.get("subcategoria", "") or ""
     descricao    = lancamento.get("descricao", "") or ""
     valor        = formatar_moeda(lancamento.get("valor", 0))
     nome_vinc    = lancamento.get("nome_cadastro", "") or "Nao vinculado"
@@ -80,6 +81,12 @@ def _gerar_html_comprovante(lancamento, igreja, slug):
 
     vinc_str = nome_vinc + (" (" + tipo_vinc + ")" if tipo_vinc else "")
     nome_assinatura = NOME_PASTOR
+
+    # Linha de subcategoria so aparece se preenchida
+    subcat_html = ""
+    if subcategoria:
+        subcat_html = ('<div class="linha"><span class="label">Subcategoria</span>'
+                       '<span class="valor">' + subcategoria + '</span></div>')
 
     html = """
 <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
@@ -137,6 +144,7 @@ body { background: #f0f0f0; display: flex; justify-content: center; padding: 20p
   <div class="sep centro">""" + sep + """</div>
   <div class="linha"><span class="label">Data</span><span class="valor">""" + data_str + """</span></div>
   <div class="linha"><span class="label">Categoria</span><span class="valor">""" + categoria + """</span></div>
+  """ + subcat_html + """
   <div class="linha"><span class="label">Vinculado</span><span class="valor">""" + vinc_str + """</span></div>
   <div class="linha"><span class="label">Descricao</span><span class="valor">""" + (descricao if descricao else "-") + """</span></div>
   <div class="linha"><span class="label">Pagamento</span><span class="valor">""" + forma_pag + """</span></div>
@@ -177,9 +185,13 @@ def _gerar_html_comprovante_lote(itens, igreja, slug, data_str, vinc_str,
 
     itens_html = ""
     for it in itens:
+        # Mostra subcategoria entre parenteses se houver
+        rotulo = it["categoria"]
+        if it.get("subcategoria"):
+            rotulo += " (" + it["subcategoria"] + ")"
         desc_extra = " - " + it["descricao"] if it.get("descricao") else ""
         itens_html += ('<div class="linha">'
-                       '<span class="label">' + it["categoria"] + desc_extra + '</span>'
+                       '<span class="label">' + rotulo + desc_extra + '</span>'
                        '<span class="valor">' + formatar_moeda(it["valor"]) + '</span>'
                        '</div>')
 
@@ -278,11 +290,28 @@ def render():
                                format="DD/MM/YYYY", key="nl_data")
         tipo   = st.selectbox("Tipo", ["Entrada", "Saida"], key="nl_tipo")
 
+        subcategoria_nl = ""
+
         if tipo == "Entrada":
             cat = st.selectbox("Categoria", CATEGORIAS_ENTRADA, key="nl_cat")
         else:
             cat = "Despesa"
             st.text_input("Categoria", value="Despesa", disabled=True, key="nl_cat_d")
+
+            # Subcategoria de despesa (vem do admin)
+            subcategorias = listar_subcategorias_despesa()
+            if subcategorias:
+                subcategoria_nl = st.selectbox(
+                    "Subcategoria",
+                    [""] + subcategorias,
+                    key="nl_subcat",
+                    help="Selecione a categoria detalhada da despesa.",
+                )
+            else:
+                st.caption(
+                    "⚠️ Nenhuma subcategoria de despesa cadastrada. "
+                    "Peca ao administrador para adicionar."
+                )
 
         if tipo == "Entrada" and cat == "Dizimo":
             vinc_pad = "Membro"
@@ -325,6 +354,7 @@ def render():
             lanc = Lancamento(
                 data=data_l, tipo=tipo, categoria=cat,
                 valor=valor, descricao=desc, forma_pagamento=forma_pag,
+                subcategoria=subcategoria_nl,
                 id_cadastro=id_cad, nome_cadastro=nome_cad, tipo_cadastro=tipo_cad,
             )
             erros = lanc.validar()
@@ -339,7 +369,7 @@ def render():
                 _invalida()
                 # Limpa campos especificos apos salvar
                 for k in ["nl_membro", "nl_fornecedor", "nl_forma_pag",
-                          "nl_valor", "nl_desc"]:
+                          "nl_valor", "nl_desc", "nl_subcat"]:
                     st.session_state.pop(k, None)
                 st.toast("Lancamento salvo!")
                 st.rerun()
@@ -389,11 +419,21 @@ def render():
             st.divider()
             st.markdown("**Adicionar item**")
 
+            subcategoria_lote_item = ""
+
             if tipo_lote == "Entrada":
                 cat_lote_item = st.selectbox("Categoria", CATEGORIAS_ENTRADA, key="lote_cat_item")
             else:
                 cat_lote_item = "Despesa"
                 st.text_input("Categoria", value="Despesa", disabled=True, key="lote_cat_d_item")
+
+                subcategorias_lote = listar_subcategorias_despesa()
+                if subcategorias_lote:
+                    subcategoria_lote_item = st.selectbox(
+                        "Subcategoria",
+                        [""] + subcategorias_lote,
+                        key="lote_subcat_item",
+                    )
 
             desc_lote_item  = st.text_input("Descricao", key="lote_desc_item")
             valor_lote_item = st.number_input("Valor (R$)", min_value=0.0,
@@ -405,6 +445,7 @@ def render():
                 else:
                     st.session_state["lote_itens"].append({
                         "categoria": cat_lote_item,
+                        "subcategoria": subcategoria_lote_item,
                         "descricao": desc_lote_item,
                         "valor": float(valor_lote_item),
                     })
@@ -420,7 +461,11 @@ def render():
                 for i, item in enumerate(st.session_state["lote_itens"]):
                     col1, col2, col3, col4 = st.columns([3, 4, 2, 1])
                     with col1:
-                        st.write(f"**{item['categoria']}**")
+                        # Mostra categoria + subcategoria
+                        rotulo_item = item['categoria']
+                        if item.get('subcategoria'):
+                            rotulo_item += f" / {item['subcategoria']}"
+                        st.write(f"**{rotulo_item}**")
                     with col2:
                         st.write(item['descricao'] or "—")
                     with col3:
@@ -449,6 +494,7 @@ def render():
                                     data=data_lote, tipo=tipo_lote,
                                     categoria=item["categoria"], valor=item["valor"],
                                     descricao=item["descricao"], forma_pagamento=forma_pag_lote,
+                                    subcategoria=item.get("subcategoria", ""),
                                     id_cadastro=id_cad_l, nome_cadastro=nome_cad_l,
                                     tipo_cadastro=tipo_cad_l,
                                 )
@@ -562,6 +608,8 @@ def render():
                                 index=tipo_opc.index(sel["tipo"]) if sel["tipo"] in tipo_opc else 0,
                                 key=kp + "tipo")
 
+        subcategoria_edit = ""
+
         if tipo_e == "Entrada":
             cat_atual = sel["categoria"] if sel["categoria"] in CATEGORIAS_ENTRADA else CATEGORIAS_ENTRADA[0]
             cat_e = st.selectbox("Categoria", CATEGORIAS_ENTRADA,
@@ -570,6 +618,26 @@ def render():
         else:
             cat_e = "Despesa"
             st.text_input("Categoria", value="Despesa", disabled=True, key=kp + "cat_d")
+
+            # Subcategoria na edicao
+            subcategorias_edit = listar_subcategorias_despesa()
+            subcat_atual = str(sel.get("subcategoria", "")) if "subcategoria" in sel.index else ""
+            if subcategorias_edit:
+                opcoes_sub = [""] + subcategorias_edit
+                # Se a subcategoria salva nao estiver na lista atual, adiciona
+                if subcat_atual and subcat_atual not in opcoes_sub:
+                    opcoes_sub = [""] + [subcat_atual] + subcategorias_edit
+                idx_sub = opcoes_sub.index(subcat_atual) if subcat_atual in opcoes_sub else 0
+                subcategoria_edit = st.selectbox(
+                    "Subcategoria",
+                    opcoes_sub,
+                    index=idx_sub,
+                    key=kp + "subcat",
+                )
+            else:
+                subcategoria_edit = subcat_atual
+                if subcat_atual:
+                    st.text_input("Subcategoria", value=subcat_atual, disabled=True, key=kp + "subcat_d")
 
         vinc_str   = str(sel["tipo_cadastro"]).strip().upper()
         vinc_pad_e = ("Membro" if (tipo_e == "Entrada" and cat_e == "Dizimo")
@@ -621,6 +689,7 @@ def render():
                 lanc = Lancamento(data=data_edit, tipo=tipo_e, categoria=cat_e,
                                   valor=valor_e, descricao=desc_e,
                                   forma_pagamento=forma_pag_e,
+                                  subcategoria=subcategoria_edit,
                                   id_cadastro=id_e, nome_cadastro=nome_e,
                                   tipo_cadastro=tipo_e2, id_lancamento=id_lanc)
                 erros = lanc.validar()
