@@ -216,6 +216,7 @@ def inicializar_tenant(slug):
                 data            TEXT NOT NULL,
                 tipo            TEXT NOT NULL,
                 categoria       TEXT NOT NULL,
+                subcategoria    TEXT DEFAULT '',
                 id_cadastro     INTEGER REFERENCES cadastros(id_cadastro),
                 nome_cadastro   TEXT DEFAULT '',
                 tipo_cadastro   TEXT DEFAULT '',
@@ -341,6 +342,17 @@ def _garantir_colunas_cadastros(conn):
             conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
 
 
+def _garantir_colunas_lancamentos(conn):
+    """Garante que a tabela lancamentos tenha todas as colunas necessarias."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
+    for col, tipo in [
+        ("forma_pagamento", "TEXT DEFAULT 'Dinheiro'"),
+        ("subcategoria",    "TEXT DEFAULT ''"),
+    ]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE lancamentos ADD COLUMN {col} {tipo}")
+
+
 def inserir_cadastro(slug, c):
     db = _tenant_db(slug)
     cpf_limpo = "".join(d for d in c.cpf if d.isdigit()) if c.cpf else ""
@@ -407,6 +419,7 @@ def carregar_lancamentos(slug):
     if not db.exists():
         inicializar_tenant(slug)
     with _conn(db) as conn:
+        _garantir_colunas_lancamentos(conn)
         df = pd.read_sql_query(
             "SELECT * FROM lancamentos ORDER BY data DESC, id_lancamento DESC", conn
         )
@@ -419,17 +432,16 @@ def carregar_lancamentos(slug):
 def inserir_lancamento(slug, l):
     db = _tenant_db(slug)
     with _conn(db) as conn:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
-        if "forma_pagamento" not in cols:
-            conn.execute("ALTER TABLE lancamentos ADD COLUMN forma_pagamento TEXT DEFAULT 'Dinheiro'")
+        _garantir_colunas_lancamentos(conn)
         cur = conn.execute(
             """INSERT INTO lancamentos
-               (data, tipo, categoria, id_cadastro, nome_cadastro, tipo_cadastro,
+               (data, tipo, categoria, subcategoria, id_cadastro, nome_cadastro, tipo_cadastro,
                 descricao, forma_pagamento, valor)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (
                 l.data.isoformat() if hasattr(l.data, "isoformat") else str(l.data),
                 l.tipo, l.categoria,
+                sanitizar(getattr(l, "subcategoria", "")),
                 int(l.id_cadastro) if l.id_cadastro else None,
                 sanitizar(l.nome_cadastro), l.tipo_cadastro,
                 sanitizar(l.descricao),
@@ -443,16 +455,15 @@ def inserir_lancamento(slug, l):
 def atualizar_lancamento(slug, l):
     db = _tenant_db(slug)
     with _conn(db) as conn:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
-        if "forma_pagamento" not in cols:
-            conn.execute("ALTER TABLE lancamentos ADD COLUMN forma_pagamento TEXT DEFAULT 'Dinheiro'")
+        _garantir_colunas_lancamentos(conn)
         conn.execute(
-            """UPDATE lancamentos SET data=?, tipo=?, categoria=?, id_cadastro=?,
+            """UPDATE lancamentos SET data=?, tipo=?, categoria=?, subcategoria=?, id_cadastro=?,
                nome_cadastro=?, tipo_cadastro=?, descricao=?, forma_pagamento=?, valor=?
                WHERE id_lancamento=?""",
             (
                 l.data.isoformat() if hasattr(l.data, "isoformat") else str(l.data),
                 l.tipo, l.categoria,
+                sanitizar(getattr(l, "subcategoria", "")),
                 int(l.id_cadastro) if l.id_cadastro else None,
                 sanitizar(l.nome_cadastro), l.tipo_cadastro,
                 sanitizar(l.descricao),
@@ -510,3 +521,69 @@ def igreja_alterar_senha(slug: str, senha_atual: str, nova_senha: str) -> bool:
             (hash_senha(nova_senha), slug),
         )
     return True
+
+
+# ── Subcategorias de despesa (configuradas pelo admin) ────────────────────
+
+SUBCATEGORIAS_DESPESA_PADRAO = [
+    "Alimentacao",
+    "Limpeza e higienizacao",
+    "Construcao",
+    "Reforma",
+    "Manutencao",
+    "Agua e luz",
+    "Internet e telefone",
+    "Material de escritorio",
+    "Combustivel",
+    "Outras despesas",
+]
+
+
+def _garantir_tabela_subcategorias_despesa(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subcategorias_despesa (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome  TEXT NOT NULL UNIQUE,
+            ordem INTEGER DEFAULT 0
+        )
+    """)
+
+
+def listar_subcategorias_despesa() -> list:
+    """Retorna lista de nomes das subcategorias de despesa cadastradas."""
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_subcategorias_despesa(conn)
+        qtd = conn.execute("SELECT COUNT(*) AS n FROM subcategorias_despesa").fetchone()["n"]
+        if qtd == 0:
+            for i, nome in enumerate(SUBCATEGORIAS_DESPESA_PADRAO):
+                conn.execute(
+                    "INSERT OR IGNORE INTO subcategorias_despesa (nome, ordem) VALUES (?, ?)",
+                    (nome, i),
+                )
+        rows = conn.execute(
+            "SELECT nome FROM subcategorias_despesa ORDER BY ordem, nome"
+        ).fetchall()
+    return [r["nome"] for r in rows]
+
+
+def adicionar_subcategoria_despesa(nome: str) -> bool:
+    nome = sanitizar(nome).strip()
+    if not nome:
+        return False
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_subcategorias_despesa(conn)
+        try:
+            conn.execute(
+                "INSERT INTO subcategorias_despesa (nome, ordem) VALUES (?, "
+                "(SELECT COALESCE(MAX(ordem),0)+1 FROM subcategorias_despesa))",
+                (nome,),
+            )
+            return True
+        except sqlite3.IntegrityError:
+            return False  # Ja existe
+
+
+def excluir_subcategoria_despesa(nome: str):
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_subcategorias_despesa(conn)
+        conn.execute("DELETE FROM subcategorias_despesa WHERE nome=?", (nome,))
