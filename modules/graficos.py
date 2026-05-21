@@ -1,4 +1,5 @@
 import datetime
+import calendar
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -6,35 +7,39 @@ import streamlit as st
 from data.repository import carregar_lancamentos, carregar_cadastros
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
-T = "plotly_white"
+T = "plotly_dark"
 
-# ── PALETA DE CORES ───────────────────────────────────────────────────────
+# ── PALETA DE CORES (tema escuro) ─────────────────────────────────────────
 COR = {
-    "Entrada":    "#1E73BE",
-    "Saida":      "#C62828",
-    "saldo":      "#0F6E56",
-    "dizimo":     "#1E73BE",
-    "missao":     "#F57C00",
-    "campanha":   "#7B1FA2",
-    "oferta":     "#BA68C8",
-    "despesa":    "#C62828",
-    "qtd_dizimo": "#1E73BE",
-    "funcao":     "#1E73BE",
+    "Entrada":    "#10B981",   # VERDE — entradas
+    "Saida":      "#EF4444",   # VERMELHO — saidas
+    "saldo":      "#3B82F6",   # AZUL — saldo
+    "dizimo":     "#10B981",
+    "missao":     "#F59E0B",
+    "campanha":   "#8B5CF6",
+    "oferta":     "#EC4899",
+    "despesa":    "#EF4444",
+    "qtd_dizimo": "#10B981",
+    "funcao":     "#3B82F6",
 }
 
 CORES_CATEGORIA = {
-    "DIZIMO":   "#1E73BE",
-    "MISSAO":   "#F57C00",
-    "CAMPANHA": "#7B1FA2",
-    "OFERTA":   "#BA68C8",
+    "DIZIMO":   "#10B981",
+    "OFERTA":   "#3B82F6",
+    "MISSAO":   "#F59E0B",
+    "CAMPANHA": "#8B5CF6",
 }
 
-# ── ALTURAS ADAPTATIVAS ───────────────────────────────────────────────────
-ALT_COMPARACAO  = 480
+CORES_DESPESAS = [
+    "#EF4444", "#F59E0B", "#10B981", "#3B82F6",
+    "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6", "#94A3B8",
+]
+
+# ── ALTURAS ───────────────────────────────────────────────────────────────
+ALT_COMPARACAO  = 380
 ALT_RANK_BASE   = 320
 ALT_POR_ITEM    = 55
-ALT_BARRAS_VERT = 420
-
+ALT_BARRAS_VERT = 400
 
 CONFIG_PLOTLY = {
     "displayModeBar": False,
@@ -44,7 +49,6 @@ CONFIG_PLOTLY = {
 
 
 def _altura_ranking(qtd_itens):
-    """Calcula altura adaptativa para graficos de ranking horizontal."""
     return max(ALT_RANK_BASE, qtd_itens * ALT_POR_ITEM + 80)
 
 
@@ -54,6 +58,7 @@ def _base_layout(margin=None, **kw):
         margin=margin if margin is not None else dict(t=20, b=20, l=10, r=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E5E7EB"),
         hovermode=False,
         dragmode=False,
         **kw,
@@ -63,78 +68,142 @@ def _base_layout(margin=None, **kw):
 def _injetar_css_dashboard():
     st.markdown("""
     <style>
-    .kpi-card {
-        background: white;
-        border-radius: 12px;
-        padding: 18px 20px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-        border-left: 4px solid #0F6E56;
-        height: 100%;
-    }
-    .kpi-card.entrada  { border-left-color: #1E73BE; }
-    .kpi-card.saida    { border-left-color: #C62828; }
-    .kpi-card.saldo    { border-left-color: #0F6E56; }
-    .kpi-card.lanc     { border-left-color: #F57C00; }
+    .stApp { background-color: #0F172A; }
 
-    .kpi-label {
-        font-size: 0.72rem;
-        font-weight: 600;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 4px;
+    .kpi-card-v2 {
+        background: #1E293B;
+        border-radius: 14px;
+        padding: 18px 16px;
+        border: 1px solid #334155;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
     }
-    .kpi-value {
-        font-size: 1.5rem;
+    .kpi-card-v2 .kpi-icon {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+    }
+    .kpi-card-v2 .kpi-titulo {
+        font-size: 0.78rem;
+        color: #94A3B8;
+        margin-bottom: 6px;
+        font-weight: 500;
+    }
+    .kpi-card-v2 .kpi-valor {
+        font-size: 1.45rem;
         font-weight: 700;
-        color: #1a1a1a;
-        line-height: 1.2;
+        color: #F1F5F9;
+        line-height: 1.1;
+        margin-bottom: 6px;
     }
-    .kpi-extra {
-        font-size: 0.72rem;
-        color: #6c757d;
-        margin-top: 4px;
+    .kpi-card-v2 .kpi-variacao {
+        font-size: 0.75rem;
+        font-weight: 600;
     }
-    .kpi-extra.positivo { color: #1E73BE; }
-    .kpi-extra.negativo { color: #C62828; }
+    .kpi-card-v2 .kpi-variacao.up    { color: #10B981; }
+    .kpi-card-v2 .kpi-variacao.down  { color: #EF4444; }
+    .kpi-card-v2 .kpi-variacao.flat  { color: #94A3B8; }
 
     .grafico-titulo {
-        font-size: 1.05rem;
+        font-size: 1.0rem;
         font-weight: 700;
-        color: #1a1a1a;
-        margin: 28px 0 12px 0;
+        color: #F1F5F9;
+        margin: 24px 0 10px 0;
         padding-bottom: 8px;
-        border-bottom: 2px solid #0F6E56;
+        border-bottom: 1px solid #334155;
+    }
+    .grafico-titulo .subtitulo {
+        font-size: 0.78rem;
+        font-weight: 400;
+        color: #94A3B8;
+        display: block;
+        margin-top: 2px;
     }
 
     .stPlotlyChart {
-        background: white;
-        border-radius: 12px;
-        padding: 16px 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        margin-bottom: 8px;
+        background: #1E293B;
+        border-radius: 14px;
+        padding: 16px 12px;
+        border: 1px solid #334155;
+        margin-bottom: 12px;
+    }
+
+    .filtro-mes-box {
+        background: #1E293B;
+        border-radius: 10px;
+        padding: 8px 14px;
+        border: 1px solid #334155;
+        margin-bottom: 14px;
+    }
+
+    h1, h2, h3, h4 { color: #F1F5F9 !important; }
+
+    .stMarkdown p, .stCaption { color: #CBD5E1; }
+
+    [data-testid="stMetricValue"] { color: #F1F5F9 !important; }
+    [data-testid="stMetricLabel"] { color: #94A3B8 !important; }
+
+    /* Selectbox e date_input no tema escuro */
+    .stSelectbox label, .stDateInput label {
+        color: #CBD5E1 !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
 
-def _aplicar_filtro_periodo(df, periodo):
-    hoje = datetime.date.today()
-    if periodo == "Hoje":
-        ini = fim = hoje
-    elif periodo == "Semana":
-        ini = hoje - datetime.timedelta(days=hoje.weekday())
-        fim = ini + datetime.timedelta(days=6)
-    elif periodo == "Mes":
-        ini = hoje.replace(day=1)
-        prox_mes = (ini.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
-        fim = prox_mes - datetime.timedelta(days=1)
-    elif periodo == "Ano":
-        ini = hoje.replace(month=1, day=1)
-        fim = hoje.replace(month=12, day=31)
-    else:
-        return df, None, None
-    return df[(df["data"] >= pd.Timestamp(ini)) & (df["data"] <= pd.Timestamp(fim))], ini, fim
+def _meses_disponiveis(df):
+    """Lista de meses (YYYY-MM) presentes no DataFrame, ordenados desc."""
+    if df.empty or "data" not in df.columns:
+        return []
+    return sorted(
+        df["data"].dropna().dt.to_period("M").unique(),
+        reverse=True,
+    )
+
+
+def _mes_anterior(periodo_mes):
+    """Retorna o periodo do mes anterior."""
+    return periodo_mes - 1
+
+
+def _calc_variacao(atual, anterior):
+    """
+    Retorna (texto_variacao, direcao).
+    direcao: 'up', 'down', 'flat'
+    """
+    if anterior == 0:
+        if atual == 0:
+            return ("Sem dados anteriores", "flat")
+        return ("Novo", "up")
+    pct = ((atual - anterior) / abs(anterior)) * 100
+    if abs(pct) < 0.1:
+        return ("0,0% vs anterior", "flat")
+    direcao = "up" if pct > 0 else "down"
+    seta = "↑" if pct > 0 else "↓"
+    return (f"{seta} {abs(pct):.1f}% vs anterior", direcao)
+
+
+def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
+    cor_var = direcao  # 'up', 'down' ou 'flat'
+    html = f"""
+    <div class="kpi-card-v2">
+        <div class="kpi-icon" style="background:{cor_icone}33;color:{cor_icone}">
+            {icone}
+        </div>
+        <div class="kpi-titulo">{titulo}</div>
+        <div class="kpi-valor">{valor}</div>
+        <div class="kpi-variacao {cor_var}">{variacao}</div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render():
@@ -151,11 +220,10 @@ def render():
     df = df_lanc.copy()
     df["data"]  = pd.to_datetime(df["data"], errors="coerce")
     df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0.0)
-    df["mes"]   = df["data"].dt.to_period("M").astype(str)
-    df["mes_label"] = df["data"].dt.strftime("%b/%Y")
+    df["mes_periodo"] = df["data"].dt.to_period("M")
+    df["mes_label"]   = df["data"].dt.strftime("%b/%Y")
     df["id_cadastro"] = pd.to_numeric(df["id_cadastro"], errors="coerce")
 
-    # Garante coluna subcategoria para lancamentos antigos
     if "subcategoria" not in df.columns:
         df["subcategoria"] = ""
     df["subcategoria"] = df["subcategoria"].fillna("").astype(str)
@@ -165,58 +233,123 @@ def render():
     df_cad["funcao"] = df_cad["funcao"].fillna("").astype(str)
     df_cad["id_cadastro"] = pd.to_numeric(df_cad["id_cadastro"], errors="coerce")
 
-    st.markdown("### Dashboard")
-    st.caption("Visao geral das financas da igreja")
+    st.markdown("### 📊 Dashboard")
+    st.caption("Visao geral da saude financeira da igreja")
 
-    # ── Filtros de periodo ────────────────────────────────────────────────
-    if "db_periodo" not in st.session_state:
-        st.session_state["db_periodo"] = "Mes"
+    # ── Seletor de mes de referencia e comparacao ─────────────────────────
+    meses = _meses_disponiveis(df)
+    if not meses:
+        st.warning("Sem dados de data para os lancamentos.")
+        return
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    botoes = [("Hoje", c1), ("Semana", c2), ("Mes", c3), ("Ano", c4), ("Personalizado", c5)]
-    for nome, col in botoes:
-        with col:
-            tipo_btn = "primary" if st.session_state["db_periodo"] == nome else "secondary"
-            if st.button(nome, key=f"db_btn_{nome}", use_container_width=True, type=tipo_btn):
-                st.session_state["db_periodo"] = nome
-                st.rerun()
+    # Periodos pre-existentes
+    if "db_mes_ref" not in st.session_state:
+        st.session_state["db_mes_ref"] = str(meses[0])
 
-    periodo_sel = st.session_state["db_periodo"]
+    # Periodo de referencia (mes atual selecionado)
+    meses_str = [str(m) for m in meses]
+    meses_lbl = [m.strftime("%b/%Y") for m in meses]
+    map_lbl   = dict(zip(meses_str, meses_lbl))
 
+    col_ref, col_comp, col_modo = st.columns([2, 2, 1])
+    with col_ref:
+        mes_ref_str = st.selectbox(
+            "📅 Mes de referencia",
+            meses_str,
+            format_func=lambda x: map_lbl.get(x, x),
+            index=meses_str.index(st.session_state["db_mes_ref"])
+            if st.session_state["db_mes_ref"] in meses_str else 0,
+            key="db_mes_ref_select",
+        )
+        st.session_state["db_mes_ref"] = mes_ref_str
+
+    mes_ref = pd.Period(mes_ref_str, freq="M")
+    mes_anterior_padrao = _mes_anterior(mes_ref)
+
+    # Opcoes de comparacao: meses anteriores ao referencia
+    meses_comp_str = [str(m) for m in meses if m < mes_ref] or [str(mes_anterior_padrao)]
+    map_comp = {str(m): m.strftime("%b/%Y") for m in meses if m < mes_ref}
+    if not map_comp:
+        map_comp[str(mes_anterior_padrao)] = mes_anterior_padrao.strftime("%b/%Y")
+
+    with col_comp:
+        idx_default = 0
+        if str(mes_anterior_padrao) in meses_comp_str:
+            idx_default = meses_comp_str.index(str(mes_anterior_padrao))
+        mes_comp_str = st.selectbox(
+            "🔄 Comparar com",
+            meses_comp_str,
+            format_func=lambda x: map_comp.get(x, x),
+            index=idx_default,
+            key="db_mes_comp_select",
+        )
+    mes_comp = pd.Period(mes_comp_str, freq="M")
+
+    with col_modo:
+        st.markdown(
+            '<div style="margin-top:28px"></div>',
+            unsafe_allow_html=True,
+        )
+        modo_personalizado = st.toggle(
+            "Personalizado",
+            value=False,
+            key="db_modo_personalizado",
+            help="Ativa filtros avancados (periodo livre, membro, funcao, categoria)",
+        )
+
+    # DataFrames pre-filtrados
+    df_ref  = df[df["mes_periodo"] == mes_ref].copy()
+    df_comp = df[df["mes_periodo"] == mes_comp].copy()
+
+    # ── Modo personalizado (sobrescreve a logica padrao) ──────────────────
     membro_sel    = "Todos"
     funcao_sel    = "Todas"
     categoria_sel = "Todas"
 
-    if periodo_sel == "Personalizado":
-        dv = df["data"].dropna()
+    if modo_personalizado:
+        st.markdown(
+            '<div class="filtro-mes-box">'
+            '<b style="color:#F1F5F9">🔍 Modo Personalizado</b> '
+            '<span style="color:#94A3B8">— os cards acima continuam mostrando o mes de referencia, '
+            'mas os graficos abaixo respeitam os filtros.</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
+        dv = df["data"].dropna()
         cp1, cp2 = st.columns(2)
         with cp1:
-            d_ini = st.date_input("De", value=dv.min().date() if not dv.empty else datetime.date.today(),
-                                  format="DD/MM/YYYY", key="db_ini")
+            d_ini = st.date_input(
+                "De",
+                value=dv.min().date() if not dv.empty else datetime.date.today(),
+                format="DD/MM/YYYY",
+                key="db_ini",
+            )
         with cp2:
-            d_fim = st.date_input("Ate", value=dv.max().date() if not dv.empty else datetime.date.today(),
-                                  format="DD/MM/YYYY", key="db_fim")
+            d_fim = st.date_input(
+                "Ate",
+                value=dv.max().date() if not dv.empty else datetime.date.today(),
+                format="DD/MM/YYYY",
+                key="db_fim",
+            )
+
         if d_ini > d_fim:
             st.error("Data inicial maior que data final.")
             return
-        df_f = df[(df["data"] >= pd.Timestamp(d_ini)) & (df["data"] <= pd.Timestamp(d_fim))].copy()
 
-        st.markdown("**Filtros adicionais**")
+        df_f = df[
+            (df["data"] >= pd.Timestamp(d_ini)) &
+            (df["data"] <= pd.Timestamp(d_fim))
+        ].copy()
+
         fc1, fc2, fc3 = st.columns(3)
-
         membros_disp = sorted([
             n for n in df_f["nome_cadastro"].dropna().unique()
             if str(n).strip() and str(n).strip() != "nan"
         ])
-
-        funcoes_disp = []
-        if not df_cad.empty and "funcao" in df_cad.columns:
-            funcoes_disp = sorted([
-                f for f in df_cad["funcao"].dropna().unique()
-                if str(f).strip()
-            ])
-
+        funcoes_disp = sorted([
+            f for f in df_cad["funcao"].dropna().unique() if str(f).strip()
+        ])
         categorias_disp = sorted([
             c for c in df_f[df_f["tipo"].str.upper() == "ENTRADA"]["categoria"].dropna().unique()
             if str(c).strip()
@@ -228,14 +361,12 @@ def render():
                 ["Todos"] + membros_disp,
                 key="db_membro_filtro",
             )
-
         with fc2:
             funcao_sel = st.selectbox(
                 "Funcao",
                 ["Todas"] + funcoes_disp,
                 key="db_funcao_filtro",
             )
-
         with fc3:
             categoria_sel = st.selectbox(
                 "Categoria entrada",
@@ -245,239 +376,386 @@ def render():
 
         if membro_sel != "Todos":
             df_f = df_f[df_f["nome_cadastro"].fillna("").str.strip() == membro_sel]
-
         if funcao_sel != "Todas":
             ids_funcao = df_cad[
                 df_cad["funcao"].fillna("").str.strip() == funcao_sel
             ]["id_cadastro"].tolist()
             df_f = df_f[df_f["id_cadastro"].isin(ids_funcao)]
-
         if categoria_sel != "Todas":
             df_f = df_f[df_f["categoria"].fillna("").str.strip() == categoria_sel]
-
-        filtros_ativos = []
-        if membro_sel != "Todos":
-            filtros_ativos.append(f"Membro: **{membro_sel}**")
-        if funcao_sel != "Todas":
-            filtros_ativos.append(f"Funcao: **{funcao_sel}**")
-        if categoria_sel != "Todas":
-            filtros_ativos.append(f"Categoria: **{categoria_sel}**")
-        if filtros_ativos:
-            st.info("🔍 Filtros: " + " | ".join(filtros_ativos))
-
     else:
-        df_f, d_ini, d_fim = _aplicar_filtro_periodo(df, periodo_sel)
-        if d_ini and d_fim:
-            st.caption(f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
+        df_f = df_ref
+
+    # ── 6 CARDS KPI ───────────────────────────────────────────────────────
+    ent_ref = df_ref[df_ref["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+    sai_ref = df_ref[df_ref["tipo"].str.upper() == "SAIDA"]["valor"].sum()
+    sal_ref = ent_ref - sai_ref
+
+    ent_comp = df_comp[df_comp["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+    sai_comp = df_comp[df_comp["tipo"].str.upper() == "SAIDA"]["valor"].sum()
+    sal_comp = ent_comp - sai_comp
+
+    # Dizimistas no mes de referencia
+    diz_ref = df_ref[
+        (df_ref["categoria"].str.upper() == "DIZIMO") &
+        (df_ref["tipo_cadastro"].str.upper() == "MEMBRO")
+    ]
+    diz_comp = df_comp[
+        (df_comp["categoria"].str.upper() == "DIZIMO") &
+        (df_comp["tipo_cadastro"].str.upper() == "MEMBRO")
+    ]
+    qtd_diz_ref  = diz_ref["id_cadastro"].dropna().nunique()
+    qtd_diz_comp = diz_comp["id_cadastro"].dropna().nunique()
+
+    # Taxa de fidelidade = dizimistas / membros ativos
+    membros_ativos_n = len(df_cad[
+        (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
+        (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
+    ])
+    taxa_ref  = (qtd_diz_ref / membros_ativos_n * 100) if membros_ativos_n else 0
+    taxa_comp = (qtd_diz_comp / membros_ativos_n * 100) if membros_ativos_n else 0
+
+    # Crescimento anual (ano atual vs ano anterior)
+    ano_ref = mes_ref.year
+    df_ano  = df[df["data"].dt.year == ano_ref]
+    df_ano_ant = df[df["data"].dt.year == ano_ref - 1]
+    ent_ano    = df_ano[df_ano["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+    ent_ano_ant = df_ano_ant[df_ano_ant["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+    cresc_pct  = ((ent_ano - ent_ano_ant) / abs(ent_ano_ant) * 100) if ent_ano_ant else 0
+
+    # Renderizar 6 cards em 2 linhas de 3 colunas (melhor no mobile)
+    r1c1, r1c2, r1c3 = st.columns(3)
+    r2c1, r2c2, r2c3 = st.columns(3)
+
+    var_ent, dir_ent = _calc_variacao(ent_ref, ent_comp)
+    var_sai, dir_sai = _calc_variacao(sai_ref, sai_comp)
+    var_sal, dir_sal = _calc_variacao(sal_ref, sal_comp)
+    var_diz, dir_diz = _calc_variacao(qtd_diz_ref, qtd_diz_comp)
+    var_taxa, dir_taxa = _calc_variacao(taxa_ref, taxa_comp)
+
+    with r1c1:
+        _kpi_card(
+            f"Entradas {mes_ref.strftime('%b/%Y')}",
+            formatar_moeda(ent_ref),
+            var_ent, dir_ent,
+            "#10B981", "💰",
+        )
+    with r1c2:
+        _kpi_card(
+            f"Despesas {mes_ref.strftime('%b/%Y')}",
+            formatar_moeda(sai_ref),
+            var_sai, dir_sai,
+            "#EF4444", "💸",
+        )
+    with r1c3:
+        _kpi_card(
+            f"Saldo {mes_ref.strftime('%b/%Y')}",
+            formatar_moeda(sal_ref),
+            var_sal, dir_sal,
+            "#3B82F6", "📊",
+        )
+
+    with r2c1:
+        _kpi_card(
+            "Dizimistas no mes",
+            str(qtd_diz_ref),
+            var_diz, dir_diz,
+            "#8B5CF6", "🙏",
+        )
+    with r2c2:
+        _kpi_card(
+            "Taxa de fidelidade",
+            f"{taxa_ref:.1f}%",
+            var_taxa, dir_taxa,
+            "#F59E0B", "📈",
+        )
+    with r2c3:
+        seta_cresc = "↑" if cresc_pct > 0 else ("↓" if cresc_pct < 0 else "—")
+        dir_cresc  = "up" if cresc_pct > 0 else ("down" if cresc_pct < 0 else "flat")
+        _kpi_card(
+            f"Crescimento {ano_ref}",
+            f"{cresc_pct:+.1f}%" if ent_ano_ant else "Sem dados",
+            f"{seta_cresc} vs {ano_ref - 1}" if ent_ano_ant else "Primeiro ano",
+            dir_cresc,
+            "#14B8A6", "📅",
+        )
+
+    st.markdown("")
+    OPC = dict(use_container_width=True, config=CONFIG_PLOTLY)
 
     if df_f.empty:
         st.warning("Sem lancamentos no periodo selecionado.")
         return
 
-    # ── KPIs ──────────────────────────────────────────────────────────────
-    ent = df_f[df_f["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-    sai = df_f[df_f["tipo"].str.upper() == "SAIDA"]["valor"].sum()
-    sal = ent - sai
-    n_lanc = len(df_f)
+    # ── 1. Fluxo de caixa ultimos 12 meses ────────────────────────────────
+    st.markdown(
+        '<div class="grafico-titulo">📈 Fluxo de Caixa — Ultimos 12 meses'
+        '<span class="subtitulo">Entradas, Despesas e Saldo mes a mes</span></div>',
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("")
-    k1, k2, k3, k4 = st.columns(4)
+    fim_12m = mes_ref
+    ini_12m = mes_ref - 11
+    df_12m  = df[(df["mes_periodo"] >= ini_12m) & (df["mes_periodo"] <= fim_12m)].copy()
 
-    with k1:
-        st.markdown(f"""
-        <div class="kpi-card saldo">
-            <div class="kpi-label">Saldo</div>
-            <div class="kpi-value" style="color:{'#1E73BE' if sal >= 0 else '#C62828'}">{formatar_moeda(sal)}</div>
-            <div class="kpi-extra">No periodo selecionado</div>
-        </div>
-        """, unsafe_allow_html=True)
+    meses_seq = [(ini_12m + i) for i in range(12)]
+    labels_12m = [m.strftime("%b/%y") for m in meses_seq]
 
-    with k2:
-        st.markdown(f"""
-        <div class="kpi-card entrada">
-            <div class="kpi-label">Entradas</div>
-            <div class="kpi-value" style="color:#1E73BE">{formatar_moeda(ent)}</div>
-            <div class="kpi-extra positivo">↑ Total arrecadado</div>
-        </div>
-        """, unsafe_allow_html=True)
+    def _serie_12m(t):
+        out = []
+        for m in meses_seq:
+            sub = df_12m[(df_12m["mes_periodo"] == m) & (df_12m["tipo"].str.upper() == t.upper())]
+            out.append(float(sub["valor"].sum()))
+        return out
 
-    with k3:
-        st.markdown(f"""
-        <div class="kpi-card saida">
-            <div class="kpi-label">Saidas</div>
-            <div class="kpi-value" style="color:#C62828">{formatar_moeda(sai)}</div>
-            <div class="kpi-extra negativo">↓ Total gasto</div>
-        </div>
-        """, unsafe_allow_html=True)
+    e12 = _serie_12m("Entrada")
+    s12 = _serie_12m("Saida")
+    sal12 = [e - s for e, s in zip(e12, s12)]
 
-    with k4:
-        st.markdown(f"""
-        <div class="kpi-card lanc">
-            <div class="kpi-label">Lancamentos</div>
-            <div class="kpi-value" style="color:#F57C00">{n_lanc}</div>
-            <div class="kpi-extra">Total de registros</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("")
-    OPC = dict(use_container_width=True, config=CONFIG_PLOTLY)
-
-    # ── 1. Evolucao mensal ────────────────────────────────────────────────
-    st.markdown('<div class="grafico-titulo">📊 Evolucao mensal — Entradas x Saidas</div>', unsafe_allow_html=True)
-
-    res   = df_f.groupby(["mes", "mes_label", "tipo"], as_index=False)["valor"].sum().sort_values("mes")
-    meses = sorted(res["mes"].unique())
-    labels = [res[res["mes"] == m]["mes_label"].iloc[0] for m in meses]
-
-    def s(t):
-        r = res[res["tipo"].str.upper() == t.upper()].set_index("mes")
-        return [float(r.loc[m, "valor"]) if m in r.index else 0.0 for m in meses]
-
-    e_vals, s_vals = s("Entrada"), s("Saida")
-    sal_vals = [e - sv for e, sv in zip(e_vals, s_vals)]
-
-    fig1 = go.Figure([
-        go.Bar(name="Entradas", x=labels, y=e_vals, marker_color=COR["Entrada"],
-               text=[formatar_moeda(v) for v in e_vals], textposition="outside", textfont_size=11,
-               hoverinfo="skip"),
-        go.Bar(name="Saidas", x=labels, y=s_vals, marker_color=COR["Saida"],
-               text=[formatar_moeda(v) for v in s_vals], textposition="outside", textfont_size=11,
-               hoverinfo="skip"),
-        go.Scatter(name="Saldo", x=labels, y=sal_vals, mode="lines+markers",
-                   line=dict(color=COR["saldo"], width=3), marker=dict(size=9),
+    fig_fc = go.Figure([
+        go.Scatter(name="Entradas", x=labels_12m, y=e12, mode="lines+markers",
+                   line=dict(color=COR["Entrada"], width=3), marker=dict(size=7),
+                   hoverinfo="skip"),
+        go.Scatter(name="Despesas", x=labels_12m, y=s12, mode="lines+markers",
+                   line=dict(color=COR["Saida"], width=3), marker=dict(size=7),
+                   hoverinfo="skip"),
+        go.Scatter(name="Saldo", x=labels_12m, y=sal12, mode="lines+markers",
+                   line=dict(color=COR["saldo"], width=3, dash="dot"), marker=dict(size=7),
                    hoverinfo="skip"),
     ])
-    fig1.update_layout(**_base_layout(
-        barmode="group", height=ALT_COMPARACAO,
-        margin=dict(t=50, b=30, l=10, r=10),
-        legend=dict(orientation="h", y=1.12, x=0),
-        xaxis=dict(fixedrange=True),
-        yaxis=dict(fixedrange=True, gridcolor="#f0f0f0"),
+    fig_fc.update_layout(**_base_layout(
+        height=ALT_COMPARACAO,
+        margin=dict(t=40, b=30, l=10, r=10),
+        legend=dict(orientation="h", y=1.12, x=0, font=dict(color="#E5E7EB")),
+        xaxis=dict(fixedrange=True, color="#94A3B8", gridcolor="#334155"),
+        yaxis=dict(fixedrange=True, gridcolor="#334155", color="#94A3B8",
+                   tickformat=",.0f"),
     ))
-    st.plotly_chart(fig1, **OPC)
+    st.plotly_chart(fig_fc, **OPC)
 
-    # ── 2. Distribuicao das entradas (pizza) ──────────────────────────────
-    st.markdown('<div class="grafico-titulo">🥧 Distribuicao das entradas</div>', unsafe_allow_html=True)
-    ent_cat = df_f[df_f["tipo"].str.upper() == "ENTRADA"].groupby("categoria", as_index=False)["valor"].sum()
-    if ent_cat.empty:
-        st.info("Sem entradas.")
-    else:
-        cores_pizza = [
-            CORES_CATEGORIA.get(str(c).upper(), "#999999")
-            for c in ent_cat["categoria"]
+    # ── 2 colunas: Entradas por categoria + Despesas por subcategoria ────
+    g1, g2 = st.columns(2)
+
+    with g1:
+        st.markdown(
+            f'<div class="grafico-titulo">🥧 Entradas por Categoria'
+            f'<span class="subtitulo">{mes_ref.strftime("%b/%Y") if not modo_personalizado else "Periodo filtrado"}</span></div>',
+            unsafe_allow_html=True,
+        )
+        ent_cat = df_f[df_f["tipo"].str.upper() == "ENTRADA"].groupby(
+            "categoria", as_index=False
+        )["valor"].sum().sort_values("valor", ascending=False)
+
+        if ent_cat.empty:
+            st.info("Sem entradas no periodo.")
+        else:
+            cores_pizza = [
+                CORES_CATEGORIA.get(str(c).upper(), "#94A3B8")
+                for c in ent_cat["categoria"]
+            ]
+            fig_ec = go.Figure(go.Pie(
+                labels=ent_cat["categoria"],
+                values=ent_cat["valor"],
+                hole=0.6,
+                textinfo="percent",
+                textfont=dict(color="white", size=12),
+                marker=dict(colors=cores_pizza, line=dict(color="#1E293B", width=2)),
+                hoverinfo="skip",
+            ))
+            total_ent = ent_cat["valor"].sum()
+            fig_ec.add_annotation(
+                text=f"<b>Total</b><br>{formatar_moeda(total_ent)}",
+                x=0.5, y=0.5,
+                font=dict(size=13, color="#F1F5F9"),
+                showarrow=False,
+            )
+            fig_ec.update_layout(**_base_layout(
+                height=ALT_COMPARACAO,
+                showlegend=True,
+                legend=dict(orientation="v", y=0.5, x=1.05,
+                            font=dict(color="#E5E7EB", size=11)),
+                margin=dict(t=20, b=20, l=20, r=20),
+            ))
+            st.plotly_chart(fig_ec, **OPC)
+
+    with g2:
+        st.markdown(
+            f'<div class="grafico-titulo">📉 Despesas por Subcategoria'
+            f'<span class="subtitulo">{mes_ref.strftime("%b/%Y") if not modo_personalizado else "Periodo filtrado"}</span></div>',
+            unsafe_allow_html=True,
+        )
+        desp = df_f[df_f["tipo"].str.upper() == "SAIDA"].copy()
+        if desp.empty:
+            st.info("Sem despesas no periodo.")
+        else:
+            desp["subcategoria"] = desp["subcategoria"].fillna("").str.strip()
+            desp["subcategoria"] = desp["subcategoria"].replace("", "Sem subcategoria")
+            agrup = desp.groupby("subcategoria", as_index=False)["valor"].sum().sort_values("valor", ascending=False)
+
+            cores_d = CORES_DESPESAS[:len(agrup)] + ["#94A3B8"] * max(0, len(agrup) - len(CORES_DESPESAS))
+
+            fig_dc = go.Figure(go.Pie(
+                labels=agrup["subcategoria"],
+                values=agrup["valor"],
+                hole=0.6,
+                textinfo="percent",
+                textfont=dict(color="white", size=12),
+                marker=dict(colors=cores_d, line=dict(color="#1E293B", width=2)),
+                hoverinfo="skip",
+            ))
+            total_desp = agrup["valor"].sum()
+            fig_dc.add_annotation(
+                text=f"<b>Total</b><br>{formatar_moeda(total_desp)}",
+                x=0.5, y=0.5,
+                font=dict(size=13, color="#F1F5F9"),
+                showarrow=False,
+            )
+            fig_dc.update_layout(**_base_layout(
+                height=ALT_COMPARACAO,
+                showlegend=True,
+                legend=dict(orientation="v", y=0.5, x=1.05,
+                            font=dict(color="#E5E7EB", size=11)),
+                margin=dict(t=20, b=20, l=20, r=20),
+            ))
+            st.plotly_chart(fig_dc, **OPC)
+
+    # ── Evolucao dos dizimos (12 meses, barras) ───────────────────────────
+    st.markdown(
+        '<div class="grafico-titulo">💰 Evolucao dos Dizimos — Ultimos 12 meses'
+        '<span class="subtitulo">Total arrecadado em dizimos mes a mes</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    def _dizimo_mensal(m):
+        sub = df_12m[
+            (df_12m["mes_periodo"] == m) &
+            (df_12m["categoria"].str.upper() == "DIZIMO")
         ]
-        fig2 = go.Figure(go.Pie(
-            labels=ent_cat["categoria"], values=ent_cat["valor"], hole=0.55,
-            textinfo="percent+label", textfont_size=15,
-            marker=dict(colors=cores_pizza),
+        return float(sub["valor"].sum())
+
+    d12 = [_dizimo_mensal(m) for m in meses_seq]
+
+    fig_d = go.Figure([
+        go.Bar(
+            x=labels_12m, y=d12,
+            marker_color=COR["dizimo"],
+            text=[formatar_moeda(v) if v > 0 else "" for v in d12],
+            textposition="outside",
+            textfont=dict(size=10, color="#CBD5E1"),
+            hoverinfo="skip",
+        ),
+    ])
+    # Linha de tendencia simples (media movel)
+    if len([v for v in d12 if v > 0]) >= 3:
+        # Media movel de 3 meses
+        ma = []
+        for i in range(len(d12)):
+            ini = max(0, i - 2)
+            window = d12[ini:i+1]
+            ma.append(sum(window) / len(window) if window else 0)
+        fig_d.add_trace(go.Scatter(
+            x=labels_12m, y=ma, mode="lines",
+            line=dict(color="#94A3B8", width=2, dash="dot"),
+            name="Tendencia",
             hoverinfo="skip",
         ))
-        fig2.update_layout(**_base_layout(
-            showlegend=False, height=ALT_COMPARACAO,
-            margin=dict(t=20, b=20, l=20, r=20),
-        ))
-        st.plotly_chart(fig2, **OPC)
 
-    # ── 3. Percentual de dizimistas ───────────────────────────────────────
-    st.markdown('<div class="grafico-titulo">📈 Percentual de dizimistas em relacao aos membros</div>', unsafe_allow_html=True)
+    fig_d.update_layout(**_base_layout(
+        height=ALT_COMPARACAO,
+        showlegend=False,
+        margin=dict(t=30, b=30, l=10, r=10),
+        xaxis=dict(fixedrange=True, color="#94A3B8", gridcolor="#334155"),
+        yaxis=dict(fixedrange=True, gridcolor="#334155", color="#94A3B8",
+                   tickformat=",.0f"),
+    ))
+    st.plotly_chart(fig_d, **OPC)
+
+    # ── Percentual de dizimistas ──────────────────────────────────────────
+    st.markdown(
+        '<div class="grafico-titulo">🙏 Percentual de Dizimistas'
+        '<span class="subtitulo">Membros ativos que contribuiram no periodo</span></div>',
+        unsafe_allow_html=True,
+    )
 
     df_membros_ativos = df_cad[
         (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
         (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
     ].copy()
 
-    if periodo_sel == "Personalizado" and funcao_sel != "Todas":
+    if modo_personalizado and funcao_sel != "Todas":
         df_membros_ativos = df_membros_ativos[
             df_membros_ativos["funcao"].fillna("").str.strip() == funcao_sel
         ]
-
-    if periodo_sel == "Personalizado" and membro_sel != "Todos":
+    if modo_personalizado and membro_sel != "Todos":
         df_membros_ativos = df_membros_ativos[
             df_membros_ativos["nome"].fillna("").str.strip() == membro_sel
         ]
 
     total_membros = len(df_membros_ativos)
-
     diz_periodo = df_f[
         (df_f["categoria"].str.upper() == "DIZIMO") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
     ]
     ids_membros_ativos = set(df_membros_ativos["id_cadastro"].dropna().astype(int).tolist())
-    ids_dizimistas     = set(diz_periodo["id_cadastro"].dropna().astype(int).tolist())
-
-    ids_dizimistas_validos = ids_dizimistas & ids_membros_ativos
-    qtd_dizimistas     = len(ids_dizimistas_validos)
-    qtd_nao_dizimistas = total_membros - qtd_dizimistas
+    ids_dizimistas = set(diz_periodo["id_cadastro"].dropna().astype(int).tolist())
+    qtd_d = len(ids_dizimistas & ids_membros_ativos)
+    qtd_nd = total_membros - qtd_d
 
     if total_membros == 0:
         st.info("Nenhum membro ativo encontrado para o filtro aplicado.")
     else:
-        pct_dizimistas = (qtd_dizimistas / total_membros) * 100
+        pct = (qtd_d / total_membros) * 100
 
         fig_pct = go.Figure(go.Pie(
             labels=["Dizimistas", "Nao dizimistas"],
-            values=[qtd_dizimistas, qtd_nao_dizimistas],
-            hole=0.65,
-            textinfo="label+percent",
-            textfont_size=15,
-            marker=dict(colors=["#1E73BE", "#E0E0E0"]),
+            values=[qtd_d, qtd_nd],
+            hole=0.7,
+            textinfo="none",
+            marker=dict(colors=[COR["Entrada"], "#374151"],
+                        line=dict(color="#1E293B", width=2)),
             hoverinfo="skip",
         ))
-
         fig_pct.add_annotation(
-            text=f"<b>{pct_dizimistas:.1f}%</b>",
-            x=0.5, y=0.55, font_size=34,
-            font_color="#1E73BE",
+            text=f"<b>{pct:.1f}%</b>",
+            x=0.5, y=0.55,
+            font=dict(size=32, color=COR["Entrada"]),
             showarrow=False,
         )
         fig_pct.add_annotation(
             text="dizimistas",
-            x=0.5, y=0.40, font_size=13,
-            font_color="#666",
+            x=0.5, y=0.40,
+            font=dict(size=12, color="#94A3B8"),
             showarrow=False,
         )
-
         fig_pct.update_layout(**_base_layout(
-            showlegend=True,
             height=ALT_COMPARACAO,
-            margin=dict(t=20, b=40, l=20, r=20),
-            legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center"),
+            showlegend=True,
+            legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center",
+                        font=dict(color="#E5E7EB")),
+            margin=dict(t=10, b=40, l=10, r=10),
         ))
         st.plotly_chart(fig_pct, **OPC)
 
-        km_a, km_b, km_c = st.columns(3)
-        km_a.metric("Membros ativos", str(total_membros))
-        km_b.metric("Dizimistas", str(qtd_dizimistas),
-                    delta=f"{pct_dizimistas:.1f}%")
-        km_c.metric("Nao dizimistas", str(qtd_nao_dizimistas),
-                    delta=f"-{100 - pct_dizimistas:.1f}%", delta_color="inverse")
+        km1, km2, km3 = st.columns(3)
+        km1.metric("Membros ativos", str(total_membros))
+        km2.metric("Dizimistas", str(qtd_d), delta=f"{pct:.1f}%")
+        km3.metric("Nao dizimistas", str(qtd_nd),
+                   delta=f"-{100-pct:.1f}%", delta_color="inverse")
 
-        st.markdown(f"""
-        <div style="background:#f0f0f0;height:28px;border-radius:14px;overflow:hidden;
-                    margin-top:12px;position:relative">
-            <div style="background:linear-gradient(90deg,#1E73BE,#0F6E56);
-                        height:100%;width:{pct_dizimistas}%;
-                        display:flex;align-items:center;justify-content:flex-end;
-                        padding-right:12px;color:white;font-weight:700;font-size:0.95rem">
-                {pct_dizimistas:.1f}%
-            </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:0.78rem;
-                    color:#666;margin-top:6px">
-            <span>0%</span>
-            <span>50%</span>
-            <span>100%</span>
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Top dizimistas + frequencia ───────────────────────────────────────
+    diz_f = df_f[
+        (df_f["categoria"].str.upper() == "DIZIMO") &
+        (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
+    ]
 
-    # ── 4. Frequencia de dizimos (qtd) ────────────────────────────────────
-    st.markdown('<div class="grafico-titulo">🔢 Frequencia de dizimos (qtd de lancamentos)</div>', unsafe_allow_html=True)
-    diz = df_f[(df_f["categoria"].str.upper() == "DIZIMO") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")]
-    if diz.empty:
-        st.info("Sem dizimos no periodo.")
-    else:
+    if not diz_f.empty:
+        st.markdown(
+            '<div class="grafico-titulo">🔢 Frequencia de Dizimos'
+            '<span class="subtitulo">Top 10 — qtd de lancamentos por membro</span></div>',
+            unsafe_allow_html=True,
+        )
         dq = (
-            diz.groupby("nome_cadastro", as_index=False)
+            diz_f.groupby("nome_cadastro", as_index=False)
             .size()
             .rename(columns={"size": "quantidade"})
             .sort_values("quantidade", ascending=False)
@@ -485,48 +763,52 @@ def render():
         )
         pares_q = sorted(zip(dq["quantidade"], dq["nome_cadastro"]))
         fig_qtd = go.Figure(go.Bar(
-            x=[p[0] for p in pares_q], y=[p[1] for p in pares_q], orientation="h",
-            marker_color=COR["qtd_dizimo"],
-            text=[str(p[0]) for p in pares_q], textposition="outside", textfont_size=12,
+            x=[p[0] for p in pares_q], y=[p[1] for p in pares_q],
+            orientation="h", marker_color=COR["qtd_dizimo"],
+            text=[str(p[0]) for p in pares_q],
+            textposition="outside",
+            textfont=dict(color="#CBD5E1", size=11),
             hoverinfo="skip",
         ))
         fig_qtd.update_layout(**_base_layout(
             height=_altura_ranking(len(dq)),
-            xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True, title="Quantidade"),
-            yaxis=dict(showgrid=False, fixedrange=True),
+            xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
+            yaxis=dict(showgrid=False, fixedrange=True, color="#CBD5E1"),
         ))
         st.plotly_chart(fig_qtd, **OPC)
 
-        km1, km2, km3 = st.columns(3)
-        km1.metric("Total de dizimos", str(len(diz)))
-        km2.metric("Membros dizimistas", str(len(dq)))
-        km3.metric("Media por membro", f"{len(diz) / max(len(dq), 1):.1f}")
-
-    # ── 5. Top dizimistas (valor) ─────────────────────────────────────────
-    st.markdown('<div class="grafico-titulo">💰 Top 10 dizimistas (valor)</div>', unsafe_allow_html=True)
-    if diz.empty:
-        st.info("Sem dizimos.")
-    else:
-        d = diz.groupby("nome_cadastro", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(10)
+        st.markdown(
+            '<div class="grafico-titulo">💰 Top 10 Dizimistas (Valor)</div>',
+            unsafe_allow_html=True,
+        )
+        d = diz_f.groupby("nome_cadastro", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(10)
         pares = sorted(zip(d["valor"], d["nome_cadastro"]))
         fig3 = go.Figure(go.Bar(
-            x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
-            marker_color=COR["dizimo"],
-            text=[formatar_moeda(p[0]) for p in pares], textposition="outside", textfont_size=12,
+            x=[p[0] for p in pares], y=[p[1] for p in pares],
+            orientation="h", marker_color=COR["dizimo"],
+            text=[formatar_moeda(p[0]) for p in pares],
+            textposition="outside",
+            textfont=dict(color="#CBD5E1", size=11),
             hoverinfo="skip",
         ))
         fig3.update_layout(**_base_layout(
             height=_altura_ranking(len(d)),
             xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
-            yaxis=dict(showgrid=False, fixedrange=True),
+            yaxis=dict(showgrid=False, fixedrange=True, color="#CBD5E1"),
         ))
         st.plotly_chart(fig3, **OPC)
 
-    # ── 6. Entradas por funcao ────────────────────────────────────────────
-    st.markdown('<div class="grafico-titulo">👥 Entradas por funcao do membro</div>', unsafe_allow_html=True)
-    ent_m = df_f[(df_f["tipo"].str.upper() == "ENTRADA") & (df_f["tipo_cadastro"].str.upper() == "MEMBRO")].copy()
+    # ── Entradas por funcao ───────────────────────────────────────────────
+    st.markdown(
+        '<div class="grafico-titulo">👥 Entradas por Funcao do Membro</div>',
+        unsafe_allow_html=True,
+    )
+    ent_m = df_f[
+        (df_f["tipo"].str.upper() == "ENTRADA") &
+        (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
+    ].copy()
     if ent_m.empty:
-        st.info("Sem entradas de membros.")
+        st.info("Sem entradas de membros no periodo.")
     else:
         mg = ent_m.merge(df_cad[["id_cadastro", "funcao"]], on="id_cadastro", how="left")
         mg["funcao"] = mg["funcao"].replace("", pd.NA).fillna("Sem funcao")
@@ -534,55 +816,17 @@ def render():
         fig5 = go.Figure(go.Bar(
             x=rf["funcao"], y=rf["valor"],
             marker_color=COR["funcao"],
-            text=[formatar_moeda(v) for v in rf["valor"]], textposition="outside", textfont_size=12,
+            text=[formatar_moeda(v) for v in rf["valor"]],
+            textposition="outside",
+            textfont=dict(color="#CBD5E1", size=11),
             hoverinfo="skip",
         ))
         fig5.update_layout(**_base_layout(
             height=ALT_BARRAS_VERT,
             yaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
-            xaxis=dict(showgrid=False, fixedrange=True),
+            xaxis=dict(showgrid=False, fixedrange=True, color="#CBD5E1"),
         ))
         st.plotly_chart(fig5, **OPC)
-
-    # ── 7. Top despesas por subcategoria ──────────────────────────────────
-    st.markdown('<div class="grafico-titulo">📉 Top 10 despesas por subcategoria</div>', unsafe_allow_html=True)
-    desp = df_f[df_f["tipo"].str.upper() == "SAIDA"].copy()
-    if desp.empty:
-        st.info("Sem despesas.")
-    else:
-        # Despesas sem subcategoria sao agrupadas como "Sem subcategoria"
-        desp["subcategoria"] = desp["subcategoria"].fillna("").astype(str).str.strip()
-        desp["subcategoria"] = desp["subcategoria"].replace("", "Sem subcategoria")
-
-        d2 = (
-            desp.groupby("subcategoria", as_index=False)["valor"]
-            .sum()
-            .sort_values("valor", ascending=False)
-            .head(10)
-        )
-        pares = sorted(zip(d2["valor"], d2["subcategoria"]))
-        fig4 = go.Figure(go.Bar(
-            x=[p[0] for p in pares], y=[p[1] for p in pares], orientation="h",
-            marker_color=COR["despesa"],
-            text=[formatar_moeda(p[0]) for p in pares], textposition="outside", textfont_size=12,
-            hoverinfo="skip",
-        ))
-        fig4.update_layout(**_base_layout(
-            height=_altura_ranking(len(d2)),
-            xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
-            yaxis=dict(showgrid=False, fixedrange=True),
-        ))
-        st.plotly_chart(fig4, **OPC)
-
-        # 3 metricas resumo das despesas
-        total_desp = desp["valor"].sum()
-        qtd_subs   = desp["subcategoria"].nunique()
-        media_desp = total_desp / max(len(desp), 1)
-
-        kd1, kd2, kd3 = st.columns(3)
-        kd1.metric("Total despesas", formatar_moeda(total_desp))
-        kd2.metric("Subcategorias", str(qtd_subs))
-        kd3.metric("Despesa media", formatar_moeda(media_desp))
 
     # ── Exportacao ────────────────────────────────────────────────────────
     st.divider()
@@ -590,5 +834,9 @@ def render():
     df_exp["data"] = pd.to_datetime(df_exp["data"]).dt.strftime("%d/%m/%Y")
     colx, _ = st.columns([1, 4])
     with colx:
-        st.download_button("📥 Exportar CSV", gerar_csv(df_exp),
-                           "dashboard.csv", "text/csv", use_container_width=True)
+        st.download_button(
+            "📥 Exportar CSV",
+            gerar_csv(df_exp),
+            "dashboard.csv", "text/csv",
+            use_container_width=True,
+        )
