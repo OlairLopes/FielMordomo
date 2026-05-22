@@ -1,4 +1,4 @@
-"""Painel do super admin — gerencia igrejas, planos, senhas, logos e backup."""
+"""Painel do super admin — gerencia igrejas, planos, senhas, logos, backup e restauracao."""
 
 import streamlit as st
 import pandas as pd
@@ -14,6 +14,7 @@ from data.repository import (
     salvar_logo_sidebar_igreja, obter_logo_sidebar_igreja,
     listar_subcategorias_despesa, adicionar_subcategoria_despesa,
     excluir_subcategoria_despesa,
+    restaurar_backup_zip,
 )
 from utils.helpers import confirmar_exclusao
 
@@ -428,78 +429,172 @@ def _backup_admin():
 
     from data.repository import carregar_cadastros, carregar_lancamentos, _tenant_db
 
-    st.subheader("Backup de todas as igrejas")
+    st.subheader("Backup e Restauracao")
+
+    # ═══ GERAR BACKUP ════════════════════════════════════════════════════
+    st.markdown("#### 📦 Gerar backup de todas as igrejas")
 
     df_igrejas = listar_igrejas()
 
     if df_igrejas.empty:
         st.info("Nenhuma igreja cadastrada.")
-        return
+    else:
+        st.caption(f"{len(df_igrejas)} igreja(s) encontrada(s).")
 
-    st.caption(f"{len(df_igrejas)} igreja(s) encontrada(s).")
+        if st.button("Gerar backup completo", type="primary", key="btn_backup_admin"):
+            buf = io.BytesIO()
 
-    if st.button("Gerar backup de todas as igrejas", type="primary", key="btn_backup_admin"):
-        buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for _, row in df_igrejas.iterrows():
+                    slug = str(row["slug"])
 
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for _, row in df_igrejas.iterrows():
-                slug = str(row["slug"])
-
-                try:
-                    df_c = carregar_cadastros(slug)
-                    zf.writestr(
-                        f"{slug}/cadastros.csv",
-                        df_c.to_csv(index=False, encoding="utf-8-sig"),
-                    )
-                except Exception:
-                    pass
-
-                try:
-                    df_l = carregar_lancamentos(slug)
-
-                    if not df_l.empty and "data" in df_l.columns:
-                        df_l = df_l.copy()
-                        df_l["data"] = (
-                            _pd.to_datetime(df_l["data"], errors="coerce")
-                            .dt.strftime("%d/%m/%Y")
-                            .fillna("")
+                    try:
+                        df_c = carregar_cadastros(slug)
+                        zf.writestr(
+                            f"{slug}/cadastros.csv",
+                            df_c.to_csv(index=False, encoding="utf-8-sig"),
                         )
+                    except Exception:
+                        pass
 
-                    zf.writestr(
-                        f"{slug}/lancamentos.csv",
-                        df_l.to_csv(index=False, encoding="utf-8-sig"),
+                    try:
+                        df_l = carregar_lancamentos(slug)
+                        if not df_l.empty and "data" in df_l.columns:
+                            df_l = df_l.copy()
+                            df_l["data"] = (
+                                _pd.to_datetime(df_l["data"], errors="coerce")
+                                .dt.strftime("%d/%m/%Y")
+                                .fillna("")
+                            )
+                        zf.writestr(
+                            f"{slug}/lancamentos.csv",
+                            df_l.to_csv(index=False, encoding="utf-8-sig"),
+                        )
+                    except Exception:
+                        pass
+
+                    try:
+                        db = _tenant_db(slug)
+                        if db.exists():
+                            zf.writestr(f"{slug}/banco_{slug}.db", db.read_bytes())
+                    except Exception:
+                        pass
+
+            buf.seek(0)
+            st.session_state["backup_admin_dados"] = buf.read()
+            st.session_state["backup_admin_nome"] = (
+                f"backup_todas_igrejas_{_pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.zip"
+            )
+            st.toast("Backup gerado!")
+
+        if "backup_admin_dados" in st.session_state:
+            st.download_button(
+                "📥 Baixar backup completo",
+                data=st.session_state["backup_admin_dados"],
+                file_name=st.session_state["backup_admin_nome"],
+                mime="application/zip",
+                key="dl_backup_admin",
+                type="primary",
+                use_container_width=True,
+            )
+
+    st.divider()
+
+    # ═══ RESTAURAR BACKUP ════════════════════════════════════════════════
+    st.markdown("#### ♻️ Restaurar backup")
+    st.caption(
+        "Envie o arquivo ZIP de backup para restaurar todas as igrejas contidas nele. "
+        "Os dados atuais das igrejas presentes no ZIP serao **substituidos**. "
+        "Um backup automatico de seguranca e feito antes."
+    )
+
+    st.warning(
+        "⚠️ **Atencao:** esta operacao sobrescreve os dados atuais das igrejas "
+        "presentes no arquivo ZIP. Bancos atuais sao salvos automaticamente em "
+        "`backups/` no servidor antes da substituicao."
+    )
+
+    if "restaurar_counter" not in st.session_state:
+        st.session_state["restaurar_counter"] = 0
+
+    arquivo_zip = st.file_uploader(
+        "Arquivo ZIP de backup",
+        type=["zip"],
+        key=f"upload_restore_{st.session_state['restaurar_counter']}",
+        help="Aceita ZIPs gerados pela funcao 'Gerar backup completo' acima.",
+    )
+
+    if arquivo_zip:
+        st.info(
+            f"📦 Arquivo recebido: **{arquivo_zip.name}** "
+            f"({arquivo_zip.size / 1024:.1f} KB)"
+        )
+
+        col_r1, col_r2 = st.columns([1, 3])
+
+        with col_r1:
+            confirmar_restauracao = st.button(
+                "✅ Restaurar agora",
+                type="primary",
+                key="btn_confirmar_restauracao",
+                use_container_width=True,
+            )
+
+        with col_r2:
+            if st.button(
+                "❌ Cancelar",
+                key="btn_cancelar_restauracao",
+                use_container_width=True,
+            ):
+                st.session_state["restaurar_counter"] += 1
+                st.rerun()
+
+        if confirmar_restauracao:
+            with st.spinner("Restaurando bancos..."):
+                resultado = restaurar_backup_zip(arquivo_zip.read())
+
+            if resultado["sucesso"]:
+                st.success(
+                    f"✅ **{len(resultado['sucesso'])} igreja(s) restaurada(s) com sucesso!**"
+                )
+                with st.expander("Ver detalhes das igrejas restauradas", expanded=True):
+                    for slug_r in resultado["sucesso"]:
+                        st.markdown(f"- ✅ `{slug_r}`")
+
+            if resultado["igrejas_recriadas"]:
+                st.info(
+                    f"ℹ️ **{len(resultado['igrejas_recriadas'])} igreja(s) recriada(s) no sistema:**"
+                )
+                with st.expander("Ver detalhes", expanded=False):
+                    st.caption(
+                        "Estas igrejas nao existiam no sistema atual e foram "
+                        "registradas com plano **basico** e senha padrao "
+                        "**fielmordomo2024**. Recomenda-se redefinir senha e plano."
                     )
-                except Exception:
-                    pass
+                    for slug_r in resultado["igrejas_recriadas"]:
+                        st.markdown(f"- 🆕 `{slug_r}`")
 
-                try:
-                    db = _tenant_db(slug)
+            if resultado["erros"]:
+                st.error(
+                    f"⚠️ **{len(resultado['erros'])} erro(s) durante a restauracao:**"
+                )
+                with st.expander("Ver erros", expanded=True):
+                    for erro in resultado["erros"]:
+                        st.markdown(f"- ❌ {erro}")
 
-                    if db.exists():
-                        zf.writestr(f"{slug}/banco_{slug}.db", db.read_bytes())
+            if not (resultado["sucesso"] or resultado["erros"]):
+                st.warning("Nenhum banco restaurado. Verifique o arquivo ZIP.")
 
-                except Exception:
-                    pass
+            # Limpa cache para forcar reload da lista de igrejas
+            for k in list(st.session_state.keys()):
+                if k.startswith("df_") or k.startswith("admin_"):
+                    st.session_state.pop(k, None)
 
-        buf.seek(0)
+            st.session_state["restaurar_counter"] += 1
 
-        st.session_state["backup_admin_dados"] = buf.read()
-        st.session_state["backup_admin_nome"] = (
-            f"backup_todas_igrejas_{_pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.zip"
-        )
-
-        st.toast("Backup gerado!")
-
-    if "backup_admin_dados" in st.session_state:
-        st.download_button(
-            "Baixar backup completo",
-            data=st.session_state["backup_admin_dados"],
-            file_name=st.session_state["backup_admin_nome"],
-            mime="application/zip",
-            key="dl_backup_admin",
-            type="primary",
-            use_container_width=True,
-        )
+            st.markdown("---")
+            if st.button("Continuar", type="primary", key="btn_continuar_pos_restore"):
+                st.rerun()
 
 
 def _configuracoes():
