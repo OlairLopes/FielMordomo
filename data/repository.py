@@ -221,6 +221,10 @@ def inicializar_tenant(slug):
                 forma_pagamento TEXT DEFAULT 'Dinheiro',
                 valor           REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS config_igreja (
+                chave TEXT PRIMARY KEY,
+                valor TEXT
+            );
         """)
 
 
@@ -478,7 +482,7 @@ def excluir_lancamento(slug, id_lancamento):
         conn.execute("DELETE FROM lancamentos WHERE id_lancamento=?", (id_lancamento,))
 
 
-# ── Configuracoes gerais do sistema ───────────────────────────────────────
+# ── Configuracoes gerais do sistema (master) ──────────────────────────────
 
 def _garantir_tabela_config(conn):
     conn.execute("""
@@ -520,6 +524,48 @@ def igreja_alterar_senha(slug: str, senha_atual: str, nova_senha: str) -> bool:
     return True
 
 
+# ── Configuracoes por igreja (tenant) — FASE 2 ────────────────────────────
+
+# Default escolhido pela igreja se nao configurada
+DIAS_DIZIMISTA_ATIVO_DEFAULT = 30
+
+
+def _garantir_tabela_config_igreja(conn):
+    """Cria tabela de configuracoes especificas da igreja no banco tenant."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS config_igreja (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+        )
+    """)
+
+
+def obter_config_igreja(slug: str, chave: str, padrao: str = "") -> str:
+    """Le uma configuracao especifica da igreja."""
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_config_igreja(conn)
+        row = conn.execute(
+            "SELECT valor FROM config_igreja WHERE chave=?", (chave,)
+        ).fetchone()
+    return row["valor"] if row else padrao
+
+
+def salvar_config_igreja(slug: str, chave: str, valor: str):
+    """Grava uma configuracao especifica da igreja."""
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_config_igreja(conn)
+        conn.execute(
+            "INSERT OR REPLACE INTO config_igreja (chave, valor) VALUES (?, ?)",
+            (chave, valor),
+        )
+
+
 # ── Subcategorias de despesa (configuradas pelo admin) ────────────────────
 
 SUBCATEGORIAS_DESPESA_PADRAO = [
@@ -547,6 +593,7 @@ def _garantir_tabela_subcategorias_despesa(conn):
 
 
 def listar_subcategorias_despesa() -> list:
+    """Retorna lista de nomes das subcategorias de despesa cadastradas."""
     with _conn(MASTER_DB) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         qtd = conn.execute("SELECT COUNT(*) AS n FROM subcategorias_despesa").fetchone()["n"]
