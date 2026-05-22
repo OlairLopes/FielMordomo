@@ -587,3 +587,120 @@ def excluir_subcategoria_despesa(nome: str):
     with _conn(MASTER_DB) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         conn.execute("DELETE FROM subcategorias_despesa WHERE nome=?", (nome,))
+
+# ── Restauracao de backup ─────────────────────────────────────────────────
+
+def restaurar_backup_zip(zip_bytes: bytes) -> dict:
+    """
+    Restaura todas as igrejas a partir de um ZIP gerado pelo painel admin.
+
+    Procura arquivos no padrao: <slug>/banco_<slug>.db
+    Faz backup automatico dos bancos atuais antes de sobrescrever.
+
+    Retorna dict com:
+        - sucesso: lista de slugs restaurados
+        - erros: lista de mensagens de erro
+        - igrejas_recriadas: slugs que precisaram ser recriados no master.db
+    """
+    import io
+    import zipfile
+
+    resultado = {
+        "sucesso": [],
+        "erros": [],
+        "igrejas_recriadas": [],
+    }
+
+    try:
+        buf = io.BytesIO(zip_bytes)
+        with zipfile.ZipFile(buf, "r") as zf:
+            arquivos = zf.namelist()
+
+            # Identifica igrejas presentes no ZIP (procura por <slug>/banco_<slug>.db)
+            bancos_zip = {}
+            for nome in arquivos:
+                if nome.endswith(".db") and "/banco_" in nome:
+                    partes = nome.split("/")
+                    if len(partes) == 2:
+                        slug_zip = partes[0]
+                        bancos_zip[slug_zip] = nome
+
+            if not bancos_zip:
+                resultado["erros"].append(
+                    "Nenhum arquivo de banco (.db) encontrado no ZIP. "
+                    "Estrutura esperada: <slug>/banco_<slug>.db"
+                )
+                return resultado
+
+            # Backup automatico do master.db antes de mexer
+            try:
+                _fazer_backup(MASTER_DB)
+            except Exception:
+                pass
+
+            # Lista de slugs ja existentes no sistema
+            slugs_existentes = set()
+            try:
+                with _conn(MASTER_DB) as conn:
+                    rows = conn.execute("SELECT slug FROM igrejas").fetchall()
+                    slugs_existentes = {r["slug"] for r in rows}
+            except Exception:
+                pass
+
+            # Restaura cada banco
+            for slug_zip, caminho_zip in bancos_zip.items():
+                try:
+                    db_destino = _tenant_db(slug_zip)
+
+                    # Backup automatico do banco atual antes de sobrescrever
+                    if db_destino.exists():
+                        try:
+                            _fazer_backup(db_destino)
+                        except Exception:
+                            pass
+
+                    # Le os bytes do ZIP e escreve no destino
+                    dados_db = zf.read(caminho_zip)
+                    db_destino.write_bytes(dados_db)
+
+                    # Verifica se a igreja existe no master.db
+                    if slug_zip not in slugs_existentes:
+                        # Tenta recriar registro no master.db usando dados do proprio banco
+                        try:
+                            with _conn(db_destino) as conn_t:
+                                # Apenas valida que o banco abre e tem estrutura esperada
+                                conn_t.execute(
+                                    "SELECT COUNT(*) FROM cadastros"
+                                ).fetchone()
+
+                            # Cria registro placeholder no master.db
+                            with _conn(MASTER_DB) as conn_m:
+                                conn_m.execute(
+                                    """INSERT INTO igrejas (nome, slug, email_admin, senha_hash, plano, ativa)
+                                       VALUES (?, ?, ?, ?, ?, ?)""",
+                                    (
+                                        slug_zip.replace("-", " ").title(),
+                                        slug_zip,
+                                        f"admin@{slug_zip}.com",
+                                        hash_senha("fielmordomo2024"),
+                                        "basico",
+                                        1,
+                                    ),
+                                )
+                            resultado["igrejas_recriadas"].append(slug_zip)
+                        except Exception as ex_recriacao:
+                            resultado["erros"].append(
+                                f"{slug_zip}: banco restaurado mas erro ao recriar no master: {ex_recriacao}"
+                            )
+
+                    resultado["sucesso"].append(slug_zip)
+
+                except Exception as ex:
+                    resultado["erros"].append(f"{slug_zip}: {ex}")
+
+    except zipfile.BadZipFile:
+        resultado["erros"].append("Arquivo ZIP invalido ou corrompido.")
+    except Exception as ex:
+        resultado["erros"].append(f"Erro geral: {ex}")
+
+    return resultado
