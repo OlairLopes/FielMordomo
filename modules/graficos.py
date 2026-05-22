@@ -658,23 +658,44 @@ def render():
     sal12 = [e - s for e, s in zip(e12, s12)]
 
     fig_fc = go.Figure([
-        go.Scatter(name="Entradas", x=labels_12m, y=e12, mode="lines+markers",
-                   line=dict(color=COR["Entrada"], width=3), marker=dict(size=7),
-                   hoverinfo="skip"),
-        go.Scatter(name="Despesas", x=labels_12m, y=s12, mode="lines+markers",
-                   line=dict(color=COR["Saida"], width=3), marker=dict(size=7),
-                   hoverinfo="skip"),
-        go.Scatter(name="Saldo", x=labels_12m, y=sal12, mode="lines+markers",
-                   line=dict(color=COR["saldo"], width=3, dash="dot"), marker=dict(size=7),
-                   hoverinfo="skip"),
+        go.Bar(
+            name="Entradas",
+            x=labels_12m, y=e12,
+            marker_color=COR["Entrada"],
+            text=[formatar_moeda(v) if v > 0 else "" for v in e12],
+            textposition="outside",
+            textfont=dict(size=10, color="#CBD5E1"),
+            hoverinfo="skip",
+        ),
+        go.Bar(
+            name="Despesas",
+            x=labels_12m, y=s12,
+            marker_color=COR["Saida"],
+            text=[formatar_moeda(v) if v > 0 else "" for v in s12],
+            textposition="outside",
+            textfont=dict(size=10, color="#CBD5E1"),
+            hoverinfo="skip",
+        ),
+        go.Bar(
+            name="Saldo",
+            x=labels_12m, y=sal12,
+            marker_color=COR["saldo"],
+            text=[formatar_moeda(v) if v != 0 else "" for v in sal12],
+            textposition="outside",
+            textfont=dict(size=10, color="#CBD5E1"),
+            hoverinfo="skip",
+        ),
     ])
     fig_fc.update_layout(**_base_layout(
+        barmode="group",
         height=ALT_COMPARACAO,
-        margin=dict(t=40, b=30, l=10, r=10),
+        margin=dict(t=50, b=30, l=10, r=10),
         legend=dict(orientation="h", y=1.12, x=0, font=dict(color="#E5E7EB")),
         xaxis=dict(fixedrange=True, color="#94A3B8", gridcolor="#334155"),
         yaxis=dict(fixedrange=True, gridcolor="#334155", color="#94A3B8",
                    tickformat=",.0f"),
+        bargap=0.20,
+        bargroupgap=0.05,
     ))
     st.plotly_chart(fig_fc, **OPC)
 
