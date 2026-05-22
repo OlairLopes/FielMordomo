@@ -562,8 +562,6 @@ def render():
     r1c1, r1c2, r1c3 = st.columns(3)
     # Linha 2: Dizimistas, Taxa, Crescimento
     r2c1, r2c2, r2c3 = st.columns(3)
-    # Linha 3: Investimentos no Reino (sozinho ou expandido)
-    r3c1 = st.container()
 
     with r1c1:
         _kpi_card(
@@ -612,7 +610,7 @@ def render():
             "#14B8A6", "📅",
         )
 
-    # Card destacado de Investimentos no Reino (largura cheia, mais visual)
+    # Card destacado de Investimentos no Reino
     st.markdown("")
     st.markdown(
         f"""
@@ -636,9 +634,28 @@ def render():
         st.warning("Sem lancamentos no periodo selecionado.")
         return
 
-    # ── Fluxo de caixa ────────────────────────────────────────────────────
-    ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo = _calc_periodo_serie(df, mes_ref)
-    df_12m = df[(df["mes_periodo"] >= ini_12m) & (df["mes_periodo"] <= fim_12m)].copy()
+    # ── Fluxo de caixa (respeita modo personalizado) ──────────────────────
+    if modo_personalizado:
+        meses_disp_personalizado = sorted(df_f["mes_periodo"].dropna().unique())
+
+        if len(meses_disp_personalizado) == 0:
+            st.warning("Sem dados de meses no periodo filtrado.")
+            return
+
+        meses_seq  = meses_disp_personalizado
+        labels_12m = [m.strftime("%b/%y") for m in meses_seq]
+        ini_12m    = meses_seq[0]
+        fim_12m    = meses_seq[-1]
+
+        titulo_periodo = (
+            f"{ini_12m.strftime('%b/%y')} a {fim_12m.strftime('%b/%y')}"
+            if len(meses_seq) > 1
+            else fim_12m.strftime('%b/%y')
+        )
+        df_12m = df_f.copy()
+    else:
+        ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo = _calc_periodo_serie(df, mes_ref)
+        df_12m = df[(df["mes_periodo"] >= ini_12m) & (df["mes_periodo"] <= fim_12m)].copy()
 
     st.markdown(
         f'<div class="grafico-titulo">📈 Fluxo de Caixa — {titulo_periodo}'
@@ -910,7 +927,6 @@ def render():
             })
             st.dataframe(df_lista, use_container_width=True, hide_index=True)
 
-            # Botao de exportacao da lista
             csv_inativos = df_lista.to_csv(index=False, encoding="utf-8-sig")
             st.download_button(
                 f"📥 Exportar lista de {titulo.lower()}",
