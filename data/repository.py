@@ -88,7 +88,6 @@ def obter_logo_sistema():
 
 def salvar_logo_igreja(slug, dados, extensao):
     for f in LOGOS_DIR.glob(f"{slug}.*"):
-        # nao apaga arquivos do tipo sidebar_<slug>.*
         if f.stem.startswith("sidebar_"):
             continue
         f.unlink()
@@ -108,7 +107,6 @@ def obter_logo_igreja(slug):
 # ── LOGO DA SIDEBAR (SISTEMA) ─────────────────────────────────────────────
 
 def salvar_logo_sidebar_sistema(dados, extensao):
-    """Salva o logo da barra lateral do sistema (fallback para igrejas sem logo proprio)."""
     for f in LOGOS_DIR.glob("sidebar_sistema.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"sidebar_sistema.{extensao}"
@@ -127,7 +125,6 @@ def obter_logo_sidebar_sistema():
 # ── LOGO DA SIDEBAR (IGREJA) ──────────────────────────────────────────────
 
 def salvar_logo_sidebar_igreja(slug, dados, extensao):
-    """Salva o logo da barra lateral especifico de uma igreja."""
     for f in LOGOS_DIR.glob(f"sidebar_{slug}.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"sidebar_{slug}.{extensao}"
@@ -225,6 +222,17 @@ def inicializar_tenant(slug):
                 valor           REAL NOT NULL
             );
         """)
+
+
+def _garantir_colunas_lancamentos(conn):
+    """Adiciona colunas novas em bancos antigos sem perder dados."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
+    for col, tipo in [
+        ("subcategoria",    "TEXT DEFAULT ''"),
+        ("forma_pagamento", "TEXT DEFAULT 'Dinheiro'"),
+    ]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE lancamentos ADD COLUMN {col} {tipo}")
 
 
 def listar_igrejas():
@@ -340,17 +348,6 @@ def _garantir_colunas_cadastros(conn):
     ]:
         if col not in cols:
             conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
-
-
-def _garantir_colunas_lancamentos(conn):
-    """Garante que a tabela lancamentos tenha todas as colunas necessarias."""
-    cols = [r[1] for r in conn.execute("PRAGMA table_info(lancamentos)").fetchall()]
-    for col, tipo in [
-        ("forma_pagamento", "TEXT DEFAULT 'Dinheiro'"),
-        ("subcategoria",    "TEXT DEFAULT ''"),
-    ]:
-        if col not in cols:
-            conn.execute(f"ALTER TABLE lancamentos ADD COLUMN {col} {tipo}")
 
 
 def inserir_cadastro(slug, c):
@@ -550,7 +547,6 @@ def _garantir_tabela_subcategorias_despesa(conn):
 
 
 def listar_subcategorias_despesa() -> list:
-    """Retorna lista de nomes das subcategorias de despesa cadastradas."""
     with _conn(MASTER_DB) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         qtd = conn.execute("SELECT COUNT(*) AS n FROM subcategorias_despesa").fetchone()["n"]
@@ -580,13 +576,14 @@ def adicionar_subcategoria_despesa(nome: str) -> bool:
             )
             return True
         except sqlite3.IntegrityError:
-            return False  # Ja existe
+            return False
 
 
 def excluir_subcategoria_despesa(nome: str):
     with _conn(MASTER_DB) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         conn.execute("DELETE FROM subcategorias_despesa WHERE nome=?", (nome,))
+
 
 # ── Restauracao de backup ─────────────────────────────────────────────────
 
@@ -616,7 +613,7 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
         with zipfile.ZipFile(buf, "r") as zf:
             arquivos = zf.namelist()
 
-            # Identifica igrejas presentes no ZIP (procura por <slug>/banco_<slug>.db)
+            # Identifica igrejas presentes no ZIP (<slug>/banco_<slug>.db)
             bancos_zip = {}
             for nome in arquivos:
                 if nome.endswith(".db") and "/banco_" in nome:
@@ -665,15 +662,12 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
 
                     # Verifica se a igreja existe no master.db
                     if slug_zip not in slugs_existentes:
-                        # Tenta recriar registro no master.db usando dados do proprio banco
                         try:
                             with _conn(db_destino) as conn_t:
-                                # Apenas valida que o banco abre e tem estrutura esperada
                                 conn_t.execute(
                                     "SELECT COUNT(*) FROM cadastros"
                                 ).fetchone()
 
-                            # Cria registro placeholder no master.db
                             with _conn(MASTER_DB) as conn_m:
                                 conn_m.execute(
                                     """INSERT INTO igrejas (nome, slug, email_admin, senha_hash, plano, ativa)
