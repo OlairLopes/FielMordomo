@@ -4,7 +4,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from data.repository import carregar_lancamentos, carregar_cadastros
+from data.repository import (
+    carregar_lancamentos, carregar_cadastros,
+    obter_config_igreja, DIAS_DIZIMISTA_ATIVO_DEFAULT,
+)
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
 T = "plotly_dark"
@@ -35,13 +38,11 @@ CORES_DESPESAS = [
     "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6", "#94A3B8",
 ]
 
-# ── ALTURAS ───────────────────────────────────────────────────────────────
 ALT_COMPARACAO  = 380
 ALT_RANK_BASE   = 320
 ALT_POR_ITEM    = 55
 ALT_BARRAS_VERT = 400
 
-# Mes minimo para series temporais (sistema entrou em operacao em jan/2026)
 MES_MINIMO_SISTEMA = pd.Period("2026-01", freq="M")
 
 CONFIG_PLOTLY = {
@@ -148,21 +149,45 @@ def _injetar_css_dashboard():
     }
 
     h1, h2, h3, h4 { color: #F1F5F9 !important; }
-
     .stMarkdown p, .stCaption { color: #CBD5E1; }
-
     [data-testid="stMetricValue"] { color: #F1F5F9 !important; }
     [data-testid="stMetricLabel"] { color: #94A3B8 !important; }
-
     .stSelectbox label, .stDateInput label {
         color: #CBD5E1 !important;
     }
+
+    /* Card de inativos financeiros */
+    .inativo-card {
+        background: #1E293B;
+        border-radius: 12px;
+        padding: 16px 18px;
+        border: 1px solid #334155;
+        text-align: center;
+        height: 100%;
+    }
+    .inativo-card .titulo {
+        font-size: 0.85rem;
+        color: #94A3B8;
+        margin-bottom: 8px;
+    }
+    .inativo-card .valor {
+        font-size: 2.1rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+    .inativo-card .pct {
+        font-size: 0.85rem;
+        margin-top: 4px;
+        color: #94A3B8;
+    }
+    .inativo-card.amarelo .valor { color: #F59E0B; }
+    .inativo-card.laranja .valor { color: #EF4444; }
+    .inativo-card.vermelho .valor { color: #DC2626; }
     </style>
     """, unsafe_allow_html=True)
 
 
 def _meses_disponiveis(df):
-    """Lista de meses (YYYY-MM) presentes no DataFrame, ordenados desc."""
     if df.empty or "data" not in df.columns:
         return []
     return sorted(
@@ -172,15 +197,10 @@ def _meses_disponiveis(df):
 
 
 def _mes_anterior(periodo_mes):
-    """Retorna o periodo do mes anterior."""
     return periodo_mes - 1
 
 
 def _calc_variacao(atual, anterior):
-    """
-    Retorna (texto_variacao, direcao).
-    direcao: 'up', 'down', 'flat'
-    """
     if anterior == 0:
         if atual == 0:
             return ("Sem dados anteriores", "flat")
@@ -194,7 +214,6 @@ def _calc_variacao(atual, anterior):
 
 
 def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
-    cor_var = direcao
     html = f"""
     <div class="kpi-card-v2">
         <div class="kpi-icon" style="background:{cor_icone}33;color:{cor_icone}">
@@ -202,36 +221,23 @@ def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
         </div>
         <div class="kpi-titulo">{titulo}</div>
         <div class="kpi-valor">{valor}</div>
-        <div class="kpi-variacao {cor_var}">{variacao}</div>
+        <div class="kpi-variacao {direcao}">{variacao}</div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
 
 
 def _calc_periodo_serie(df, mes_ref):
-    """
-    Calcula o periodo da serie temporal de ate 12 meses.
-
-    Regras:
-    - Inicio nao pode ser anterior a Jan/2026 (entrada do sistema em operacao)
-    - Inicio nao pode ser anterior ao primeiro mes com dados reais
-    - Maximo de 12 meses ate o mes de referencia
-    """
     if df.empty or df["mes_periodo"].dropna().empty:
         primeiro_mes_dados = mes_ref
     else:
         primeiro_mes_dados = df["mes_periodo"].dropna().min()
 
-    # Inicio efetivo: o mais recente entre Jan/2026 e primeiro mes com dados
     ini_serie = max(primeiro_mes_dados, MES_MINIMO_SISTEMA)
-
-    # Nunca mais de 12 meses para tras do mes de referencia
     ini_12m_limite = mes_ref - 11
     ini_12m = max(ini_serie, ini_12m_limite)
-
     fim_12m = mes_ref
 
-    # Se mes de referencia for anterior ao inicio calculado, ajusta
     if fim_12m < ini_12m:
         ini_12m = fim_12m
 
@@ -246,6 +252,75 @@ def _calc_periodo_serie(df, mes_ref):
     )
 
     return ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo
+
+
+def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
+    """
+    Calcula membros inativos por faixa de dias sem dizimo.
+
+    Retorna dict:
+    {
+        '30': {'qtd': N, 'pct': P, 'lista': [{'nome', 'telefone', 'ultimo', 'dias'}]},
+        '60': {...}, '90': {...}
+    }
+    """
+    total_membros = len(df_membros_ativos)
+
+    # Mapeia ultimo dizimo por id_cadastro
+    ultimo_diz = {}
+    if not df_dizimos.empty:
+        agrup = df_dizimos.groupby("id_cadastro")["data"].max()
+        ultimo_diz = agrup.to_dict()
+
+    resultado = {}
+    for faixa_dias in [30, 60, 90]:
+        lista = []
+
+        for _, m in df_membros_ativos.iterrows():
+            id_m = int(m["id_cadastro"]) if pd.notna(m["id_cadastro"]) else None
+            if id_m is None:
+                continue
+
+            if id_m in ultimo_diz and pd.notna(ultimo_diz[id_m]):
+                ultimo_data = pd.Timestamp(ultimo_diz[id_m]).date()
+                dias_sem = (hoje - ultimo_data).days
+                ultimo_str = ultimo_data.strftime("%d/%m/%Y")
+            else:
+                dias_sem = 9999  # Nunca dizimou
+                ultimo_str = "Nunca"
+
+            if dias_sem >= faixa_dias:
+                # Formata telefone
+                tel = str(m.get("telefone", "") or "").strip()
+                tel_fmt = ""
+                if tel and tel.isdigit():
+                    if len(tel) == 11:
+                        tel_fmt = f"({tel[:2]}) {tel[2:7]}-{tel[7:]}"
+                    elif len(tel) == 10:
+                        tel_fmt = f"({tel[:2]}) {tel[2:6]}-{tel[6:]}"
+                    else:
+                        tel_fmt = tel
+                elif tel:
+                    tel_fmt = tel
+
+                lista.append({
+                    "nome": str(m["nome"]),
+                    "telefone": tel_fmt or "—",
+                    "ultimo": ultimo_str,
+                    "dias": dias_sem if dias_sem < 9999 else None,
+                })
+
+        # Ordena por mais dias sem dizimar (descendente)
+        lista.sort(key=lambda x: x["dias"] if x["dias"] is not None else 99999, reverse=True)
+
+        pct = (len(lista) / total_membros * 100) if total_membros else 0
+        resultado[str(faixa_dias)] = {
+            "qtd": len(lista),
+            "pct": pct,
+            "lista": lista,
+        }
+
+    return resultado
 
 
 def render():
@@ -274,6 +349,14 @@ def render():
         df_cad["funcao"] = ""
     df_cad["funcao"] = df_cad["funcao"].fillna("").astype(str)
     df_cad["id_cadastro"] = pd.to_numeric(df_cad["id_cadastro"], errors="coerce")
+
+    # Configuracao: dias para ser dizimista ativo (configuravel pela igreja)
+    try:
+        dias_ativo = int(obter_config_igreja(
+            slug, "dias_dizimista_ativo", str(DIAS_DIZIMISTA_ATIVO_DEFAULT)
+        ))
+    except (ValueError, TypeError):
+        dias_ativo = DIAS_DIZIMISTA_ATIVO_DEFAULT
 
     st.markdown("### 📊 Dashboard")
     st.caption("Visao geral da saude financeira da igreja")
@@ -333,13 +416,12 @@ def render():
             "Personalizado",
             value=False,
             key="db_modo_personalizado",
-            help="Ativa filtros avancados (periodo livre, membro, funcao, categoria)",
+            help="Ativa filtros avancados",
         )
 
     df_ref  = df[df["mes_periodo"] == mes_ref].copy()
     df_comp = df[df["mes_periodo"] == mes_comp].copy()
 
-    # ── Modo personalizado ────────────────────────────────────────────────
     membro_sel    = "Todos"
     funcao_sel    = "Todas"
     categoria_sel = "Todas"
@@ -424,7 +506,7 @@ def render():
     else:
         df_f = df_ref
 
-    # ── 6 CARDS KPI ───────────────────────────────────────────────────────
+    # ── CARDS KPI ─────────────────────────────────────────────────────────
     ent_ref = df_ref[df_ref["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
     sai_ref = df_ref[df_ref["tipo"].str.upper() == "SAIDA"]["valor"].sum()
     sal_ref = ent_ref - sai_ref
@@ -451,6 +533,17 @@ def render():
     taxa_ref  = (qtd_diz_ref / membros_ativos_n * 100) if membros_ativos_n else 0
     taxa_comp = (qtd_diz_comp / membros_ativos_n * 100) if membros_ativos_n else 0
 
+    # Investimentos no Reino (categoria Missao das entradas)
+    miss_ref  = df_ref[
+        (df_ref["tipo"].str.upper() == "ENTRADA") &
+        (df_ref["categoria"].str.upper() == "MISSAO")
+    ]["valor"].sum()
+    miss_comp = df_comp[
+        (df_comp["tipo"].str.upper() == "ENTRADA") &
+        (df_comp["categoria"].str.upper() == "MISSAO")
+    ]["valor"].sum()
+
+    # Crescimento anual
     ano_ref = mes_ref.year
     df_ano  = df[df["data"].dt.year == ano_ref]
     df_ano_ant = df[df["data"].dt.year == ano_ref - 1]
@@ -458,14 +551,19 @@ def render():
     ent_ano_ant = df_ano_ant[df_ano_ant["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
     cresc_pct  = ((ent_ano - ent_ano_ant) / abs(ent_ano_ant) * 100) if ent_ano_ant else 0
 
-    r1c1, r1c2, r1c3 = st.columns(3)
-    r2c1, r2c2, r2c3 = st.columns(3)
-
     var_ent, dir_ent = _calc_variacao(ent_ref, ent_comp)
     var_sai, dir_sai = _calc_variacao(sai_ref, sai_comp)
     var_sal, dir_sal = _calc_variacao(sal_ref, sal_comp)
     var_diz, dir_diz = _calc_variacao(qtd_diz_ref, qtd_diz_comp)
     var_taxa, dir_taxa = _calc_variacao(taxa_ref, taxa_comp)
+    var_miss, dir_miss = _calc_variacao(miss_ref, miss_comp)
+
+    # Linha 1: Entradas, Despesas, Saldo
+    r1c1, r1c2, r1c3 = st.columns(3)
+    # Linha 2: Dizimistas, Taxa, Crescimento
+    r2c1, r2c2, r2c3 = st.columns(3)
+    # Linha 3: Investimentos no Reino (sozinho ou expandido)
+    r3c1 = st.container()
 
     with r1c1:
         _kpi_card(
@@ -514,6 +612,23 @@ def render():
             "#14B8A6", "📅",
         )
 
+    # Card destacado de Investimentos no Reino (largura cheia, mais visual)
+    st.markdown("")
+    st.markdown(
+        f"""
+        <div class="kpi-card-v2" style="border-left:4px solid #F59E0B">
+            <div class="kpi-icon" style="background:#F59E0B33;color:#F59E0B">⛪</div>
+            <div class="kpi-titulo">🌍 Investimentos no Reino — {mes_ref.strftime('%b/%Y')}</div>
+            <div class="kpi-valor" style="color:#F59E0B">{formatar_moeda(miss_ref)}</div>
+            <div class="kpi-variacao {dir_miss}">{var_miss}</div>
+            <div style="font-size:0.78rem;color:#94A3B8;margin-top:8px">
+                Total arrecadado na categoria Missao
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.markdown("")
     OPC = dict(use_container_width=True, config=CONFIG_PLOTLY)
 
@@ -521,7 +636,7 @@ def render():
         st.warning("Sem lancamentos no periodo selecionado.")
         return
 
-    # ── 1. Fluxo de caixa (a partir de Jan/2026 ou primeiro mes com dados) ──
+    # ── Fluxo de caixa ────────────────────────────────────────────────────
     ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo = _calc_periodo_serie(df, mes_ref)
     df_12m = df[(df["mes_periodo"] >= ini_12m) & (df["mes_periodo"] <= fim_12m)].copy()
 
@@ -563,7 +678,7 @@ def render():
     ))
     st.plotly_chart(fig_fc, **OPC)
 
-    # ── 2 colunas: Entradas + Despesas ────────────────────────────────────
+    # ── Donuts de Entradas e Despesas ─────────────────────────────────────
     g1, g2 = st.columns(2)
 
     with g1:
@@ -649,7 +764,7 @@ def render():
             ))
             st.plotly_chart(fig_dc, **OPC)
 
-    # ── Evolucao dos dizimos (mesmo periodo do fluxo de caixa) ────────────
+    # ── Evolucao dos dizimos ──────────────────────────────────────────────
     st.markdown(
         f'<div class="grafico-titulo">💰 Evolucao dos Dizimos — {titulo_periodo}'
         f'<span class="subtitulo">Total arrecadado em dizimos mes a mes</span></div>',
@@ -697,6 +812,92 @@ def render():
                    tickformat=",.0f"),
     ))
     st.plotly_chart(fig_d, **OPC)
+
+    # ── INATIVOS FINANCEIROS (FASE 2) ─────────────────────────────────────
+    st.markdown(
+        f'<div class="grafico-titulo">⚠️ Membros Inativos Financeiramente'
+        f'<span class="subtitulo">Configuracao da igreja: dizimista ativo = ate {dias_ativo} dias. '
+        f'As 3 faixas abaixo mostram quem esta abaixo desse criterio.</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    df_mem_ativos_full = df_cad[
+        (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
+        (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
+    ].copy()
+
+    df_dizimos_todos = df[
+        (df["categoria"].str.upper() == "DIZIMO") &
+        (df["tipo_cadastro"].str.upper() == "MEMBRO")
+    ].copy()
+
+    hoje_dt = datetime.date.today()
+    inativos = _calcular_inativos_financeiros(
+        df_mem_ativos_full, df_dizimos_todos, hoje_dt
+    )
+
+    # 3 cards lado a lado
+    ina_c1, ina_c2, ina_c3 = st.columns(3)
+
+    cores_inativos = {
+        "30": ("amarelo", "30 dias ou mais", "🟡"),
+        "60": ("laranja", "60 dias ou mais", "🟠"),
+        "90": ("vermelho", "90 dias ou mais", "🔴"),
+    }
+
+    for (faixa, (cor, titulo, icone)), col in zip(
+        cores_inativos.items(), [ina_c1, ina_c2, ina_c3]
+    ):
+        dados = inativos[faixa]
+        with col:
+            st.markdown(
+                f"""
+                <div class="inativo-card {cor}">
+                    <div class="titulo">{icone} {titulo}</div>
+                    <div class="valor">{dados['qtd']}</div>
+                    <div class="pct">{dados['pct']:.1f}% dos membros</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    # Listas expansiveis com os nomes
+    st.markdown("")
+    st.caption(
+        f"📋 Total de membros ativos: **{len(df_mem_ativos_full)}**. "
+        "Clique nas faixas abaixo para ver os nomes."
+    )
+
+    for faixa, (cor, titulo, icone) in cores_inativos.items():
+        dados = inativos[faixa]
+        if dados["qtd"] == 0:
+            continue
+
+        with st.expander(
+            f"{icone} {titulo} — {dados['qtd']} membro(s)",
+            expanded=False,
+        ):
+            df_lista = pd.DataFrame(dados["lista"])
+            df_lista["dias"] = df_lista["dias"].apply(
+                lambda x: f"{x} dias" if x is not None else "Nunca dizimou"
+            )
+            df_lista = df_lista.rename(columns={
+                "nome":     "Nome",
+                "telefone": "Telefone",
+                "ultimo":   "Ultimo dizimo",
+                "dias":     "Dias sem dizimar",
+            })
+            st.dataframe(df_lista, use_container_width=True, hide_index=True)
+
+            # Botao de exportacao da lista
+            csv_inativos = df_lista.to_csv(index=False, encoding="utf-8-sig")
+            st.download_button(
+                f"📥 Exportar lista de {titulo.lower()}",
+                csv_inativos,
+                f"inativos_{faixa}dias.csv",
+                "text/csv",
+                key=f"dl_inativos_{faixa}",
+            )
 
     # ── Percentual de dizimistas ──────────────────────────────────────────
     st.markdown(
@@ -770,7 +971,7 @@ def render():
         km3.metric("Nao dizimistas", str(qtd_nd),
                    delta=f"-{100-pct:.1f}%", delta_color="inverse")
 
-    # ── Top dizimistas + frequencia ───────────────────────────────────────
+    # ── Top dizimistas ────────────────────────────────────────────────────
     diz_f = df_f[
         (df_f["categoria"].str.upper() == "DIZIMO") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
