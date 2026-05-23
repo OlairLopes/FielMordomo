@@ -266,7 +266,6 @@ def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
     """
     total_membros = len(df_membros_ativos)
 
-    # Mapeia ultimo dizimo por id_cadastro
     ultimo_diz = {}
     if not df_dizimos.empty:
         agrup = df_dizimos.groupby("id_cadastro")["data"].max()
@@ -290,7 +289,6 @@ def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
                 ultimo_str = "Nunca"
 
             if dias_sem >= faixa_dias:
-                # Formata telefone
                 tel = str(m.get("telefone", "") or "").strip()
                 tel_fmt = ""
                 if tel and tel.isdigit():
@@ -310,7 +308,6 @@ def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
                     "dias": dias_sem if dias_sem < 9999 else None,
                 })
 
-        # Ordena por mais dias sem dizimar (descendente)
         lista.sort(key=lambda x: x["dias"] if x["dias"] is not None else 99999, reverse=True)
 
         pct = (len(lista) / total_membros * 100) if total_membros else 0
@@ -350,7 +347,6 @@ def render():
     df_cad["funcao"] = df_cad["funcao"].fillna("").astype(str)
     df_cad["id_cadastro"] = pd.to_numeric(df_cad["id_cadastro"], errors="coerce")
 
-    # Configuracao: dias para ser dizimista ativo (configuravel pela igreja)
     try:
         dias_ativo = int(obter_config_igreja(
             slug, "dias_dizimista_ativo", str(DIAS_DIZIMISTA_ATIVO_DEFAULT)
@@ -425,13 +421,15 @@ def render():
     membro_sel    = "Todos"
     funcao_sel    = "Todas"
     categoria_sel = "Todas"
+    d_ini = None
+    d_fim = None
 
     if modo_personalizado:
         st.markdown(
             '<div class="filtro-mes-box">'
             '<b style="color:#F1F5F9">🔍 Modo Personalizado</b> '
-            '<span style="color:#94A3B8">— os cards acima continuam mostrando o mes de referencia, '
-            'mas os graficos abaixo respeitam os filtros.</span>'
+            '<span style="color:#94A3B8">— todos os cards e graficos respeitam os filtros abaixo. '
+            'A comparacao usa o periodo equivalente anterior.</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -506,22 +504,75 @@ def render():
     else:
         df_f = df_ref
 
+    # ── CALCULA PERIODO DE COMPARACAO E DATAFRAMES PARA CARDS ─────────────
+    if modo_personalizado:
+        # Periodo equivalente anterior (mesma duracao em dias)
+        dias_periodo = (d_fim - d_ini).days + 1
+        d_fim_comp_pers = d_ini - datetime.timedelta(days=1)
+        d_ini_comp_pers = d_fim_comp_pers - datetime.timedelta(days=dias_periodo - 1)
+
+        # Aplica os mesmos filtros no periodo de comparacao
+        df_comp_pers = df[
+            (df["data"] >= pd.Timestamp(d_ini_comp_pers)) &
+            (df["data"] <= pd.Timestamp(d_fim_comp_pers))
+        ].copy()
+
+        if membro_sel != "Todos":
+            df_comp_pers = df_comp_pers[
+                df_comp_pers["nome_cadastro"].fillna("").str.strip() == membro_sel
+            ]
+        if funcao_sel != "Todas":
+            ids_funcao = df_cad[
+                df_cad["funcao"].fillna("").str.strip() == funcao_sel
+            ]["id_cadastro"].tolist()
+            df_comp_pers = df_comp_pers[df_comp_pers["id_cadastro"].isin(ids_funcao)]
+        if categoria_sel != "Todas":
+            df_comp_pers = df_comp_pers[
+                df_comp_pers["categoria"].fillna("").str.strip() == categoria_sel
+            ]
+
+        df_card_atual = df_f
+        df_card_comp  = df_comp_pers
+
+        label_atual = f"{d_ini.strftime('%d/%m')} a {d_fim.strftime('%d/%m/%Y')}"
+
+        # Resumo dos filtros aplicados
+        filtros_resumo = []
+        if membro_sel != "Todos":
+            filtros_resumo.append(f"Membro: **{membro_sel}**")
+        if funcao_sel != "Todas":
+            filtros_resumo.append(f"Funcao: **{funcao_sel}**")
+        if categoria_sel != "Todas":
+            filtros_resumo.append(f"Categoria: **{categoria_sel}**")
+
+        if filtros_resumo:
+            st.info("🔍 Filtros ativos: " + " | ".join(filtros_resumo))
+
+        st.caption(
+            f"📊 Cards comparando **{label_atual}** com periodo equivalente anterior "
+            f"({d_ini_comp_pers.strftime('%d/%m/%Y')} a {d_fim_comp_pers.strftime('%d/%m/%Y')})"
+        )
+    else:
+        df_card_atual = df_ref
+        df_card_comp  = df_comp
+        label_atual   = mes_ref.strftime("%b/%Y")
+
     # ── CARDS KPI ─────────────────────────────────────────────────────────
-    ent_ref = df_ref[df_ref["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-    sai_ref = df_ref[df_ref["tipo"].str.upper() == "SAIDA"]["valor"].sum()
+    ent_ref = df_card_atual[df_card_atual["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+    sai_ref = df_card_atual[df_card_atual["tipo"].str.upper() == "SAIDA"]["valor"].sum()
     sal_ref = ent_ref - sai_ref
 
-    ent_comp = df_comp[df_comp["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-    sai_comp = df_comp[df_comp["tipo"].str.upper() == "SAIDA"]["valor"].sum()
+    ent_comp = df_card_comp[df_card_comp["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+    sai_comp = df_card_comp[df_card_comp["tipo"].str.upper() == "SAIDA"]["valor"].sum()
     sal_comp = ent_comp - sai_comp
 
-    diz_ref = df_ref[
-        (df_ref["categoria"].str.upper() == "DIZIMO") &
-        (df_ref["tipo_cadastro"].str.upper() == "MEMBRO")
+    diz_ref = df_card_atual[
+        (df_card_atual["categoria"].str.upper() == "DIZIMO") &
+        (df_card_atual["tipo_cadastro"].str.upper() == "MEMBRO")
     ]
-    diz_comp = df_comp[
-        (df_comp["categoria"].str.upper() == "DIZIMO") &
-        (df_comp["tipo_cadastro"].str.upper() == "MEMBRO")
+    diz_comp = df_card_comp[
+        (df_card_comp["categoria"].str.upper() == "DIZIMO") &
+        (df_card_comp["tipo_cadastro"].str.upper() == "MEMBRO")
     ]
     qtd_diz_ref  = diz_ref["id_cadastro"].dropna().nunique()
     qtd_diz_comp = diz_comp["id_cadastro"].dropna().nunique()
@@ -534,13 +585,13 @@ def render():
     taxa_comp = (qtd_diz_comp / membros_ativos_n * 100) if membros_ativos_n else 0
 
     # Investimentos no Reino (categoria Missao das entradas)
-    miss_ref  = df_ref[
-        (df_ref["tipo"].str.upper() == "ENTRADA") &
-        (df_ref["categoria"].str.upper() == "MISSAO")
+    miss_ref  = df_card_atual[
+        (df_card_atual["tipo"].str.upper() == "ENTRADA") &
+        (df_card_atual["categoria"].str.upper() == "MISSAO")
     ]["valor"].sum()
-    miss_comp = df_comp[
-        (df_comp["tipo"].str.upper() == "ENTRADA") &
-        (df_comp["categoria"].str.upper() == "MISSAO")
+    miss_comp = df_card_comp[
+        (df_card_comp["tipo"].str.upper() == "ENTRADA") &
+        (df_card_comp["categoria"].str.upper() == "MISSAO")
     ]["valor"].sum()
 
     # Crescimento anual
@@ -565,21 +616,21 @@ def render():
 
     with r1c1:
         _kpi_card(
-            f"Entradas {mes_ref.strftime('%b/%Y')}",
+            f"Entradas {label_atual}",
             formatar_moeda(ent_ref),
             var_ent, dir_ent,
             "#10B981", "💰",
         )
     with r1c2:
         _kpi_card(
-            f"Despesas {mes_ref.strftime('%b/%Y')}",
+            f"Despesas {label_atual}",
             formatar_moeda(sai_ref),
             var_sai, dir_sai,
             "#EF4444", "💸",
         )
     with r1c3:
         _kpi_card(
-            f"Saldo {mes_ref.strftime('%b/%Y')}",
+            f"Saldo {label_atual}",
             formatar_moeda(sal_ref),
             var_sal, dir_sal,
             "#3B82F6", "📊",
@@ -587,7 +638,7 @@ def render():
 
     with r2c1:
         _kpi_card(
-            "Dizimistas no mes",
+            "Dizimistas no periodo",
             str(qtd_diz_ref),
             var_diz, dir_diz,
             "#8B5CF6", "🙏",
@@ -616,7 +667,7 @@ def render():
         f"""
         <div class="kpi-card-v2" style="border-left:4px solid #F59E0B">
             <div class="kpi-icon" style="background:#F59E0B33;color:#F59E0B">⛪</div>
-            <div class="kpi-titulo">🌍 Investimentos no Reino — {mes_ref.strftime('%b/%Y')}</div>
+            <div class="kpi-titulo">🌍 Investimentos no Reino — {label_atual}</div>
             <div class="kpi-valor" style="color:#F59E0B">{formatar_moeda(miss_ref)}</div>
             <div class="kpi-variacao {dir_miss}">{var_miss}</div>
             <div style="font-size:0.78rem;color:#94A3B8;margin-top:8px">
@@ -722,7 +773,7 @@ def render():
     with g1:
         st.markdown(
             f'<div class="grafico-titulo">🥧 Entradas por Categoria'
-            f'<span class="subtitulo">{mes_ref.strftime("%b/%Y") if not modo_personalizado else "Periodo filtrado"}</span></div>',
+            f'<span class="subtitulo">{label_atual}</span></div>',
             unsafe_allow_html=True,
         )
         ent_cat = df_f[df_f["tipo"].str.upper() == "ENTRADA"].groupby(
@@ -764,7 +815,7 @@ def render():
     with g2:
         st.markdown(
             f'<div class="grafico-titulo">📉 Despesas por Subcategoria'
-            f'<span class="subtitulo">{mes_ref.strftime("%b/%Y") if not modo_personalizado else "Periodo filtrado"}</span></div>',
+            f'<span class="subtitulo">{label_atual}</span></div>',
             unsafe_allow_html=True,
         )
         desp = df_f[df_f["tipo"].str.upper() == "SAIDA"].copy()
@@ -899,7 +950,6 @@ def render():
                 unsafe_allow_html=True,
             )
 
-    # Listas expansiveis com os nomes
     st.markdown("")
     st.caption(
         f"📋 Total de membros ativos: **{len(df_mem_ativos_full)}**. "
