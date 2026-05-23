@@ -506,12 +506,10 @@ def render():
 
     # ── CALCULA PERIODO DE COMPARACAO E DATAFRAMES PARA CARDS ─────────────
     if modo_personalizado:
-        # Periodo equivalente anterior (mesma duracao em dias)
         dias_periodo = (d_fim - d_ini).days + 1
         d_fim_comp_pers = d_ini - datetime.timedelta(days=1)
         d_ini_comp_pers = d_fim_comp_pers - datetime.timedelta(days=dias_periodo - 1)
 
-        # Aplica os mesmos filtros no periodo de comparacao
         df_comp_pers = df[
             (df["data"] >= pd.Timestamp(d_ini_comp_pers)) &
             (df["data"] <= pd.Timestamp(d_fim_comp_pers))
@@ -536,7 +534,6 @@ def render():
 
         label_atual = f"{d_ini.strftime('%d/%m')} a {d_fim.strftime('%d/%m/%Y')}"
 
-        # Resumo dos filtros aplicados
         filtros_resumo = []
         if membro_sel != "Todos":
             filtros_resumo.append(f"Membro: **{membro_sel}**")
@@ -584,7 +581,6 @@ def render():
     taxa_ref  = (qtd_diz_ref / membros_ativos_n * 100) if membros_ativos_n else 0
     taxa_comp = (qtd_diz_comp / membros_ativos_n * 100) if membros_ativos_n else 0
 
-    # Investimentos no Reino (categoria Missao das entradas)
     miss_ref  = df_card_atual[
         (df_card_atual["tipo"].str.upper() == "ENTRADA") &
         (df_card_atual["categoria"].str.upper() == "MISSAO")
@@ -594,7 +590,6 @@ def render():
         (df_card_comp["categoria"].str.upper() == "MISSAO")
     ]["valor"].sum()
 
-    # Crescimento anual
     ano_ref = mes_ref.year
     df_ano  = df[df["data"].dt.year == ano_ref]
     df_ano_ant = df[df["data"].dt.year == ano_ref - 1]
@@ -609,9 +604,7 @@ def render():
     var_taxa, dir_taxa = _calc_variacao(taxa_ref, taxa_comp)
     var_miss, dir_miss = _calc_variacao(miss_ref, miss_comp)
 
-    # Linha 1: Entradas, Despesas, Saldo
     r1c1, r1c2, r1c3 = st.columns(3)
-    # Linha 2: Dizimistas, Taxa, Crescimento
     r2c1, r2c2, r2c3 = st.columns(3)
 
     with r1c1:
@@ -925,7 +918,6 @@ def render():
         df_mem_ativos_full, df_dizimos_todos, hoje_dt
     )
 
-    # 3 cards lado a lado
     ina_c1, ina_c2, ina_c3 = st.columns(3)
 
     cores_inativos = {
@@ -1058,7 +1050,7 @@ def render():
         km3.metric("Nao dizimistas", str(qtd_nd),
                    delta=f"-{100-pct:.1f}%", delta_color="inverse")
 
-    # ── Top dizimistas ────────────────────────────────────────────────────
+    # ── Top dizimistas + Frequencia individual ────────────────────────────
     diz_f = df_f[
         (df_f["categoria"].str.upper() == "DIZIMO") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
@@ -1093,6 +1085,166 @@ def render():
         ))
         st.plotly_chart(fig_qtd, **OPC)
 
+        # ── Frequencia individual de um membro especifico ─────────────────
+        st.markdown(
+            '<div class="grafico-titulo">🔍 Frequencia Individual do Membro'
+            '<span class="subtitulo">Selecione um membro para ver detalhes da contribuicao</span></div>',
+            unsafe_allow_html=True,
+        )
+
+        membros_dizimistas = sorted(
+            diz_f["nome_cadastro"].dropna().unique().tolist()
+        )
+
+        membro_sel_freq = st.selectbox(
+            "Membro",
+            ["— Selecione um membro —"] + membros_dizimistas,
+            key="freq_membro_sel",
+            help="Mostra todos os dizimos deste membro no periodo selecionado.",
+        )
+
+        if membro_sel_freq != "— Selecione um membro —":
+            diz_membro = diz_f[
+                diz_f["nome_cadastro"].fillna("").str.strip() == membro_sel_freq
+            ].copy()
+
+            if diz_membro.empty:
+                st.info(f"Nenhum dizimo de {membro_sel_freq} no periodo.")
+            else:
+                qtd_total = len(diz_membro)
+                valor_total = diz_membro["valor"].sum()
+                media_valor = valor_total / qtd_total if qtd_total else 0
+                meses_unicos = diz_membro["mes_periodo"].nunique()
+
+                mf1, mf2, mf3, mf4 = st.columns(4)
+                with mf1:
+                    st.metric(
+                        "Total de dizimos",
+                        str(qtd_total),
+                        help="Quantidade de lancamentos no periodo",
+                    )
+                with mf2:
+                    st.metric(
+                        "Valor total",
+                        formatar_moeda(valor_total),
+                    )
+                with mf3:
+                    st.metric(
+                        "Media por contribuicao",
+                        formatar_moeda(media_valor),
+                    )
+                with mf4:
+                    st.metric(
+                        "Meses com dizimo",
+                        f"{meses_unicos} mes(es)",
+                    )
+
+                # Mapa de presenca mensal
+                st.markdown(
+                    f'<div style="margin-top:18px;color:#94A3B8;font-size:0.85rem">'
+                    f'📅 <b>Mapa de presenca</b> — em quais meses {membro_sel_freq} contribuiu '
+                    f'(periodo do dashboard)'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+                meses_com_diz = set(diz_membro["mes_periodo"].dropna().tolist())
+
+                badges_html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;margin-bottom:18px">'
+                for m in meses_seq:
+                    presente = m in meses_com_diz
+                    if presente:
+                        valor_mes = diz_membro[
+                            diz_membro["mes_periodo"] == m
+                        ]["valor"].sum()
+                        qtd_mes = len(diz_membro[diz_membro["mes_periodo"] == m])
+
+                        badges_html += (
+                            f'<div style="background:#10B981;color:white;'
+                            f'padding:8px 14px;border-radius:8px;font-size:0.82rem;'
+                            f'font-weight:600;text-align:center;min-width:90px">'
+                            f'✅ {m.strftime("%b/%y")}<br>'
+                            f'<span style="font-size:0.72rem;font-weight:400;opacity:0.9">'
+                            f'{qtd_mes}x · {formatar_moeda(valor_mes)}</span>'
+                            f'</div>'
+                        )
+                    else:
+                        badges_html += (
+                            f'<div style="background:#374151;color:#94A3B8;'
+                            f'padding:8px 14px;border-radius:8px;font-size:0.82rem;'
+                            f'text-align:center;min-width:90px;opacity:0.6">'
+                            f'❌ {m.strftime("%b/%y")}<br>'
+                            f'<span style="font-size:0.72rem">sem dizimo</span>'
+                            f'</div>'
+                        )
+                badges_html += '</div>'
+                st.markdown(badges_html, unsafe_allow_html=True)
+
+                # Avaliacao de frequencia
+                if len(meses_seq) > 0:
+                    taxa_freq = (meses_unicos / len(meses_seq)) * 100
+                    if taxa_freq >= 80:
+                        cor_freq = "#10B981"
+                        msg_freq = "🌟 Excelente frequencia"
+                    elif taxa_freq >= 50:
+                        cor_freq = "#F59E0B"
+                        msg_freq = "👍 Boa frequencia"
+                    else:
+                        cor_freq = "#EF4444"
+                        msg_freq = "⚠️ Frequencia baixa — necessita atencao pastoral"
+
+                    st.markdown(
+                        f'<div style="background:#1E293B;border-left:4px solid {cor_freq};'
+                        f'padding:12px 16px;border-radius:8px;margin-bottom:18px">'
+                        f'<div style="color:{cor_freq};font-weight:700;font-size:1rem">'
+                        f'{msg_freq}'
+                        f'</div>'
+                        f'<div style="color:#CBD5E1;font-size:0.85rem;margin-top:4px">'
+                        f'Taxa de frequencia: <b>{taxa_freq:.1f}%</b> — contribuiu em '
+                        f'{meses_unicos} de {len(meses_seq)} meses do periodo.'
+                        f'</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                # Tabela detalhada
+                with st.expander(
+                    f"📋 Ver detalhamento dos {qtd_total} dizimo(s) de {membro_sel_freq}",
+                    expanded=False,
+                ):
+                    cols_detalhe = ["data", "valor"]
+                    if "forma_pagamento" in diz_membro.columns:
+                        cols_detalhe.append("forma_pagamento")
+                    cols_detalhe.append("descricao")
+
+                    df_detalhe = diz_membro[cols_detalhe].copy()
+
+                    df_detalhe["data"] = pd.to_datetime(
+                        df_detalhe["data"], errors="coerce"
+                    ).dt.strftime("%d/%m/%Y")
+                    df_detalhe["valor"] = df_detalhe["valor"].apply(formatar_moeda)
+                    df_detalhe = df_detalhe.sort_values("data", ascending=False)
+
+                    rename_map = {
+                        "data":            "Data",
+                        "valor":           "Valor",
+                        "forma_pagamento": "Forma de pagamento",
+                        "descricao":       "Descricao",
+                    }
+                    df_detalhe = df_detalhe.rename(columns=rename_map)
+
+                    st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
+
+                    csv_membro = df_detalhe.to_csv(index=False, encoding="utf-8-sig")
+                    st.download_button(
+                        f"📥 Exportar dizimos de {membro_sel_freq}",
+                        csv_membro,
+                        f"dizimos_{membro_sel_freq.replace(' ', '_').lower()}.csv",
+                        "text/csv",
+                        key=f"dl_dizimos_{membro_sel_freq}",
+                    )
+
+        # ── Top 10 dizimistas (valor) ─────────────────────────────────────
         st.markdown(
             '<div class="grafico-titulo">💰 Top 10 Dizimistas (Valor)</div>',
             unsafe_allow_html=True,
