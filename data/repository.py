@@ -636,21 +636,31 @@ def excluir_subcategoria_despesa(nome: str):
 
 def restaurar_backup_zip(zip_bytes: bytes) -> dict:
     """
-    Restaura todas as igrejas a partir de um ZIP gerado pelo painel admin.
+    Restaura backup completo a partir de um ZIP.
 
-    Procura arquivos no padrao: <slug>/banco_<slug>.db
-    Faz backup automatico dos bancos atuais antes de sobrescrever.
+    Estrutura esperada do ZIP:
+        - master.db                       → restaura master.db (igrejas, senhas, super_admin)
+        - logos/<arquivo>                 → restaura logos do sistema/igrejas
+        - <slug>/banco_<slug>.db          → restaura banco da igreja
+        - <slug>/cadastros.csv            → ignorado (apenas referencia)
+        - <slug>/lancamentos.csv          → ignorado (apenas referencia)
+
+    Faz backup automatico de TUDO antes de sobrescrever.
 
     Retorna dict com:
-        - sucesso: lista de slugs restaurados
-        - erros: lista de mensagens de erro
-        - igrejas_recriadas: slugs que precisaram ser recriados no master.db
+        - sucesso_tenants: lista de slugs restaurados
+        - master_restaurado: True/False
+        - logos_restaurados: int (quantos)
+        - erros: lista de mensagens
+        - igrejas_recriadas: slugs recriados no master.db
     """
     import io
     import zipfile
 
     resultado = {
-        "sucesso": [],
+        "sucesso_tenants": [],
+        "master_restaurado": False,
+        "logos_restaurados": 0,
         "erros": [],
         "igrejas_recriadas": [],
     }
@@ -660,29 +670,41 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
         with zipfile.ZipFile(buf, "r") as zf:
             arquivos = zf.namelist()
 
-            # Identifica igrejas presentes no ZIP (<slug>/banco_<slug>.db)
-            bancos_zip = {}
+            # ── Identifica arquivos do ZIP ────────────────────────────────
+            bancos_tenants = {}
+            arquivo_master = None
+            arquivos_logos = []
+
             for nome in arquivos:
-                if nome.endswith(".db") and "/banco_" in nome:
+                # Master.db
+                if nome == "master.db":
+                    arquivo_master = nome
+
+                # Logos (sistema, igrejas, sidebar)
+                elif nome.startswith("logos/") and not nome.endswith("/"):
+                    arquivos_logos.append(nome)
+
+                # Bancos tenant (<slug>/banco_<slug>.db)
+                elif nome.endswith(".db") and "/banco_" in nome:
                     partes = nome.split("/")
                     if len(partes) == 2:
                         slug_zip = partes[0]
-                        bancos_zip[slug_zip] = nome
+                        bancos_tenants[slug_zip] = nome
 
-            if not bancos_zip:
+            if not (bancos_tenants or arquivo_master or arquivos_logos):
                 resultado["erros"].append(
-                    "Nenhum arquivo de banco (.db) encontrado no ZIP. "
-                    "Estrutura esperada: <slug>/banco_<slug>.db"
+                    "ZIP nao contem arquivos reconheciveis. "
+                    "Estrutura esperada: master.db, logos/<arquivo>, <slug>/banco_<slug>.db"
                 )
                 return resultado
 
-            # Backup automatico do master.db antes de mexer
+            # ── Backup automatico do master.db ────────────────────────────
             try:
                 _fazer_backup(MASTER_DB)
             except Exception:
                 pass
 
-            # Lista de slugs ja existentes no sistema
+            # ── Lista de slugs existentes no master atual ─────────────────
             slugs_existentes = set()
             try:
                 with _conn(MASTER_DB) as conn:
@@ -691,23 +713,55 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
             except Exception:
                 pass
 
-            # Restaura cada banco
-            for slug_zip, caminho_zip in bancos_zip.items():
+            # ── 1. RESTAURA MASTER.DB ─────────────────────────────────────
+            if arquivo_master:
+                try:
+                    dados_master = zf.read(arquivo_master)
+                    MASTER_DB.write_bytes(dados_master)
+                    resultado["master_restaurado"] = True
+
+                    # Recarrega slugs existentes (apos restaurar master)
+                    try:
+                        with _conn(MASTER_DB) as conn:
+                            rows = conn.execute("SELECT slug FROM igrejas").fetchall()
+                            slugs_existentes = {r["slug"] for r in rows}
+                    except Exception:
+                        pass
+
+                except Exception as ex:
+                    resultado["erros"].append(f"master.db: {ex}")
+
+            # ── 2. RESTAURA LOGOS ─────────────────────────────────────────
+            for caminho_logo in arquivos_logos:
+                try:
+                    # Pega so o nome do arquivo (remove "logos/")
+                    nome_arquivo = caminho_logo.replace("logos/", "", 1)
+                    if not nome_arquivo:
+                        continue
+
+                    dados_logo = zf.read(caminho_logo)
+                    destino_logo = LOGOS_DIR / nome_arquivo
+                    destino_logo.write_bytes(dados_logo)
+                    resultado["logos_restaurados"] += 1
+                except Exception as ex:
+                    resultado["erros"].append(f"logo {caminho_logo}: {ex}")
+
+            # ── 3. RESTAURA BANCOS TENANT ─────────────────────────────────
+            for slug_zip, caminho_zip in bancos_tenants.items():
                 try:
                     db_destino = _tenant_db(slug_zip)
 
-                    # Backup automatico do banco atual antes de sobrescrever
+                    # Backup automatico do banco atual
                     if db_destino.exists():
                         try:
                             _fazer_backup(db_destino)
                         except Exception:
                             pass
 
-                    # Le os bytes do ZIP e escreve no destino
                     dados_db = zf.read(caminho_zip)
                     db_destino.write_bytes(dados_db)
 
-                    # Verifica se a igreja existe no master.db
+                    # Se igreja nao existe no master, recria com placeholder
                     if slug_zip not in slugs_existentes:
                         try:
                             with _conn(db_destino) as conn_t:
@@ -734,7 +788,7 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
                                 f"{slug_zip}: banco restaurado mas erro ao recriar no master: {ex_recriacao}"
                             )
 
-                    resultado["sucesso"].append(slug_zip)
+                    resultado["sucesso_tenants"].append(slug_zip)
 
                 except Exception as ex:
                     resultado["erros"].append(f"{slug_zip}: {ex}")
