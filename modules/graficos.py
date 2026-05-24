@@ -801,8 +801,8 @@ def render():
         if ent_cat.empty:
             st.info("Sem entradas no periodo.")
         else:
-            cores_pizza = [
-                CORES_CATEGORIA.get(str(c).upper(), "#94A3B8")
+           cores_pizza = [
+    CORES_CATEGORIA.get(str(c).upper(), "#94A3B8")
     for c in ent_cat["categoria"]
 ]
             fig_ec = go.Figure(go.Pie(
@@ -928,45 +928,47 @@ def render():
         unsafe_allow_html=True,
     )
 
-   df_mem_ativos_full = df_cad[
-    (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
-    (df_cad["situacao"].str.upper() == "ATIVO")
-].copy()
+       df_mem_ativos_full = df_cad[
+        (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
+        (df_cad["situacao"].str.upper() == "ATIVO")
+    ].copy()
 
-if modo_personalizado and funcao_sel != "Todas":
-    df_mem_ativos_full = df_mem_ativos_full[
-        df_mem_ativos_full["funcao"].str.strip() == funcao_sel
-    ]
+    if modo_personalizado and funcao_sel != "Todas":
+        df_mem_ativos_full = df_mem_ativos_full[
+            df_mem_ativos_full["funcao"].str.strip() == funcao_sel
+        ]
 
-if modo_personalizado and membro_sel != "Todos":
-    df_mem_ativos_full = df_mem_ativos_full[
-        df_mem_ativos_full["nome"].str.strip() == membro_sel
-    ]
+    if modo_personalizado and membro_sel != "Todos":
+        df_mem_ativos_full = df_mem_ativos_full[
+            df_mem_ativos_full["nome"].str.strip() == membro_sel
+        ]
 
-df_dizimos_todos = df[
-    (df["categoria"].str.upper() == "DIZIMO") &
-    (df["tipo_cadastro"].str.upper() == "MEMBRO")
-].copy()
+    df_dizimos_todos = df[
+        (df["categoria"].str.upper() == "DIZIMO") &
+        (df["tipo_cadastro"].str.upper() == "MEMBRO")
+    ].copy()
 
-hoje_dt = datetime.date.today()
-inativos = _calcular_inativos_financeiros(
-    df_mem_ativos_full, df_dizimos_todos, hoje_dt, dias_ativo
-)
+    hoje_dt = datetime.date.today()
+    inativos = _calcular_inativos_financeiros(
+        df_mem_ativos_full, df_dizimos_todos, hoje_dt, dias_ativo
+    )
 
-cores_inativos = {
-    str(dias_ativo): ("amarelo", f"{dias_ativo} dias ou mais", "🟡"),
-    "30": ("amarelo", "30 dias ou mais", "🟡"),
-    "60": ("laranja", "60 dias ou mais", "🟠"),
-    "90": ("vermelho", "90 dias ou mais", "🔴"),
-}
-cores_inativos = {
-    faixa: dados
-    for faixa, dados in cores_inativos.items()
-    if faixa in inativos
-}
+    cores_inativos = {
+        str(dias_ativo): ("amarelo", f"{dias_ativo} dias ou mais", "🟡"),
+        "30": ("amarelo", "30 dias ou mais", "🟡"),
+        "60": ("laranja", "60 dias ou mais", "🟠"),
+        "90": ("vermelho", "90 dias ou mais", "🔴"),
+    }
+    cores_inativos = {
+        faixa: dados
+        for faixa, dados in cores_inativos.items()
+        if faixa in inativos
+    }
+
+    colunas_inativos = st.columns(len(cores_inativos))
 
     for (faixa, (cor, titulo, icone)), col in zip(
-        cores_inativos.items(), [ina_c1, ina_c2, ina_c3]
+        cores_inativos.items(), colunas_inativos
     ):
         dados = inativos[faixa]
         with col:
@@ -980,7 +982,6 @@ cores_inativos = {
                 """,
                 unsafe_allow_html=True,
             )
-
     st.markdown("")
     st.caption(
         f"📋 Total de membros ativos: **{len(df_mem_ativos_full)}**. "
