@@ -921,14 +921,15 @@ def render():
     st.plotly_chart(fig_d, **OPC)
 
     # ── INATIVOS FINANCEIROS (FASE 2) ─────────────────────────────────────
+       # ── INATIVOS FINANCEIROS (FASE 2) ─────────────────────────────────────
     st.markdown(
         f'<div class="grafico-titulo">⚠️ Membros Inativos Financeiramente'
         f'<span class="subtitulo">Configuracao da igreja: dizimista ativo = ate {dias_ativo} dias. '
-        f'As 3 faixas abaixo mostram quem esta abaixo desse criterio.</span></div>',
+        f'As faixas abaixo mostram quem esta abaixo desse criterio.</span></div>',
         unsafe_allow_html=True,
     )
 
-       df_mem_ativos_full = df_cad[
+    df_mem_ativos_full = df_cad[
         (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
         (df_cad["situacao"].str.upper() == "ATIVO")
     ].copy()
@@ -982,6 +983,7 @@ def render():
                 """,
                 unsafe_allow_html=True,
             )
+
     st.markdown("")
     st.caption(
         f"📋 Total de membros ativos: **{len(df_mem_ativos_full)}**. "
@@ -1002,10 +1004,10 @@ def render():
                 lambda x: f"{x} dias" if x is not None else "Nunca dizimou"
             )
             df_lista = df_lista.rename(columns={
-                "nome":     "Nome",
+                "nome": "Nome",
                 "telefone": "Telefone",
-                "ultimo":   "Ultimo dizimo",
-                "dias":     "Dias sem dizimar",
+                "ultimo": "Ultimo dizimo",
+                "dias": "Dias sem dizimar",
             })
             st.dataframe(df_lista, use_container_width=True, hide_index=True)
 
@@ -1259,7 +1261,7 @@ def render():
 
                     df_detalhe = diz_membro[cols_detalhe].copy()
 
-                                        df_detalhe["data"] = pd.to_datetime(
+                    df_detalhe["data"] = pd.to_datetime(
                         df_detalhe["data"], errors="coerce"
                     )
                     df_detalhe = df_detalhe.sort_values("data", ascending=False)
