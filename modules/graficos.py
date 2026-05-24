@@ -1258,10 +1258,12 @@ cores_inativos = {
 
                     df_detalhe = diz_membro[cols_detalhe].copy()
 
-                    df_detalhe["data"] = pd.to_datetime(df_detalhe["data"], errors="coerce")
-df_detalhe = df_detalhe.sort_values("data", ascending=False)
-df_detalhe["data"] = df_detalhe["data"].dt.strftime("%d/%m/%Y")
-df_detalhe["valor"] = df_detalhe["valor"].apply(formatar_moeda)
+                                        df_detalhe["data"] = pd.to_datetime(
+                        df_detalhe["data"], errors="coerce"
+                    )
+                    df_detalhe = df_detalhe.sort_values("data", ascending=False)
+                    df_detalhe["data"] = df_detalhe["data"].dt.strftime("%d/%m/%Y")
+                    df_detalhe["valor"] = df_detalhe["valor"].apply(formatar_moeda)
                     df_detalhe = df_detalhe.sort_values("data", ascending=False)
 
                     rename_map = {
