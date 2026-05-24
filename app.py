@@ -289,34 +289,16 @@ if modo == "admin":
     painel.render()
 
 elif modo == "igreja":
-    try:
-    from modules import home
-    st.write("home OK")
-
-    from modules import cadastros
-    st.write("cadastros OK")
-
-    from modules import lancamentos
-    st.write("lancamentos OK")
-
-    from modules import relatorios
-    st.write("relatorios OK")
-
-    from modules import graficos
-    st.write("graficos OK")
-
-    from modules import backup
-    st.write("backup OK")
-
-    from modules import aniversariantes
-    st.write("aniversariantes OK")
-
-    from modules import minha_conta
-    st.write("minha_conta OK")
-
-except Exception as e:
-    st.exception(e)
-    st.stop()
+  from modules import (
+    home,
+    cadastros,
+    lancamentos,
+    relatorios,
+    graficos,
+    backup,
+    aniversariantes,
+    minha_conta,
+)
 
     paginas = {
         "home": ("Inicio", home),
