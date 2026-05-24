@@ -3,20 +3,23 @@ FielMordomo - Gestao financeira para igrejas
 SaaS multi-tenant com dados isolados por igreja
 """
 
-import sys
-import os
 import base64
+import html
+import os
+import sys
+
+import streamlit as st
 
 _here = os.path.dirname(os.path.abspath(__file__))
 if _here not in sys.path:
     sys.path.insert(0, _here)
 
-import streamlit as st
-
 from data.repository import (
     inicializar_master,
-    obter_logo_igreja, obter_logo_sistema,
-    obter_logo_sidebar_igreja, obter_logo_sidebar_sistema,
+    obter_logo_igreja,
+    obter_logo_sistema,
+    obter_logo_sidebar_igreja,
+    obter_logo_sidebar_sistema,
 )
 from modules.auth import tela_login, logout, modo_atual
 
@@ -26,6 +29,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+
+def _esc(valor):
+    return html.escape(str(valor if valor is not None else ""), quote=True)
 
 
 def _injetar_css():
@@ -151,18 +158,12 @@ def _injetar_css():
 
 
 def _img_b64(dados, ext):
+    ext = str(ext or "").lower()
     mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/" + ext
     return "data:" + mime + ";base64," + base64.b64encode(dados).decode()
 
 
 def _logo_para_sidebar_igreja(slug):
-    """
-    Cascata de fallback para o logo da sidebar da igreja:
-    1. Logo sidebar especifico da igreja
-    2. Logo sidebar do sistema
-    3. Logo principal da igreja
-    4. Logo principal do sistema
-    """
     return (
         obter_logo_sidebar_igreja(slug)
         or obter_logo_sidebar_sistema()
@@ -172,16 +173,11 @@ def _logo_para_sidebar_igreja(slug):
 
 
 def _logo_para_sidebar_admin():
-    """
-    Cascata de fallback para a sidebar do admin:
-    1. Logo sidebar do sistema
-    2. Logo principal do sistema
-    """
     return obter_logo_sidebar_sistema() or obter_logo_sistema()
 
 
 def _sidebar_igreja(pagina_atual, paginas, igreja, slug):
-    ICONES = {
+    icones = {
         "home": "🏠",
         "cadastros": "👤",
         "lancamentos": "💵",
@@ -210,8 +206,8 @@ def _sidebar_igreja(pagina_atual, paginas, igreja, slug):
                 unsafe_allow_html=True,
             )
 
-        nome = igreja.get("nome", "FielMordomo")
-        plano = igreja.get("plano", "").capitalize()
+        nome = _esc(igreja.get("nome", "FielMordomo"))
+        plano = _esc(str(igreja.get("plano", "")).capitalize())
 
         st.markdown(
             f'<div class="sidebar-info">'
@@ -222,11 +218,11 @@ def _sidebar_igreja(pagina_atual, paginas, igreja, slug):
         )
 
         for key, (label, _) in paginas.items():
-            ic = ICONES.get(key, "")
+            icone = icones.get(key, "")
             ativo = pagina_atual == key
 
             if st.button(
-                f"{ic}  {label}",
+                f"{icone}  {label}",
                 key=f"sb_{key}",
                 use_container_width=True,
                 type="primary" if ativo else "secondary",
@@ -277,7 +273,6 @@ def _sidebar_admin():
             logout()
 
 
-# ── Bootstrap ─────────────────────────────────────────────────────────────
 inicializar_master()
 
 if not tela_login():
@@ -294,16 +289,18 @@ if modo == "admin":
     painel.render()
 
 elif modo == "igreja":
-    from modules import home
-    from modules import cadastros
-    from modules import lancamentos
-    from modules import relatorios
-    from modules import graficos
-    from modules import backup
-    from modules import aniversariantes
-    from modules import minha_conta
+    from modules import (
+        home,
+        cadastros,
+        lancamentos,
+        relatorios,
+        graficos,
+        backup,
+        aniversariantes,
+        minha_conta,
+    )
 
-    PAGINAS = {
+    paginas = {
         "home": ("Inicio", home),
         "cadastros": ("Membros", cadastros),
         "lancamentos": ("Lancamentos", lancamentos),
@@ -314,7 +311,7 @@ elif modo == "igreja":
         "minha_conta": ("Minha conta", minha_conta),
     }
 
-    if "pagina" not in st.session_state:
+    if st.session_state.get("pagina") not in paginas:
         st.session_state["pagina"] = "home"
 
     igreja = st.session_state.get("igreja", {})
@@ -322,10 +319,15 @@ elif modo == "igreja":
 
     _sidebar_igreja(
         pagina_atual=st.session_state["pagina"],
-        paginas=PAGINAS,
+        paginas=paginas,
         igreja=igreja,
         slug=slug,
     )
 
-    _, modulo = PAGINAS.get(st.session_state["pagina"], PAGINAS["home"])
+    _, modulo = paginas.get(st.session_state["pagina"], paginas["home"])
     modulo.render()
+
+else:
+    st.error("Modo de acesso invalido. Faca login novamente.")
+    if st.button("Sair"):
+        logout()
