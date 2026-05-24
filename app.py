@@ -295,13 +295,13 @@ if modo == "admin":
 
 elif modo == "igreja":
     from modules import home
-from modules import cadastros
-from modules import lancamentos
-from modules import relatorios
-from modules import graficos
-from modules import backup
-from modules import aniversariantes
-from modules import minha_conta
+    from modules import cadastros
+    from modules import lancamentos
+    from modules import relatorios
+    from modules import graficos
+    from modules import backup
+    from modules import aniversariantes
+    from modules import minha_conta
 
     PAGINAS = {
         "home": ("Inicio", home),
