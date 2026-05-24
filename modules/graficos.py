@@ -1,5 +1,4 @@
 import datetime
-import calendar
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -12,25 +11,26 @@ from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
 T = "plotly_dark"
 
-# ── PALETA DE CORES (tema escuro) ─────────────────────────────────────────
 COR = {
-    "Entrada":    "#10B981",
-    "Saida":      "#EF4444",
-    "saldo":      "#3B82F6",
-    "dizimo":     "#10B981",
-    "missao":     "#F59E0B",
-    "campanha":   "#8B5CF6",
-    "oferta":     "#EC4899",
-    "despesa":    "#EF4444",
+    "Entrada": "#10B981",
+    "Saida": "#EF4444",
+    "saldo": "#3B82F6",
+    "dizimo": "#10B981",
+    "missao": "#F59E0B",
+    "campanha": "#8B5CF6",
+    "oferta": "#EC4899",
+    "despesa": "#EF4444",
     "qtd_dizimo": "#10B981",
-    "funcao":     "#3B82F6",
+    "funcao": "#3B82F6",
+    "Revista EBD": "#03A61E",
 }
 
 CORES_CATEGORIA = {
-    "DIZIMO":   "#10B981",
-    "OFERTA":   "#3B82F6",
-    "MISSAO":   "#F59E0B",
+    "DIZIMO": "#10B981",
+    "OFERTA": "#3B82F6",
+    "MISSAO": "#F59E0B",
     "CAMPANHA": "#8B5CF6",
+    "REVISTA EBD": "#03A61E",
 }
 
 CORES_DESPESAS = [
@@ -38,9 +38,9 @@ CORES_DESPESAS = [
     "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6", "#94A3B8",
 ]
 
-ALT_COMPARACAO  = 380
-ALT_RANK_BASE   = 320
-ALT_POR_ITEM    = 55
+ALT_COMPARACAO = 380
+ALT_RANK_BASE = 320
+ALT_POR_ITEM = 55
 ALT_BARRAS_VERT = 400
 
 MES_MINIMO_SISTEMA = pd.Period("2026-01", freq="M")
@@ -67,6 +67,25 @@ def _base_layout(margin=None, **kw):
         dragmode=False,
         **kw,
     )
+
+
+def _normalizar_texto(df, colunas):
+    for col in colunas:
+        if col not in df.columns:
+            df[col] = ""
+        df[col] = df[col].fillna("").astype(str)
+    return df
+
+
+def _validar_colunas(df, colunas, nome_df):
+    faltando = [c for c in colunas if c not in df.columns]
+    if faltando:
+        st.error(
+            f"Dados incompletos em {nome_df}. Colunas ausentes: "
+            + ", ".join(faltando)
+        )
+        return False
+    return True
 
 
 def _injetar_css_dashboard():
@@ -112,9 +131,9 @@ def _injetar_css_dashboard():
         font-size: 0.75rem;
         font-weight: 600;
     }
-    .kpi-card-v2 .kpi-variacao.up    { color: #10B981; }
-    .kpi-card-v2 .kpi-variacao.down  { color: #EF4444; }
-    .kpi-card-v2 .kpi-variacao.flat  { color: #94A3B8; }
+    .kpi-card-v2 .kpi-variacao.up { color: #10B981; }
+    .kpi-card-v2 .kpi-variacao.down { color: #EF4444; }
+    .kpi-card-v2 .kpi-variacao.flat { color: #94A3B8; }
 
     .grafico-titulo {
         font-size: 1.0rem;
@@ -152,11 +171,8 @@ def _injetar_css_dashboard():
     .stMarkdown p, .stCaption { color: #CBD5E1; }
     [data-testid="stMetricValue"] { color: #F1F5F9 !important; }
     [data-testid="stMetricLabel"] { color: #94A3B8 !important; }
-    .stSelectbox label, .stDateInput label {
-        color: #CBD5E1 !important;
-    }
+    .stSelectbox label, .stDateInput label { color: #CBD5E1 !important; }
 
-    /* Card de inativos financeiros */
     .inativo-card {
         background: #1E293B;
         border-radius: 12px;
@@ -190,10 +206,7 @@ def _injetar_css_dashboard():
 def _meses_disponiveis(df):
     if df.empty or "data" not in df.columns:
         return []
-    return sorted(
-        df["data"].dropna().dt.to_period("M").unique(),
-        reverse=True,
-    )
+    return sorted(df["data"].dropna().dt.to_period("M").unique(), reverse=True)
 
 
 def _mes_anterior(periodo_mes):
@@ -205,16 +218,18 @@ def _calc_variacao(atual, anterior):
         if atual == 0:
             return ("Sem dados anteriores", "flat")
         return ("Novo", "up")
+
     pct = ((atual - anterior) / abs(anterior)) * 100
     if abs(pct) < 0.1:
         return ("0,0% vs anterior", "flat")
+
     direcao = "up" if pct > 0 else "down"
     seta = "↑" if pct > 0 else "↓"
     return (f"{seta} {abs(pct):.1f}% vs anterior", direcao)
 
 
 def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
-    html = f"""
+    st.markdown(f"""
     <div class="kpi-card-v2">
         <div class="kpi-icon" style="background:{cor_icone}33;color:{cor_icone}">
             {icone}
@@ -223,56 +238,45 @@ def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
         <div class="kpi-valor">{valor}</div>
         <div class="kpi-variacao {direcao}">{variacao}</div>
     </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 
 def _calc_periodo_serie(df, mes_ref):
-    if df.empty or df["mes_periodo"].dropna().empty:
-        primeiro_mes_dados = mes_ref
-    else:
-        primeiro_mes_dados = df["mes_periodo"].dropna().min()
+    primeiro_mes_dados = (
+        mes_ref if df.empty or df["mes_periodo"].dropna().empty
+        else df["mes_periodo"].dropna().min()
+    )
 
     ini_serie = max(primeiro_mes_dados, MES_MINIMO_SISTEMA)
-    ini_12m_limite = mes_ref - 11
-    ini_12m = max(ini_serie, ini_12m_limite)
+    ini_12m = max(ini_serie, mes_ref - 11)
     fim_12m = mes_ref
 
     if fim_12m < ini_12m:
         ini_12m = fim_12m
 
-    qtd_meses  = max(1, (fim_12m - ini_12m).n + 1)
-    meses_seq  = [(ini_12m + i) for i in range(qtd_meses)]
+    qtd_meses = max(1, (fim_12m - ini_12m).n + 1)
+    meses_seq = [(ini_12m + i) for i in range(qtd_meses)]
     labels_12m = [m.strftime("%b/%y") for m in meses_seq]
 
     titulo_periodo = (
         f"{ini_12m.strftime('%b/%y')} a {fim_12m.strftime('%b/%y')}"
-        if qtd_meses > 1
-        else fim_12m.strftime('%b/%y')
+        if qtd_meses > 1 else fim_12m.strftime("%b/%y")
     )
 
     return ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo
 
 
-def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
-    """
-    Calcula membros inativos por faixa de dias sem dizimo.
-
-    Retorna dict:
-    {
-        '30': {'qtd': N, 'pct': P, 'lista': [{'nome', 'telefone', 'ultimo', 'dias'}]},
-        '60': {...}, '90': {...}
-    }
-    """
+def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje, dias_ativo):
     total_membros = len(df_membros_ativos)
 
     ultimo_diz = {}
     if not df_dizimos.empty:
-        agrup = df_dizimos.groupby("id_cadastro")["data"].max()
-        ultimo_diz = agrup.to_dict()
+        ultimo_diz = df_dizimos.groupby("id_cadastro")["data"].max().to_dict()
 
     resultado = {}
-    for faixa_dias in [30, 60, 90]:
+    faixas = sorted(set([int(dias_ativo), 30, 60, 90]))
+
+    for faixa_dias in faixas:
         lista = []
 
         for _, m in df_membros_ativos.iterrows():
@@ -285,12 +289,13 @@ def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
                 dias_sem = (hoje - ultimo_data).days
                 ultimo_str = ultimo_data.strftime("%d/%m/%Y")
             else:
-                dias_sem = 9999  # Nunca dizimou
+                dias_sem = 9999
                 ultimo_str = "Nunca"
 
             if dias_sem >= faixa_dias:
                 tel = str(m.get("telefone", "") or "").strip()
                 tel_fmt = ""
+
                 if tel and tel.isdigit():
                     if len(tel) == 11:
                         tel_fmt = f"({tel[:2]}) {tel[2:7]}-{tel[7:]}"
@@ -302,18 +307,20 @@ def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
                     tel_fmt = tel
 
                 lista.append({
-                    "nome": str(m["nome"]),
+                    "nome": str(m.get("nome", "")),
                     "telefone": tel_fmt or "—",
                     "ultimo": ultimo_str,
                     "dias": dias_sem if dias_sem < 9999 else None,
                 })
 
-        lista.sort(key=lambda x: x["dias"] if x["dias"] is not None else 99999, reverse=True)
+        lista.sort(
+            key=lambda x: x["dias"] if x["dias"] is not None else 99999,
+            reverse=True,
+        )
 
-        pct = (len(lista) / total_membros * 100) if total_membros else 0
         resultado[str(faixa_dias)] = {
             "qtd": len(lista),
-            "pct": pct,
+            "pct": (len(lista) / total_membros * 100) if total_membros else 0,
             "lista": lista,
         }
 
@@ -323,29 +330,43 @@ def _calcular_inativos_financeiros(df_membros_ativos, df_dizimos, hoje):
 def render():
     _injetar_css_dashboard()
 
-    slug    = slug_da_sessao()
+    slug = slug_da_sessao()
     df_lanc = carregar_lancamentos(slug)
-    df_cad  = carregar_cadastros(slug)
+    df_cad = carregar_cadastros(slug)
 
     if df_lanc.empty:
         st.info("Ainda nao ha lancamentos para o dashboard.")
         return
 
+    colunas_lanc = [
+        "data", "valor", "id_cadastro", "tipo", "categoria",
+        "tipo_cadastro", "nome_cadastro",
+    ]
+    colunas_cad = ["id_cadastro", "tipo_cadastro", "situacao", "nome"]
+
+    if not _validar_colunas(df_lanc, colunas_lanc, "lancamentos"):
+        return
+    if not _validar_colunas(df_cad, colunas_cad, "cadastros"):
+        return
+
     df = df_lanc.copy()
-    df["data"]  = pd.to_datetime(df["data"], errors="coerce")
+    df_cad = df_cad.copy()
+
+    df = _normalizar_texto(df, [
+        "tipo", "categoria", "tipo_cadastro", "nome_cadastro",
+        "subcategoria", "descricao", "forma_pagamento",
+    ])
+    df_cad = _normalizar_texto(df_cad, [
+        "tipo_cadastro", "situacao", "nome", "telefone", "funcao",
+    ])
+
+    df["data"] = pd.to_datetime(df["data"], errors="coerce")
     df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0.0)
-    df["mes_periodo"] = df["data"].dt.to_period("M")
-    df["mes_label"]   = df["data"].dt.strftime("%b/%Y")
     df["id_cadastro"] = pd.to_numeric(df["id_cadastro"], errors="coerce")
-
-    if "subcategoria" not in df.columns:
-        df["subcategoria"] = ""
-    df["subcategoria"] = df["subcategoria"].fillna("").astype(str)
-
-    if "funcao" not in df_cad.columns:
-        df_cad["funcao"] = ""
-    df_cad["funcao"] = df_cad["funcao"].fillna("").astype(str)
     df_cad["id_cadastro"] = pd.to_numeric(df_cad["id_cadastro"], errors="coerce")
+
+    df["mes_periodo"] = df["data"].dt.to_period("M")
+    df["mes_label"] = df["data"].dt.strftime("%b/%Y")
 
     try:
         dias_ativo = int(obter_config_igreja(
@@ -357,7 +378,6 @@ def render():
     st.markdown("### 📊 Dashboard")
     st.caption("Visao geral da saude financeira da igreja")
 
-    # ── Seletor de mes de referencia e comparacao ─────────────────────────
     meses = _meses_disponiveis(df)
     if not meses:
         st.warning("Sem dados de data para os lancamentos.")
@@ -368,9 +388,10 @@ def render():
 
     meses_str = [str(m) for m in meses]
     meses_lbl = [m.strftime("%b/%Y") for m in meses]
-    map_lbl   = dict(zip(meses_str, meses_lbl))
+    map_lbl = dict(zip(meses_str, meses_lbl))
 
     col_ref, col_comp, col_modo = st.columns([2, 2, 1])
+
     with col_ref:
         mes_ref_str = st.selectbox(
             "📅 Mes de referencia",
@@ -387,6 +408,7 @@ def render():
 
     meses_comp_str = [str(m) for m in meses if m < mes_ref] or [str(mes_anterior_padrao)]
     map_comp = {str(m): m.strftime("%b/%Y") for m in meses if m < mes_ref}
+
     if not map_comp:
         map_comp[str(mes_anterior_padrao)] = mes_anterior_padrao.strftime("%b/%Y")
 
@@ -394,6 +416,7 @@ def render():
         idx_default = 0
         if str(mes_anterior_padrao) in meses_comp_str:
             idx_default = meses_comp_str.index(str(mes_anterior_padrao))
+
         mes_comp_str = st.selectbox(
             "🔄 Comparar com",
             meses_comp_str,
@@ -401,13 +424,11 @@ def render():
             index=idx_default,
             key="db_mes_comp_select",
         )
+
     mes_comp = pd.Period(mes_comp_str, freq="M")
 
     with col_modo:
-        st.markdown(
-            '<div style="margin-top:28px"></div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div style="margin-top:28px"></div>', unsafe_allow_html=True)
         modo_personalizado = st.toggle(
             "Personalizado",
             value=False,
@@ -415,11 +436,11 @@ def render():
             help="Ativa filtros avancados",
         )
 
-    df_ref  = df[df["mes_periodo"] == mes_ref].copy()
+    df_ref = df[df["mes_periodo"] == mes_ref].copy()
     df_comp = df[df["mes_periodo"] == mes_comp].copy()
 
-    membro_sel    = "Todos"
-    funcao_sel    = "Todas"
+    membro_sel = "Todos"
+    funcao_sel = "Todas"
     categoria_sel = "Todas"
     d_ini = None
     d_fim = None
@@ -428,7 +449,7 @@ def render():
         st.markdown(
             '<div class="filtro-mes-box">'
             '<b style="color:#F1F5F9">🔍 Modo Personalizado</b> '
-            '<span style="color:#94A3B8">— todos os cards e graficos respeitam os filtros abaixo. '
+            '<span style="color:#94A3B8">— cards e graficos respeitam os filtros abaixo. '
             'A comparacao usa o periodo equivalente anterior.</span>'
             '</div>',
             unsafe_allow_html=True,
@@ -436,6 +457,7 @@ def render():
 
         dv = df["data"].dropna()
         cp1, cp2 = st.columns(2)
+
         with cp1:
             d_ini = st.date_input(
                 "De",
@@ -443,6 +465,7 @@ def render():
                 format="DD/MM/YYYY",
                 key="db_ini",
             )
+
         with cp2:
             d_fim = st.date_input(
                 "Ate",
@@ -461,12 +484,14 @@ def render():
         ].copy()
 
         fc1, fc2, fc3 = st.columns(3)
+
         membros_disp = sorted([
             n for n in df_f["nome_cadastro"].dropna().unique()
             if str(n).strip() and str(n).strip() != "nan"
         ])
         funcoes_disp = sorted([
-            f for f in df_cad["funcao"].dropna().unique() if str(f).strip()
+            f for f in df_cad["funcao"].dropna().unique()
+            if str(f).strip()
         ])
         categorias_disp = sorted([
             c for c in df_f[df_f["tipo"].str.upper() == "ENTRADA"]["categoria"].dropna().unique()
@@ -479,12 +504,14 @@ def render():
                 ["Todos"] + membros_disp,
                 key="db_membro_filtro",
             )
+
         with fc2:
             funcao_sel = st.selectbox(
                 "Funcao",
                 ["Todas"] + funcoes_disp,
                 key="db_funcao_filtro",
             )
+
         with fc3:
             categoria_sel = st.selectbox(
                 "Categoria entrada",
@@ -493,18 +520,19 @@ def render():
             )
 
         if membro_sel != "Todos":
-            df_f = df_f[df_f["nome_cadastro"].fillna("").str.strip() == membro_sel]
+            df_f = df_f[df_f["nome_cadastro"].str.strip() == membro_sel]
+
         if funcao_sel != "Todas":
             ids_funcao = df_cad[
-                df_cad["funcao"].fillna("").str.strip() == funcao_sel
+                df_cad["funcao"].str.strip() == funcao_sel
             ]["id_cadastro"].tolist()
             df_f = df_f[df_f["id_cadastro"].isin(ids_funcao)]
+
         if categoria_sel != "Todas":
-            df_f = df_f[df_f["categoria"].fillna("").str.strip() == categoria_sel]
+            df_f = df_f[df_f["categoria"].str.strip() == categoria_sel]
     else:
         df_f = df_ref
 
-    # ── CALCULA PERIODO DE COMPARACAO E DATAFRAMES PARA CARDS ─────────────
     if modo_personalizado:
         dias_periodo = (d_fim - d_ini).days + 1
         d_fim_comp_pers = d_ini - datetime.timedelta(days=1)
@@ -516,22 +544,19 @@ def render():
         ].copy()
 
         if membro_sel != "Todos":
-            df_comp_pers = df_comp_pers[
-                df_comp_pers["nome_cadastro"].fillna("").str.strip() == membro_sel
-            ]
+            df_comp_pers = df_comp_pers[df_comp_pers["nome_cadastro"].str.strip() == membro_sel]
+
         if funcao_sel != "Todas":
             ids_funcao = df_cad[
-                df_cad["funcao"].fillna("").str.strip() == funcao_sel
+                df_cad["funcao"].str.strip() == funcao_sel
             ]["id_cadastro"].tolist()
             df_comp_pers = df_comp_pers[df_comp_pers["id_cadastro"].isin(ids_funcao)]
+
         if categoria_sel != "Todas":
-            df_comp_pers = df_comp_pers[
-                df_comp_pers["categoria"].fillna("").str.strip() == categoria_sel
-            ]
+            df_comp_pers = df_comp_pers[df_comp_pers["categoria"].str.strip() == categoria_sel]
 
         df_card_atual = df_f
-        df_card_comp  = df_comp_pers
-
+        df_card_comp = df_comp_pers
         label_atual = f"{d_ini.strftime('%d/%m')} a {d_fim.strftime('%d/%m/%Y')}"
 
         filtros_resumo = []
@@ -551,8 +576,8 @@ def render():
         )
     else:
         df_card_atual = df_ref
-        df_card_comp  = df_comp
-        label_atual   = mes_ref.strftime("%b/%Y")
+        df_card_comp = df_comp
+        label_atual = mes_ref.strftime("%b/%Y")
 
     # ── CARDS KPI ─────────────────────────────────────────────────────────
     ent_ref = df_card_atual[df_card_atual["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
@@ -778,8 +803,8 @@ def render():
         else:
             cores_pizza = [
                 CORES_CATEGORIA.get(str(c).upper(), "#94A3B8")
-                for c in ent_cat["categoria"]
-            ]
+    for c in ent_cat["categoria"]
+]
             fig_ec = go.Figure(go.Pie(
                 labels=ent_cat["categoria"],
                 values=ent_cat["valor"],
@@ -903,28 +928,42 @@ def render():
         unsafe_allow_html=True,
     )
 
-    df_mem_ativos_full = df_cad[
-        (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
-        (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
-    ].copy()
+   df_mem_ativos_full = df_cad[
+    (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
+    (df_cad["situacao"].str.upper() == "ATIVO")
+].copy()
 
-    df_dizimos_todos = df[
-        (df["categoria"].str.upper() == "DIZIMO") &
-        (df["tipo_cadastro"].str.upper() == "MEMBRO")
-    ].copy()
+if modo_personalizado and funcao_sel != "Todas":
+    df_mem_ativos_full = df_mem_ativos_full[
+        df_mem_ativos_full["funcao"].str.strip() == funcao_sel
+    ]
 
-    hoje_dt = datetime.date.today()
-    inativos = _calcular_inativos_financeiros(
-        df_mem_ativos_full, df_dizimos_todos, hoje_dt
-    )
+if modo_personalizado and membro_sel != "Todos":
+    df_mem_ativos_full = df_mem_ativos_full[
+        df_mem_ativos_full["nome"].str.strip() == membro_sel
+    ]
 
-    ina_c1, ina_c2, ina_c3 = st.columns(3)
+df_dizimos_todos = df[
+    (df["categoria"].str.upper() == "DIZIMO") &
+    (df["tipo_cadastro"].str.upper() == "MEMBRO")
+].copy()
 
-    cores_inativos = {
-        "30": ("amarelo", "30 dias ou mais", "🟡"),
-        "60": ("laranja", "60 dias ou mais", "🟠"),
-        "90": ("vermelho", "90 dias ou mais", "🔴"),
-    }
+hoje_dt = datetime.date.today()
+inativos = _calcular_inativos_financeiros(
+    df_mem_ativos_full, df_dizimos_todos, hoje_dt, dias_ativo
+)
+
+cores_inativos = {
+    str(dias_ativo): ("amarelo", f"{dias_ativo} dias ou mais", "🟡"),
+    "30": ("amarelo", "30 dias ou mais", "🟡"),
+    "60": ("laranja", "60 dias ou mais", "🟠"),
+    "90": ("vermelho", "90 dias ou mais", "🔴"),
+}
+cores_inativos = {
+    faixa: dados
+    for faixa, dados in cores_inativos.items()
+    if faixa in inativos
+}
 
     for (faixa, (cor, titulo, icone)), col in zip(
         cores_inativos.items(), [ina_c1, ina_c2, ina_c3]
@@ -1219,10 +1258,10 @@ def render():
 
                     df_detalhe = diz_membro[cols_detalhe].copy()
 
-                    df_detalhe["data"] = pd.to_datetime(
-                        df_detalhe["data"], errors="coerce"
-                    ).dt.strftime("%d/%m/%Y")
-                    df_detalhe["valor"] = df_detalhe["valor"].apply(formatar_moeda)
+                    df_detalhe["data"] = pd.to_datetime(df_detalhe["data"], errors="coerce")
+df_detalhe = df_detalhe.sort_values("data", ascending=False)
+df_detalhe["data"] = df_detalhe["data"].dt.strftime("%d/%m/%Y")
+df_detalhe["valor"] = df_detalhe["valor"].apply(formatar_moeda)
                     df_detalhe = df_detalhe.sort_values("data", ascending=False)
 
                     rename_map = {
