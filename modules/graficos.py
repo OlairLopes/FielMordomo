@@ -4,8 +4,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from data.repository import (
-    carregar_lancamentos, carregar_cadastros,
-    obter_config_igreja, DIAS_DIZIMISTA_ATIVO_DEFAULT,
+    carregar_lancamentos,
+    carregar_cadastros,
+    obter_config_igreja,
+    DIAS_DIZIMISTA_ATIVO_DEFAULT,
 )
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
@@ -42,7 +44,6 @@ ALT_COMPARACAO = 380
 ALT_RANK_BASE = 320
 ALT_POR_ITEM = 55
 ALT_BARRAS_VERT = 400
-
 MES_MINIMO_SISTEMA = pd.Period("2026-01", freq="M")
 
 CONFIG_PLOTLY = {
@@ -242,10 +243,10 @@ def _kpi_card(titulo, valor, variacao, direcao, cor_icone, icone):
 
 
 def _calc_periodo_serie(df, mes_ref):
-    primeiro_mes_dados = (
-        mes_ref if df.empty or df["mes_periodo"].dropna().empty
-        else df["mes_periodo"].dropna().min()
-    )
+    if df.empty or df["mes_periodo"].dropna().empty:
+        primeiro_mes_dados = mes_ref
+    else:
+        primeiro_mes_dados = df["mes_periodo"].dropna().min()
 
     ini_serie = max(primeiro_mes_dados, MES_MINIMO_SISTEMA)
     ini_12m = max(ini_serie, mes_ref - 11)
@@ -260,7 +261,8 @@ def _calc_periodo_serie(df, mes_ref):
 
     titulo_periodo = (
         f"{ini_12m.strftime('%b/%y')} a {fim_12m.strftime('%b/%y')}"
-        if qtd_meses > 1 else fim_12m.strftime("%b/%y")
+        if qtd_meses > 1
+        else fim_12m.strftime("%b/%y")
     )
 
     return ini_12m, fim_12m, meses_seq, labels_12m, titulo_periodo
@@ -579,7 +581,6 @@ def render():
         df_card_comp = df_comp
         label_atual = mes_ref.strftime("%b/%Y")
 
-    # ── CARDS KPI ─────────────────────────────────────────────────────────
     ent_ref = df_card_atual[df_card_atual["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
     sai_ref = df_card_atual[df_card_atual["tipo"].str.upper() == "SAIDA"]["valor"].sum()
     sal_ref = ent_ref - sai_ref
@@ -596,17 +597,17 @@ def render():
         (df_card_comp["categoria"].str.upper() == "DIZIMO") &
         (df_card_comp["tipo_cadastro"].str.upper() == "MEMBRO")
     ]
-    qtd_diz_ref  = diz_ref["id_cadastro"].dropna().nunique()
+    qtd_diz_ref = diz_ref["id_cadastro"].dropna().nunique()
     qtd_diz_comp = diz_comp["id_cadastro"].dropna().nunique()
 
     membros_ativos_n = len(df_cad[
         (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
-        (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
+        (df_cad["situacao"].str.upper() == "ATIVO")
     ])
-    taxa_ref  = (qtd_diz_ref / membros_ativos_n * 100) if membros_ativos_n else 0
+    taxa_ref = (qtd_diz_ref / membros_ativos_n * 100) if membros_ativos_n else 0
     taxa_comp = (qtd_diz_comp / membros_ativos_n * 100) if membros_ativos_n else 0
 
-    miss_ref  = df_card_atual[
+    miss_ref = df_card_atual[
         (df_card_atual["tipo"].str.upper() == "ENTRADA") &
         (df_card_atual["categoria"].str.upper() == "MISSAO")
     ]["valor"].sum()
@@ -616,11 +617,11 @@ def render():
     ]["valor"].sum()
 
     ano_ref = mes_ref.year
-    df_ano  = df[df["data"].dt.year == ano_ref]
+    df_ano = df[df["data"].dt.year == ano_ref]
     df_ano_ant = df[df["data"].dt.year == ano_ref - 1]
-    ent_ano    = df_ano[df_ano["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
+    ent_ano = df_ano[df_ano["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
     ent_ano_ant = df_ano_ant[df_ano_ant["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-    cresc_pct  = ((ent_ano - ent_ano_ant) / abs(ent_ano_ant) * 100) if ent_ano_ant else 0
+    cresc_pct = ((ent_ano - ent_ano_ant) / abs(ent_ano_ant) * 100) if ent_ano_ant else 0
 
     var_ent, dir_ent = _calc_variacao(ent_ref, ent_comp)
     var_sai, dir_sai = _calc_variacao(sai_ref, sai_comp)
@@ -633,54 +634,28 @@ def render():
     r2c1, r2c2, r2c3 = st.columns(3)
 
     with r1c1:
-        _kpi_card(
-            f"Entradas {label_atual}",
-            formatar_moeda(ent_ref),
-            var_ent, dir_ent,
-            "#10B981", "💰",
-        )
+        _kpi_card(f"Entradas {label_atual}", formatar_moeda(ent_ref), var_ent, dir_ent, "#10B981", "💰")
     with r1c2:
-        _kpi_card(
-            f"Despesas {label_atual}",
-            formatar_moeda(sai_ref),
-            var_sai, dir_sai,
-            "#EF4444", "💸",
-        )
+        _kpi_card(f"Despesas {label_atual}", formatar_moeda(sai_ref), var_sai, dir_sai, "#EF4444", "💸")
     with r1c3:
-        _kpi_card(
-            f"Saldo {label_atual}",
-            formatar_moeda(sal_ref),
-            var_sal, dir_sal,
-            "#3B82F6", "📊",
-        )
+        _kpi_card(f"Saldo {label_atual}", formatar_moeda(sal_ref), var_sal, dir_sal, "#3B82F6", "📊")
 
     with r2c1:
-        _kpi_card(
-            "Dizimistas no periodo",
-            str(qtd_diz_ref),
-            var_diz, dir_diz,
-            "#8B5CF6", "🙏",
-        )
+        _kpi_card("Dizimistas no periodo", str(qtd_diz_ref), var_diz, dir_diz, "#8B5CF6", "🙏")
     with r2c2:
-        _kpi_card(
-            "Taxa de fidelidade",
-            f"{taxa_ref:.1f}%",
-            var_taxa, dir_taxa,
-            "#F59E0B", "📈",
-        )
+        _kpi_card("Taxa de fidelidade", f"{taxa_ref:.1f}%", var_taxa, dir_taxa, "#F59E0B", "📈")
     with r2c3:
         seta_cresc = "↑" if cresc_pct > 0 else ("↓" if cresc_pct < 0 else "—")
-        dir_cresc  = "up" if cresc_pct > 0 else ("down" if cresc_pct < 0 else "flat")
+        dir_cresc = "up" if cresc_pct > 0 else ("down" if cresc_pct < 0 else "flat")
         _kpi_card(
             f"Crescimento {ano_ref}",
             f"{cresc_pct:+.1f}%" if ent_ano_ant else "Sem dados",
             f"{seta_cresc} vs {ano_ref - 1}" if ent_ano_ant else "Primeiro ano",
             dir_cresc,
-            "#14B8A6", "📅",
+            "#14B8A6",
+            "📅",
         )
 
-    # Card destacado de Investimentos no Reino
-    st.markdown("")
     st.markdown(
         f"""
         <div class="kpi-card-v2" style="border-left:4px solid #F59E0B">
@@ -696,30 +671,25 @@ def render():
         unsafe_allow_html=True,
     )
 
-    st.markdown("")
     OPC = dict(use_container_width=True, config=CONFIG_PLOTLY)
 
     if df_f.empty:
         st.warning("Sem lancamentos no periodo selecionado.")
         return
 
-    # ── Fluxo de caixa (respeita modo personalizado) ──────────────────────
     if modo_personalizado:
-        meses_disp_personalizado = sorted(df_f["mes_periodo"].dropna().unique())
-
-        if len(meses_disp_personalizado) == 0:
+        meses_seq = sorted(df_f["mes_periodo"].dropna().unique())
+        if not meses_seq:
             st.warning("Sem dados de meses no periodo filtrado.")
             return
 
-        meses_seq  = meses_disp_personalizado
         labels_12m = [m.strftime("%b/%y") for m in meses_seq]
-        ini_12m    = meses_seq[0]
-        fim_12m    = meses_seq[-1]
-
+        ini_12m = meses_seq[0]
+        fim_12m = meses_seq[-1]
         titulo_periodo = (
             f"{ini_12m.strftime('%b/%y')} a {fim_12m.strftime('%b/%y')}"
             if len(meses_seq) > 1
-            else fim_12m.strftime('%b/%y')
+            else fim_12m.strftime("%b/%y")
         )
         df_12m = df_f.copy()
     else:
@@ -735,7 +705,10 @@ def render():
     def _serie_12m(t):
         out = []
         for m in meses_seq:
-            sub = df_12m[(df_12m["mes_periodo"] == m) & (df_12m["tipo"].str.upper() == t.upper())]
+            sub = df_12m[
+                (df_12m["mes_periodo"] == m) &
+                (df_12m["tipo"].str.upper() == t.upper())
+            ]
             out.append(float(sub["valor"].sum()))
         return out
 
@@ -746,7 +719,8 @@ def render():
     fig_fc = go.Figure([
         go.Bar(
             name="Entradas",
-            x=labels_12m, y=e12,
+            x=labels_12m,
+            y=e12,
             marker_color=COR["Entrada"],
             text=[formatar_moeda(v) if v > 0 else "" for v in e12],
             textposition="outside",
@@ -755,7 +729,8 @@ def render():
         ),
         go.Bar(
             name="Despesas",
-            x=labels_12m, y=s12,
+            x=labels_12m,
+            y=s12,
             marker_color=COR["Saida"],
             text=[formatar_moeda(v) if v > 0 else "" for v in s12],
             textposition="outside",
@@ -764,7 +739,8 @@ def render():
         ),
         go.Bar(
             name="Saldo",
-            x=labels_12m, y=sal12,
+            x=labels_12m,
+            y=sal12,
             marker_color=COR["saldo"],
             text=[formatar_moeda(v) if v != 0 else "" for v in sal12],
             textposition="outside",
@@ -778,14 +754,12 @@ def render():
         margin=dict(t=50, b=30, l=10, r=10),
         legend=dict(orientation="h", y=1.12, x=0, font=dict(color="#E5E7EB")),
         xaxis=dict(fixedrange=True, color="#94A3B8", gridcolor="#334155"),
-        yaxis=dict(fixedrange=True, gridcolor="#334155", color="#94A3B8",
-                   tickformat=",.0f"),
+        yaxis=dict(fixedrange=True, gridcolor="#334155", color="#94A3B8", tickformat=",.0f"),
         bargap=0.20,
         bargroupgap=0.05,
     ))
     st.plotly_chart(fig_fc, **OPC)
 
-    # ── Donuts de Entradas e Despesas ─────────────────────────────────────
     g1, g2 = st.columns(2)
 
     with g1:
@@ -801,10 +775,10 @@ def render():
         if ent_cat.empty:
             st.info("Sem entradas no periodo.")
         else:
-           cores_pizza = [
-    CORES_CATEGORIA.get(str(c).upper(), "#94A3B8")
-    for c in ent_cat["categoria"]
-]
+            cores_pizza = [
+                CORES_CATEGORIA.get(str(c).upper(), "#94A3B8")
+                for c in ent_cat["categoria"]
+            ]
             fig_ec = go.Figure(go.Pie(
                 labels=ent_cat["categoria"],
                 values=ent_cat["valor"],
@@ -817,15 +791,15 @@ def render():
             total_ent = ent_cat["valor"].sum()
             fig_ec.add_annotation(
                 text=f"<b>Total</b><br>{formatar_moeda(total_ent)}",
-                x=0.5, y=0.5,
+                x=0.5,
+                y=0.5,
                 font=dict(size=13, color="#F1F5F9"),
                 showarrow=False,
             )
             fig_ec.update_layout(**_base_layout(
                 height=ALT_COMPARACAO,
                 showlegend=True,
-                legend=dict(orientation="v", y=0.5, x=1.05,
-                            font=dict(color="#E5E7EB", size=11)),
+                legend=dict(orientation="v", y=0.5, x=1.05, font=dict(color="#E5E7EB", size=11)),
                 margin=dict(t=20, b=20, l=20, r=20),
             ))
             st.plotly_chart(fig_ec, **OPC)
@@ -843,7 +817,6 @@ def render():
             desp["subcategoria"] = desp["subcategoria"].fillna("").str.strip()
             desp["subcategoria"] = desp["subcategoria"].replace("", "Sem subcategoria")
             agrup = desp.groupby("subcategoria", as_index=False)["valor"].sum().sort_values("valor", ascending=False)
-
             cores_d = CORES_DESPESAS[:len(agrup)] + ["#94A3B8"] * max(0, len(agrup) - len(CORES_DESPESAS))
 
             fig_dc = go.Figure(go.Pie(
@@ -858,53 +831,53 @@ def render():
             total_desp = agrup["valor"].sum()
             fig_dc.add_annotation(
                 text=f"<b>Total</b><br>{formatar_moeda(total_desp)}",
-                x=0.5, y=0.5,
+                x=0.5,
+                y=0.5,
                 font=dict(size=13, color="#F1F5F9"),
                 showarrow=False,
             )
             fig_dc.update_layout(**_base_layout(
                 height=ALT_COMPARACAO,
                 showlegend=True,
-                legend=dict(orientation="v", y=0.5, x=1.05,
-                            font=dict(color="#E5E7EB", size=11)),
+                legend=dict(orientation="v", y=0.5, x=1.05, font=dict(color="#E5E7EB", size=11)),
                 margin=dict(t=20, b=20, l=20, r=20),
             ))
             st.plotly_chart(fig_dc, **OPC)
 
-    # ── Evolucao dos dizimos ──────────────────────────────────────────────
     st.markdown(
         f'<div class="grafico-titulo">💰 Evolucao dos Dizimos — {titulo_periodo}'
         f'<span class="subtitulo">Total arrecadado em dizimos mes a mes</span></div>',
         unsafe_allow_html=True,
     )
 
-    def _dizimo_mensal(m):
+    d12 = []
+    for m in meses_seq:
         sub = df_12m[
             (df_12m["mes_periodo"] == m) &
             (df_12m["categoria"].str.upper() == "DIZIMO")
         ]
-        return float(sub["valor"].sum())
+        d12.append(float(sub["valor"].sum()))
 
-    d12 = [_dizimo_mensal(m) for m in meses_seq]
+    fig_d = go.Figure(go.Bar(
+        x=labels_12m,
+        y=d12,
+        marker_color=COR["dizimo"],
+        text=[formatar_moeda(v) if v > 0 else "" for v in d12],
+        textposition="outside",
+        textfont=dict(size=10, color="#CBD5E1"),
+        hoverinfo="skip",
+    ))
 
-    fig_d = go.Figure([
-        go.Bar(
-            x=labels_12m, y=d12,
-            marker_color=COR["dizimo"],
-            text=[formatar_moeda(v) if v > 0 else "" for v in d12],
-            textposition="outside",
-            textfont=dict(size=10, color="#CBD5E1"),
-            hoverinfo="skip",
-        ),
-    ])
     if len([v for v in d12 if v > 0]) >= 3:
         ma = []
         for i in range(len(d12)):
             ini = max(0, i - 2)
-            window = d12[ini:i+1]
+            window = d12[ini:i + 1]
             ma.append(sum(window) / len(window) if window else 0)
         fig_d.add_trace(go.Scatter(
-            x=labels_12m, y=ma, mode="lines",
+            x=labels_12m,
+            y=ma,
+            mode="lines",
             line=dict(color="#94A3B8", width=2, dash="dot"),
             name="Tendencia",
             hoverinfo="skip",
@@ -915,13 +888,10 @@ def render():
         showlegend=False,
         margin=dict(t=30, b=30, l=10, r=10),
         xaxis=dict(fixedrange=True, color="#94A3B8", gridcolor="#334155"),
-        yaxis=dict(fixedrange=True, gridcolor="#334155", color="#94A3B8",
-                   tickformat=",.0f"),
+        yaxis=dict(fixedrange=True, gridcolor="#334155", color="#94A3B8", tickformat=",.0f"),
     ))
     st.plotly_chart(fig_d, **OPC)
 
-    # ── INATIVOS FINANCEIROS (FASE 2) ─────────────────────────────────────
-       # ── INATIVOS FINANCEIROS (FASE 2) ─────────────────────────────────────
     st.markdown(
         f'<div class="grafico-titulo">⚠️ Membros Inativos Financeiramente'
         f'<span class="subtitulo">Configuracao da igreja: dizimista ativo = ate {dias_ativo} dias. '
@@ -1020,7 +990,6 @@ def render():
                 key=f"dl_inativos_{faixa}",
             )
 
-    # ── Percentual de dizimistas ──────────────────────────────────────────
     st.markdown(
         '<div class="grafico-titulo">🙏 Percentual de Dizimistas'
         '<span class="subtitulo">Membros ativos que contribuiram no periodo</span></div>',
@@ -1029,16 +998,17 @@ def render():
 
     df_membros_ativos = df_cad[
         (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
-        (df_cad["situacao"].fillna("").str.upper() == "ATIVO")
+        (df_cad["situacao"].str.upper() == "ATIVO")
     ].copy()
 
     if modo_personalizado and funcao_sel != "Todas":
         df_membros_ativos = df_membros_ativos[
-            df_membros_ativos["funcao"].fillna("").str.strip() == funcao_sel
+            df_membros_ativos["funcao"].str.strip() == funcao_sel
         ]
+
     if modo_personalizado and membro_sel != "Todos":
         df_membros_ativos = df_membros_ativos[
-            df_membros_ativos["nome"].fillna("").str.strip() == membro_sel
+            df_membros_ativos["nome"].str.strip() == membro_sel
         ]
 
     total_membros = len(df_membros_ativos)
@@ -1046,6 +1016,7 @@ def render():
         (df_f["categoria"].str.upper() == "DIZIMO") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
     ]
+
     ids_membros_ativos = set(df_membros_ativos["id_cadastro"].dropna().astype(int).tolist())
     ids_dizimistas = set(diz_periodo["id_cadastro"].dropna().astype(int).tolist())
     qtd_d = len(ids_dizimistas & ids_membros_ativos)
@@ -1061,27 +1032,27 @@ def render():
             values=[qtd_d, qtd_nd],
             hole=0.7,
             textinfo="none",
-            marker=dict(colors=[COR["Entrada"], "#374151"],
-                        line=dict(color="#1E293B", width=2)),
+            marker=dict(colors=[COR["Entrada"], "#374151"], line=dict(color="#1E293B", width=2)),
             hoverinfo="skip",
         ))
         fig_pct.add_annotation(
             text=f"<b>{pct:.1f}%</b>",
-            x=0.5, y=0.55,
+            x=0.5,
+            y=0.55,
             font=dict(size=32, color=COR["Entrada"]),
             showarrow=False,
         )
         fig_pct.add_annotation(
             text="dizimistas",
-            x=0.5, y=0.40,
+            x=0.5,
+            y=0.40,
             font=dict(size=12, color="#94A3B8"),
             showarrow=False,
         )
         fig_pct.update_layout(**_base_layout(
             height=ALT_COMPARACAO,
             showlegend=True,
-            legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center",
-                        font=dict(color="#E5E7EB")),
+            legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center", font=dict(color="#E5E7EB")),
             margin=dict(t=10, b=40, l=10, r=10),
         ))
         st.plotly_chart(fig_pct, **OPC)
@@ -1089,10 +1060,8 @@ def render():
         km1, km2, km3 = st.columns(3)
         km1.metric("Membros ativos", str(total_membros))
         km2.metric("Dizimistas", str(qtd_d), delta=f"{pct:.1f}%")
-        km3.metric("Nao dizimistas", str(qtd_nd),
-                   delta=f"-{100-pct:.1f}%", delta_color="inverse")
+        km3.metric("Nao dizimistas", str(qtd_nd), delta=f"-{100 - pct:.1f}%", delta_color="inverse")
 
-    # ── Top dizimistas + Frequencia individual ────────────────────────────
     diz_f = df_f[
         (df_f["categoria"].str.upper() == "DIZIMO") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
@@ -1104,6 +1073,7 @@ def render():
             '<span class="subtitulo">Top 10 — qtd de lancamentos por membro</span></div>',
             unsafe_allow_html=True,
         )
+
         dq = (
             diz_f.groupby("nome_cadastro", as_index=False)
             .size()
@@ -1112,9 +1082,12 @@ def render():
             .head(10)
         )
         pares_q = sorted(zip(dq["quantidade"], dq["nome_cadastro"]))
+
         fig_qtd = go.Figure(go.Bar(
-            x=[p[0] for p in pares_q], y=[p[1] for p in pares_q],
-            orientation="h", marker_color=COR["qtd_dizimo"],
+            x=[p[0] for p in pares_q],
+            y=[p[1] for p in pares_q],
+            orientation="h",
+            marker_color=COR["qtd_dizimo"],
             text=[str(p[0]) for p in pares_q],
             textposition="outside",
             textfont=dict(color="#CBD5E1", size=11),
@@ -1127,17 +1100,13 @@ def render():
         ))
         st.plotly_chart(fig_qtd, **OPC)
 
-        # ── Frequencia individual de um membro especifico ─────────────────
         st.markdown(
             '<div class="grafico-titulo">🔍 Frequencia Individual do Membro'
             '<span class="subtitulo">Selecione um membro para ver detalhes da contribuicao</span></div>',
             unsafe_allow_html=True,
         )
 
-        membros_dizimistas = sorted(
-            diz_f["nome_cadastro"].dropna().unique().tolist()
-        )
-
+        membros_dizimistas = sorted(diz_f["nome_cadastro"].dropna().unique().tolist())
         membro_sel_freq = st.selectbox(
             "Membro",
             ["— Selecione um membro —"] + membros_dizimistas,
@@ -1147,7 +1116,7 @@ def render():
 
         if membro_sel_freq != "— Selecione um membro —":
             diz_membro = diz_f[
-                diz_f["nome_cadastro"].fillna("").str.strip() == membro_sel_freq
+                diz_f["nome_cadastro"].str.strip() == membro_sel_freq
             ].copy()
 
             if diz_membro.empty:
@@ -1159,46 +1128,18 @@ def render():
                 meses_unicos = diz_membro["mes_periodo"].nunique()
 
                 mf1, mf2, mf3, mf4 = st.columns(4)
-                with mf1:
-                    st.metric(
-                        "Total de dizimos",
-                        str(qtd_total),
-                        help="Quantidade de lancamentos no periodo",
-                    )
-                with mf2:
-                    st.metric(
-                        "Valor total",
-                        formatar_moeda(valor_total),
-                    )
-                with mf3:
-                    st.metric(
-                        "Media por contribuicao",
-                        formatar_moeda(media_valor),
-                    )
-                with mf4:
-                    st.metric(
-                        "Meses com dizimo",
-                        f"{meses_unicos} mes(es)",
-                    )
-
-                # Mapa de presenca mensal
-                st.markdown(
-                    f'<div style="margin-top:18px;color:#94A3B8;font-size:0.85rem">'
-                    f'📅 <b>Mapa de presenca</b> — em quais meses {membro_sel_freq} contribuiu '
-                    f'(periodo do dashboard)'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+                mf1.metric("Total de dizimos", str(qtd_total), help="Quantidade de lancamentos no periodo")
+                mf2.metric("Valor total", formatar_moeda(valor_total))
+                mf3.metric("Media por contribuicao", formatar_moeda(media_valor))
+                mf4.metric("Meses com dizimo", f"{meses_unicos} mes(es)")
 
                 meses_com_diz = set(diz_membro["mes_periodo"].dropna().tolist())
-
                 badges_html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;margin-bottom:18px">'
+
                 for m in meses_seq:
                     presente = m in meses_com_diz
                     if presente:
-                        valor_mes = diz_membro[
-                            diz_membro["mes_periodo"] == m
-                        ]["valor"].sum()
+                        valor_mes = diz_membro[diz_membro["mes_periodo"] == m]["valor"].sum()
                         qtd_mes = len(diz_membro[diz_membro["mes_periodo"] == m])
 
                         badges_html += (
@@ -1219,10 +1160,10 @@ def render():
                             f'<span style="font-size:0.72rem">sem dizimo</span>'
                             f'</div>'
                         )
-                badges_html += '</div>'
+
+                badges_html += "</div>"
                 st.markdown(badges_html, unsafe_allow_html=True)
 
-                # Avaliacao de frequencia
                 if len(meses_seq) > 0:
                     taxa_freq = (meses_unicos / len(meses_seq)) * 100
                     if taxa_freq >= 80:
@@ -1238,18 +1179,14 @@ def render():
                     st.markdown(
                         f'<div style="background:#1E293B;border-left:4px solid {cor_freq};'
                         f'padding:12px 16px;border-radius:8px;margin-bottom:18px">'
-                        f'<div style="color:{cor_freq};font-weight:700;font-size:1rem">'
-                        f'{msg_freq}'
-                        f'</div>'
+                        f'<div style="color:{cor_freq};font-weight:700;font-size:1rem">{msg_freq}</div>'
                         f'<div style="color:#CBD5E1;font-size:0.85rem;margin-top:4px">'
                         f'Taxa de frequencia: <b>{taxa_freq:.1f}%</b> — contribuiu em '
                         f'{meses_unicos} de {len(meses_seq)} meses do periodo.'
-                        f'</div>'
-                        f'</div>',
+                        f'</div></div>',
                         unsafe_allow_html=True,
                     )
 
-                # Tabela detalhada
                 with st.expander(
                     f"📋 Ver detalhamento dos {qtd_total} dizimo(s) de {membro_sel_freq}",
                     expanded=False,
@@ -1260,22 +1197,17 @@ def render():
                     cols_detalhe.append("descricao")
 
                     df_detalhe = diz_membro[cols_detalhe].copy()
-
-                    df_detalhe["data"] = pd.to_datetime(
-                        df_detalhe["data"], errors="coerce"
-                    )
+                    df_detalhe["data"] = pd.to_datetime(df_detalhe["data"], errors="coerce")
                     df_detalhe = df_detalhe.sort_values("data", ascending=False)
                     df_detalhe["data"] = df_detalhe["data"].dt.strftime("%d/%m/%Y")
                     df_detalhe["valor"] = df_detalhe["valor"].apply(formatar_moeda)
-                    df_detalhe = df_detalhe.sort_values("data", ascending=False)
 
-                    rename_map = {
-                        "data":            "Data",
-                        "valor":           "Valor",
+                    df_detalhe = df_detalhe.rename(columns={
+                        "data": "Data",
+                        "valor": "Valor",
                         "forma_pagamento": "Forma de pagamento",
-                        "descricao":       "Descricao",
-                    }
-                    df_detalhe = df_detalhe.rename(columns=rename_map)
+                        "descricao": "Descricao",
+                    })
 
                     st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
 
@@ -1288,16 +1220,24 @@ def render():
                         key=f"dl_dizimos_{membro_sel_freq}",
                     )
 
-        # ── Top 10 dizimistas (valor) ─────────────────────────────────────
         st.markdown(
             '<div class="grafico-titulo">💰 Top 10 Dizimistas (Valor)</div>',
             unsafe_allow_html=True,
         )
-        d = diz_f.groupby("nome_cadastro", as_index=False)["valor"].sum().sort_values("valor", ascending=False).head(10)
+
+        d = (
+            diz_f.groupby("nome_cadastro", as_index=False)["valor"]
+            .sum()
+            .sort_values("valor", ascending=False)
+            .head(10)
+        )
         pares = sorted(zip(d["valor"], d["nome_cadastro"]))
+
         fig3 = go.Figure(go.Bar(
-            x=[p[0] for p in pares], y=[p[1] for p in pares],
-            orientation="h", marker_color=COR["dizimo"],
+            x=[p[0] for p in pares],
+            y=[p[1] for p in pares],
+            orientation="h",
+            marker_color=COR["dizimo"],
             text=[formatar_moeda(p[0]) for p in pares],
             textposition="outside",
             textfont=dict(color="#CBD5E1", size=11),
@@ -1310,23 +1250,26 @@ def render():
         ))
         st.plotly_chart(fig3, **OPC)
 
-    # ── Entradas por funcao ───────────────────────────────────────────────
     st.markdown(
         '<div class="grafico-titulo">👥 Entradas por Funcao do Membro</div>',
         unsafe_allow_html=True,
     )
+
     ent_m = df_f[
         (df_f["tipo"].str.upper() == "ENTRADA") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
     ].copy()
+
     if ent_m.empty:
         st.info("Sem entradas de membros no periodo.")
     else:
         mg = ent_m.merge(df_cad[["id_cadastro", "funcao"]], on="id_cadastro", how="left")
         mg["funcao"] = mg["funcao"].replace("", pd.NA).fillna("Sem funcao")
         rf = mg.groupby("funcao", as_index=False)["valor"].sum().sort_values("valor", ascending=False)
+
         fig5 = go.Figure(go.Bar(
-            x=rf["funcao"], y=rf["valor"],
+            x=rf["funcao"],
+            y=rf["valor"],
             marker_color=COR["funcao"],
             text=[formatar_moeda(v) for v in rf["valor"]],
             textposition="outside",
@@ -1340,15 +1283,16 @@ def render():
         ))
         st.plotly_chart(fig5, **OPC)
 
-    # ── Exportacao ────────────────────────────────────────────────────────
     st.divider()
     df_exp = df_f.copy()
     df_exp["data"] = pd.to_datetime(df_exp["data"]).dt.strftime("%d/%m/%Y")
+
     colx, _ = st.columns([1, 4])
     with colx:
         st.download_button(
             "📥 Exportar CSV",
             gerar_csv(df_exp),
-            "dashboard.csv", "text/csv",
+            "dashboard.csv",
+            "text/csv",
             use_container_width=True,
         )
