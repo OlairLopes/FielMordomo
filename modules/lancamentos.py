@@ -17,7 +17,7 @@ from utils.helpers import (
 )
 from utils.planos import tem_lancamento_lote, obter_plano, proximo_plano
 
-CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta"]
+CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD",]
 FORMAS_PAGAMENTO   = ["Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque", "Cartao Debito", "Cartao Credito"]
 
 # Nome fixo do pastor responsavel pelos comprovantes
