@@ -591,6 +591,7 @@ def _garantir_tabela_subcategorias_despesa(conn):
 
 
 def listar_subcategorias_despesa() -> list:
+    """Retorna lista de nomes das subcategorias de despesa cadastradas (em ordem alfabetica)."""
     with _conn(MASTER_DB) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         qtd = conn.execute("SELECT COUNT(*) AS n FROM subcategorias_despesa").fetchone()["n"]
@@ -600,8 +601,9 @@ def listar_subcategorias_despesa() -> list:
                     "INSERT OR IGNORE INTO subcategorias_despesa (nome, ordem) VALUES (?, ?)",
                     (nome, i),
                 )
+        # Ordenacao alfabetica case-insensitive (ignora maiusculas/minusculas)
         rows = conn.execute(
-            "SELECT nome FROM subcategorias_despesa ORDER BY ordem, nome"
+            "SELECT nome FROM subcategorias_despesa ORDER BY LOWER(nome)"
         ).fetchall()
     return [r["nome"] for r in rows]
 
