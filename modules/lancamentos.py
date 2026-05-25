@@ -731,6 +731,15 @@ def render():
                 html_comp = _gerar_html_comprovante(dict(sel_imp), igreja, slug)
                 components.html(html_comp, height=700, scrolling=True)
 
+                id_lanc = int(sel_imp["id_lancamento"])
+                st.download_button(
+                "Baixar comprovante",
+                data=html_comp,
+                file_name=f"comprovante_{id_lanc}.html",
+                mime="text/html",
+                use_container_width=True,
+    )
+
     with st.expander("Editar ou excluir lancamento", expanded=False):
         if df_lanc.empty:
             st.info("Nenhum lancamento ainda.")
