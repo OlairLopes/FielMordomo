@@ -572,11 +572,26 @@ SUBCATEGORIAS_DESPESA_PADRAO = [
     "Construcao",
     "Reforma",
     "Manutencao",
-    "Agua e luz",
+    "Agua",
+    "Energia",
     "Internet e telefone",
     "Material de escritorio",
     "Combustivel",
     "Outras despesas",
+    "Assistencia Social",
+    "Eventos",
+    "Previdencia Privada",
+    "Seguro de Vida",
+    "Prebenda Pastoral",
+    "Missoes",
+    "Comunicacao",
+    "Repasse Sede",
+    "Inscrições/Congressos/Convenções",
+    "Licencas",
+    "Software",
+    "Treinamentos",
+    "Literatura",
+    
 ]
 
 
