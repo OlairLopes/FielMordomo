@@ -1,156 +1,100 @@
-                    (nome, i),
-                )
-        rows = conn.execute(
-            "SELECT nome FROM subcategorias_despesa ORDER BY ordem, nome"
-        ).fetchall()
-    return [r["nome"] for r in rows]
+          """
+Camada de persistencia multi-tenant.
+"""
+
+import os
+import re
+import sqlite3
+import hashlib
+import shutil
+import datetime
+from contextlib import contextmanager
+from pathlib import Path
+
+import pandas as pd
 
 
-def adicionar_subcategoria_despesa(nome: str) -> bool:
-    nome = sanitizar(nome).strip()
-    if not nome:
-        return False
-    with _conn(MASTER_DB) as conn:
-        _garantir_tabela_subcategorias_despesa(conn)
-        try:
-            conn.execute(
-                "INSERT INTO subcategorias_despesa (nome, ordem) VALUES (?, "
-                "(SELECT COALESCE(MAX(ordem),0)+1 FROM subcategorias_despesa))",
-                (nome,),
-            )
-            return True
-        except sqlite3.IntegrityError:
-            return False
+def _data_dir() -> Path:
+    env = os.environ.get("FIELMORDOMO_DATA_DIR")
+    if env:
+        p = Path(env)
+    elif os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home())
+        p = Path(base) / "FielMordomo"
+    else:
+        p = Path.home() / ".fielmordomo"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
-def excluir_subcategoria_despesa(nome: str):
-    with _conn(MASTER_DB) as conn:
-        _garantir_tabela_subcategorias_despesa(conn)
-        conn.execute("DELETE FROM subcategorias_despesa WHERE nome=?", (nome,))
+DATA_DIR = _data_dir()
+MASTER_DB = DATA_DIR / "master.db"
+TENANTS_DIR = DATA_DIR / "tenants"
+LOGOS_DIR = DATA_DIR / "logos"
+BACKUP_DIR = DATA_DIR / "backups"
+
+TENANTS_DIR.mkdir(exist_ok=True)
+LOGOS_DIR.mkdir(exist_ok=True)
+BACKUP_DIR.mkdir(exist_ok=True)
 
 
-def restaurar_backup_zip(zip_bytes: bytes) -> dict:
-    import io
-    import zipfile
+def hash_senha(senha: str) -> str:
+    return hashlib.sha256(senha.encode()).hexdigest()
 
-    resultado = {
-        "sucesso_tenants": [],
-        "master_restaurado": False,
-        "logos_restaurados": 0,
-        "erros": [],
-        "igrejas_recriadas": [],
-    }
 
-    try:
-        buf = io.BytesIO(zip_bytes)
-        with zipfile.ZipFile(buf, "r") as zf:
-            arquivos = zf.namelist()
-            bancos_tenants = {}
-            arquivo_master = None
-            arquivos_logos = []
+def slugify(texto: str) -> str:
+    t = texto.lower().strip()
+    t = re.sub(r"[^a-z0-9]+", "-", t)
+    return t.strip("-")[:40]
 
-            for nome in arquivos:
-                if nome == "master.db":
-                    arquivo_master = nome
-                elif nome.startswith("logos/") and not nome.endswith("/"):
-                    arquivos_logos.append(nome)
-                elif nome.endswith(".db") and "/banco_" in nome:
-                    partes = nome.split("/")
-                    if len(partes) == 2:
-                        slug_zip = partes[0]
-                        bancos_tenants[slug_zip] = nome
 
-            if not (bancos_tenants or arquivo_master or arquivos_logos):
-                resultado["erros"].append(
-                    "ZIP nao contem arquivos reconheciveis. "
-                    "Estrutura esperada: master.db, logos/<arquivo>, <slug>/banco_<slug>.db"
-                )
-                return resultado
+def sanitizar(texto: str) -> str:
+    t = str(texto).strip()
+    if t.startswith(("=", "+", "-", "@")):
+        return "'" + t
+    return t
 
-            try:
-                _fazer_backup(MASTER_DB)
-            except Exception:
-                pass
 
-            slugs_existentes = set()
-            try:
-                with _conn(MASTER_DB) as conn:
-                    rows = conn.execute("SELECT slug FROM igrejas").fetchall()
-                    slugs_existentes = {r["slug"] for r in rows}
-            except Exception:
-                pass
+def _fazer_backup(db_path: Path):
+    BACKUP_DIR.mkdir(exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    destino = BACKUP_DIR / f"{db_path.stem}_{ts}.db"
+    if db_path.exists():
+        shutil.copy2(db_path, destino)
+    backups = sorted(BACKUP_DIR.glob(f"{db_path.stem}_*.db"))
+    for antigo in backups[:-20]:
+        antigo.unlink()
 
-            if arquivo_master:
-                try:
-                    dados_master = zf.read(arquivo_master)
-                    MASTER_DB.write_bytes(dados_master)
-                    resultado["master_restaurado"] = True
 
-                    try:
-                        with _conn(MASTER_DB) as conn:
-                            rows = conn.execute("SELECT slug FROM igrejas").fetchall()
-                            slugs_existentes = {r["slug"] for r in rows}
-                    except Exception:
-                        pass
-                except Exception as ex:
-                    resultado["erros"].append(f"master.db: {ex}")
+def salvar_logo_sistema(dados, extensao):
+    for f in LOGOS_DIR.glob("sistema.*"):
+        f.unlink()
+    caminho = LOGOS_DIR / f"sistema.{extensao}"
+    caminho.write_bytes(dados)
+    return caminho
 
-            for caminho_logo in arquivos_logos:
-                try:
-                    nome_arquivo = caminho_logo.replace("logos/", "", 1)
-                    if not nome_arquivo:
-                        continue
-                    dados_logo = zf.read(caminho_logo)
-                    destino_logo = LOGOS_DIR / nome_arquivo
-                    destino_logo.write_bytes(dados_logo)
-                    resultado["logos_restaurados"] += 1
-                except Exception as ex:
-                    resultado["erros"].append(f"logo {caminho_logo}: {ex}")
 
-            for slug_zip, caminho_zip in bancos_tenants.items():
-                try:
-                    db_destino = _tenant_db(slug_zip)
+def obter_logo_sistema():
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = LOGOS_DIR / f"sistema.{ext}"
+        if p.exists():
+            return p.read_bytes(), ext
+    return None
 
-                    if db_destino.exists():
-                        try:
-                            _fazer_backup(db_destino)
-                        except Exception:
-                            pass
 
-                    dados_db = zf.read(caminho_zip)
-                    db_destino.write_bytes(dados_db)
+def salvar_logo_igreja(slug, dados, extensao):
+    for f in LOGOS_DIR.glob(f"{slug}.*"):
+        if f.stem.startswith("sidebar_"):
+            continue
+        f.unlink()
+    caminho = LOGOS_DIR / f"{slug}.{extensao}"
+    caminho.write_bytes(dados)
+    return caminho
 
-                    if slug_zip not in slugs_existentes:
-                        try:
-                            with _conn(db_destino) as conn_t:
-                                conn_t.execute("SELECT COUNT(*) FROM cadastros").fetchone()
 
-                            with _conn(MASTER_DB) as conn_m:
-                                conn_m.execute(
-                                    """INSERT INTO igrejas (nome, slug, email_admin, senha_hash, plano, ativa)
-                                       VALUES (?, ?, ?, ?, ?, ?)""",
-                                    (
-                                        slug_zip.replace("-", " ").title(),
-                                        slug_zip,
-                                        f"admin@{slug_zip}.com",
-                                        hash_senha("fielmordomo2024"),
-                                        "basico",
-                                        1,
-                                    ),
-                                )
-                            resultado["igrejas_recriadas"].append(slug_zip)
-                        except Exception as ex_recriacao:
-                            resultado["erros"].append(
-                                f"{slug_zip}: banco restaurado mas erro ao recriar no master: {ex_recriacao}"
-                            )
-
-                    resultado["sucesso_tenants"].append(slug_zip)
-                except Exception as ex:
-                    resultado["erros"].append(f"{slug_zip}: {ex}")
-
-    except zipfile.BadZipFile:
-        resultado["erros"].append("Arquivo ZIP invalido ou corrompido.")
-    except Exception as ex:
-        resultado["erros"].append(f"Erro geral: {ex}")
-
-    return resultado
+def obter_logo_igreja(slug):
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = LOGOS_DIR / f"{slug}.{ext}"
+        if p.exists():
+            return p.read_bytes(), ext
+    return None
