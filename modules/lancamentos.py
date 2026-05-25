@@ -676,6 +676,13 @@ def render():
                     height=700,
                     scrolling=True,
                 )
+                st.download_button(
+                "Baixar comprovante consolidado",
+                data=st.session_state["lote_comprovante_html"],
+                file_name="comprovante_lote.html",
+                mime="text/html",
+                use_container_width=True,
+)
                 if st.button("Fechar comprovante", key="lote_fechar_comp"):
                     st.session_state.pop("lote_comprovante_html", None)
                     st.rerun()
