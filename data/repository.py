@@ -1,4 +1,4 @@
-          """
+"""
 Camada de persistencia multi-tenant.
 """
 
