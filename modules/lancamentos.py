@@ -1,5 +1,5 @@
-import base64
 import datetime
+import base64
 import html
 
 import pandas as pd
@@ -8,37 +8,21 @@ import streamlit.components.v1 as components
 
 from data.models import Lancamento
 from data.repository import (
-    carregar_cadastros,
-    carregar_lancamentos,
-    inserir_lancamento,
-    atualizar_lancamento,
-    excluir_lancamento,
-    obter_logo_igreja,
-    listar_subcategorias_despesa,
+    carregar_cadastros, carregar_lancamentos,
+    inserir_lancamento, atualizar_lancamento, excluir_lancamento,
+    obter_logo_igreja, listar_subcategorias_despesa,
 )
 from utils.helpers import (
-    formatar_moeda,
-    preparar_df,
-    obter_ativos,
-    montar_opcoes,
-    encontrar_chave,
-    confirmar_exclusao,
-    gerar_csv,
-    slug_da_sessao,
-    solicitar_autorizacao,
+    formatar_moeda, preparar_df, obter_ativos, montar_opcoes,
+    encontrar_chave, confirmar_exclusao, gerar_csv,
+    slug_da_sessao, solicitar_autorizacao,
 )
 from utils.planos import tem_lancamento_lote, obter_plano, proximo_plano
 
 CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD"]
-
 FORMAS_PAGAMENTO = [
-    "Pix",
-    "Dinheiro",
-    "Transferencia",
-    "Boleto",
-    "Cheque",
-    "Cartao Debito",
-    "Cartao Credito",
+    "Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque",
+    "Cartao Debito", "Cartao Credito",
 ]
 
 NOME_PASTOR = "Pr. Olair Pereira Lopes"
@@ -74,7 +58,6 @@ def _logo_base64(slug):
     if resultado:
         dados, ext = resultado
         b64 = base64.b64encode(dados).decode()
-        ext = str(ext or "").lower()
         mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
         return f"data:{mime};base64,{b64}"
     return None
@@ -98,26 +81,12 @@ def _opcoes_com_registro_atual(df_ativos, id_atual, nome_atual, tipo_atual):
     return opcoes, chave_atual
 
 
-def _rotulo_lancamento(r):
-    nome = r.get("nome_cadastro", "")
-    if pd.isna(nome) or not str(nome).strip():
-        nome = "Sem vinculo"
-
-    data_fmt = r.get("data_fmt", "")
-    return (
-        f'{int(r["id_lancamento"])} | {data_fmt} | '
-        f'{r["tipo"]} | {r["categoria"]} | '
-        f'{nome} | {formatar_moeda(r["valor"])}'
-    )
-
-
 def _gerar_html_comprovante(lancamento, igreja, slug):
     nome_igreja = _html(igreja.get("nome", "Igreja"))
     data_fmt = pd.to_datetime(lancamento.get("data"), errors="coerce")
     data_str = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else "-"
     data_emissao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     id_lanc = lancamento.get("id_lancamento", 0)
-
     tipo = _html(lancamento.get("tipo", "-"))
     categoria = _html(lancamento.get("categoria", "-"))
     subcategoria = _html(lancamento.get("subcategoria", "") or "")
@@ -348,12 +317,8 @@ def render():
     plano_igreja = igreja.get("plano", "basico")
 
     with st.expander("Novo lancamento", expanded=False):
-        data_l = st.date_input(
-            "Data",
-            value=datetime.date.today(),
-            format="DD/MM/YYYY",
-            key="nl_data",
-        )
+        data_l = st.date_input("Data", value=datetime.date.today(),
+                               format="DD/MM/YYYY", key="nl_data")
         tipo = st.selectbox("Tipo", ["Entrada", "Saida"], key="nl_tipo")
 
         subcategoria_nl = ""
@@ -374,7 +339,7 @@ def render():
                 )
             else:
                 st.caption(
-                    "Nenhuma subcategoria de despesa cadastrada. "
+                    "⚠️ Nenhuma subcategoria de despesa cadastrada. "
                     "Peca ao administrador para adicionar."
                 )
 
@@ -386,8 +351,7 @@ def render():
             vinc_pad = "Nenhum"
 
         vincular = st.selectbox(
-            "Vincular a",
-            ["Nenhum", "Membro", "Fornecedor"],
+            "Vincular a", ["Nenhum", "Membro", "Fornecedor"],
             index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad),
             key="nl_vincular",
         )
@@ -401,9 +365,7 @@ def render():
                 opc = montar_opcoes(membros)
                 esc = st.selectbox("Membro", list(opc.keys()), key="nl_membro")
                 l = opc[esc]
-                id_cad = int(l["id_cadastro"])
-                nome_cad = l["nome"]
-                tipo_cad = l["tipo_cadastro"]
+                id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
         elif vincular == "Fornecedor":
             if fornec.empty:
                 st.warning("Nenhum fornecedor ativo cadastrado.")
@@ -411,81 +373,53 @@ def render():
                 opc = montar_opcoes(fornec)
                 esc = st.selectbox("Fornecedor", list(opc.keys()), key="nl_fornecedor")
                 l = opc[esc]
-                id_cad = int(l["id_cadastro"])
-                nome_cad = l["nome"]
-                tipo_cad = l["tipo_cadastro"]
+                id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
         desc = st.text_input("Descricao", key="nl_desc")
         forma_pag = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO, key="nl_forma_pag")
-        valor = st.number_input(
-            "Valor (R$)",
-            min_value=0.0,
-            step=0.01,
-            format="%.2f",
-            key="nl_valor",
-        )
+        valor = st.number_input("Valor (R$)", min_value=0.0,
+                                step=0.01, format="%.2f", key="nl_valor")
 
         if st.button("Salvar lancamento", type="primary", key="nl_salvar"):
             lanc = Lancamento(
-                data=data_l,
-                tipo=tipo,
-                categoria=cat,
-                valor=valor,
-                descricao=desc,
-                forma_pagamento=forma_pag,
+                data=data_l, tipo=tipo, categoria=cat,
+                valor=valor, descricao=desc, forma_pagamento=forma_pag,
                 subcategoria=subcategoria_nl,
-                id_cadastro=id_cad,
-                nome_cadastro=nome_cad,
-                tipo_cadastro=tipo_cad,
+                id_cadastro=id_cad, nome_cadastro=nome_cad, tipo_cadastro=tipo_cad,
             )
             erros = lanc.validar()
-
             if vincular == "Membro" and membros.empty:
                 erros.append("Nenhum membro ativo disponivel.")
             if vincular == "Fornecedor" and fornec.empty:
                 erros.append("Nenhum fornecedor ativo disponivel.")
-
             if erros:
                 for e in erros:
                     st.error(e)
             else:
                 inserir_lancamento(slug, lanc)
                 _invalida()
-                for k in [
-                    "nl_membro",
-                    "nl_fornecedor",
-                    "nl_forma_pag",
-                    "nl_valor",
-                    "nl_desc",
-                    "nl_subcat",
-                ]:
+                for k in ["nl_membro", "nl_fornecedor", "nl_forma_pag",
+                          "nl_valor", "nl_desc", "nl_subcat"]:
                     st.session_state.pop(k, None)
                 st.toast("Lancamento salvo!")
                 st.rerun()
 
     if tem_lancamento_lote(plano_igreja):
         with st.expander("Lancamento em lote (multiplos itens)", expanded=False):
-            st.caption(
-                "Lance varios itens compartilhando data, membro/fornecedor "
-                "e forma de pagamento."
-            )
+            st.caption("Lance varios itens (dizimo + oferta + missao etc) "
+                       "compartilhando data, membro/fornecedor e forma de pagamento.")
 
             if "lote_itens" not in st.session_state:
                 st.session_state["lote_itens"] = []
 
             st.markdown("**Dados compartilhados**")
-            data_lote = st.date_input(
-                "Data",
-                value=datetime.date.today(),
-                format="DD/MM/YYYY",
-                key="lote_data",
-            )
+            data_lote = st.date_input("Data", value=datetime.date.today(),
+                                       format="DD/MM/YYYY", key="lote_data")
             tipo_lote = st.selectbox("Tipo", ["Entrada", "Saida"], key="lote_tipo")
 
             vinc_pad_l = "Membro" if tipo_lote == "Entrada" else "Fornecedor"
             vincular_lote = st.selectbox(
-                "Vincular a",
-                ["Nenhum", "Membro", "Fornecedor"],
+                "Vincular a", ["Nenhum", "Membro", "Fornecedor"],
                 index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_l),
                 key="lote_vincular",
             )
@@ -499,9 +433,7 @@ def render():
                     opc = montar_opcoes(membros)
                     esc = st.selectbox("Membro", list(opc.keys()), key="lote_membro")
                     l = opc[esc]
-                    id_cad_l = int(l["id_cadastro"])
-                    nome_cad_l = l["nome"]
-                    tipo_cad_l = l["tipo_cadastro"]
+                    id_cad_l, nome_cad_l, tipo_cad_l = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
             elif vincular_lote == "Fornecedor":
                 if fornec.empty:
                     st.warning("Nenhum fornecedor ativo cadastrado.")
@@ -509,15 +441,9 @@ def render():
                     opc = montar_opcoes(fornec)
                     esc = st.selectbox("Fornecedor", list(opc.keys()), key="lote_fornecedor")
                     l = opc[esc]
-                    id_cad_l = int(l["id_cadastro"])
-                    nome_cad_l = l["nome"]
-                    tipo_cad_l = l["tipo_cadastro"]
+                    id_cad_l, nome_cad_l, tipo_cad_l = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
-            forma_pag_lote = st.selectbox(
-                "Forma de pagamento",
-                FORMAS_PAGAMENTO,
-                key="lote_forma_pag",
-            )
+            forma_pag_lote = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO, key="lote_forma_pag")
 
             st.divider()
             st.markdown("**Adicionar item**")
@@ -525,19 +451,10 @@ def render():
             subcategoria_lote_item = ""
 
             if tipo_lote == "Entrada":
-                cat_lote_item = st.selectbox(
-                    "Categoria",
-                    CATEGORIAS_ENTRADA,
-                    key="lote_cat_item",
-                )
+                cat_lote_item = st.selectbox("Categoria", CATEGORIAS_ENTRADA, key="lote_cat_item")
             else:
                 cat_lote_item = "Despesa"
-                st.text_input(
-                    "Categoria",
-                    value="Despesa",
-                    disabled=True,
-                    key="lote_cat_d_item",
-                )
+                st.text_input("Categoria", value="Despesa", disabled=True, key="lote_cat_d_item")
 
                 subcategorias_lote = listar_subcategorias_despesa()
                 if subcategorias_lote:
@@ -548,13 +465,8 @@ def render():
                     )
 
             desc_lote_item = st.text_input("Descricao", key="lote_desc_item")
-            valor_lote_item = st.number_input(
-                "Valor (R$)",
-                min_value=0.0,
-                step=0.01,
-                format="%.2f",
-                key="lote_valor_item",
-            )
+            valor_lote_item = st.number_input("Valor (R$)", min_value=0.0,
+                                              step=0.01, format="%.2f", key="lote_valor_item")
 
             if st.button("Adicionar item ao lote", key="lote_add_item"):
                 if valor_lote_item <= 0:
@@ -566,7 +478,7 @@ def render():
                         "descricao": desc_lote_item,
                         "valor": float(valor_lote_item),
                     })
-                    st.toast("Item adicionando!")
+                    st.toast("Item adicionado!")
                     st.rerun()
 
             if st.session_state["lote_itens"]:
@@ -583,7 +495,7 @@ def render():
                             rotulo_item += f" / {item['subcategoria']}"
                         st.write(f"**{rotulo_item}**")
                     with col2:
-                        st.write(item["descricao"] or "-")
+                        st.write(item["descricao"] or "—")
                     with col3:
                         st.write(formatar_moeda(item["valor"]))
                     with col4:
@@ -598,69 +510,52 @@ def render():
                 c_salvar, c_limpar = st.columns(2)
 
                 with c_salvar:
-                    if st.button(
-                        "Salvar todos os lancamentos",
-                        type="primary",
-                        key="lote_salvar",
-                    ):
+                    if st.button("Salvar todos os lancamentos", type="primary", key="lote_salvar"):
                         if vincular_lote == "Membro" and not id_cad_l:
                             st.error("Selecione um membro para vincular.")
                         elif vincular_lote == "Fornecedor" and not id_cad_l:
                             st.error("Selecione um fornecedor para vincular.")
                         else:
-                            lancamentos_para_salvar = []
+                            itens_salvos = []
                             erros_lote = []
 
                             for idx, item in enumerate(st.session_state["lote_itens"], start=1):
                                 lanc = Lancamento(
-                                    data=data_lote,
-                                    tipo=tipo_lote,
-                                    categoria=item["categoria"],
-                                    valor=item["valor"],
-                                    descricao=item["descricao"],
-                                    forma_pagamento=forma_pag_lote,
+                                    data=data_lote, tipo=tipo_lote,
+                                    categoria=item["categoria"], valor=item["valor"],
+                                    descricao=item["descricao"], forma_pagamento=forma_pag_lote,
                                     subcategoria=item.get("subcategoria", ""),
-                                    id_cadastro=id_cad_l,
-                                    nome_cadastro=nome_cad_l,
+                                    id_cadastro=id_cad_l, nome_cadastro=nome_cad_l,
                                     tipo_cadastro=tipo_cad_l,
                                 )
                                 erros = lanc.validar()
                                 if erros:
                                     erros_lote.extend([f"Item {idx}: {erro}" for erro in erros])
                                 else:
-                                    lancamentos_para_salvar.append((lanc, item))
+                                    inserir_lancamento(slug, lanc)
+                                    itens_salvos.append(item)
 
                             if erros_lote:
                                 for erro in erros_lote:
                                     st.error(erro)
-                            else:
-                                itens_salvos = []
-                                for lanc, item in lancamentos_para_salvar:
-                                    inserir_lancamento(slug, lanc)
-                                    itens_salvos.append(item)
 
-                                if itens_salvos:
-                                    vinc_str = nome_cad_l + (
-                                        f" ({tipo_cad_l})" if tipo_cad_l else ""
-                                    )
-                                    if not vinc_str:
-                                        vinc_str = "Nao vinculado"
+                            if itens_salvos and not erros_lote:
+                                vinc_str = nome_cad_l + (" (" + tipo_cad_l + ")" if tipo_cad_l else "")
+                                if not vinc_str:
+                                    vinc_str = "Nao vinculado"
 
-                                    numero_lote = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                                    html_comp = _gerar_html_comprovante_lote(
-                                        itens=itens_salvos,
-                                        igreja=igreja,
-                                        slug=slug,
-                                        data_str=data_lote.strftime("%d/%m/%Y"),
-                                        vinc_str=vinc_str,
-                                        forma_pag=forma_pag_lote,
-                                        numero_lote=numero_lote,
-                                    )
-                                    st.session_state["lote_comprovante_html"] = html_comp
-                                    st.session_state["lote_itens"] = []
-                                    _invalida()
-                                    st.toast(f"{len(itens_salvos)} lancamentos salvos!")
-                                    st.rerun()
+                                numero_lote = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                                html_comp = _gerar_html_comprovante_lote(
+                                    itens=itens_salvos, igreja=igreja, slug=slug,
+                                    data_str=data_lote.strftime("%d/%m/%Y"),
+                                    vinc_str=vinc_str, forma_pag=forma_pag_lote,
+                                    numero_lote=numero_lote,
+                                )
+                                st.session_state["lote_comprovante_html"] = html_comp
+                                st.session_state["lote_itens"] = []
+                                _invalida()
+                                st.toast(f"{len(itens_salvos)} lancamentos salvos!")
+                                st.rerun()
 
                 with c_limpar:
                     if st.button("Limpar lote", key="lote_limpar"):
@@ -671,27 +566,20 @@ def render():
             if "lote_comprovante_html" in st.session_state:
                 st.divider()
                 st.success("Lancamentos salvos! Comprovante consolidado:")
-                components.html(
-                    st.session_state["lote_comprovante_html"],
-                    height=700,
-                    scrolling=True,
-                )
+                components.html(st.session_state["lote_comprovante_html"], height=700, scrolling=True)
                 st.download_button(
-                "Baixar comprovante consolidado",
-                data=st.session_state["lote_comprovante_html"],
-                file_name="comprovante_lote.html",
-                mime="text/html",
-                use_container_width=True,
-)
+                    "Baixar comprovante consolidado",
+                    data=st.session_state["lote_comprovante_html"],
+                    file_name="comprovante_lote.html",
+                    mime="text/html",
+                    use_container_width=True,
+                )
                 if st.button("Fechar comprovante", key="lote_fechar_comp"):
                     st.session_state.pop("lote_comprovante_html", None)
                     st.rerun()
     else:
         p_info_l = obter_plano(plano_igreja)
-        with st.expander(
-            "Lancamento em lote (apenas Profissional e Premium)",
-            expanded=False,
-        ):
+        with st.expander("🔒 Lancamento em lote (apenas Profissional e Premium)", expanded=False):
             st.warning(
                 f"O lancamento em lote esta disponivel apenas nos planos "
                 f"**Profissional** e **Premium**. Seu plano atual: **{p_info_l['nome']}**."
@@ -706,46 +594,37 @@ def render():
         if df_lanc.empty:
             st.info("Nenhum lancamento ainda.")
         else:
-            df_preparado = preparar_df(df_lanc)
-            st.dataframe(df_preparado, use_container_width=True)
-            st.download_button(
-                "Exportar CSV",
-                gerar_csv(df_preparado),
-                "lancamentos.csv",
-                "text/csv",
-            )
+            st.dataframe(preparar_df(df_lanc), use_container_width=True)
+            st.download_button("Exportar CSV", gerar_csv(preparar_df(df_lanc)),
+                               "lancamentos.csv", "text/csv")
 
     with st.expander("Imprimir comprovante", expanded=False):
         if df_lanc.empty:
             st.info("Nenhum lancamento ainda.")
         else:
             df_p = df_lanc.copy()
-            df_p["data_fmt"] = (
-                pd.to_datetime(df_p["data"], errors="coerce")
-                .dt.strftime("%d/%m/%Y")
-                .fillna("")
+            df_p["data_fmt"] = pd.to_datetime(df_p["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+            df_p["rotulo"] = df_p.apply(
+                lambda r: (f'{int(r["id_lancamento"])} | {r["data_fmt"]} | '
+                           f'{r["tipo"]} | {r["categoria"]} | '
+                           f'{r["nome_cadastro"] or "Sem vinculo"} | '
+                           f'{formatar_moeda(r["valor"])}'),
+                axis=1,
             )
-            df_p["rotulo"] = df_p.apply(_rotulo_lancamento, axis=1)
-
-            rotulo_imp = st.selectbox(
-                "Selecione o lancamento para imprimir",
-                df_p["rotulo"].tolist(),
-                key="sel_imp",
-            )
+            rotulo_imp = st.selectbox("Selecione o lancamento para imprimir",
+                                      df_p["rotulo"].tolist(), key="sel_imp")
             sel_imp = df_p[df_p["rotulo"] == rotulo_imp].iloc[0]
-
             if st.button("Gerar cupom", type="primary", key="btn_imprimir"):
                 html_comp = _gerar_html_comprovante(dict(sel_imp), igreja, slug)
                 components.html(html_comp, height=700, scrolling=True)
-
                 id_lanc = int(sel_imp["id_lancamento"])
                 st.download_button(
-                "Baixar comprovante",
-                data=html_comp,
-                file_name=f"comprovante_{id_lanc}.html",
-                mime="text/html",
-                use_container_width=True,
-    )
+                    "Baixar comprovante",
+                    data=html_comp,
+                    file_name=f"comprovante_{id_lanc}.html",
+                    mime="text/html",
+                    use_container_width=True,
+                )
 
     with st.expander("Editar ou excluir lancamento", expanded=False):
         if df_lanc.empty:
@@ -753,69 +632,44 @@ def render():
             return
 
         df_e = df_lanc.copy()
-        df_e["data_fmt"] = (
-            pd.to_datetime(df_e["data"], errors="coerce")
-            .dt.strftime("%d/%m/%Y")
-            .fillna("")
+        df_e["data_fmt"] = pd.to_datetime(df_e["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+        df_e["rotulo"] = df_e.apply(
+            lambda r: (f'{int(r["id_lancamento"])} | {r["data_fmt"]} | '
+                       f'{r["tipo"]} | {r["categoria"]} | '
+                       f'{r["nome_cadastro"] or "Sem vinculo"} | '
+                       f'{formatar_moeda(r["valor"])}'),
+            axis=1,
         )
-        df_e["rotulo"] = df_e.apply(_rotulo_lancamento, axis=1)
 
-        rotulo = st.selectbox(
-            "Selecione o lancamento",
-            df_e["rotulo"].tolist(),
-            key="sel_lanc_edit",
-        )
+        rotulo = st.selectbox("Selecione o lancamento", df_e["rotulo"].tolist(), key="sel_lanc_edit")
         sel = df_e[df_e["rotulo"] == rotulo].iloc[0]
         id_lanc = int(sel["id_lancamento"])
 
         kp = f"_edit_{id_lanc}_"
 
         data_base = pd.to_datetime(sel["data"], errors="coerce")
-        data_edit = st.date_input(
-            "Data",
-            value=data_base.date() if pd.notna(data_base) else datetime.date.today(),
-            format="DD/MM/YYYY",
-            key=kp + "data",
-        )
+        data_edit = st.date_input("Data",
+                                  value=data_base.date() if pd.notna(data_base) else datetime.date.today(),
+                                  format="DD/MM/YYYY", key=kp + "data")
 
         tipo_opc = ["Entrada", "Saida"]
-        tipo_e = st.selectbox(
-            "Tipo",
-            tipo_opc,
-            index=tipo_opc.index(sel["tipo"]) if sel["tipo"] in tipo_opc else 0,
-            key=kp + "tipo",
-        )
+        tipo_e = st.selectbox("Tipo", tipo_opc,
+                              index=tipo_opc.index(sel["tipo"]) if sel["tipo"] in tipo_opc else 0,
+                              key=kp + "tipo")
 
         subcategoria_edit = ""
 
         if tipo_e == "Entrada":
-            cat_atual = (
-                sel["categoria"]
-                if sel["categoria"] in CATEGORIAS_ENTRADA
-                else CATEGORIAS_ENTRADA[0]
-            )
-            cat_e = st.selectbox(
-                "Categoria",
-                CATEGORIAS_ENTRADA,
-                index=CATEGORIAS_ENTRADA.index(cat_atual),
-                key=kp + "cat",
-            )
+            cat_atual = sel["categoria"] if sel["categoria"] in CATEGORIAS_ENTRADA else CATEGORIAS_ENTRADA[0]
+            cat_e = st.selectbox("Categoria", CATEGORIAS_ENTRADA,
+                                 index=CATEGORIAS_ENTRADA.index(cat_atual),
+                                 key=kp + "cat")
         else:
             cat_e = "Despesa"
-            st.text_input(
-                "Categoria",
-                value="Despesa",
-                disabled=True,
-                key=kp + "cat_d",
-            )
+            st.text_input("Categoria", value="Despesa", disabled=True, key=kp + "cat_d")
 
             subcategorias_edit = listar_subcategorias_despesa()
-            subcat_atual = (
-                str(sel.get("subcategoria", ""))
-                if "subcategoria" in sel.index
-                else ""
-            )
-
+            subcat_atual = str(sel.get("subcategoria", "")) if "subcategoria" in sel.index else ""
             if subcategorias_edit:
                 opcoes_sub = [""] + subcategorias_edit
                 if subcat_atual and subcat_atual not in opcoes_sub:
@@ -830,109 +684,56 @@ def render():
             else:
                 subcategoria_edit = subcat_atual
                 if subcat_atual:
-                    st.text_input(
-                        "Subcategoria",
-                        value=subcat_atual,
-                        disabled=True,
-                        key=kp + "subcat_d",
-                    )
+                    st.text_input("Subcategoria", value=subcat_atual, disabled=True, key=kp + "subcat_d")
 
         vinc_str = str(sel["tipo_cadastro"]).strip().upper()
-        vinc_pad_e = (
-            "Membro"
-            if (tipo_e == "Entrada" and cat_e == "Dizimo")
-            else "Fornecedor"
-            if vinc_str == "FORNECEDOR"
-            else "Membro"
-            if vinc_str == "MEMBRO"
-            else "Nenhum"
-        )
-
-        vincular_e = st.selectbox(
-            "Vincular a",
-            ["Nenhum", "Membro", "Fornecedor"],
-            index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_e),
-            key=kp + "vinc",
-        )
+        vinc_pad_e = ("Membro" if (tipo_e == "Entrada" and cat_e == "Dizimo")
+                      else "Fornecedor" if vinc_str == "FORNECEDOR"
+                      else "Membro" if vinc_str == "MEMBRO"
+                      else "Nenhum")
+        vincular_e = st.selectbox("Vincular a", ["Nenhum", "Membro", "Fornecedor"],
+                                  index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_e),
+                                  key=kp + "vinc")
 
         id_e, nome_e, tipo_e2 = None, "", ""
-
         if vincular_e == "Membro":
             opc, chave = _opcoes_com_registro_atual(
-                membros,
-                sel["id_cadastro"],
-                sel["nome_cadastro"],
-                sel["tipo_cadastro"],
+                membros, sel["id_cadastro"], sel["nome_cadastro"], sel["tipo_cadastro"]
             )
             if opc:
                 chaves = list(opc.keys())
-                esc = st.selectbox(
-                    "Membro",
-                    chaves,
-                    index=chaves.index(chave) if chave in chaves else 0,
-                    key=kp + "mem",
-                )
+                esc = st.selectbox("Membro", chaves,
+                                   index=chaves.index(chave) if chave in chaves else 0,
+                                   key=kp + "mem")
                 l = opc[esc]
-                id_e = int(l["id_cadastro"])
-                nome_e = l["nome"]
-                tipo_e2 = l["tipo_cadastro"]
+                id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
             else:
                 st.warning("Nenhum membro ativo cadastrado.")
         elif vincular_e == "Fornecedor":
             opc, chave = _opcoes_com_registro_atual(
-                fornec,
-                sel["id_cadastro"],
-                sel["nome_cadastro"],
-                sel["tipo_cadastro"],
+                fornec, sel["id_cadastro"], sel["nome_cadastro"], sel["tipo_cadastro"]
             )
             if opc:
                 chaves = list(opc.keys())
-                esc = st.selectbox(
-                    "Fornecedor",
-                    chaves,
-                    index=chaves.index(chave) if chave in chaves else 0,
-                    key=kp + "forn",
-                )
+                esc = st.selectbox("Fornecedor", chaves,
+                                   index=chaves.index(chave) if chave in chaves else 0,
+                                   key=kp + "forn")
                 l = opc[esc]
-                id_e = int(l["id_cadastro"])
-                nome_e = l["nome"]
-                tipo_e2 = l["tipo_cadastro"]
+                id_e, nome_e, tipo_e2 = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
             else:
                 st.warning("Nenhum fornecedor ativo cadastrado.")
         else:
             st.text_input("Nome", value="", disabled=True, key=kp + "nome_vazio")
 
-        desc_e = st.text_input(
-            "Descricao",
-            value=str(sel.get("descricao", "")),
-            key=kp + "desc",
-        )
+        desc_e = st.text_input("Descricao", value=str(sel["descricao"]), key=kp + "desc")
 
-        forma_pag_atual = (
-            str(sel.get("forma_pagamento", "Dinheiro"))
-            if "forma_pagamento" in sel.index
-            else "Dinheiro"
-        )
-        idx_fp = (
-            FORMAS_PAGAMENTO.index(forma_pag_atual)
-            if forma_pag_atual in FORMAS_PAGAMENTO
-            else 1
-        )
-        forma_pag_e = st.selectbox(
-            "Forma de pagamento",
-            FORMAS_PAGAMENTO,
-            index=idx_fp,
-            key=kp + "forma_pag",
-        )
+        forma_pag_atual = str(sel.get("forma_pagamento", "Dinheiro")) if "forma_pagamento" in sel.index else "Dinheiro"
+        idx_fp = FORMAS_PAGAMENTO.index(forma_pag_atual) if forma_pag_atual in FORMAS_PAGAMENTO else 1
+        forma_pag_e = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO,
+                                   index=idx_fp, key=kp + "forma_pag")
 
-        valor_e = st.number_input(
-            "Valor (R$)",
-            min_value=0.0,
-            value=float(sel["valor"]),
-            step=0.01,
-            format="%.2f",
-            key=kp + "val",
-        )
+        valor_e = st.number_input("Valor (R$)", min_value=0.0, value=float(sel["valor"]),
+                                  step=0.01, format="%.2f", key=kp + "val")
 
         st.divider()
         c1, c2 = st.columns(2)
@@ -940,21 +741,13 @@ def render():
         with c1:
             st.caption("Editar lancamento")
             if solicitar_autorizacao("salvar_lanc", "editar"):
-                lanc = Lancamento(
-                    data=data_edit,
-                    tipo=tipo_e,
-                    categoria=cat_e,
-                    valor=valor_e,
-                    descricao=desc_e,
-                    forma_pagamento=forma_pag_e,
-                    subcategoria=subcategoria_edit,
-                    id_cadastro=id_e,
-                    nome_cadastro=nome_e,
-                    tipo_cadastro=tipo_e2,
-                    id_lancamento=id_lanc,
-                )
+                lanc = Lancamento(data=data_edit, tipo=tipo_e, categoria=cat_e,
+                                  valor=valor_e, descricao=desc_e,
+                                  forma_pagamento=forma_pag_e,
+                                  subcategoria=subcategoria_edit,
+                                  id_cadastro=id_e, nome_cadastro=nome_e,
+                                  tipo_cadastro=tipo_e2, id_lancamento=id_lanc)
                 erros = lanc.validar()
-
                 if erros:
                     for e in erros:
                         st.error(e)
@@ -974,12 +767,8 @@ def render():
                     excluir_lancamento(slug, id_lanc)
                     _invalida()
                     for k in list(st.session_state.keys()):
-                        if (
-                            k.startswith("_auth_")
-                            or k.startswith("_del_")
-                            or k.startswith("_edit_")
-                            or k == "sel_lanc_edit"
-                        ):
+                        if (k.startswith("_auth_") or k.startswith("_del_")
+                            or k.startswith("_edit_") or k == "sel_lanc_edit"):
                             st.session_state.pop(k, None)
                     st.toast("Lancamento excluido!")
                     st.rerun()
