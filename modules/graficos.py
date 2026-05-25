@@ -25,6 +25,7 @@ COR = {
     "qtd_dizimo": "#10B981",
     "funcao": "#3B82F6",
     "Revista EBD": "#03A61E",
+    "sem_contribuicao": "#374151",
 }
 
 CORES_CATEGORIA = {
@@ -42,7 +43,7 @@ CORES_DESPESAS = [
 
 ALT_COMPARACAO = 380
 ALT_RANK_BASE = 320
-ALT_POR_ITEM = 55
+ALT_POR_ITEM = 35
 ALT_BARRAS_VERT = 400
 MES_MINIMO_SISTEMA = pd.Period("2026-01", freq="M")
 
@@ -1062,56 +1063,130 @@ def render():
         km2.metric("Dizimistas", str(qtd_d), delta=f"{pct:.1f}%")
         km3.metric("Nao dizimistas", str(qtd_nd), delta=f"-{100 - pct:.1f}%", delta_color="inverse")
 
+    # ── FREQUENCIA DE DIZIMOS — TODOS OS MEMBROS ATIVOS ───────────────────
     diz_f = df_f[
         (df_f["categoria"].str.upper() == "DIZIMO") &
         (df_f["tipo_cadastro"].str.upper() == "MEMBRO")
     ]
 
-    if not diz_f.empty:
+    # Lista TODOS os membros ativos da igreja (com filtros se modo personalizado)
+    df_todos_membros = df_cad[
+        (df_cad["tipo_cadastro"].str.upper() == "MEMBRO") &
+        (df_cad["situacao"].str.upper() == "ATIVO")
+    ].copy()
+
+    if modo_personalizado and funcao_sel != "Todas":
+        df_todos_membros = df_todos_membros[
+            df_todos_membros["funcao"].str.strip() == funcao_sel
+        ]
+    if modo_personalizado and membro_sel != "Todos":
+        df_todos_membros = df_todos_membros[
+            df_todos_membros["nome"].str.strip() == membro_sel
+        ]
+
+    if not df_todos_membros.empty:
         st.markdown(
-            '<div class="grafico-titulo">🔢 Frequencia de Dizimos'
-            '<span class="subtitulo">Top 10 — qtd de lancamentos por membro</span></div>',
+            f'<div class="grafico-titulo">🔢 Frequencia de Dizimos'
+            f'<span class="subtitulo">Todos os membros ativos — qtd de lancamentos no periodo '
+            f'({len(df_todos_membros)} membros)</span></div>',
             unsafe_allow_html=True,
         )
 
-        dq = (
-            diz_f.groupby("nome_cadastro", as_index=False)
-            .size()
-            .rename(columns={"size": "quantidade"})
-            .sort_values("quantidade", ascending=False)
-            .head(10)
-        )
-        pares_q = sorted(zip(dq["quantidade"], dq["nome_cadastro"]))
+        # Conta dizimos por id_cadastro
+        if not diz_f.empty:
+            cont_dizimos = diz_f.groupby("id_cadastro").size().to_dict()
+        else:
+            cont_dizimos = {}
+
+        # Monta lista com TODOS os membros ativos (mesmo os que tem 0)
+        lista_freq = []
+        for _, m in df_todos_membros.iterrows():
+            id_m = int(m["id_cadastro"]) if pd.notna(m["id_cadastro"]) else None
+            if id_m is None:
+                continue
+            qtd_membro = cont_dizimos.get(id_m, 0)
+            lista_freq.append({
+                "nome": str(m["nome"]),
+                "quantidade": qtd_membro,
+            })
+
+        # Ordena: maior quantidade primeiro, depois alfabetico
+        lista_freq.sort(key=lambda x: (-x["quantidade"], x["nome"]))
+
+        # Inverte para o grafico horizontal (maior aparece no topo)
+        lista_freq_grafico = list(reversed(lista_freq))
+
+        nomes_g = [item["nome"] for item in lista_freq_grafico]
+        qtds_g  = [item["quantidade"] for item in lista_freq_grafico]
+
+        # Cores: verde se contribuiu, cinza se 0
+        cores_g = [
+            COR["qtd_dizimo"] if q > 0 else COR["sem_contribuicao"]
+            for q in qtds_g
+        ]
+
+        # Texto da barra: numero, ou "Sem contribuicao" se 0
+        textos_g = [
+            str(q) if q > 0 else "Sem contribuicao"
+            for q in qtds_g
+        ]
 
         fig_qtd = go.Figure(go.Bar(
-            x=[p[0] for p in pares_q],
-            y=[p[1] for p in pares_q],
+            x=qtds_g,
+            y=nomes_g,
             orientation="h",
-            marker_color=COR["qtd_dizimo"],
-            text=[str(p[0]) for p in pares_q],
+            marker_color=cores_g,
+            text=textos_g,
             textposition="outside",
             textfont=dict(color="#CBD5E1", size=11),
             hoverinfo="skip",
         ))
         fig_qtd.update_layout(**_base_layout(
-            height=_altura_ranking(len(dq)),
+            height=_altura_ranking(len(lista_freq)),
             xaxis=dict(showticklabels=False, showgrid=False, fixedrange=True),
             yaxis=dict(showgrid=False, fixedrange=True, color="#CBD5E1"),
         ))
         st.plotly_chart(fig_qtd, **OPC)
 
+        # 3 metricas resumo
+        qtd_com_diz   = sum(1 for q in qtds_g if q > 0)
+        qtd_sem_diz   = len(qtds_g) - qtd_com_diz
+        total_lancs   = sum(qtds_g)
+
+        km_f1, km_f2, km_f3 = st.columns(3)
+        km_f1.metric("Membros que contribuiram", str(qtd_com_diz))
+        km_f2.metric("Membros sem contribuicao", str(qtd_sem_diz))
+        km_f3.metric("Total de lancamentos", str(total_lancs))
+
+        # Exportacao da lista completa
+        df_freq_exp = pd.DataFrame(lista_freq).rename(columns={
+            "nome": "Nome",
+            "quantidade": "Qtd dizimos no periodo",
+        })
+        csv_freq = df_freq_exp.to_csv(index=False, encoding="utf-8-sig")
+        st.download_button(
+            "📥 Exportar lista completa de frequencia",
+            csv_freq,
+            "frequencia_dizimos.csv",
+            "text/csv",
+            key="dl_freq_completa",
+        )
+
+        # ── FREQUENCIA INDIVIDUAL DO MEMBRO ───────────────────────────────
         st.markdown(
             '<div class="grafico-titulo">🔍 Frequencia Individual do Membro'
-            '<span class="subtitulo">Selecione um membro para ver detalhes da contribuicao</span></div>',
+            '<span class="subtitulo">Selecione um membro (inclui quem nao contribuiu)</span></div>',
             unsafe_allow_html=True,
         )
 
-        membros_dizimistas = sorted(diz_f["nome_cadastro"].dropna().unique().tolist())
+        # Lista TODOS os membros ativos (em ordem alfabetica)
+        membros_lista_select = sorted(df_todos_membros["nome"].dropna().unique().tolist())
+
         membro_sel_freq = st.selectbox(
             "Membro",
-            ["— Selecione um membro —"] + membros_dizimistas,
+            ["— Selecione um membro —"] + membros_lista_select,
             key="freq_membro_sel",
-            help="Mostra todos os dizimos deste membro no periodo selecionado.",
+            help="Lista todos os membros ativos da igreja, mesmo os que nao contribuiram.",
         )
 
         if membro_sel_freq != "— Selecione um membro —":
@@ -1119,74 +1194,89 @@ def render():
                 diz_f["nome_cadastro"].str.strip() == membro_sel_freq
             ].copy()
 
-            if diz_membro.empty:
-                st.info(f"Nenhum dizimo de {membro_sel_freq} no periodo.")
-            else:
-                qtd_total = len(diz_membro)
-                valor_total = diz_membro["valor"].sum()
-                media_valor = valor_total / qtd_total if qtd_total else 0
-                meses_unicos = diz_membro["mes_periodo"].nunique()
+            qtd_total = len(diz_membro)
+            valor_total = diz_membro["valor"].sum() if qtd_total else 0
+            media_valor = valor_total / qtd_total if qtd_total else 0
+            meses_unicos = diz_membro["mes_periodo"].nunique() if qtd_total else 0
 
-                mf1, mf2, mf3, mf4 = st.columns(4)
-                mf1.metric("Total de dizimos", str(qtd_total), help="Quantidade de lancamentos no periodo")
-                mf2.metric("Valor total", formatar_moeda(valor_total))
-                mf3.metric("Media por contribuicao", formatar_moeda(media_valor))
-                mf4.metric("Meses com dizimo", f"{meses_unicos} mes(es)")
+            mf1, mf2, mf3, mf4 = st.columns(4)
+            mf1.metric("Total de dizimos", str(qtd_total), help="Quantidade de lancamentos no periodo")
+            mf2.metric("Valor total", formatar_moeda(valor_total))
+            mf3.metric("Media por contribuicao", formatar_moeda(media_valor))
+            mf4.metric("Meses com dizimo", f"{meses_unicos} mes(es)")
 
-                meses_com_diz = set(diz_membro["mes_periodo"].dropna().tolist())
-                badges_html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;margin-bottom:18px">'
+            # Mapa de presenca (sempre mostra, mesmo se 0 dizimos)
+            meses_com_diz = set(diz_membro["mes_periodo"].dropna().tolist()) if qtd_total else set()
+            badges_html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;margin-bottom:18px">'
 
-                for m in meses_seq:
-                    presente = m in meses_com_diz
-                    if presente:
-                        valor_mes = diz_membro[diz_membro["mes_periodo"] == m]["valor"].sum()
-                        qtd_mes = len(diz_membro[diz_membro["mes_periodo"] == m])
+            for m in meses_seq:
+                presente = m in meses_com_diz
+                if presente:
+                    valor_mes = diz_membro[diz_membro["mes_periodo"] == m]["valor"].sum()
+                    qtd_mes = len(diz_membro[diz_membro["mes_periodo"] == m])
 
-                        badges_html += (
-                            f'<div style="background:#10B981;color:white;'
-                            f'padding:8px 14px;border-radius:8px;font-size:0.82rem;'
-                            f'font-weight:600;text-align:center;min-width:90px">'
-                            f'✅ {m.strftime("%b/%y")}<br>'
-                            f'<span style="font-size:0.72rem;font-weight:400;opacity:0.9">'
-                            f'{qtd_mes}x · {formatar_moeda(valor_mes)}</span>'
-                            f'</div>'
-                        )
-                    else:
-                        badges_html += (
-                            f'<div style="background:#374151;color:#94A3B8;'
-                            f'padding:8px 14px;border-radius:8px;font-size:0.82rem;'
-                            f'text-align:center;min-width:90px;opacity:0.6">'
-                            f'❌ {m.strftime("%b/%y")}<br>'
-                            f'<span style="font-size:0.72rem">sem dizimo</span>'
-                            f'</div>'
-                        )
-
-                badges_html += "</div>"
-                st.markdown(badges_html, unsafe_allow_html=True)
-
-                if len(meses_seq) > 0:
-                    taxa_freq = (meses_unicos / len(meses_seq)) * 100
-                    if taxa_freq >= 80:
-                        cor_freq = "#10B981"
-                        msg_freq = "🌟 Excelente frequencia"
-                    elif taxa_freq >= 50:
-                        cor_freq = "#F59E0B"
-                        msg_freq = "👍 Boa frequencia"
-                    else:
-                        cor_freq = "#EF4444"
-                        msg_freq = "⚠️ Frequencia baixa — necessita atencao pastoral"
-
-                    st.markdown(
-                        f'<div style="background:#1E293B;border-left:4px solid {cor_freq};'
-                        f'padding:12px 16px;border-radius:8px;margin-bottom:18px">'
-                        f'<div style="color:{cor_freq};font-weight:700;font-size:1rem">{msg_freq}</div>'
-                        f'<div style="color:#CBD5E1;font-size:0.85rem;margin-top:4px">'
-                        f'Taxa de frequencia: <b>{taxa_freq:.1f}%</b> — contribuiu em '
-                        f'{meses_unicos} de {len(meses_seq)} meses do periodo.'
-                        f'</div></div>',
-                        unsafe_allow_html=True,
+                    badges_html += (
+                        f'<div style="background:#10B981;color:white;'
+                        f'padding:8px 14px;border-radius:8px;font-size:0.82rem;'
+                        f'font-weight:600;text-align:center;min-width:90px">'
+                        f'✅ {m.strftime("%b/%y")}<br>'
+                        f'<span style="font-size:0.72rem;font-weight:400;opacity:0.9">'
+                        f'{qtd_mes}x · {formatar_moeda(valor_mes)}</span>'
+                        f'</div>'
+                    )
+                else:
+                    badges_html += (
+                        f'<div style="background:#374151;color:#94A3B8;'
+                        f'padding:8px 14px;border-radius:8px;font-size:0.82rem;'
+                        f'text-align:center;min-width:90px;opacity:0.6">'
+                        f'❌ {m.strftime("%b/%y")}<br>'
+                        f'<span style="font-size:0.72rem">sem dizimo</span>'
+                        f'</div>'
                     )
 
+            badges_html += "</div>"
+            st.markdown(badges_html, unsafe_allow_html=True)
+
+            # Avaliacao pastoral
+            if qtd_total == 0:
+                # Membro nao contribuiu nada
+                st.markdown(
+                    f'<div style="background:#1E293B;border-left:4px solid #DC2626;'
+                    f'padding:14px 18px;border-radius:8px;margin-bottom:18px">'
+                    f'<div style="color:#DC2626;font-weight:700;font-size:1.05rem">'
+                    f'🚨 Sem contribuicoes no periodo'
+                    f'</div>'
+                    f'<div style="color:#CBD5E1;font-size:0.88rem;margin-top:6px">'
+                    f'<b>{membro_sel_freq}</b> nao possui dizimos registrados no periodo selecionado. '
+                    f'Recomenda-se visita pastoral ou contato para aconselhamento.'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+            elif len(meses_seq) > 0:
+                taxa_freq = (meses_unicos / len(meses_seq)) * 100
+                if taxa_freq >= 80:
+                    cor_freq = "#10B981"
+                    msg_freq = "🌟 Excelente frequencia"
+                elif taxa_freq >= 50:
+                    cor_freq = "#F59E0B"
+                    msg_freq = "👍 Boa frequencia"
+                else:
+                    cor_freq = "#EF4444"
+                    msg_freq = "⚠️ Frequencia baixa — necessita atencao pastoral"
+
+                st.markdown(
+                    f'<div style="background:#1E293B;border-left:4px solid {cor_freq};'
+                    f'padding:12px 16px;border-radius:8px;margin-bottom:18px">'
+                    f'<div style="color:{cor_freq};font-weight:700;font-size:1rem">{msg_freq}</div>'
+                    f'<div style="color:#CBD5E1;font-size:0.85rem;margin-top:4px">'
+                    f'Taxa de frequencia: <b>{taxa_freq:.1f}%</b> — contribuiu em '
+                    f'{meses_unicos} de {len(meses_seq)} meses do periodo.'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Tabela detalhada (so se tiver dizimos)
+            if qtd_total > 0:
                 with st.expander(
                     f"📋 Ver detalhamento dos {qtd_total} dizimo(s) de {membro_sel_freq}",
                     expanded=False,
@@ -1220,6 +1310,8 @@ def render():
                         key=f"dl_dizimos_{membro_sel_freq}",
                     )
 
+    # ── TOP 10 DIZIMISTAS (VALOR) ─────────────────────────────────────────
+    if not diz_f.empty:
         st.markdown(
             '<div class="grafico-titulo">💰 Top 10 Dizimistas (Valor)</div>',
             unsafe_allow_html=True,
