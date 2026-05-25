@@ -1,8 +1,10 @@
 import datetime
 import base64
 import html
+import urllib.parse
 
 import pandas as pd
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -79,6 +81,187 @@ def _opcoes_com_registro_atual(df_ativos, id_atual, nome_atual, tipo_atual):
         }
 
     return opcoes, chave_atual
+
+
+def _limpar_tel(tel):
+    return "".join(c for c in str(tel) if c.isdigit())
+
+
+def _normalizar_tel_brasil(tel):
+    tel_limpo = _limpar_tel(tel)
+
+    if not tel_limpo:
+        return ""
+
+    while tel_limpo.startswith("0"):
+        tel_limpo = tel_limpo[1:]
+
+    if not tel_limpo.startswith("55"):
+        tel_limpo = "55" + tel_limpo
+
+    return tel_limpo
+
+
+def _link_whatsapp(tel, mensagem):
+    tel_limpo = _normalizar_tel_brasil(tel)
+
+    if not tel_limpo:
+        return ""
+
+    msg_enc = urllib.parse.quote(mensagem)
+    return f"https://wa.me/{tel_limpo}?text={msg_enc}"
+
+
+def _config_whatsapp():
+    try:
+        cfg = st.secrets.get("whatsapp", {})
+    except Exception:
+        cfg = {}
+
+    return {
+        "access_token": str(cfg.get("access_token", "")).strip(),
+        "phone_number_id": str(cfg.get("phone_number_id", "")).strip(),
+        "api_version": str(cfg.get("api_version", "v20.0")).strip(),
+    }
+
+
+def _whatsapp_api_configurada():
+    cfg = _config_whatsapp()
+    return bool(cfg["access_token"] and cfg["phone_number_id"])
+
+
+def _enviar_whatsapp_texto_api(telefone, mensagem):
+    cfg = _config_whatsapp()
+    numero = _normalizar_tel_brasil(telefone)
+
+    if not numero:
+        return False, "Telefone invalido ou vazio."
+
+    if not cfg["access_token"] or not cfg["phone_number_id"]:
+        return False, "WhatsApp Cloud API nao configurada no st.secrets."
+
+    url = (
+        f"https://graph.facebook.com/"
+        f"{cfg['api_version']}/{cfg['phone_number_id']}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {cfg['access_token']}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": mensagem,
+        },
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=25)
+
+        if 200 <= resp.status_code < 300:
+            return True, "Comprovante enviado com sucesso."
+
+        return False, f"Erro {resp.status_code}: {resp.text}"
+
+    except requests.RequestException as e:
+        return False, f"Falha na requisicao: {e}"
+
+
+def _telefone_do_lancamento(df_cad, lancamento):
+    id_cadastro = lancamento.get("id_cadastro")
+
+    if pd.isna(id_cadastro):
+        return ""
+
+    try:
+        id_cadastro = int(id_cadastro)
+    except Exception:
+        return ""
+
+    if df_cad.empty or "id_cadastro" not in df_cad.columns:
+        return ""
+
+    ids = pd.to_numeric(df_cad["id_cadastro"], errors="coerce")
+    linha = df_cad[ids == id_cadastro]
+
+    if linha.empty or "telefone" not in linha.columns:
+        return ""
+
+    return str(linha.iloc[0].get("telefone", "") or "")
+
+
+def _montar_mensagem_comprovante(lancamento, igreja):
+    nome_igreja = igreja.get("nome", "Igreja")
+    data_fmt = pd.to_datetime(lancamento.get("data"), errors="coerce")
+    data_str = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else "-"
+
+    id_lanc = lancamento.get("id_lancamento", 0)
+    tipo = lancamento.get("tipo", "-")
+    categoria = lancamento.get("categoria", "-")
+    subcategoria = lancamento.get("subcategoria", "") or ""
+    descricao = lancamento.get("descricao", "") or "-"
+    forma_pag = lancamento.get("forma_pagamento", "Dinheiro") or "Dinheiro"
+    valor = formatar_moeda(lancamento.get("valor", 0))
+    nome_vinc = lancamento.get("nome_cadastro", "") or "Nao vinculado"
+
+    linhas = [
+        f"Comprovante de lancamento - {nome_igreja}",
+        "",
+        f"Cupom: #{str(id_lanc).zfill(6)}",
+        f"Data: {data_str}",
+        f"Tipo: {tipo}",
+        f"Categoria: {categoria}",
+    ]
+
+    if subcategoria:
+        linhas.append(f"Subcategoria: {subcategoria}")
+
+    linhas.extend([
+        f"Vinculado: {nome_vinc}",
+        f"Descricao: {descricao}",
+        f"Pagamento: {forma_pag}",
+        f"Valor: {valor}",
+        "",
+        "Mensagem enviada pelo sistema FielMordomo.",
+        NOME_PASTOR,
+    ])
+
+    return "\n".join(linhas)
+
+
+def _render_whatsapp_comprovante(df_cad, lancamento, igreja, key_prefix):
+    telefone = _telefone_do_lancamento(df_cad, lancamento)
+    mensagem = _montar_mensagem_comprovante(lancamento, igreja)
+    link = _link_whatsapp(telefone, mensagem)
+
+    if link:
+        st.markdown(
+            f'<a href="{link}" target="_blank" '
+            f'style="display:inline-block;background:#25D366;color:white;'
+            f'padding:8px 16px;border-radius:6px;text-decoration:none;'
+            f'font-weight:600;margin-top:10px;margin-bottom:8px">'
+            f'Enviar comprovante pelo WhatsApp</a>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.warning("Este lancamento nao possui telefone vinculado.")
+
+    if _whatsapp_api_configurada():
+        if st.button(
+            "Enviar pela WhatsApp Cloud API",
+            key=f"{key_prefix}_enviar_cupom_api",
+            use_container_width=True,
+        ):
+            ok, detalhe = _enviar_whatsapp_texto_api(telefone, mensagem)
+            if ok:
+                st.success(detalhe)
+            else:
+                st.error(detalhe)
 
 
 def _gerar_html_comprovante(lancamento, igreja, slug):
@@ -627,6 +810,12 @@ def render():
                 html_comp = _gerar_html_comprovante(dict(sel_imp), igreja, slug)
                 components.html(html_comp, height=700, scrolling=True)
                 id_lanc = int(sel_imp["id_lancamento"])
+                _render_whatsapp_comprovante(
+                    df_cad=df_cad,
+                    lancamento=dict(sel_imp),
+                    igreja=igreja,
+                    key_prefix=f"cupom_{id_lanc}",
+                )
                 st.download_button(
                     "Baixar comprovante",
                     data=html_comp,
