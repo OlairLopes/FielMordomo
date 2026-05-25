@@ -377,8 +377,15 @@ def render():
 
         desc = st.text_input("Descricao", key="nl_desc")
         forma_pag = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO, key="nl_forma_pag")
-        valor = st.number_input("Valor (R$)", min_value=0.0,
-                                step=0.01, format="%.2f", key="nl_valor")
+        valor = st.number_input(
+            "Valor (R$)",
+            min_value=0.0,
+            value=None,
+            step=0.01,
+            format="%.2f",
+            placeholder="0,00",
+            key="nl_valor",
+        )
 
         if st.button("Salvar lancamento", type="primary", key="nl_salvar"):
             lanc = Lancamento(
@@ -392,6 +399,8 @@ def render():
                 erros.append("Nenhum membro ativo disponivel.")
             if vincular == "Fornecedor" and fornec.empty:
                 erros.append("Nenhum fornecedor ativo disponivel.")
+            if valor is None or valor <= 0:
+                erros.append("Informe um valor maior que zero.")
             if erros:
                 for e in erros:
                     st.error(e)
