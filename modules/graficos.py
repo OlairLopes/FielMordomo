@@ -24,7 +24,7 @@ COR = {
     "despesa": "#EF4444",
     "qtd_dizimo": "#10B981",
     "funcao": "#3B82F6",
-    "Revista EBD": "#03A61E",
+    "Revista EBD": "#11cfc8",
     "sem_contribuicao": "#374151",
 }
 
@@ -33,7 +33,7 @@ CORES_CATEGORIA = {
     "OFERTA": "#3B82F6",
     "MISSAO": "#F59E0B",
     "CAMPANHA": "#8B5CF6",
-    "REVISTA EBD": "#03A61E",
+    "REVISTA EBD": "#11cfc8",
 }
 
 CORES_DESPESAS = [
