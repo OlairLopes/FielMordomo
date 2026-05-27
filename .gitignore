@@ -1,6 +1,28 @@
-*.db
-backups/
-.streamlit/secrets.toml
+# Python
 __pycache__/
 *.pyc
-.venv/
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Dados locais (caso alguem rode na pasta do projeto por engano)
+master.db
+tenants/
+backups/
+dados/
+logos/*.png
+logos/*.jpg
+logos/*.jpeg
+logos/*.gif
+logos/*.webp
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

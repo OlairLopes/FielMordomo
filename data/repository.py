@@ -15,12 +15,18 @@ import pandas as pd
 
 
 def _data_dir() -> Path:
+    # 1. Prioridade maxima: variavel de ambiente FIELMORDOMO_DATA_DIR
     env = os.environ.get("FIELMORDOMO_DATA_DIR")
     if env:
         p = Path(env)
+    # 2. Render.com com disco persistente
+    elif os.environ.get("RENDER_PERSISTENT_DISK", "").lower() == "true":
+        p = Path("/opt/render/project/src/dados")
+    # 3. Windows local
     elif os.name == "nt":
         base = os.environ.get("LOCALAPPDATA") or str(Path.home())
         p = Path(base) / "FielMordomo"
+    # 4. Linux/Mac local ou Streamlit Cloud
     else:
         p = Path.home() / ".fielmordomo"
     p.mkdir(parents=True, exist_ok=True)
