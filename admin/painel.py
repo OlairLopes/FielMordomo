@@ -17,6 +17,7 @@ from data.repository import (
     restaurar_backup_zip,
 )
 from utils.helpers import confirmar_exclusao
+from admin.dashboard_geral import render_dashboard_geral
 
 PLANOS = ["basico", "profissional", "premium"]
 
@@ -25,8 +26,9 @@ def render():
     st.title("FielMordomo — Painel Admin")
     st.caption("Gerenciamento de igrejas e planos")
 
-    aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs([
-        "Igrejas", "Nova igreja", "Logos", "Subcategorias", "Backup", "Configuracoes"
+    aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs([
+        "Igrejas", "Nova igreja", "Logos", "Subcategorias", "Backup", "Configuracoes",
+        "📊 Dashboard Geral"
     ])
 
     with aba1:
@@ -41,6 +43,8 @@ def render():
         _backup_admin()
     with aba6:
         _configuracoes()
+    with aba7:
+        render_dashboard_geral()
 
 
 def _listar_igrejas():
