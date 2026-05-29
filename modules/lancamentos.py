@@ -499,25 +499,35 @@ def render():
     igreja = st.session_state.get("igreja", {})
     plano_igreja = igreja.get("plano", "basico")
 
+    # Contador para forcar recriacao dos widgets do "Novo lancamento" apos salvar.
+    # Cada vez que um lancamento e salvo, o contador incrementa e todas as keys
+    # mudam (nl_data_0 -> nl_data_1), o que faz o Streamlit criar widgets novos
+    # do zero, com valores padrao (vazios). Essa e a forma confiavel de "limpar"
+    # campos no Streamlit, especialmente para number_input com value=None.
+    if "nl_counter" not in st.session_state:
+        st.session_state["nl_counter"] = 0
+
+    cnt = st.session_state["nl_counter"]
+
     with st.expander("Novo lancamento", expanded=False):
         data_l = st.date_input("Data", value=datetime.date.today(),
-                               format="DD/MM/YYYY", key="nl_data")
-        tipo = st.selectbox("Tipo", ["Entrada", "Saida"], key="nl_tipo")
+                               format="DD/MM/YYYY", key=f"nl_data_{cnt}")
+        tipo = st.selectbox("Tipo", ["Entrada", "Saida"], key=f"nl_tipo_{cnt}")
 
         subcategoria_nl = ""
 
         if tipo == "Entrada":
-            cat = st.selectbox("Categoria", CATEGORIAS_ENTRADA, key="nl_cat")
+            cat = st.selectbox("Categoria", CATEGORIAS_ENTRADA, key=f"nl_cat_{cnt}")
         else:
             cat = "Despesa"
-            st.text_input("Categoria", value="Despesa", disabled=True, key="nl_cat_d")
+            st.text_input("Categoria", value="Despesa", disabled=True, key=f"nl_cat_d_{cnt}")
 
             subcategorias = listar_subcategorias_despesa()
             if subcategorias:
                 subcategoria_nl = st.selectbox(
                     "Subcategoria",
                     [""] + subcategorias,
-                    key="nl_subcat",
+                    key=f"nl_subcat_{cnt}",
                     help="Selecione a categoria detalhada da despesa.",
                 )
             else:
@@ -536,7 +546,7 @@ def render():
         vincular = st.selectbox(
             "Vincular a", ["Nenhum", "Membro", "Fornecedor"],
             index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad),
-            key="nl_vincular",
+            key=f"nl_vincular_{cnt}",
         )
 
         id_cad, nome_cad, tipo_cad = None, "", ""
@@ -546,7 +556,7 @@ def render():
                 st.warning("Nenhum membro ativo cadastrado.")
             else:
                 opc = montar_opcoes(membros)
-                esc = st.selectbox("Membro", list(opc.keys()), key="nl_membro")
+                esc = st.selectbox("Membro", list(opc.keys()), key=f"nl_membro_{cnt}")
                 l = opc[esc]
                 id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
         elif vincular == "Fornecedor":
@@ -554,12 +564,12 @@ def render():
                 st.warning("Nenhum fornecedor ativo cadastrado.")
             else:
                 opc = montar_opcoes(fornec)
-                esc = st.selectbox("Fornecedor", list(opc.keys()), key="nl_fornecedor")
+                esc = st.selectbox("Fornecedor", list(opc.keys()), key=f"nl_fornecedor_{cnt}")
                 l = opc[esc]
                 id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
-        desc = st.text_input("Descricao", key="nl_desc")
-        forma_pag = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO, key="nl_forma_pag")
+        desc = st.text_input("Descricao", key=f"nl_desc_{cnt}")
+        forma_pag = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO, key=f"nl_forma_pag_{cnt}")
         valor = st.number_input(
             "Valor (R$)",
             min_value=0.0,
@@ -567,13 +577,14 @@ def render():
             step=0.01,
             format="%.2f",
             placeholder="0,00",
-            key="nl_valor",
+            key=f"nl_valor_{cnt}",
         )
 
-        if st.button("Salvar lancamento", type="primary", key="nl_salvar"):
+        if st.button("Salvar lancamento", type="primary", key=f"nl_salvar_{cnt}"):
             lanc = Lancamento(
                 data=data_l, tipo=tipo, categoria=cat,
-                valor=valor, descricao=desc, forma_pagamento=forma_pag,
+                valor=valor if valor is not None else 0.0,
+                descricao=desc, forma_pagamento=forma_pag,
                 subcategoria=subcategoria_nl,
                 id_cadastro=id_cad, nome_cadastro=nome_cad, tipo_cadastro=tipo_cad,
             )
@@ -590,9 +601,8 @@ def render():
             else:
                 inserir_lancamento(slug, lanc)
                 _invalida()
-                for k in ["nl_membro", "nl_fornecedor", "nl_forma_pag",
-                          "nl_valor", "nl_desc", "nl_subcat"]:
-                    st.session_state.pop(k, None)
+                # Incrementa contador para forcar recriacao dos widgets (limpa campos)
+                st.session_state["nl_counter"] += 1
                 st.toast("Lancamento salvo!")
                 st.rerun()
 
