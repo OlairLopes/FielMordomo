@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 
 
 AZUL_PRINCIPAL = "#0B3A66"
@@ -15,7 +14,7 @@ def _pagina_atual():
     pagina = st.query_params.get("pagina", "inicio")
     if isinstance(pagina, list):
         pagina = pagina[0] if pagina else "inicio"
-    return pagina or "inicio"
+    return str(pagina or "inicio").strip().lower()
 
 
 def _css_base():
@@ -31,15 +30,14 @@ def _css_base():
 
         body {{
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-            background: {CINZA_SUAVE};
-            color: {CINZA_TEXTO};
         }}
 
         .fm-page {{
             width: 100%;
             min-height: 100vh;
             background: {CINZA_SUAVE};
+            color: {CINZA_TEXTO};
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
         }}
 
         .fm-navbar-wrap {{
@@ -597,58 +595,40 @@ def _css_base():
     """
 
 
-def _html_base(conteudo: str) -> str:
-    return f"""
-    <!doctype html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        {_css_base()}
-    </head>
-    <body>
-        <div class="fm-page">
-            {conteudo}
-        </div>
-    </body>
-    </html>
-    """
-
-
-def _navbar() -> str:
+def _navbar():
     return """
     <div class="fm-navbar-wrap">
         <div class="fm-navbar">
-            <a class="fm-logo" href="?pagina=inicio" target="_top">Fiel<span>+</span>Mordomo</a>
+            <a class="fm-logo" href="?pagina=inicio">Fiel<span>+</span>Mordomo</a>
 
             <div class="fm-menu">
-                <a href="?pagina=inicio#sobre" target="_top">Sobre</a>
-                <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
-                <a href="?pagina=contato" target="_top">Contato</a>
-                <a href="?pagina=privacidade" target="_top">Privacidade</a>
-                <a class="fm-btn-login" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
+                <a href="?pagina=inicio#sobre">Sobre</a>
+                <a href="?pagina=inicio#recursos">Recursos</a>
+                <a href="?pagina=contato">Contato</a>
+                <a href="?pagina=privacidade">Privacidade</a>
+                <a class="fm-btn-login" href="?pagina=login">🔒 Acessar Sistema</a>
             </div>
         </div>
     </div>
     """
 
 
-def _footer() -> str:
+def _footer():
     return """
     <div class="fm-footer">
         <div class="fm-footer-inner">
             <div>FielMordomo © 2026 — Sistema de gestão financeira para igrejas.</div>
             <div>
-                <a href="?pagina=contato" target="_top">Contato</a>
-                <a href="?pagina=privacidade" target="_top">Política de Privacidade</a>
-                <a href="?pagina=termos" target="_top">Termos de Uso</a>
+                <a href="?pagina=contato">Contato</a>
+                <a href="?pagina=privacidade">Política de Privacidade</a>
+                <a href="?pagina=termos">Termos de Uso</a>
             </div>
         </div>
     </div>
     """
 
 
-def _home() -> str:
+def _home():
     return """
     <section class="fm-hero">
         <div class="fm-hero-text">
@@ -663,7 +643,7 @@ def _home() -> str:
             </p>
 
             <div class="fm-actions">
-                <a class="fm-primary" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
+                <a class="fm-primary" href="?pagina=login">🔒 Acessar Sistema</a>
                 <a class="fm-secondary" href="#sobre">ⓘ Conhecer o FielMordomo</a>
             </div>
         </div>
@@ -784,13 +764,13 @@ def _home() -> str:
                 </p>
             </div>
 
-            <a class="fm-gold-btn" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
+            <a class="fm-gold-btn" href="?pagina=login">🔒 Acessar Sistema</a>
         </div>
     </section>
     """
 
 
-def _contato() -> str:
+def _contato():
     return """
     <div class="fm-simple-page">
         <div class="fm-simple-card">
@@ -815,7 +795,7 @@ def _contato() -> str:
     """
 
 
-def _privacidade() -> str:
+def _privacidade():
     return """
     <div class="fm-simple-page">
         <div class="fm-simple-card">
@@ -868,7 +848,7 @@ def _privacidade() -> str:
     """
 
 
-def _termos() -> str:
+def _termos():
     return """
     <div class="fm-simple-page">
         <div class="fm-simple-card">
@@ -919,7 +899,7 @@ def _termos() -> str:
     """
 
 
-def _conteudo_da_pagina() -> str:
+def _conteudo_da_pagina():
     pagina = _pagina_atual()
 
     if pagina in ("", "inicio", "sobre", "recursos"):
@@ -937,8 +917,18 @@ def _conteudo_da_pagina() -> str:
     return _navbar() + _home() + _footer()
 
 
+def _render_html(html_final: str):
+    """
+    Usa st.html quando disponivel para os links funcionarem no proprio app.
+    Se a versao do Streamlit for antiga, usa st.markdown como alternativa.
+    """
+    if hasattr(st, "html"):
+        st.html(html_final)
+    else:
+        st.markdown(html_final, unsafe_allow_html=True)
+
+
 def render_institucional():
-    # CSS no app principal: remove margens/header do Streamlit na área pública.
     st.markdown(
         """
         <style>
@@ -962,11 +952,5 @@ def render_institucional():
         unsafe_allow_html=True,
     )
 
-    pagina = _pagina_atual()
-    altura = 1750 if pagina in ("", "inicio", "sobre", "recursos") else 1150
-
-    components.html(
-        _html_base(_conteudo_da_pagina()),
-        height=altura,
-        scrolling=True,
-    )
+    html_final = _css_base() + '<div class="fm-page">' + _conteudo_da_pagina() + "</div>"
+    _render_html(html_final)
