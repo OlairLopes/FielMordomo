@@ -13,6 +13,7 @@ CINZA_SUAVE = "#F5F7FA"
 
 def _html(conteudo: str):
     """Renderiza HTML/CSS sem transformar tags indentadas em bloco de código."""
+    st.markdown(dedent(conteudo).strip(), unsafe_allow_html=True)
 
 
 def _pagina_atual():
