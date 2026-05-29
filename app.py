@@ -9,6 +9,7 @@ import os
 import sys
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 _here = os.path.dirname(os.path.abspath(__file__))
 if _here not in sys.path:
@@ -29,6 +30,63 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+
+def _redirecionar_para_dominio_oficial():
+    """
+    Impede o uso público pelos domínios antigos do Render ou Streamlit Cloud.
+    Ao acessar por esses endereços, redireciona para o domínio oficial.
+    Mantém localhost/127.0.0.1 liberado para desenvolvimento.
+    """
+    components.html(
+        """
+        <script>
+        (function () {
+            const destino = "https://fielmordomo.com.br";
+
+            function obterHost() {
+                try {
+                    return window.parent.location.hostname;
+                } catch (e) {
+                    return window.location.hostname;
+                }
+            }
+
+            const host = (obterHost() || "").toLowerCase();
+
+            const ambienteLocal =
+                host === "localhost" ||
+                host === "127.0.0.1" ||
+                host === "0.0.0.0";
+
+            const dominioOficial =
+                host === "fielmordomo.com.br" ||
+                host === "www.fielmordomo.com.br";
+
+            const dominioRender =
+                host === "fielmordomo.onrender.com" ||
+                host.endsWith(".onrender.com");
+
+            const dominioStreamlit =
+                host.endsWith(".streamlit.app") ||
+                host === "share.streamlit.io";
+
+            if (!ambienteLocal && !dominioOficial && (dominioRender || dominioStreamlit)) {
+                try {
+                    window.parent.location.replace(destino);
+                } catch (e) {
+                    window.location.replace(destino);
+                }
+            }
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+_redirecionar_para_dominio_oficial()
 
 
 def _esc(valor):
