@@ -22,6 +22,7 @@ from data.repository import (
     obter_logo_sidebar_sistema,
 )
 from modules.auth import tela_login, logout, modo_atual
+from modules.institucional import render_institucional
 
 st.set_page_config(
     page_title="FielMordomo",
@@ -92,6 +93,34 @@ def _bloquear_acesso_fora_do_dominio_oficial():
         st.stop()
 
 _bloquear_acesso_fora_do_dominio_oficial()
+
+
+# Paginas institucionais publicas.
+# A pagina inicial abre antes do login; o login continua em ?pagina=login.
+def _pagina_query_atual():
+    pagina = st.query_params.get("pagina", "inicio")
+
+    if isinstance(pagina, list):
+        pagina = pagina[0] if pagina else "inicio"
+
+    return pagina or "inicio"
+
+
+pagina_publica = _pagina_query_atual()
+
+PAGINAS_INSTITUCIONAIS = {
+    "",
+    "inicio",
+    "sobre",
+    "recursos",
+    "contato",
+    "privacidade",
+    "termos",
+}
+
+if pagina_publica in PAGINAS_INSTITUCIONAIS:
+    render_institucional()
+    st.stop()
 
 
 def _esc(valor):
