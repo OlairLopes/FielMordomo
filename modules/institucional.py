@@ -1,4 +1,5 @@
 import streamlit as st
+from textwrap import dedent
 
 
 AZUL_PRINCIPAL = "#0B3A66"
@@ -8,6 +9,10 @@ AZUL_CLARO = "#EAF2FB"
 DOURADO = "#D4AF37"
 CINZA_TEXTO = "#1F2933"
 CINZA_SUAVE = "#F5F7FA"
+
+
+def _html(conteudo: str):
+    """Renderiza HTML/CSS sem transformar tags indentadas em bloco de código."""
 
 
 def _pagina_atual():
@@ -20,7 +25,7 @@ def _pagina_atual():
 
 
 def aplicar_estilo_institucional():
-    st.markdown(
+    _html(
         f"""
         <style>
             .block-container {{
@@ -599,12 +604,11 @@ def aplicar_estilo_institucional():
             }}
         </style>
         """,
-        unsafe_allow_html=True,
     )
 
 
 def render_navbar():
-    st.markdown(
+    _html(
         """
         <div class="fm-navbar-wrap">
             <div class="fm-navbar">
@@ -620,12 +624,11 @@ def render_navbar():
             </div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
 
 
 def render_home():
-    st.markdown(
+    _html(
         """
         <div class="fm-page">
 
@@ -769,12 +772,11 @@ def render_home():
 
         </div>
         """,
-        unsafe_allow_html=True,
     )
 
 
 def render_contato():
-    st.markdown(
+    _html(
         """
         <div class="fm-simple-page">
             <div class="fm-simple-card">
@@ -797,12 +799,11 @@ def render_contato():
             </div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
 
 
 def render_privacidade():
-    st.markdown(
+    _html(
         """
         <div class="fm-simple-page">
             <div class="fm-simple-card">
@@ -853,12 +854,11 @@ def render_privacidade():
             </div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
 
 
 def render_termos():
-    st.markdown(
+    _html(
         """
         <div class="fm-simple-page">
             <div class="fm-simple-card">
@@ -907,12 +907,11 @@ def render_termos():
             </div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
 
 
 def render_footer():
-    st.markdown(
+    _html(
         """
         <div class="fm-footer">
             <div class="fm-footer-inner">
@@ -925,7 +924,6 @@ def render_footer():
             </div>
         </div>
         """,
-        unsafe_allow_html=True,
     )
 
 
