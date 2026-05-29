@@ -24,6 +24,7 @@ from data.repository import (
 from modules.auth import tela_login, logout, modo_atual
 from modules.institucional import render_institucional
 
+
 st.set_page_config(
     page_title="FielMordomo",
     page_icon="FM",
@@ -43,9 +44,15 @@ DOMINIOS_PERMITIDOS = {
 
 
 def _host_atual():
-    # Captura o host pelo cabecalho HTTP da sessao.
-    # Ex.: fielmordomo.com.br, fielmordomo.streamlit.app,
-    # fielmordomo.onrender.com, localhost etc.
+    """
+    Captura o host pelo cabecalho HTTP da sessao.
+    Exemplos:
+    - fielmordomo.com.br
+    - www.fielmordomo.com.br
+    - fielmordomo.streamlit.app
+    - fielmordomo.onrender.com
+    - localhost
+    """
     try:
         host = st.context.headers.get("host", "")
     except Exception:
@@ -58,12 +65,12 @@ def _host_atual():
 
 
 def _bloquear_acesso_fora_do_dominio_oficial():
-    # Bloqueia a exibicao do sistema quando acessado por dominios
-    # que nao sejam o dominio oficial ou ambiente local de desenvolvimento.
+    """
+    Bloqueia a exibicao do sistema quando acessado por dominios que nao sejam
+    o dominio oficial ou ambiente local de desenvolvimento.
+    """
     host = _host_atual()
 
-    # Se o Streamlit nao conseguir informar o host, nao bloqueia para evitar
-    # travar o sistema em algum ambiente inesperado.
     if not host:
         return
 
@@ -92,35 +99,32 @@ def _bloquear_acesso_fora_do_dominio_oficial():
         )
         st.stop()
 
-_bloquear_acesso_fora_do_dominio_oficial()
 
-
-# Paginas institucionais publicas.
-# A pagina inicial abre antes do login; o login continua em ?pagina=login.
-def _pagina_query_atual():
+def _pagina_publica_atual():
     pagina = st.query_params.get("pagina", "inicio")
 
     if isinstance(pagina, list):
         pagina = pagina[0] if pagina else "inicio"
 
-    return pagina or "inicio"
+    return str(pagina or "inicio").strip().lower()
 
 
-pagina_publica = _pagina_query_atual()
+def _renderizar_institucional_se_necessario():
+    pagina_publica = _pagina_publica_atual()
 
-PAGINAS_INSTITUCIONAIS = {
-    "",
-    "inicio",
-    "sobre",
-    "recursos",
-    "contato",
-    "privacidade",
-    "termos",
-}
+    paginas_institucionais = {
+        "",
+        "inicio",
+        "sobre",
+        "recursos",
+        "contato",
+        "privacidade",
+        "termos",
+    }
 
-if pagina_publica in PAGINAS_INSTITUCIONAIS:
-    render_institucional()
-    st.stop()
+    if pagina_publica in paginas_institucionais:
+        render_institucional()
+        st.stop()
 
 
 def _esc(valor):
@@ -364,6 +368,10 @@ def _sidebar_admin():
         if st.button("🚪  Sair", key="sb_sair_admin", use_container_width=True):
             logout()
 
+
+_bloquear_acesso_fora_do_dominio_oficial()
+
+_renderizar_institucional_se_necessario()
 
 inicializar_master()
 
