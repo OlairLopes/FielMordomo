@@ -9,7 +9,6 @@ import os
 import sys
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 _here = os.path.dirname(os.path.abspath(__file__))
 if _here not in sys.path:
@@ -32,61 +31,67 @@ st.set_page_config(
 )
 
 
-def _redirecionar_para_dominio_oficial():
-    """
-    Impede o uso público pelos domínios antigos do Render ou Streamlit Cloud.
-    Ao acessar por esses endereços, redireciona para o domínio oficial.
-    Mantém localhost/127.0.0.1 liberado para desenvolvimento.
-    """
-    components.html(
-        """
-        <script>
-        (function () {
-            const destino = "https://fielmordomo.com.br";
-
-            function obterHost() {
-                try {
-                    return window.parent.location.hostname;
-                } catch (e) {
-                    return window.location.hostname;
-                }
-            }
-
-            const host = (obterHost() || "").toLowerCase();
-
-            const ambienteLocal =
-                host === "localhost" ||
-                host === "127.0.0.1" ||
-                host === "0.0.0.0";
-
-            const dominioOficial =
-                host === "fielmordomo.com.br" ||
-                host === "www.fielmordomo.com.br";
-
-            const dominioRender =
-                host === "fielmordomo.onrender.com" ||
-                host.endsWith(".onrender.com");
-
-            const dominioStreamlit =
-                host.endsWith(".streamlit.app") ||
-                host === "share.streamlit.io";
-
-            if (!ambienteLocal && !dominioOficial && (dominioRender || dominioStreamlit)) {
-                try {
-                    window.parent.location.replace(destino);
-                } catch (e) {
-                    window.location.replace(destino);
-                }
-            }
-        })();
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
+DOMINIO_OFICIAL = "https://fielmordomo.com.br"
+DOMINIOS_PERMITIDOS = {
+    "fielmordomo.com.br",
+    "www.fielmordomo.com.br",
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+}
 
 
-_redirecionar_para_dominio_oficial()
+def _host_atual():
+    # Captura o host pelo cabecalho HTTP da sessao.
+    # Ex.: fielmordomo.com.br, fielmordomo.streamlit.app,
+    # fielmordomo.onrender.com, localhost etc.
+    try:
+        host = st.context.headers.get("host", "")
+    except Exception:
+        host = ""
+
+    host = str(host or "").strip().lower()
+    host = host.split(",")[0].strip()
+    host = host.split(":")[0].strip()
+    return host
+
+
+def _bloquear_acesso_fora_do_dominio_oficial():
+    # Bloqueia a exibicao do sistema quando acessado por dominios
+    # que nao sejam o dominio oficial ou ambiente local de desenvolvimento.
+    host = _host_atual()
+
+    # Se o Streamlit nao conseguir informar o host, nao bloqueia para evitar
+    # travar o sistema em algum ambiente inesperado.
+    if not host:
+        return
+
+    if host not in DOMINIOS_PERMITIDOS:
+        st.markdown(
+            f"""
+            <div style="max-width:720px;margin:80px auto;padding:32px;border:1px solid #ddd;
+                        border-radius:14px;text-align:center;font-family:Arial,sans-serif;">
+                <h2 style="margin-bottom:10px;color:#061B44;">Acesso restrito</h2>
+                <p style="font-size:1rem;color:#333;line-height:1.5;">
+                    O FielMordomo deve ser acessado somente pelo dominio oficial.
+                </p>
+                <p style="margin-top:18px;">
+                    <a href="{DOMINIO_OFICIAL}" target="_self"
+                       style="display:inline-block;background:#061B44;color:white;text-decoration:none;
+                              padding:12px 22px;border-radius:8px;font-weight:700;">
+                        Abrir FielMordomo
+                    </a>
+                </p>
+                <p style="margin-top:16px;color:#777;font-size:0.85rem;">
+                    Dominio detectado: {host}
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.stop()
+
+_bloquear_acesso_fora_do_dominio_oficial()
 
 
 def _esc(valor):
