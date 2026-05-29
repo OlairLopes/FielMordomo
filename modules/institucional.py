@@ -1,3 +1,6 @@
+import base64
+from pathlib import Path
+
 import streamlit as st
 
 
@@ -15,6 +18,72 @@ def _pagina_atual():
     if isinstance(pagina, list):
         pagina = pagina[0] if pagina else "inicio"
     return str(pagina or "inicio").strip().lower()
+
+
+def _img_b64(dados, ext):
+    ext = str(ext or "png").lower().replace(".", "")
+    if ext in ("jpg", "jpeg"):
+        mime = "image/jpeg"
+    elif ext == "svg":
+        mime = "image/svg+xml"
+    else:
+        mime = f"image/{ext}"
+    return "data:" + mime + ";base64," + base64.b64encode(dados).decode("utf-8")
+
+
+def _logo_sistema_src():
+    """
+    Tenta carregar o logo oficial do FielMordomo.
+    Ordem:
+    1. Logo cadastrado no painel admin/sistema.
+    2. Arquivos locais comuns em assets/static.
+    3. Fallback textual.
+    """
+    # 1. Logo salvo no banco/configuração do sistema
+    try:
+        from data.repository import obter_logo_sistema, obter_logo_sidebar_sistema
+
+        logo = obter_logo_sistema() or obter_logo_sidebar_sistema()
+        if logo:
+            dados, ext = logo
+            return _img_b64(dados, ext)
+    except Exception:
+        pass
+
+    # 2. Logo em arquivo local, caso exista no projeto
+    try:
+        base = Path(__file__).resolve().parents[1]
+        candidatos = [
+            base / "assets" / "logo_fielmordomo.png",
+            base / "assets" / "logo.png",
+            base / "static" / "logo_fielmordomo.png",
+            base / "static" / "logo.png",
+            base / "logo_fielmordomo.png",
+            base / "logo.png",
+        ]
+
+        for arq in candidatos:
+            if arq.exists() and arq.is_file():
+                ext = arq.suffix.replace(".", "") or "png"
+                return _img_b64(arq.read_bytes(), ext)
+    except Exception:
+        pass
+
+    return ""
+
+
+def _marca_fielmordomo_html():
+    logo_src = _logo_sistema_src()
+
+    if logo_src:
+        return (
+            '<a class="fm-logo fm-logo-com-imagem" href="?pagina=inicio">'
+            f'<img class="fm-logo-img" src="{logo_src}" alt="FielMordomo">'
+            '</a>'
+        )
+
+    # Fallback textual corrigido: sem "Campo+Mordomo" e sem "Fiel+Mordomo".
+    return '<a class="fm-logo" href="?pagina=inicio">FielMordomo</a>'
 
 
 def _css_base():
@@ -596,10 +665,10 @@ def _css_base():
 
 
 def _navbar():
-    return """
+    return f"""
     <div class="fm-navbar-wrap">
         <div class="fm-navbar">
-            <a class="fm-logo" href="?pagina=inicio">Fiel<span>+</span>Mordomo</a>
+            {_marca_fielmordomo_html()}
 
             <div class="fm-menu">
                 <a href="?pagina=inicio#sobre">Sobre</a>
