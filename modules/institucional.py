@@ -91,13 +91,13 @@ def _marca_fielmordomo_html():
 
     if logo_src:
         return (
-            '<a class="fm-logo fm-logo-com-imagem" href="?pagina=inicio">'
+            '<a class="fm-logo fm-logo-com-imagem" href="?pagina=inicio" target="_top">'
             f'<img class="fm-logo-img" src="{logo_src}" alt="FielMordomo">'
             '</a>'
         )
 
     # Fallback textual corrigido: sem "Campo+Mordomo" e sem "Fiel+Mordomo".
-    return '<a class="fm-logo" href="?pagina=inicio">FielMordomo</a>'
+    return '<a class="fm-logo" href="?pagina=inicio" target="_top">FielMordomo</a>'
 
 
 def _css_base():
@@ -699,11 +699,11 @@ def _navbar():
             {_marca_fielmordomo_html()}
 
             <div class="fm-menu">
-                <a href="?pagina=inicio#sobre">Sobre</a>
-                <a href="?pagina=inicio#recursos">Recursos</a>
-                <a href="?pagina=contato">Contato</a>
-                <a href="?pagina=privacidade">Privacidade</a>
-                <a class="fm-btn-login" href="?pagina=login">🔒 Acessar Sistema</a>
+                <a href="?pagina=inicio#sobre" target="_top">Sobre</a>
+                <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
+                <a href="?pagina=contato" target="_top">Contato</a>
+                <a href="?pagina=privacidade" target="_top">Privacidade</a>
+                <a class="fm-btn-login" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
             </div>
         </div>
     </div>
@@ -716,9 +716,9 @@ def _footer():
         <div class="fm-footer-inner">
             <div>FielMordomo © 2026 — Sistema de gestão financeira para igrejas.</div>
             <div>
-                <a href="?pagina=contato">Contato</a>
-                <a href="?pagina=privacidade">Política de Privacidade</a>
-                <a href="?pagina=termos">Termos de Uso</a>
+                <a href="?pagina=contato" target="_top">Contato</a>
+                <a href="?pagina=privacidade" target="_top">Política de Privacidade</a>
+                <a href="?pagina=termos" target="_top">Termos de Uso</a>
             </div>
         </div>
     </div>
@@ -740,7 +740,7 @@ def _home():
             </p>
 
             <div class="fm-actions">
-                <a class="fm-primary" href="?pagina=login">🔒 Acessar Sistema</a>
+                <a class="fm-primary" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
                 <a class="fm-secondary" href="#sobre">ⓘ Conheça o FielMordomo</a>
             </div>
         </div>
@@ -861,7 +861,7 @@ def _home():
                 </p>
             </div>
 
-            <a class="fm-gold-btn" href="?pagina=login">🔒 Acessar Sistema</a>
+            <a class="fm-gold-btn" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
         </div>
     </section>
     """
