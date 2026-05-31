@@ -1,14 +1,21 @@
+<<<<<<< HEAD
 import time
 
+=======
+import hashlib
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 import pandas as pd
 import streamlit as st
 
 from data.repository import autenticar_igreja
 
 
+<<<<<<< HEAD
 AUTORIZACAO_TTL_SEGUNDOS = 5 * 60
 
 
+=======
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def formatar_moeda(valor) -> str:
     try:
         return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -26,6 +33,7 @@ def preparar_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def obter_ativos(df_cad: pd.DataFrame, tipo: str) -> pd.DataFrame:
+<<<<<<< HEAD
     colunas = {"tipo_cadastro", "situacao", "id_cadastro", "nome"}
     if df_cad.empty or not colunas.issubset(df_cad.columns):
         return pd.DataFrame(columns=df_cad.columns)
@@ -33,6 +41,13 @@ def obter_ativos(df_cad: pd.DataFrame, tipo: str) -> pd.DataFrame:
     situacoes = df_cad["situacao"].fillna("").astype(str).str.strip().str.upper()
     return (
         df_cad[(tipos == str(tipo).upper()) & (situacoes == "ATIVO")]
+=======
+    return (
+        df_cad[
+            (df_cad["tipo_cadastro"].str.strip().str.upper() == tipo.upper()) &
+            (df_cad["situacao"].str.strip().str.upper() == "ATIVO")
+        ]
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         .drop_duplicates("id_cadastro")
         .sort_values("nome")
     )
@@ -60,6 +75,7 @@ def encontrar_chave(opcoes: dict, id_cad) -> str | None:
     return None
 
 
+<<<<<<< HEAD
 def _sanitizar_csv(valor):
     if isinstance(valor, str) and valor.lstrip().startswith(("=", "+", "-", "@")):
         return "'" + valor
@@ -78,6 +94,14 @@ def slug_da_sessao() -> str:
     if not isinstance(igreja, dict):
         return ""
     return str(igreja.get("slug", "") or "").strip().lower()
+=======
+def gerar_csv(df: pd.DataFrame) -> bytes:
+    return df.to_csv(index=False).encode("utf-8-sig")
+
+
+def slug_da_sessao() -> str:
+    return st.session_state.get("igreja", {}).get("slug", "")
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
 
 def confirmar_exclusao(key: str, label: str) -> bool:
@@ -98,6 +122,7 @@ def confirmar_exclusao(key: str, label: str) -> bool:
 
 
 def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
+<<<<<<< HEAD
     """Solicita a senha da igreja e mantem autorizacao por cinco minutos."""
     flag_mostrar = f"_auth_mostrar_{key}"
     flag_ate = f"_auth_ate_{key}"
@@ -106,6 +131,19 @@ def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
     if st.session_state.get(flag_ate, 0) > agora:
         return True
     st.session_state.pop(flag_ate, None)
+=======
+    """
+    Exibe campo de senha e valida contra o login da igreja.
+    A autorizacao persiste ate ser explicitamente revogada,
+    permitindo encadear com outras confirmacoes.
+    """
+    flag_mostrar = f"_auth_mostrar_{key}"
+    flag_ok      = f"_auth_ok_{key}"
+
+    # Ja autorizado anteriormente — mantem True para fluxos encadeados
+    if st.session_state.get(flag_ok):
+        return True
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
     if not st.session_state.get(flag_mostrar):
         if st.button(f"Autorizar para {acao}", key=f"btn_auth_{key}", type="primary"):
@@ -125,9 +163,15 @@ def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
     with c1:
         if st.button("Confirmar", key=f"confirmar_auth_{key}", type="primary"):
             slug = slug_da_sessao()
+<<<<<<< HEAD
             if slug and autenticar_igreja(slug, senha):
                 st.session_state[flag_mostrar] = False
                 st.session_state[flag_ate] = agora + AUTORIZACAO_TTL_SEGUNDOS
+=======
+            if autenticar_igreja(slug, senha):
+                st.session_state[flag_mostrar] = False
+                st.session_state[flag_ok]      = True
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                 st.rerun()
             else:
                 st.error("Senha incorreta. Tente novamente.")

@@ -2,8 +2,11 @@
 Autenticacao do FielMordomo.
 """
 
+<<<<<<< HEAD
 import html
 import re
+=======
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 import urllib.parse
 import streamlit as st
 
@@ -13,6 +16,7 @@ from data.repository import (
 )
 
 
+<<<<<<< HEAD
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -44,6 +48,8 @@ def _limpar_sessao():
             st.session_state.pop(key, None)
 
 
+=======
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def _exibir_logo_sistema():
     resultado = obter_logo_sistema()
     if resultado:
@@ -65,8 +71,13 @@ def _exibir_logo_sistema():
 
 def _mostrar_recuperacao_senha():
     """Tela com contato do admin para recuperacao de senha."""
+<<<<<<< HEAD
     email_admin  = _normalizar_email(obter_config("contato_email", "admin@fielmordomo.com"))
     wpp_admin    = _normalizar_whatsapp(obter_config("contato_whatsapp", ""))
+=======
+    email_admin  = obter_config("contato_email", "admin@fielmordomo.com")
+    wpp_admin    = obter_config("contato_whatsapp", "")
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     mensagem     = obter_config(
         "contato_mensagem",
         "Entre em contato com o administrador do sistema para redefinir sua senha."
@@ -87,10 +98,14 @@ def _mostrar_recuperacao_senha():
             "Motivo: \n\n"
             "Obrigado!"
         )
+<<<<<<< HEAD
         email_link = urllib.parse.quote(email_admin, safe="@._+-")
         link_email = html.escape(
             f"mailto:{email_link}?subject={assunto}&body={corpo}", quote=True
         )
+=======
+        link_email = f"mailto:{email_admin}?subject={assunto}&body={corpo}"
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         st.markdown(
             f'<a href="{link_email}" '
             f'style="display:inline-block;background:#0F6E56;color:white;'
@@ -106,9 +121,15 @@ def _mostrar_recuperacao_senha():
             "Ola! Preciso de ajuda para redefinir a senha da minha igreja no FielMordomo. "
             "Pode me ajudar?"
         )
+<<<<<<< HEAD
         wpp_link = html.escape(f"https://wa.me/{wpp_admin}?text={msg_wpp}", quote=True)
         st.markdown(
             f'<a href="{wpp_link}" target="_blank" rel="noopener noreferrer" '
+=======
+        wpp_link = f"https://wa.me/55{wpp_admin}?text={msg_wpp}"
+        st.markdown(
+            f'<a href="{wpp_link}" target="_blank" '
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             f'style="display:inline-block;background:#25D366;color:white;'
             f'padding:10px 20px;border-radius:8px;text-decoration:none;'
             f'font-weight:600;margin:4px 4px 4px 0">'
@@ -168,6 +189,7 @@ def _login_igreja():
         senha = st.text_input("Senha", type="password")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
+<<<<<<< HEAD
             slug = slug.strip().lower()
             if not slug or not senha:
                 st.error("Preencha todos os campos.")
@@ -175,6 +197,16 @@ def _login_igreja():
             igreja = autenticar_igreja(slug, senha)
             if igreja:
                 _iniciar_sessao("igreja", igreja)
+=======
+            if not slug or not senha:
+                st.error("Preencha todos os campos.")
+                return
+            igreja = autenticar_igreja(slug.strip().lower(), senha)
+            if igreja:
+                st.session_state["autenticado"] = True
+                st.session_state["modo"] = "igreja"
+                st.session_state["igreja"] = igreja
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                 st.toast(f"Bem-vindo, {igreja['nome']}!")
                 st.rerun()
             else:
@@ -197,12 +229,18 @@ def _login_admin():
         senha   = st.text_input("Senha", type="password")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
+<<<<<<< HEAD
             usuario = usuario.strip()
             if not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
             if autenticar_super_admin(usuario, senha):
                 _iniciar_sessao("admin")
+=======
+            if autenticar_super_admin(usuario, senha):
+                st.session_state["autenticado"] = True
+                st.session_state["modo"] = "admin"
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                 st.toast("Acesso de administrador autorizado.")
                 st.rerun()
             else:
@@ -210,7 +248,12 @@ def _login_admin():
 
 
 def logout():
+<<<<<<< HEAD
     _limpar_sessao()
+=======
+    for key in ("autenticado", "modo", "igreja", "pagina", "mostrar_recuperacao"):
+        st.session_state.pop(key, None)
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     st.rerun()
 
 

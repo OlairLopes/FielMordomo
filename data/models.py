@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+<<<<<<< HEAD
 from datetime import date
 import math
 import re
@@ -44,6 +45,12 @@ def validar_cnpj(cnpj: str) -> bool:
     return True
 
 
+=======
+from datetime import date, datetime
+from typing import Optional
+
+
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 @dataclass
 class Igreja:
     nome: str
@@ -59,10 +66,17 @@ class Igreja:
         erros = []
         if not self.nome.strip():
             erros.append("Nome da igreja e obrigatorio.")
+<<<<<<< HEAD
         if not SLUG_RE.fullmatch(self.slug.strip().lower()):
             erros.append("Slug invalido. Use letras minusculas, numeros e hifens.")
         if not EMAIL_RE.fullmatch(self.email_admin.strip()):
             erros.append("E-mail invalido.")
+=======
+        if not self.slug.strip():
+            erros.append("Slug e obrigatorio.")
+        if not self.email_admin.strip():
+            erros.append("E-mail e obrigatorio.")
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         return erros
 
 
@@ -90,6 +104,7 @@ class Cadastro:
             erros.append("Nome e obrigatorio.")
         if self.tipo_cadastro not in ("Membro", "Fornecedor"):
             erros.append("Tipo de cadastro invalido.")
+<<<<<<< HEAD
         if self.situacao not in ("Ativo", "Inativo"):
             erros.append("Situacao invalida.")
 
@@ -101,6 +116,25 @@ class Cadastro:
 
         if self.cep.strip():
             cep_limpo = limpar_documento(self.cep)
+=======
+
+        if self.tipo_cadastro == "Membro":
+            cpf_limpo = "".join(c for c in self.cpf if c.isdigit())
+            if not cpf_limpo:
+                erros.append("CPF e obrigatorio para membros.")
+            elif len(cpf_limpo) != 11:
+                erros.append("CPF invalido. Informe 11 digitos.")
+
+        if self.tipo_cadastro == "Fornecedor":
+            cnpj_limpo = "".join(c for c in self.cpf if c.isdigit())
+            if not cnpj_limpo:
+                erros.append("CNPJ e obrigatorio para fornecedores.")
+            elif len(cnpj_limpo) != 14:
+                erros.append("CNPJ invalido. Informe 14 digitos.")
+
+        if self.cep.strip():
+            cep_limpo = "".join(c for c in self.cep if c.isdigit())
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             if len(cep_limpo) != 8:
                 erros.append("CEP invalido. Informe 8 digitos.")
         return erros
@@ -122,6 +156,7 @@ class Lancamento:
 
     def validar(self) -> list[str]:
         erros = []
+<<<<<<< HEAD
         try:
             valor = float(self.valor)
         except (TypeError, ValueError):
@@ -137,4 +172,12 @@ class Lancamento:
         if self.tipo == "Entrada" and self.categoria == "Dizimo":
             if not self.id_cadastro or self.tipo_cadastro != "Membro":
                 erros.append("Para dizimo, selecione um membro.")
+=======
+        if self.valor <= 0:
+            erros.append("Valor deve ser maior que zero.")
+        if self.tipo not in ("Entrada", "Saida"):
+            erros.append("Tipo invalido.")
+        if self.tipo == "Entrada" and self.categoria == "Dizimo" and not self.id_cadastro:
+            erros.append("Para dizimo, selecione um membro.")
+>>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         return erros
