@@ -39,8 +39,6 @@ def _img_b64(dados, ext):
     mime = MIMES_IMAGEM.get(ext)
     if not mime or not isinstance(dados, (bytes, bytearray, memoryview)):
         return ""
-def _img_b64(dados, ext):
-    mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/" + ext
     return "data:" + mime + ";base64," + base64.b64encode(dados).decode()
 
 
@@ -70,7 +68,6 @@ def render():
             <h2 style="color:#0F6E56;margin:20px 0 4px 0;font-weight:700;
                        font-size:1.8rem;text-align:center">
                 {nome_igreja}
-                {igreja.get("nome", "FielMordomo")}
             </h2>
             <p style="color:#888;font-size:0.95rem;margin:0;text-align:center">
                 Gestao financeira da igreja
@@ -86,7 +83,6 @@ def render():
             <h2 style="color:#0F6E56;margin:20px 0 4px 0;font-weight:700;
                        font-size:1.6rem;text-align:center">
                 {nome_igreja}
-                {igreja.get("nome", "")}
             </h2>
             <p style="color:#888;font-size:0.95rem;margin:0;text-align:center">
                 Gestao financeira da igreja
@@ -116,9 +112,6 @@ def render():
             (valores_originais.notna() & valores_originais.astype(str).str.strip().ne("") & valores_numericos.isna()).sum()
         )
         df_lanc["valor"] = valores_numericos.fillna(0.0)
-    if not df_lanc.empty:
-        df_lanc["data"]  = pd.to_datetime(df_lanc["data"], errors="coerce")
-        df_lanc["valor"] = pd.to_numeric(df_lanc["valor"], errors="coerce").fillna(0.0)
         df_mes = df_lanc[
             (df_lanc["data"] >= pd.Timestamp(ini_mes)) &
             (df_lanc["data"] <= pd.Timestamp(hoje))
@@ -126,8 +119,6 @@ def render():
         tipos = df_mes["tipo"].fillna("").astype(str).str.strip().str.upper()
         ent_mes = df_mes[tipos == "ENTRADA"]["valor"].sum()
         sai_mes = df_mes[tipos == "SAIDA"]["valor"].sum()
-        ent_mes = df_mes[df_mes["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
-        sai_mes = df_mes[df_mes["tipo"].str.upper() == "SAIDA"]["valor"].sum()
         sal_mes = ent_mes - sai_mes
         n_lanc_mes = len(df_mes)
     else:
@@ -150,11 +141,6 @@ def render():
         qtd_membros = 0
         qtd_membros_ativos = 0
 
-    if not df_cad.empty and "tipo_cadastro" in df_cad.columns:
-        qtd_membros = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "MEMBRO"])
-    else:
-        qtd_membros = 0
-
     plano    = igreja.get("plano", "basico")
     p_info   = obter_plano(plano)
     lim_txt  = texto_limite(plano)
@@ -170,10 +156,6 @@ def render():
     st.markdown(f"""
     <h4 style="color:#0F6E56;margin:18px 0 12px 0">
         📊 Resumo de {mes_ano}
-
-    st.markdown(f"""
-    <h4 style="color:#0F6E56;margin:18px 0 12px 0">
-        📊 Resumo de {hoje.strftime('%B/%Y').capitalize()}
     </h4>
     """, unsafe_allow_html=True)
 
@@ -228,9 +210,6 @@ def render():
             <div style="font-size:0.72rem;color:#888;margin-top:4px">
                 {_html(qtd_membros)} membro(s) cadastrado(s) no total
             </div>
-                        text-transform:uppercase;letter-spacing:0.05em">Lancamentos / Membros</div>
-            <div style="font-size:1.35rem;font-weight:700;color:#F57C00;
-                        line-height:1.2;margin-top:4px">{n_lanc_mes} / {qtd_membros}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -245,9 +224,6 @@ def render():
     st.markdown("")
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,{cor_plano} 0%,#0F6E56 100%);
-    st.markdown("")
-    st.markdown(f"""
-    <div style="background:linear-gradient(135deg,{p_info['cor']} 0%,#0F6E56 100%);
                 border-radius:14px;padding:22px 26px;color:white;margin-top:14px;
                 box-shadow:0 4px 14px rgba(15,110,86,0.25)">
         <div style="display:flex;justify-content:space-between;align-items:center;
@@ -260,10 +236,6 @@ def render():
                 </div>
                 <div style="font-size:0.85rem;opacity:0.9;margin-top:4px">
                     Limite: {lim_txt} membros • {preco_plano}
-                    {p_info['nome']}
-                </div>
-                <div style="font-size:0.85rem;opacity:0.9;margin-top:4px">
-                    Limite: {lim_txt} membros • {p_info['preco']}
                 </div>
             </div>
             <div style="font-size:2.6rem;opacity:0.5">⛪</div>

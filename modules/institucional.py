@@ -42,12 +42,6 @@ def _img_b64(dados, ext):
     if len(dados) > TAMANHO_MAXIMO_LOGO:
         raise ValueError("O logo excede o limite de 5 MB.")
 
-    if ext in ("jpg", "jpeg"):
-        mime = "image/jpeg"
-    elif ext == "svg":
-        mime = "image/svg+xml"
-    else:
-        mime = f"image/{ext}"
     return "data:" + mime + ";base64," + base64.b64encode(dados).decode("utf-8")
 
 
@@ -69,7 +63,6 @@ def _logo_sistema_src():
             return _img_b64(dados, ext)
     except Exception:
         LOGGER.exception("Não foi possível carregar o logo configurado no sistema.")
-        pass
 
     # 2. Logo em arquivo local, caso exista no projeto
     try:
@@ -89,7 +82,6 @@ def _logo_sistema_src():
                 return _img_b64(arq.read_bytes(), ext)
     except Exception:
         LOGGER.exception("Não foi possível carregar um logo local.")
-        pass
 
     return ""
 
@@ -166,6 +158,15 @@ def _css_base():
         .fm-logo span {{
             color: {DOURADO};
             font-weight: 900;
+        }}
+
+        .fm-logo-img {{
+            display: block;
+            width: auto;
+            height: auto;
+            max-width: 180px;
+            max-height: 54px;
+            object-fit: contain;
         }}
 
         .fm-menu {{
@@ -551,7 +552,6 @@ def _css_base():
         .fm-cta-inner {{
             max-width: 1180px;
             margin: 0 auto;
-            margin: 0 abackk
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -643,6 +643,11 @@ def _css_base():
             .fm-navbar {{
                 align-items: flex-start;
                 flex-direction: column;
+            }}
+
+            .fm-logo-img {{
+                max-width: 150px;
+                max-height: 46px;
             }}
 
             .fm-hero {{

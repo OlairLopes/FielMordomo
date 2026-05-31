@@ -1373,18 +1373,21 @@ def _substituir_banco_validado(destino: Path, dados: bytes, tabelas_obrigatorias
             arquivo.write(dados)
             temporario = Path(arquivo.name)
 
-        with closing(sqlite3.connect(str(temporario))) as conn:
-            integridade = conn.execute("PRAGMA integrity_check").fetchone()[0]
-            if integridade != "ok":
-                raise ValueError("Banco SQLite corrompido.")
-            tabelas = {
-                row[0]
-                for row in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                ).fetchall()
-            }
-            if not tabelas_obrigatorias.issubset(tabelas):
-                raise ValueError("Banco SQLite nao possui as tabelas obrigatorias.")
+        try:
+            with closing(sqlite3.connect(str(temporario))) as conn:
+                integridade = conn.execute("PRAGMA integrity_check").fetchone()[0]
+                if integridade != "ok":
+                    raise ValueError("Banco SQLite corrompido.")
+                tabelas = {
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    ).fetchall()
+                }
+                if not tabelas_obrigatorias.issubset(tabelas):
+                    raise ValueError("Banco SQLite nao possui as tabelas obrigatorias.")
+        except sqlite3.DatabaseError as ex:
+            raise ValueError("Arquivo SQLite invalido ou corrompido.") from ex
 
         for auxiliar in (Path(f"{destino}-wal"), Path(f"{destino}-shm")):
             auxiliar.unlink(missing_ok=True)
@@ -1393,6 +1396,126 @@ def _substituir_banco_validado(destino: Path, dados: bytes, tabelas_obrigatorias
     finally:
         if temporario:
             temporario.unlink(missing_ok=True)
+
+
+def _copia_consistente_sqlite(db_path: Path) -> bytes:
+    """Cria snapshot SQLite consistente mesmo quando o banco usa WAL."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        raise ValueError("Banco de dados da igreja nao encontrado.")
+    temporario = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=db_path.parent, prefix=f".{db_path.stem}_backup_", suffix=".db",
+            delete=False,
+        ) as arquivo:
+            temporario = Path(arquivo.name)
+        with closing(sqlite3.connect(str(db_path))) as origem:
+            with closing(sqlite3.connect(str(temporario))) as destino:
+                origem.backup(destino)
+        return temporario.read_bytes()
+    finally:
+        if temporario:
+            temporario.unlink(missing_ok=True)
+
+
+def _df_csv_seguro(df):
+    seguro = df.copy()
+    for coluna in seguro.select_dtypes(include=["object", "string"]).columns:
+        seguro[coluna] = seguro[coluna].map(
+            lambda valor: sanitizar(valor) if isinstance(valor, str) else valor
+        )
+    return seguro
+
+
+def exportar_backup_igreja(slug) -> bytes:
+    """Exporta ZIP restauravel com snapshot SQLite e CSVs para conferencia."""
+    import io
+    import zipfile
+
+    slug = _validar_slug(slug)
+    inicializar_tenant(slug)
+    banco = _copia_consistente_sqlite(_tenant_db(slug))
+    cadastros = _df_csv_seguro(carregar_cadastros(slug))
+    lancamentos = _df_csv_seguro(carregar_lancamentos(slug))
+    if "data" in lancamentos.columns:
+        lancamentos["data"] = pd.to_datetime(
+            lancamentos["data"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d").fillna("")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"banco_{slug}.db", banco)
+        zf.writestr(
+            f"cadastros_{slug}.csv",
+            cadastros.to_csv(index=False).encode("utf-8-sig"),
+        )
+        zf.writestr(
+            f"lancamentos_{slug}.csv",
+            lancamentos.to_csv(index=False).encode("utf-8-sig"),
+        )
+    dados = buf.getvalue()
+    if len(dados) > TAMANHO_MAXIMO_ZIP:
+        raise ValueError("O backup excede o limite de 100 MB.")
+    return dados
+
+
+def _extrair_banco_backup_igreja(slug, dados, nome_arquivo):
+    import io
+    import zipfile
+
+    if not isinstance(dados, bytes) or not dados:
+        raise ValueError("Arquivo de backup vazio ou invalido.")
+    nome = Path(str(nome_arquivo or "")).name.lower()
+    if nome.endswith(".db"):
+        if len(dados) > TAMANHO_MAXIMO_ARQUIVOS_ZIP:
+            raise ValueError("O banco excede o limite de 500 MB.")
+        return dados
+    if not nome.endswith(".zip"):
+        raise ValueError("Formato invalido. Envie um arquivo .zip ou .db.")
+    if len(dados) > TAMANHO_MAXIMO_ZIP:
+        raise ValueError("O ZIP deve possuir no maximo 100 MB.")
+
+    esperado = f"banco_{slug}.db"
+    try:
+        with zipfile.ZipFile(io.BytesIO(dados), "r") as zf:
+            infos = zf.infolist()
+            if len(infos) > 20:
+                raise ValueError("ZIP possui arquivos demais.")
+            if sum(info.file_size for info in infos) > TAMANHO_MAXIMO_ARQUIVOS_ZIP:
+                raise ValueError("Conteudo descompactado excede o limite de 500 MB.")
+            nomes = zf.namelist()
+            if len(nomes) != len(set(nomes)):
+                raise ValueError("ZIP possui nomes de arquivo duplicados.")
+            for nome_zip in nomes:
+                partes = Path(nome_zip.replace("\\", "/")).parts
+                if nome_zip.startswith(("/", "\\")) or ".." in partes:
+                    raise ValueError("ZIP possui caminho interno invalido.")
+            if esperado not in nomes:
+                raise ValueError(
+                    f"O ZIP nao possui o banco esperado para esta igreja: {esperado}."
+                )
+            banco = zf.read(esperado)
+            if len(banco) > TAMANHO_MAXIMO_ARQUIVOS_ZIP:
+                raise ValueError("O banco excede o limite de 500 MB.")
+            return banco
+    except zipfile.BadZipFile as ex:
+        raise ValueError("Arquivo ZIP invalido ou corrompido.") from ex
+
+
+def restaurar_backup_igreja(slug, dados, nome_arquivo):
+    """Valida e restaura atomicamente somente o banco da igreja informada."""
+    slug = _validar_slug(slug)
+    banco = _extrair_banco_backup_igreja(slug, dados, nome_arquivo)
+    destino = _tenant_db(slug)
+    _fazer_backup(destino)
+    _substituir_banco_validado(destino, banco, {"cadastros", "lancamentos"})
+    inicializar_tenant(slug)
+    with _conn(destino) as conn:
+        _garantir_colunas_cadastros(conn)
+        _garantir_colunas_lancamentos(conn)
+        _garantir_tabela_tesoureiros(conn)
+    return True
 
 
 def restaurar_backup_zip(zip_bytes: bytes) -> dict:

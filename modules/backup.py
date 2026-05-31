@@ -1,683 +1,184 @@
-"""
-Modulo de backup — exportacao, download, envio ao OneDrive,
-upload e recuperacao de dados da igreja.
-"""
+"""Backup manual seguro da congregacao autenticada."""
 
-import io
-import zipfile
 import datetime
-import requests
-import streamlit as st
+import logging
+
 import pandas as pd
+import streamlit as st
 
 from data.repository import (
-    carregar_cadastros, carregar_lancamentos, _tenant_db,
+    TAMANHO_MAXIMO_ARQUIVOS_ZIP,
+    TAMANHO_MAXIMO_ZIP,
+    carregar_cadastros,
+    carregar_lancamentos,
+    exportar_backup_igreja,
+    restaurar_backup_igreja,
 )
-from utils.helpers import slug_da_sessao, formatar_moeda
-from utils.planos import tem_backup_automatico, obter_plano, proximo_plano
+from utils.helpers import formatar_moeda, slug_da_sessao, solicitar_autorizacao
+from utils.planos import obter_plano, tem_backup_automatico
 
 
-def _nome_arquivo(prefixo, ext, slug):
-    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefixo}_{slug}_{ts}.{ext}"
+LOGGER = logging.getLogger(__name__)
 
 
-def _gerar_sqlite(slug):
-    db_path = _tenant_db(slug)
-    if db_path.exists():
-        return db_path.read_bytes()
-    return b""
+def _sk(nome, slug):
+    return f"backup_{nome}_{slug}"
 
 
-def _obter_token_onedrive():
-    tenant_id = st.secrets["onedrive"]["tenant_id"]
-    client_id = st.secrets["onedrive"]["client_id"]
-    client_secret = st.secrets["onedrive"]["client_secret"]
-
-    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-
-    payload = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "scope": "https://graph.microsoft.com/.default",
-        "grant_type": "client_credentials",
-    }
-
-    resp = requests.post(url, data=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()["access_token"]
+def _nome_backup(slug):
+    agora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"backup_{slug}_{agora}.zip"
 
 
-def _enviar_backup_onedrive(nome_arquivo, dados):
-    token = _obter_token_onedrive()
-
-    user_id = st.secrets["onedrive"]["user_id"]
-    pasta_destino = st.secrets["onedrive"].get("pasta_destino", "FielMordomo")
-
-    url = (
-        f"https://graph.microsoft.com/v1.0/users/{user_id}"
-        f"/drive/root:/{pasta_destino}/{nome_arquivo}:/content"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/zip",
-    }
-
-    resp = requests.put(url, headers=headers, data=dados, timeout=120)
-    resp.raise_for_status()
-    return resp.json()
+def _limpar_cache_dados():
+    prefixos = ("df_", "lote_", "nl_counter_", "dashboard_")
+    for chave in list(st.session_state.keys()):
+        if chave.startswith(prefixos):
+            st.session_state.pop(chave, None)
 
 
-def _gerar_resumo(df_cad, df_lanc, slug):
-    agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-    linhas = [
-        "=" * 50,
-        "FIELMORDOMO - RESUMO DO BACKUP",
-        "=" * 50,
-        f"Igreja: {slug}",
-        f"Data/hora: {agora}",
-        "",
-        "--- CADASTROS ---",
-        f"Total: {len(df_cad)} registros",
-    ]
-
-    if not df_cad.empty and "tipo_cadastro" in df_cad.columns:
-        tipo = df_cad["tipo_cadastro"].astype(str).str.upper()
-        membros = len(df_cad[tipo == "MEMBRO"])
-        fornecedores = len(df_cad[tipo == "FORNECEDOR"])
-        linhas.append(f"  Membros: {membros}")
-        linhas.append(f"  Fornecedores: {fornecedores}")
-
-    linhas += [
-        "",
-        "--- LANCAMENTOS ---",
-        f"Total: {len(df_lanc)} registros",
-    ]
-
-    if not df_lanc.empty:
-        df_l = df_lanc.copy()
-
-        if "valor" in df_l.columns:
-            df_l["valor"] = pd.to_numeric(df_l["valor"], errors="coerce").fillna(0)
-
-        if "tipo" in df_l.columns and "valor" in df_l.columns:
-            tipo = df_l["tipo"].astype(str).str.upper()
-            entradas = df_l[tipo == "ENTRADA"]["valor"].sum()
-            saidas = df_l[tipo == "SAIDA"]["valor"].sum()
-
-            linhas.append("  Total entradas: " + formatar_moeda(entradas))
-            linhas.append("  Total saidas:   " + formatar_moeda(saidas))
-            linhas.append("  Saldo:          " + formatar_moeda(entradas - saidas))
-
-    linhas += [
-        "",
-        "=" * 50,
-        "FielMordomo - Sistema de Gestao Financeira",
-        "=" * 50,
-    ]
-
-    return "\n".join(linhas)
-
-
-def _gerar_zip_completo(slug):
-    df_cad = carregar_cadastros(slug)
-    df_lanc = carregar_lancamentos(slug)
-
-    if not df_lanc.empty and "data" in df_lanc.columns:
-        df_lanc = df_lanc.copy()
-        df_lanc["data"] = pd.to_datetime(
-            df_lanc["data"], errors="coerce"
-        ).dt.strftime("%d/%m/%Y").fillna("")
-
-    buf = io.BytesIO()
-
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(
-            f"cadastros_{slug}.csv",
-            df_cad.to_csv(index=False, encoding="utf-8-sig"),
-        )
-
-        zf.writestr(
-            f"lancamentos_{slug}.csv",
-            df_lanc.to_csv(index=False, encoding="utf-8-sig"),
-        )
-
-        zf.writestr(
-            f"resumo_{slug}.txt",
-            _gerar_resumo(df_cad, df_lanc, slug),
-        )
-
-        db_bytes = _gerar_sqlite(slug)
-
-        if db_bytes:
-            zf.writestr(f"banco_{slug}.db", db_bytes)
-
-    buf.seek(0)
-    return buf.read()
-
-
-def _tentar_enviar_onedrive(slug, nome, dados, tipo):
+def _gerar_backup(slug):
     try:
-        _enviar_backup_onedrive(nome, dados)
-        st.session_state[f"{tipo}_onedrive_{slug}"] = True
-        st.session_state[f"{tipo}_onedrive_erro_{slug}"] = ""
-        return True
-
-    except Exception as e:
-        st.session_state[f"{tipo}_onedrive_{slug}"] = False
-        st.session_state[f"{tipo}_onedrive_erro_{slug}"] = str(e)
-        return False
-
-
-def _verificar_backup_automatico(slug):
-    igreja = st.session_state.get("igreja", {})
-    plano = igreja.get("plano", "basico")
-
-    if not tem_backup_automatico(plano):
-        return
-
-    agora = datetime.datetime.now()
-    hoje = agora.date()
-
-    ultimo_diario = st.session_state.get("backup_diario_" + slug)
-
-    if ultimo_diario != hoje:
-        dados = _gerar_zip_completo(slug)
-        nome = _nome_arquivo("backup_diario", "zip", slug)
-
-        st.session_state["backup_diario_" + slug] = hoje
-        st.session_state["backup_diario_dados_" + slug] = dados
-        st.session_state["backup_diario_nome_" + slug] = nome
-
-        _tentar_enviar_onedrive(slug, nome, dados, "backup_diario")
-
-    semana_atual = agora.isocalendar()[1]
-    ultimo_semanal = st.session_state.get("backup_semanal_" + slug)
-
-    if ultimo_semanal != semana_atual:
-        dados = _gerar_zip_completo(slug)
-        nome = _nome_arquivo("backup_semanal", "zip", slug)
-
-        st.session_state["backup_semanal_" + slug] = semana_atual
-        st.session_state["backup_semanal_dados_" + slug] = dados
-        st.session_state["backup_semanal_nome_" + slug] = nome
-
-        _tentar_enviar_onedrive(slug, nome, dados, "backup_semanal")
-
-
-def _extrair_sqlite_do_zip(dados_zip, slug):
-    try:
-        with zipfile.ZipFile(io.BytesIO(dados_zip), "r") as zf:
-            arquivos = zf.namelist()
-            nome_esperado = f"banco_{slug}.db"
-
-            if nome_esperado in arquivos:
-                return zf.read(nome_esperado)
-
-            for nome in arquivos:
-                if nome.lower().endswith(".db"):
-                    return zf.read(nome)
-
-        return b""
-
+        dados = exportar_backup_igreja(slug)
     except Exception:
-        return b""
+        LOGGER.exception("Nao foi possivel exportar backup da igreja %s.", slug)
+        st.error("Nao foi possivel gerar o backup. Consulte o log do sistema.")
+        return
+    st.session_state[_sk("download_dados", slug)] = dados
+    st.session_state[_sk("download_nome", slug)] = _nome_backup(slug)
+    st.toast("Backup gerado com sucesso.")
 
 
-def _obter_ultimo_backup_para_restaurar(slug):
-    opcoes = []
-
-    if st.session_state.get("backup_manual_completo"):
-        opcoes.append({
-            "tipo": "Backup completo manual",
-            "nome": st.session_state.get("backup_manual_completo_nome", "backup_completo.zip"),
-            "dados": st.session_state.get("backup_manual_completo"),
-            "formato": "zip",
-            "prioridade": 4,
-        })
-
-    if st.session_state.get("backup_diario_dados_" + slug):
-        opcoes.append({
-            "tipo": "Backup diario automatico",
-            "nome": st.session_state.get("backup_diario_nome_" + slug, "backup_diario.zip"),
-            "dados": st.session_state.get("backup_diario_dados_" + slug),
-            "formato": "zip",
-            "prioridade": 3,
-        })
-
-    if st.session_state.get("backup_semanal_dados_" + slug):
-        opcoes.append({
-            "tipo": "Backup semanal automatico",
-            "nome": st.session_state.get("backup_semanal_nome_" + slug, "backup_semanal.zip"),
-            "dados": st.session_state.get("backup_semanal_dados_" + slug),
-            "formato": "zip",
-            "prioridade": 2,
-        })
-
-    if st.session_state.get("backup_manual_db"):
-        opcoes.append({
-            "tipo": "SQLite manual",
-            "nome": st.session_state.get("backup_manual_db_nome", "banco.db"),
-            "dados": st.session_state.get("backup_manual_db"),
-            "formato": "db",
-            "prioridade": 1,
-        })
-
-    if not opcoes:
-        return None
-
-    return sorted(opcoes, key=lambda x: x["prioridade"], reverse=True)[0]
+def _render_download(slug):
+    st.markdown("#### Gerar backup")
+    st.caption(
+        "O ZIP inclui uma copia consistente do banco SQLite e arquivos CSV para conferencia."
+    )
+    if st.button("Gerar backup completo", type="primary", key=_sk("gerar", slug)):
+        _gerar_backup(slug)
+    dados = st.session_state.get(_sk("download_dados", slug))
+    nome = st.session_state.get(_sk("download_nome", slug))
+    if dados and nome:
+        st.download_button(
+            "Baixar arquivo ZIP",
+            data=dados,
+            file_name=nome,
+            mime="application/zip",
+            key=_sk("baixar", slug),
+        )
+        st.caption(f"Arquivo pronto: {nome} ({len(dados) / 1024:.1f} KB)")
 
 
-def _salvar_backup_seguro_atual(slug, prefixo):
-    db_path = _tenant_db(slug)
-
-    if db_path.exists():
-        nome_seguro = _nome_arquivo(prefixo, "db", slug)
-        db_seguro = db_path.with_name(nome_seguro)
-        db_seguro.write_bytes(db_path.read_bytes())
-
-
-def _restaurar_db_bytes(slug, db_bytes):
-    if not db_bytes:
-        return False, "Arquivo de backup invalido."
-
-    db_path = _tenant_db(slug)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    db_path.write_bytes(db_bytes)
-
-    return True, "Banco de dados restaurado com sucesso."
+def _guardar_upload(slug, arquivo):
+    dados = arquivo.getvalue()
+    limite = TAMANHO_MAXIMO_ZIP if arquivo.name.lower().endswith(".zip") else TAMANHO_MAXIMO_ARQUIVOS_ZIP
+    if not dados:
+        st.error("O arquivo enviado esta vazio.")
+        return
+    if len(dados) > limite:
+        st.error("O arquivo enviado excede o limite permitido.")
+        return
+    st.session_state[_sk("upload_nome", slug)] = arquivo.name
+    st.session_state[_sk("upload_dados", slug)] = dados
 
 
-def _recuperar_pelo_ultimo_backup(slug):
-    backup = _obter_ultimo_backup_para_restaurar(slug)
-
-    if not backup:
-        return False, "Nenhum backup disponivel para recuperacao."
-
+def _restaurar_upload(slug):
+    nome = st.session_state.get(_sk("upload_nome", slug), "")
+    dados = st.session_state.get(_sk("upload_dados", slug), b"")
+    if not nome or not dados:
+        st.error("Envie um arquivo de backup antes de restaurar.")
+        return
     try:
-        if backup["formato"] == "zip":
-            db_bytes = _extrair_sqlite_do_zip(backup["dados"], slug)
-        else:
-            db_bytes = backup["dados"]
-
-        if not db_bytes:
-            return False, "O backup selecionado nao possui banco SQLite valido."
-
-        _salvar_backup_seguro_atual(slug, "backup_antes_restauracao")
-        sucesso, mensagem = _restaurar_db_bytes(slug, db_bytes)
-
-        if sucesso:
-            return True, (
-                "Sistema recuperado com sucesso a partir de: "
-                + backup["tipo"]
-                + " — "
-                + backup["nome"]
-            )
-
-        return False, mensagem
-
-    except Exception as e:
-        return False, "Erro ao recuperar o sistema: " + str(e)
+        restaurar_backup_igreja(slug, dados, nome)
+    except ValueError as ex:
+        st.error(str(ex))
+        return
+    except Exception:
+        LOGGER.exception("Nao foi possivel restaurar backup da igreja %s.", slug)
+        st.error("Nao foi possivel restaurar o backup. Consulte o log do sistema.")
+        return
+    _limpar_cache_dados()
+    st.session_state.pop(_sk("upload_nome", slug), None)
+    st.session_state.pop(_sk("upload_dados", slug), None)
+    st.success("Backup restaurado com sucesso. Os dados foram recarregados.")
 
 
-def _validar_e_obter_db_do_upload(nome_arquivo, dados_arquivo, slug):
-    if not dados_arquivo:
-        return False, b"", "Nenhum arquivo enviado ou arquivo vazio."
+def _render_restauracao(slug):
+    st.markdown("#### Restaurar backup")
+    st.warning(
+        "A restauracao substitui os dados atuais desta congregacao. "
+        "O sistema cria uma copia preventiva antes da substituicao."
+    )
+    arquivo = st.file_uploader(
+        "Selecione um backup ZIP ou banco SQLite",
+        type=["zip", "db"],
+        key=_sk("arquivo", slug),
+    )
+    if arquivo is not None:
+        _guardar_upload(slug, arquivo)
+    nome = st.session_state.get(_sk("upload_nome", slug))
+    dados = st.session_state.get(_sk("upload_dados", slug))
+    if nome and dados:
+        st.info(f"Arquivo carregado: {nome} ({len(dados) / 1024:.1f} KB)")
+    confirmar = st.checkbox(
+        "Confirmo que desejo substituir os dados atuais desta congregacao.",
+        key=_sk("confirmar", slug),
+    )
+    if not solicitar_autorizacao(_sk("restaurar", slug), "restaurar o backup"):
+        return
+    if st.button(
+        "Restaurar arquivo validado",
+        type="primary",
+        key=_sk("executar_restauracao", slug),
+        disabled=not confirmar,
+    ):
+        _restaurar_upload(slug)
 
-    nome = nome_arquivo.lower().strip()
 
-    if nome.endswith(".db"):
-        return True, dados_arquivo, "Arquivo SQLite valido."
-
-    if nome.endswith(".zip"):
-        db_bytes = _extrair_sqlite_do_zip(dados_arquivo, slug)
-
-        if db_bytes:
-            return True, db_bytes, "Backup ZIP valido."
-
-        return False, b"", "O arquivo ZIP nao possui banco SQLite valido."
-
-    return False, b"", "Formato invalido. Envie um arquivo .zip ou .db."
-
-
-def _recuperar_por_upload(slug, db_bytes):
-    try:
-        _salvar_backup_seguro_atual(slug, "backup_antes_upload_restauracao")
-        return _restaurar_db_bytes(slug, db_bytes)
-
-    except Exception as e:
-        return False, "Erro ao recuperar backup enviado: " + str(e)
+def _render_resumo(slug):
+    cadastros = carregar_cadastros(slug)
+    lancamentos = carregar_lancamentos(slug)
+    membros = fornecedores = 0
+    if not cadastros.empty and "tipo_cadastro" in cadastros.columns:
+        tipos = cadastros["tipo_cadastro"].fillna("").astype(str).str.strip().str.upper()
+        membros = int((tipos == "MEMBRO").sum())
+        fornecedores = int((tipos == "FORNECEDOR").sum())
+    entradas = saidas = 0.0
+    if not lancamentos.empty and {"tipo", "valor"}.issubset(lancamentos.columns):
+        tipos = lancamentos["tipo"].fillna("").astype(str).str.strip().str.upper()
+        valores = pd.to_numeric(lancamentos["valor"], errors="coerce").fillna(0.0)
+        entradas = float(valores[tipos == "ENTRADA"].sum())
+        saidas = float(valores[tipos == "SAIDA"].sum())
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Membros", membros)
+    c2.metric("Fornecedores", fornecedores)
+    c3.metric("Lancamentos", len(lancamentos))
+    c4.metric("Resultado registrado", formatar_moeda(entradas - saidas))
 
 
 def render():
     slug = slug_da_sessao()
-
-    st.subheader("Backup de dados")
-    st.caption(
-        "Exporte, baixe, envie ao OneDrive e recupere os dados da sua igreja com seguranca."
-    )
-
+    if not slug:
+        st.error("Sessao invalida. Faca login novamente.")
+        return
     igreja = st.session_state.get("igreja", {})
-    plano = igreja.get("plano", "basico")
-
-    _verificar_backup_automatico(slug)
-
-    with st.expander("Backup manual", expanded=True):
-        st.markdown("Escolha o formato e clique para baixar:")
-
-        c1, c2, c3 = st.columns(3)
-
-        with c1:
-            st.markdown("**CSV (planilhas)**")
-            st.caption("Cadastros e lancamentos em CSV — abre no Excel.")
-
-            if st.button("Gerar CSV", key="btn_csv", use_container_width=True):
-                dados = _gerar_zip_completo(slug)
-                st.session_state["backup_manual_csv"] = dados
-                st.session_state["backup_manual_csv_nome"] = _nome_arquivo(
-                    "backup_csv", "zip", slug
-                )
-                st.toast("CSV gerado!")
-
-            if "backup_manual_csv" in st.session_state:
-                st.download_button(
-                    "Baixar CSV",
-                    data=st.session_state["backup_manual_csv"],
-                    file_name=st.session_state["backup_manual_csv_nome"],
-                    mime="application/zip",
-                    key="dl_csv",
-                    use_container_width=True,
-                    type="primary",
-                )
-
-        with c2:
-            st.markdown("**Banco de dados (SQLite)**")
-            st.caption("Arquivo completo do banco — para restaurar o sistema.")
-
-            if st.button("Gerar SQLite", key="btn_sqlite", use_container_width=True):
-                dados = _gerar_sqlite(slug)
-
-                if dados:
-                    st.session_state["backup_manual_db"] = dados
-                    st.session_state["backup_manual_db_nome"] = _nome_arquivo(
-                        "banco", "db", slug
-                    )
-                    st.toast("Banco gerado!")
-                else:
-                    st.error("Banco nao encontrado.")
-
-            if "backup_manual_db" in st.session_state:
-                st.download_button(
-                    "Baixar SQLite",
-                    data=st.session_state["backup_manual_db"],
-                    file_name=st.session_state["backup_manual_db_nome"],
-                    mime="application/octet-stream",
-                    key="dl_sqlite",
-                    use_container_width=True,
-                    type="primary",
-                )
-
-        with c3:
-            st.markdown("**Backup completo (ZIP)**")
-            st.caption("CSV + banco SQLite + resumo em um unico arquivo.")
-
-            if st.button(
-                "Gerar backup completo",
-                key="btn_completo",
-                use_container_width=True,
-            ):
-                dados = _gerar_zip_completo(slug)
-                nome = _nome_arquivo("backup_completo", "zip", slug)
-
-                st.session_state["backup_manual_completo"] = dados
-                st.session_state["backup_manual_completo_nome"] = nome
-
-                st.toast("Backup completo gerado!")
-
-            if "backup_manual_completo" in st.session_state:
-                st.download_button(
-                    "Baixar backup completo",
-                    data=st.session_state["backup_manual_completo"],
-                    file_name=st.session_state["backup_manual_completo_nome"],
-                    mime="application/zip",
-                    key="dl_completo",
-                    use_container_width=True,
-                    type="primary",
-                )
-
-    with st.expander("Enviar backup manual ao OneDrive", expanded=False):
-        st.caption(
-            "Envia o ultimo backup completo manual gerado para a pasta configurada no OneDrive."
-        )
-
-        if "backup_manual_completo" not in st.session_state:
-            st.info("Gere primeiro um backup completo manual.")
-        else:
-            st.info(
-                "Arquivo pronto para envio: "
-                + st.session_state.get("backup_manual_completo_nome", "backup_completo.zip")
-            )
-
-            if st.button(
-                "Enviar ultimo backup completo ao OneDrive",
-                key="btn_enviar_manual_onedrive",
-                use_container_width=True,
-            ):
-                try:
-                    _enviar_backup_onedrive(
-                        st.session_state["backup_manual_completo_nome"],
-                        st.session_state["backup_manual_completo"],
-                    )
-                    st.success("Backup enviado ao OneDrive com sucesso.")
-                except Exception as e:
-                    st.error("Erro ao enviar backup ao OneDrive: " + str(e))
-
+    plano = igreja.get("plano", "basico") if isinstance(igreja, dict) else "basico"
+    st.subheader("Backup de dados")
+    st.caption("Exporte ou restaure os dados isolados desta congregacao.")
+    _render_resumo(slug)
+    st.divider()
+    _render_download(slug)
+    st.divider()
+    _render_restauracao(slug)
+    st.divider()
+    p_info = obter_plano(plano)
     if tem_backup_automatico(plano):
-        with st.expander("Backups automaticos", expanded=False):
-            st.markdown(
-                "Gerados automaticamente ao acessar o sistema e enviados ao OneDrive."
-            )
-
-            c1, c2 = st.columns(2)
-
-            with c1:
-                st.markdown("**Backup diario**")
-
-                ultimo = st.session_state.get("backup_diario_" + slug)
-                st.caption(
-                    "Gerado em: " + (ultimo.strftime("%d/%m/%Y") if ultimo else "-")
-                )
-
-                dados_d = st.session_state.get("backup_diario_dados_" + slug)
-                nome_d = st.session_state.get(
-                    "backup_diario_nome_" + slug,
-                    "backup_diario.zip",
-                )
-
-                if dados_d:
-                    st.download_button(
-                        "Baixar backup diario",
-                        data=dados_d,
-                        file_name=nome_d,
-                        mime="application/zip",
-                        key="dl_auto_diario",
-                        use_container_width=True,
-                        type="primary",
-                    )
-
-                    if st.session_state.get("backup_diario_onedrive_" + slug):
-                        st.success("Enviado ao OneDrive.")
-                    else:
-                        erro = st.session_state.get("backup_diario_onedrive_erro_" + slug)
-                        if erro:
-                            st.warning("Nao foi enviado ao OneDrive.")
-                            st.caption(erro)
-                else:
-                    st.info("Nenhum backup diario disponivel.")
-
-            with c2:
-                st.markdown("**Backup semanal**")
-
-                semana = st.session_state.get("backup_semanal_" + slug)
-                st.caption("Semana: " + (str(semana) if semana else "-"))
-
-                dados_s = st.session_state.get("backup_semanal_dados_" + slug)
-                nome_s = st.session_state.get(
-                    "backup_semanal_nome_" + slug,
-                    "backup_semanal.zip",
-                )
-
-                if dados_s:
-                    st.download_button(
-                        "Baixar backup semanal",
-                        data=dados_s,
-                        file_name=nome_s,
-                        mime="application/zip",
-                        key="dl_auto_semanal",
-                        use_container_width=True,
-                        type="primary",
-                    )
-
-                    if st.session_state.get("backup_semanal_onedrive_" + slug):
-                        st.success("Enviado ao OneDrive.")
-                    else:
-                        erro = st.session_state.get("backup_semanal_onedrive_erro_" + slug)
-                        if erro:
-                            st.warning("Nao foi enviado ao OneDrive.")
-                            st.caption(erro)
-                else:
-                    st.info("Nenhum backup semanal disponivel.")
-
+        st.info(
+            "Seu plano permite backup automatico. Configure uma rotina agendada "
+            "no ambiente de hospedagem para armazenar copias fora da aplicacao."
+        )
     else:
-        p_info = obter_plano(plano)
-
-        with st.expander(
-            "🔒 Backups automaticos (apenas Profissional e Premium)",
-            expanded=False,
-        ):
-            st.warning(
-                f"Backup automatico esta disponivel apenas nos planos "
-                f"**Profissional** e **Premium**. Seu plano atual: **{p_info['nome']}**."
-            )
-            st.caption("Voce continua tendo acesso ao backup manual acima.")
-            st.info(
-                f"Upgrade para **{proximo_plano(plano).capitalize()}** "
-                f"para ter backups diarios e semanais automaticos."
-            )
-
-    with st.expander("Recuperacao do sistema pelo ultimo backup", expanded=False):
-        st.warning(
-            "A recuperacao substitui o banco de dados atual pelo banco contido no ultimo backup disponivel."
+        st.caption(
+            f"O plano {p_info['nome']} possui backup manual. "
+            "Backups automaticos devem ser configurados em planos habilitados."
         )
-
-        ultimo_backup = _obter_ultimo_backup_para_restaurar(slug)
-
-        if ultimo_backup:
-            st.info(
-                "Ultimo backup disponivel: "
-                + ultimo_backup["tipo"]
-                + " — "
-                + ultimo_backup["nome"]
-            )
-        else:
-            st.error("Nenhum backup disponivel para recuperacao.")
-
-        confirmar = st.checkbox(
-            "Confirmo que desejo restaurar o sistema usando o ultimo backup disponivel.",
-            key="confirmar_restauracao_backup",
-        )
-
-        if st.button(
-            "Restaurar sistema pelo ultimo backup",
-            key="btn_restaurar_backup",
-            use_container_width=True,
-            type="primary",
-        ):
-            if not confirmar:
-                st.warning("Marque a confirmacao antes de restaurar.")
-            else:
-                sucesso, mensagem = _recuperar_pelo_ultimo_backup(slug)
-
-                if sucesso:
-                    st.success(mensagem)
-                    st.info("Recarregue a pagina ou reinicie o aplicativo para atualizar os dados.")
-                else:
-                    st.error(mensagem)
-
-    with st.expander("Upload e recuperacao por arquivo de backup", expanded=False):
-        st.warning(
-            "Use esta opcao para restaurar o sistema a partir de um arquivo .zip ou .db."
-        )
-
-        arquivo_backup = st.file_uploader(
-            "Selecione um arquivo de backup",
-            type=["zip", "db"],
-            key="upload_backup_restauracao",
-        )
-
-        if arquivo_backup is not None:
-            st.session_state["upload_backup_nome"] = arquivo_backup.name
-            st.session_state["upload_backup_dados"] = arquivo_backup.getvalue()
-
-            tamanho_kb = len(st.session_state["upload_backup_dados"]) / 1024
-
-            st.success(
-                f"Arquivo carregado: {st.session_state['upload_backup_nome']} "
-                f"({tamanho_kb:.1f} KB)"
-            )
-
-        elif st.session_state.get("upload_backup_dados"):
-            st.info(
-                "Arquivo carregado anteriormente: "
-                + st.session_state.get("upload_backup_nome", "backup")
-            )
-
-        confirmar_upload = st.checkbox(
-            "Confirmo que desejo substituir os dados atuais pelo arquivo enviado.",
-            key="confirmar_restauracao_upload",
-        )
-
-        if st.button(
-            "Restaurar sistema pelo arquivo enviado",
-            key="btn_restaurar_upload",
-            use_container_width=True,
-            type="primary",
-        ):
-            nome_upload = st.session_state.get("upload_backup_nome")
-            dados_upload = st.session_state.get("upload_backup_dados")
-
-            if not dados_upload:
-                st.warning("Envie um arquivo de backup antes de restaurar.")
-
-            elif not confirmar_upload:
-                st.warning("Marque a confirmacao antes de restaurar.")
-
-            else:
-                valido, db_bytes, msg_validacao = _validar_e_obter_db_do_upload(
-                    nome_upload,
-                    dados_upload,
-                    slug,
-                )
-
-                if not valido:
-                    st.error(msg_validacao)
-                else:
-                    sucesso, mensagem = _recuperar_por_upload(slug, db_bytes)
-
-                    if sucesso:
-                        st.success(mensagem)
-                        st.info("Recarregue a pagina ou reinicie o aplicativo para atualizar os dados.")
-
-                        st.session_state.pop("upload_backup_nome", None)
-                        st.session_state.pop("upload_backup_dados", None)
-                    else:
-                        st.error(mensagem)
-
-    with st.expander("Resumo dos dados", expanded=False):
-        df_cad = carregar_cadastros(slug)
-        df_lanc = carregar_lancamentos(slug)
-        resumo = _gerar_resumo(df_cad, df_lanc, slug)
-        st.code(resumo, language=None)

@@ -8,14 +8,6 @@ from data.repository import (
     excluir_cadastro, cadastro_em_uso, cpf_existe, LimiteMembrosExcedido,
 )
 from utils.helpers import confirmar_exclusao, slug_da_sessao, solicitar_autorizacao
-from data.models import Cadastro
-from data.repository import (
-    carregar_cadastros, inserir_cadastro, atualizar_cadastro,
-    excluir_cadastro, cadastro_em_uso, cpf_existe,
-)
-from utils.helpers import (
-    preparar_df, confirmar_exclusao, slug_da_sessao, solicitar_autorizacao,
-)
 from utils.planos import obter_plano, pode_cadastrar_membro, proximo_plano
 
 
@@ -25,18 +17,6 @@ FUNCOES = [
     "Secretario", "Tesoureiro", "Professor", "Lider", "Missionário (a)", "",
 ]
 
-BAIRROS_MINACU = [
-    "Setor Central", "Nova Esperanca", "Jardim Arimateia", "Jardim Boa Vista",
-    "Jardim Brasil", "Jardim Emilia", "Jardim Floresta", "Jardim Floresta II",
-    "Jardim dos Ipês", "Habitacional Primavera", "Minacu Norte", "Patrimonio do Trevo",
-    "Patrimonio do Vicente", "Residencial Cana Brava", "Residencial Tocantins",
-    "Marajoara", "Setor Serrinha", "Vila Batista", "Vila Residencial Sama",
-    "Vila de Furnas", "Vila de Malta", "Vila Manchester", "Vila Menezes",
-    "Vila Moraes", "Vila Sao Geraldo", "Vila Uniao", "Wilson Vaz", "",
-]
-
-CIDADES  = ["Minacu"]
-CEPS     = ["76450-000"]
 SEXO_OPC = ["Masculino", "Feminino", ""]
 
 
@@ -89,12 +69,6 @@ def _cache_key(slug):
 
 def _get(slug):
     k = _cache_key(slug)
-def _cache_key():
-    return f"df_cad_{slug_da_sessao()}"
-
-
-def _get(slug):
-    k = _cache_key()
     if k not in st.session_state:
         st.session_state[k] = carregar_cadastros(slug)
     return st.session_state[k]
@@ -102,13 +76,11 @@ def _get(slug):
 
 def _invalida(slug):
     st.session_state.pop(_cache_key(slug), None)
-    st.session_state.pop(_cache_key(), None)
 
 
 def _val(row, col):
     v = row.get(col, "") if isinstance(row, dict) else getattr(row, col, "")
     return "" if pd.isna(v) else str(v).strip()
-    return str(v).strip() if v else ""
 
 
 def _congregacao_da_sessao(slug, igreja):
@@ -141,7 +113,6 @@ def render():
     if not df.empty and "tipo_cadastro" in df.columns:
         tipos = df["tipo_cadastro"].fillna("").astype(str).str.strip().str.upper()
         qtd_membros = len(df[tipos == "MEMBRO"])
-        qtd_membros = len(df[df["tipo_cadastro"].str.upper() == "MEMBRO"])
     else:
         qtd_membros = 0
 
@@ -244,7 +215,6 @@ def render():
                     )
 
                 bairro = st.text_input("Bairro", placeholder="Ex: Setor Central")
-                bairro = st.selectbox("Bairro", BAIRROS_MINACU)
 
                 col3, col4 = st.columns([2, 1])
 
@@ -253,10 +223,6 @@ def render():
 
                 with col4:
                     cep = st.text_input("CEP", value="76450-000")
-                    cidade = st.selectbox("Cidade", CIDADES)
-
-                with col4:
-                    cep = st.selectbox("CEP", CEPS)
 
                 if st.form_submit_button("Salvar", type="primary"):
                     dn_str = dt_nasc.isoformat() if dt_nasc else ""
@@ -281,13 +247,6 @@ def render():
                     erros = c.validar()
 
                     doc_limpo = limpar_documento(cpf)
-                    doc_limpo = "".join(d for d in cpf if d.isdigit())
-
-                    # Valida tamanho conforme o tipo
-                    if tipo == "Membro" and doc_limpo and len(doc_limpo) != 11:
-                        erros.append("CPF deve ter 11 digitos.")
-                    elif tipo == "Fornecedor" and doc_limpo and len(doc_limpo) != 14:
-                        erros.append("CNPJ deve ter 14 digitos.")
 
                     if doc_limpo and cpf_existe(slug, doc_limpo):
                         doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
@@ -305,10 +264,6 @@ def render():
                             _invalida(slug)
                             st.toast("Cadastro salvo!")
                             st.rerun()
-                        inserir_cadastro(slug, c)
-                        _invalida(slug)
-                        st.toast("Cadastro salvo!")
-                        st.rerun()
 
     # ── Tabela ────────────────────────────────────────────────────────────
     total = len(df)
@@ -455,11 +410,6 @@ def render():
         st.text_input(
             "Congregacao",
             value=cong_edit,
-        cong_edit = congregacao_fixa
-
-        st.text_input(
-            "Congregacao",
-            value=congregacao_fixa,
             disabled=True,
             key=kp + "cong_fixo",
             help="Definida automaticamente pelo identificador da igreja logada."
@@ -507,13 +457,6 @@ def render():
         bai_edit = st.text_input(
             "Bairro",
             value=_val(sel, "bairro"),
-        bairro_atual = _val(sel, "bairro")
-        idx_bairro   = BAIRROS_MINACU.index(bairro_atual) if bairro_atual in BAIRROS_MINACU else 0
-
-        bai_edit = st.selectbox(
-            "Bairro",
-            BAIRROS_MINACU,
-            index=idx_bairro,
             key=kp + "bai"
         )
 
@@ -523,13 +466,6 @@ def render():
             cid_edit = st.text_input(
                 "Cidade",
                 value=_val(sel, "cidade"),
-            cid_atual = _val(sel, "cidade")
-            idx_cid   = CIDADES.index(cid_atual) if cid_atual in CIDADES else 0
-
-            cid_edit = st.selectbox(
-                "Cidade",
-                CIDADES,
-                index=idx_cid,
                 key=kp + "cid"
             )
 
@@ -538,13 +474,6 @@ def render():
             cep_edit = st.text_input(
                 "CEP",
                 value=_formatar_cep(cep_atual) if cep_atual else "",
-            cep_fmt   = _formatar_cep(cep_atual) if cep_atual else ""
-            idx_cep   = CEPS.index(cep_fmt) if cep_fmt in CEPS else 0
-
-            cep_edit = st.selectbox(
-                "CEP",
-                CEPS,
-                index=idx_cep,
                 key=kp + "cep"
             )
 
@@ -588,13 +517,6 @@ def render():
                     erros.append(
                         f"O plano {p_info['nome']} atingiu o limite de membros."
                     )
-                doc_limpo_e = "".join(d for d in cpf_edit if d.isdigit())
-
-                # Valida tamanho conforme o tipo
-                if tipo_edit == "Membro" and doc_limpo_e and len(doc_limpo_e) != 11:
-                    erros.append("CPF deve ter 11 digitos.")
-                elif tipo_edit == "Fornecedor" and doc_limpo_e and len(doc_limpo_e) != 14:
-                    erros.append("CNPJ deve ter 14 digitos.")
 
                 if doc_limpo_e and cpf_existe(slug, doc_limpo_e, id_excluir=id_sel):
                     doc_tipo_e = "CPF" if tipo_edit == "Membro" else "CNPJ"
@@ -617,15 +539,6 @@ def render():
 
                         st.toast("Cadastro alterado!")
                         st.rerun()
-                    atualizar_cadastro(slug, c)
-                    _invalida(slug)
-
-                    for k in list(st.session_state.keys()):
-                        if k.startswith("_auth_") or k.startswith("_edit_cad_"):
-                            st.session_state.pop(k, None)
-
-                    st.toast("Cadastro alterado!")
-                    st.rerun()
 
         with c2:
             st.caption("Excluir cadastro")

@@ -15,8 +15,6 @@ from data.repository import (
     carregar_cadastros, carregar_lancamentos,
     inserir_lancamento, inserir_lancamentos_lote, atualizar_lancamento, excluir_lancamento,
     obter_logo_igreja, listar_subcategorias_despesa, obter_config_igreja,
-    inserir_lancamento, atualizar_lancamento, excluir_lancamento,
-    obter_logo_igreja, listar_subcategorias_despesa,
 )
 from utils.helpers import (
     formatar_moeda, preparar_df, obter_ativos, montar_opcoes,
@@ -42,11 +40,6 @@ def _ck(sufixo, slug):
 
 def _sk(sufixo, slug):
     return f"{sufixo}_{slug}"
-NOME_PASTOR = "Pr. Olair Pereira Lopes"
-
-
-def _ck(sufixo):
-    return f"df_{sufixo}_{slug_da_sessao()}"
 
 
 def _html(valor):
@@ -61,7 +54,6 @@ def _invalida():
 
 def _get_cad(slug):
     k = _ck("cad", slug)
-    k = _ck("cad")
     if k not in st.session_state:
         st.session_state[k] = carregar_cadastros(slug)
     return st.session_state[k]
@@ -124,10 +116,6 @@ def _assinatura_igreja(slug):
 
 def _valor_texto(valor):
     return "" if pd.isna(valor) else str(valor or "")
-    if not tel_limpo.startswith("55"):
-        tel_limpo = "55" + tel_limpo
-
-    return tel_limpo
 
 
 def _link_whatsapp(tel, mensagem):
@@ -147,7 +135,6 @@ def _config_whatsapp():
         cfg = {}
 
     resultado = {
-    return {
         "access_token": str(cfg.get("access_token", "")).strip(),
         "phone_number_id": str(cfg.get("phone_number_id", "")).strip(),
         "api_version": str(cfg.get("api_version", "v20.0")).strip(),
@@ -206,10 +193,6 @@ def _enviar_whatsapp_texto_api(telefone, mensagem):
     except requests.RequestException:
         LOGGER.exception("Falha ao enviar comprovante pela WhatsApp Cloud API.")
         return False, "Falha de comunicacao com o WhatsApp. Tente novamente."
-        return False, f"Erro {resp.status_code}: {resp.text}"
-
-    except requests.RequestException as e:
-        return False, f"Falha na requisicao: {e}"
 
 
 def _telefone_do_lancamento(df_cad, lancamento):
@@ -236,7 +219,6 @@ def _telefone_do_lancamento(df_cad, lancamento):
 
 
 def _montar_mensagem_comprovante(lancamento, igreja, slug):
-def _montar_mensagem_comprovante(lancamento, igreja):
     nome_igreja = igreja.get("nome", "Igreja")
     data_fmt = pd.to_datetime(lancamento.get("data"), errors="coerce")
     data_str = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else "-"
@@ -270,7 +252,6 @@ def _montar_mensagem_comprovante(lancamento, igreja):
         "",
         "Mensagem enviada pelo sistema FielMordomo.",
         _assinatura_igreja(slug),
-        NOME_PASTOR,
     ])
 
     return "\n".join(linhas)
@@ -279,15 +260,11 @@ def _montar_mensagem_comprovante(lancamento, igreja):
 def _render_whatsapp_comprovante(df_cad, lancamento, igreja, slug, key_prefix):
     telefone = _telefone_do_lancamento(df_cad, lancamento)
     mensagem = _montar_mensagem_comprovante(lancamento, igreja, slug)
-def _render_whatsapp_comprovante(df_cad, lancamento, igreja, key_prefix):
-    telefone = _telefone_do_lancamento(df_cad, lancamento)
-    mensagem = _montar_mensagem_comprovante(lancamento, igreja)
     link = _link_whatsapp(telefone, mensagem)
 
     if link:
         st.markdown(
         f'<a href="{_html(link)}" target="_blank" rel="noopener noreferrer" '
-            f'<a href="{link}" target="_blank" '
             f'style="display:inline-block;background:#25D366;color:white;'
             f'padding:8px 16px;border-radius:6px;text-decoration:none;'
             f'font-weight:600;margin-top:10px;margin-bottom:8px">'
@@ -338,7 +315,6 @@ def _gerar_html_comprovante(lancamento, igreja, slug):
     sep2 = "=" * 40
     vinc_str = nome_vinc + (f" ({tipo_vinc})" if tipo_vinc else "")
     nome_assinatura = _html(_assinatura_igreja(slug))
-    nome_assinatura = _html(NOME_PASTOR)
 
     subcat_html = ""
     if subcategoria:
@@ -444,7 +420,6 @@ def _gerar_html_comprovante_lote(itens, igreja, slug, data_str, vinc_str,
     sep = "-" * 40
     sep2 = "=" * 40
     nome_assinatura = _html(_assinatura_igreja(slug))
-    nome_assinatura = _html(NOME_PASTOR)
 
     itens_html = ""
     for it in itens:
@@ -559,10 +534,6 @@ def render():
         st.session_state[nl_counter_key] = 0
 
     cnt = st.session_state[nl_counter_key]
-    if "nl_counter" not in st.session_state:
-        st.session_state["nl_counter"] = 0
-
-    cnt = st.session_state["nl_counter"]
 
     with st.expander("Novo lancamento", expanded=False):
         data_l = st.date_input("Data", value=datetime.date.today(),
@@ -658,7 +629,6 @@ def render():
                 _invalida()
                 # Incrementa contador para forcar recriacao dos widgets (limpa campos)
                 st.session_state[nl_counter_key] += 1
-                st.session_state["nl_counter"] += 1
                 st.toast("Lancamento salvo!")
                 st.rerun()
 
@@ -669,8 +639,6 @@ def render():
 
             if lote_itens_key not in st.session_state:
                 st.session_state[lote_itens_key] = []
-            if "lote_itens" not in st.session_state:
-                st.session_state["lote_itens"] = []
 
             st.markdown("**Dados compartilhados**")
             data_lote = st.date_input("Data", value=datetime.date.today(),
@@ -680,7 +648,6 @@ def render():
                 disabled=bool(st.session_state[lote_itens_key]),
                 help="Limpe os itens para alterar o tipo do lote.",
             )
-            tipo_lote = st.selectbox("Tipo", ["Entrada", "Saida"], key="lote_tipo")
 
             vinc_pad_l = "Membro" if tipo_lote == "Entrada" else "Fornecedor"
             vincular_lote = st.selectbox(
@@ -739,7 +706,6 @@ def render():
                 else:
                     st.session_state[lote_itens_key].append({
                         "tipo": tipo_lote,
-                    st.session_state["lote_itens"].append({
                         "categoria": cat_lote_item,
                         "subcategoria": subcategoria_lote_item,
                         "descricao": desc_lote_item,
@@ -755,13 +721,6 @@ def render():
                 total_lote = sum(it["valor"] for it in st.session_state[lote_itens_key])
 
                 for i, item in enumerate(st.session_state[lote_itens_key]):
-            if st.session_state["lote_itens"]:
-                st.divider()
-                st.markdown("**Itens do lote**")
-
-                total_lote = sum(it["valor"] for it in st.session_state["lote_itens"])
-
-                for i, item in enumerate(st.session_state["lote_itens"]):
                     col1, col2, col3, col4 = st.columns([3, 4, 2, 1])
                     with col1:
                         rotulo_item = item["categoria"]
@@ -779,11 +738,6 @@ def render():
 
                 st.markdown(f"### Total: {formatar_moeda(total_lote)}")
                 st.caption(f"{len(st.session_state[lote_itens_key])} item(ns) no lote")
-                            st.session_state["lote_itens"].pop(i)
-                            st.rerun()
-
-                st.markdown(f"### Total: {formatar_moeda(total_lote)}")
-                st.caption(f"{len(st.session_state['lote_itens'])} item(ns) no lote")
 
                 st.divider()
                 c_salvar, c_limpar = st.columns(2)
@@ -802,11 +756,6 @@ def render():
                             for idx, item in enumerate(st.session_state[lote_itens_key], start=1):
                                 lanc = Lancamento(
                                     data=data_lote, tipo=item["tipo"],
-                            erros_lote = []
-
-                            for idx, item in enumerate(st.session_state["lote_itens"], start=1):
-                                lanc = Lancamento(
-                                    data=data_lote, tipo=tipo_lote,
                                     categoria=item["categoria"], valor=item["valor"],
                                     descricao=item["descricao"], forma_pagamento=forma_pag_lote,
                                     subcategoria=item.get("subcategoria", ""),
@@ -818,7 +767,6 @@ def render():
                                     erros_lote.extend([f"Item {idx}: {erro}" for erro in erros])
                                 else:
                                     lancamentos_lote.append(lanc)
-                                    inserir_lancamento(slug, lanc)
                                     itens_salvos.append(item)
 
                             if erros_lote:
@@ -838,7 +786,6 @@ def render():
                                 if not vinc_str:
                                     vinc_str = "Nao vinculado"
 
-                                numero_lote = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
                                 html_comp = _gerar_html_comprovante_lote(
                                     itens=itens_salvos, igreja=igreja, slug=slug,
                                     data_str=data_lote.strftime("%d/%m/%Y"),
@@ -847,8 +794,6 @@ def render():
                                 )
                                 st.session_state[lote_comprovante_key] = html_comp
                                 st.session_state[lote_itens_key] = []
-                                st.session_state["lote_comprovante_html"] = html_comp
-                                st.session_state["lote_itens"] = []
                                 _invalida()
                                 st.toast(f"{len(itens_salvos)} lancamentos salvos!")
                                 st.rerun()
@@ -866,24 +811,12 @@ def render():
                 st.download_button(
                     "Baixar comprovante consolidado",
                     data=st.session_state[lote_comprovante_key],
-                        st.session_state["lote_itens"] = []
-                        st.toast("Lote limpo.")
-                        st.rerun()
-
-            if "lote_comprovante_html" in st.session_state:
-                st.divider()
-                st.success("Lancamentos salvos! Comprovante consolidado:")
-                components.html(st.session_state["lote_comprovante_html"], height=700, scrolling=True)
-                st.download_button(
-                    "Baixar comprovante consolidado",
-                    data=st.session_state["lote_comprovante_html"],
                     file_name="comprovante_lote.html",
                     mime="text/html",
                     use_container_width=True,
                 )
                 if st.button("Fechar comprovante", key="lote_fechar_comp"):
                     st.session_state.pop(lote_comprovante_key, None)
-                    st.session_state.pop("lote_comprovante_html", None)
                     st.rerun()
     else:
         p_info_l = obter_plano(plano_igreja)
@@ -985,7 +918,6 @@ def render():
 
             subcategorias_edit = listar_subcategorias_despesa()
             subcat_atual = _valor_texto(sel.get("subcategoria", "")) if "subcategoria" in sel.index else ""
-            subcat_atual = str(sel.get("subcategoria", "")) if "subcategoria" in sel.index else ""
             if subcategorias_edit:
                 opcoes_sub = [""] + subcategorias_edit
                 if subcat_atual and subcat_atual not in opcoes_sub:
@@ -1003,7 +935,6 @@ def render():
                     st.text_input("Subcategoria", value=subcat_atual, disabled=True, key=kp + "subcat_d")
 
         vinc_str = _valor_texto(sel["tipo_cadastro"]).strip().upper()
-        vinc_str = str(sel["tipo_cadastro"]).strip().upper()
         vinc_pad_e = ("Membro" if (tipo_e == "Entrada" and cat_e == "Dizimo")
                       else "Fornecedor" if vinc_str == "FORNECEDOR"
                       else "Membro" if vinc_str == "MEMBRO"
@@ -1045,9 +976,6 @@ def render():
         desc_e = st.text_input("Descricao", value=_valor_texto(sel["descricao"]), key=kp + "desc")
 
         forma_pag_atual = _valor_texto(sel.get("forma_pagamento", "Dinheiro")) if "forma_pagamento" in sel.index else "Dinheiro"
-        desc_e = st.text_input("Descricao", value=str(sel["descricao"]), key=kp + "desc")
-
-        forma_pag_atual = str(sel.get("forma_pagamento", "Dinheiro")) if "forma_pagamento" in sel.index else "Dinheiro"
         idx_fp = FORMAS_PAGAMENTO.index(forma_pag_atual) if forma_pag_atual in FORMAS_PAGAMENTO else 1
         forma_pag_e = st.selectbox("Forma de pagamento", FORMAS_PAGAMENTO,
                                    index=idx_fp, key=kp + "forma_pag")
@@ -1091,5 +1019,4 @@ def render():
                             or k.startswith("_edit_") or k == "sel_lanc_edit"):
                             st.session_state.pop(k, None)
                     st.toast("Lancamento excluido!")
-                    st.rerun()
                     st.rerun()
