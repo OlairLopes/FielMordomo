@@ -4,11 +4,8 @@ Tela inicial da igreja - logo centralizado + KPIs.
 
 import datetime
 import base64
-<<<<<<< HEAD
 import html
 import re
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 import pandas as pd
 import streamlit as st
 
@@ -20,7 +17,6 @@ from utils.helpers import formatar_moeda, slug_da_sessao
 from utils.planos import obter_plano, texto_limite
 
 
-<<<<<<< HEAD
 MESES_PT_BR = [
     "", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -43,22 +39,17 @@ def _img_b64(dados, ext):
     mime = MIMES_IMAGEM.get(ext)
     if not mime or not isinstance(dados, (bytes, bytearray, memoryview)):
         return ""
-=======
 def _img_b64(dados, ext):
     mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/" + ext
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     return "data:" + mime + ";base64," + base64.b64encode(dados).decode()
 
 
 def render():
     slug   = slug_da_sessao()
     igreja = st.session_state.get("igreja", {})
-<<<<<<< HEAD
     if not isinstance(igreja, dict):
         igreja = {}
     nome_igreja = _html(igreja.get("nome", "FielMordomo"))
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
     # ── Logo grande centralizado ──────────────────────────────────────────
     logo_r = obter_logo_igreja(slug) or obter_logo_sistema()
@@ -66,13 +57,10 @@ def render():
     if logo_r:
         dados, ext = logo_r
         img_src = _img_b64(dados, ext)
-<<<<<<< HEAD
     else:
         img_src = ""
 
     if img_src:
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         st.markdown(f"""
         <div style="display:flex;flex-direction:column;align-items:center;
                     justify-content:center;padding:40px 20px 30px 20px">
@@ -81,11 +69,8 @@ def render():
                         filter:drop-shadow(0 4px 12px rgba(15,110,86,0.15))"/>
             <h2 style="color:#0F6E56;margin:20px 0 4px 0;font-weight:700;
                        font-size:1.8rem;text-align:center">
-<<<<<<< HEAD
                 {nome_igreja}
-=======
                 {igreja.get("nome", "FielMordomo")}
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             </h2>
             <p style="color:#888;font-size:0.95rem;margin:0;text-align:center">
                 Gestao financeira da igreja
@@ -100,11 +85,8 @@ def render():
                         letter-spacing:-1px">FielMordomo</div>
             <h2 style="color:#0F6E56;margin:20px 0 4px 0;font-weight:700;
                        font-size:1.6rem;text-align:center">
-<<<<<<< HEAD
                 {nome_igreja}
-=======
                 {igreja.get("nome", "")}
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             </h2>
             <p style="color:#888;font-size:0.95rem;margin:0;text-align:center">
                 Gestao financeira da igreja
@@ -121,7 +103,6 @@ def render():
     hoje = datetime.date.today()
     ini_mes = hoje.replace(day=1)
 
-<<<<<<< HEAD
     colunas_lanc = {"data", "valor", "tipo"}
     if not df_lanc.empty and colunas_lanc.issubset(df_lanc.columns):
         datas_originais = df_lanc["data"].copy()
@@ -135,29 +116,23 @@ def render():
             (valores_originais.notna() & valores_originais.astype(str).str.strip().ne("") & valores_numericos.isna()).sum()
         )
         df_lanc["valor"] = valores_numericos.fillna(0.0)
-=======
     if not df_lanc.empty:
         df_lanc["data"]  = pd.to_datetime(df_lanc["data"], errors="coerce")
         df_lanc["valor"] = pd.to_numeric(df_lanc["valor"], errors="coerce").fillna(0.0)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         df_mes = df_lanc[
             (df_lanc["data"] >= pd.Timestamp(ini_mes)) &
             (df_lanc["data"] <= pd.Timestamp(hoje))
         ]
-<<<<<<< HEAD
         tipos = df_mes["tipo"].fillna("").astype(str).str.strip().str.upper()
         ent_mes = df_mes[tipos == "ENTRADA"]["valor"].sum()
         sai_mes = df_mes[tipos == "SAIDA"]["valor"].sum()
-=======
         ent_mes = df_mes[df_mes["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
         sai_mes = df_mes[df_mes["tipo"].str.upper() == "SAIDA"]["valor"].sum()
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         sal_mes = ent_mes - sai_mes
         n_lanc_mes = len(df_mes)
     else:
         ent_mes = sai_mes = sal_mes = 0.0
         n_lanc_mes = 0
-<<<<<<< HEAD
         qtd_datas_invalidas = qtd_valores_invalidos = 0
         if not df_lanc.empty:
             st.warning("Nao foi possivel calcular os indicadores: existem colunas financeiras ausentes.")
@@ -174,18 +149,15 @@ def render():
     else:
         qtd_membros = 0
         qtd_membros_ativos = 0
-=======
 
     if not df_cad.empty and "tipo_cadastro" in df_cad.columns:
         qtd_membros = len(df_cad[df_cad["tipo_cadastro"].str.upper() == "MEMBRO"])
     else:
         qtd_membros = 0
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
     plano    = igreja.get("plano", "basico")
     p_info   = obter_plano(plano)
     lim_txt  = texto_limite(plano)
-<<<<<<< HEAD
     mes_ano = f"{MESES_PT_BR[hoje.month]}/{hoje.year}"
 
     if qtd_datas_invalidas or qtd_valores_invalidos:
@@ -198,12 +170,10 @@ def render():
     st.markdown(f"""
     <h4 style="color:#0F6E56;margin:18px 0 12px 0">
         📊 Resumo de {mes_ano}
-=======
 
     st.markdown(f"""
     <h4 style="color:#0F6E56;margin:18px 0 12px 0">
         📊 Resumo de {hoje.strftime('%B/%Y').capitalize()}
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     </h4>
     """, unsafe_allow_html=True)
 
@@ -252,23 +222,19 @@ def render():
                     box-shadow:0 2px 6px rgba(0,0,0,0.08);
                     border-left:4px solid #F57C00;height:100%">
             <div style="font-size:0.72rem;font-weight:600;color:#888;
-<<<<<<< HEAD
                         text-transform:uppercase;letter-spacing:0.05em">Lancamentos no mes / membros ativos</div>
             <div style="font-size:1.35rem;font-weight:700;color:#F57C00;
                         line-height:1.2;margin-top:4px">{n_lanc_mes} / {qtd_membros_ativos}</div>
             <div style="font-size:0.72rem;color:#888;margin-top:4px">
                 {_html(qtd_membros)} membro(s) cadastrado(s) no total
             </div>
-=======
                         text-transform:uppercase;letter-spacing:0.05em">Lancamentos / Membros</div>
             <div style="font-size:1.35rem;font-weight:700;color:#F57C00;
                         line-height:1.2;margin-top:4px">{n_lanc_mes} / {qtd_membros}</div>
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         </div>
         """, unsafe_allow_html=True)
 
     # ── Card do plano ─────────────────────────────────────────────────────
-<<<<<<< HEAD
     cor_plano = str(p_info.get("cor", "#0F6E56"))
     if not COR_HEX_RE.fullmatch(cor_plano):
         cor_plano = "#0F6E56"
@@ -279,11 +245,9 @@ def render():
     st.markdown("")
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,{cor_plano} 0%,#0F6E56 100%);
-=======
     st.markdown("")
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,{p_info['cor']} 0%,#0F6E56 100%);
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                 border-radius:14px;padding:22px 26px;color:white;margin-top:14px;
                 box-shadow:0 4px 14px rgba(15,110,86,0.25)">
         <div style="display:flex;justify-content:space-between;align-items:center;
@@ -292,17 +256,14 @@ def render():
                 <div style="font-size:0.72rem;text-transform:uppercase;
                             letter-spacing:0.08em;opacity:0.85">Plano atual</div>
                 <div style="font-size:1.6rem;font-weight:700;margin-top:2px">
-<<<<<<< HEAD
                     {nome_plano}
                 </div>
                 <div style="font-size:0.85rem;opacity:0.9;margin-top:4px">
                     Limite: {lim_txt} membros • {preco_plano}
-=======
                     {p_info['nome']}
                 </div>
                 <div style="font-size:0.85rem;opacity:0.9;margin-top:4px">
                     Limite: {lim_txt} membros • {p_info['preco']}
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                 </div>
             </div>
             <div style="font-size:2.6rem;opacity:0.5">⛪</div>

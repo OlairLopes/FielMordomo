@@ -1,15 +1,11 @@
 import datetime
-<<<<<<< HEAD
 import html
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from data.repository import (
-<<<<<<< HEAD
     DIAS_DIZIMISTA_ATIVO_DEFAULT,
     autenticar_igreja,
     carregar_cadastros,
@@ -204,7 +200,6 @@ def _injetar_css():
     .dash-label { color:#94A3B8;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em; }
     .dash-value { color:#F8FAFC;font-size:1.45rem;font-weight:700;margin-top:5px; }
     .dash-note { color:#CBD5E1;font-size:.76rem;margin-top:5px; }
-=======
     carregar_lancamentos,
     carregar_cadastros,
     obter_config_igreja,
@@ -402,12 +397,10 @@ def _injetar_css_dashboard():
     .inativo-card.amarelo .valor { color: #F59E0B; }
     .inativo-card.laranja .valor { color: #EF4444; }
     .inativo-card.vermelho .valor { color: #DC2626; }
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     </style>
     """, unsafe_allow_html=True)
 
 
-<<<<<<< HEAD
 def _card(titulo, valor, nota=""):
     st.markdown(
         f'<div class="dash-card"><div class="dash-label">{_escape(titulo)}</div>'
@@ -438,7 +431,6 @@ def render():
     _injetar_css()
     slug = slug_da_sessao()
     df_lanc, df_cad = carregar_lancamentos(slug), carregar_cadastros(slug)
-=======
 def _meses_disponiveis(df):
     if df.empty or "data" not in df.columns:
         return []
@@ -571,12 +563,10 @@ def render():
     df_lanc = carregar_lancamentos(slug)
     df_cad = carregar_cadastros(slug)
 
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     if df_lanc.empty:
         st.info("Ainda nao ha lancamentos para o dashboard.")
         return
 
-<<<<<<< HEAD
     df, cad, faltantes, qualidade = _normalizar_dados(df_lanc, df_cad)
     if faltantes:
         st.error("Dashboard indisponivel. Colunas ausentes: " + ", ".join(faltantes))
@@ -703,7 +693,6 @@ def render():
         "text/csv",
         key=_sk("csv_mes", slug),
     )
-=======
     colunas_lanc = [
         "data", "valor", "id_cadastro", "tipo", "categoria",
         "tipo_cadastro", "nome_cadastro",
@@ -1751,4 +1740,3 @@ def render():
             "text/csv",
             use_container_width=True,
         )
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc

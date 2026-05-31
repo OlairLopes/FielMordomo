@@ -1,10 +1,8 @@
-<<<<<<< HEAD
 """Dashboard executivo consolidado por ministerio."""
 
 import datetime
 import html
 import logging
-=======
 """
 dashboard_geral.py — Painel geral do administrador do FielMordomo.
 
@@ -27,12 +25,10 @@ from __future__ import annotations
 import datetime as _dt
 import importlib
 from typing import Any, Dict, Iterable, List, Optional
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
 import pandas as pd
 import streamlit as st
 
-<<<<<<< HEAD
 from data.repository import carregar_dashboard_ministerio, listar_ministerios
 from utils.helpers import formatar_moeda, gerar_csv
 
@@ -74,7 +70,6 @@ def _injetar_css():
         .min-label {color:#64748B;font-size:.74rem;text-transform:uppercase;letter-spacing:.04em}
         .min-value {color:#0F172A;font-size:1.35rem;font-weight:750;margin-top:5px}
         .min-note {color:#64748B;font-size:.73rem;margin-top:5px}
-=======
 
 AZUL = "#061B44"
 AZUL_2 = "#0B3A66"
@@ -171,14 +166,12 @@ def _injetar_css() -> None:
                 margin: 12px 0;
                 font-size: 0.92rem;
             }}
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-<<<<<<< HEAD
 def _figura_mensal(mensal):
     return mensal.set_index("mes")[["entradas", "saidas", "resultado"]].rename(columns={
         "entradas": "Entradas",
@@ -334,7 +327,6 @@ def render():
         <div class="min-hero">
           <h1>Dashboard Ministerial</h1>
           <p>Visao financeira consolidada das congregacoes vinculadas ao ministerio.</p>
-=======
 # ─────────────────────────────────────────────────────────────
 # Utilidades
 # ─────────────────────────────────────────────────────────────
@@ -658,13 +650,11 @@ def _render_card(label: str, valor: str, nota: str = "") -> None:
             <div class="adm-card-label">{label}</div>
             <div class="adm-card-value">{valor}</div>
             <div class="adm-card-note">{nota}</div>
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-<<<<<<< HEAD
     ministerios = listar_ministerios()
     if ministerios.empty:
         st.error("Nenhum ministerio ativo foi encontrado.")
@@ -757,7 +747,6 @@ def renderizar_dashboard_geral():
 
 
 def aba_dashboard_geral():
-=======
 
 def _render_graficos(df_igrejas: pd.DataFrame, df_metricas: pd.DataFrame) -> None:
     st.markdown('<div class="adm-section-title">Visão por plano e movimentação</div>', unsafe_allow_html=True)
@@ -908,16 +897,13 @@ def painel_dashboard_geral() -> None:
 
 
 def pagina_dashboard_geral() -> None:
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     render()
 
 
 __all__ = [
-<<<<<<< HEAD
     "render", "render_dashboard_geral", "exibir_dashboard_geral", "dashboard_geral",
     "renderizar", "renderizar_dashboard_geral", "aba_dashboard_geral",
 ]
-=======
     "render",
     "render_dashboard_geral",
     "exibir_dashboard_geral",
@@ -928,4 +914,3 @@ __all__ = [
     "painel_dashboard_geral",
     "pagina_dashboard_geral",
 ]
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc

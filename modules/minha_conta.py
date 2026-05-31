@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import logging
 
 import streamlit as st
@@ -9,20 +8,17 @@ from data.repository import (
     obter_config_igreja,
     salvar_config_igreja,
     validar_nova_senha,
-=======
 import streamlit as st
 
 from data.repository import (
     igreja_alterar_senha,
     obter_config_igreja, salvar_config_igreja,
     DIAS_DIZIMISTA_ATIVO_DEFAULT,
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 )
 from utils.helpers import slug_da_sessao
 from utils.planos import obter_plano
 
 
-<<<<<<< HEAD
 LOGGER = logging.getLogger(__name__)
 OPCOES_DIAS = [30, 60, 90, 120]
 
@@ -56,7 +52,6 @@ def render():
         st.error("Sessao invalida. Faca login novamente.")
         return
 
-=======
 def render():
     st.subheader("Minha Conta")
 
@@ -68,7 +63,6 @@ def render():
         return
 
     # ── Dados da igreja ───────────────────────────────────────────────────
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     st.markdown("### 🏛️ Dados da igreja")
 
     col1, col2 = st.columns(2)
@@ -82,11 +76,8 @@ def render():
         p_info = obter_plano(plano)
         st.text_input(
             "Plano atual",
-<<<<<<< HEAD
             value=f"{p_info['nome']} - {p_info.get('preco', '')}",
-=======
             value=f"{p_info['nome']} — {p_info.get('preco', '')}",
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             disabled=True,
         )
 
@@ -95,7 +86,6 @@ def render():
     )
 
     st.divider()
-<<<<<<< HEAD
     st.markdown("### ⚙️ Configuracoes da igreja")
     st.caption("Personalize criterios usados nos relatorios, dashboard e comprovantes.")
 
@@ -110,7 +100,6 @@ def render():
         return
 
     idx_atual = OPCOES_DIAS.index(dias_atual)
-=======
 
     # ── Configuracoes da igreja (FASE 2) ──────────────────────────────────
     st.markdown("### ⚙️ Configuracoes da igreja")
@@ -128,19 +117,15 @@ def render():
 
     OPCOES_DIAS = [30, 60, 90, 120]
     idx_atual = OPCOES_DIAS.index(dias_atual) if dias_atual in OPCOES_DIAS else 0
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
     with st.form("form_config_igreja"):
         st.markdown("**🙏 Dizimista ativo**")
         st.caption(
-<<<<<<< HEAD
             "Um membro e considerado dizimista ativo se contribuiu com dizimo "
             "nos ultimos N dias."
-=======
             "Um membro e considerado **dizimista ativo** se contribuiu "
             "com dizimo nos ultimos N dias. Configure o periodo conforme a "
             "frequencia esperada de contribuicao da sua igreja."
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         )
 
         dias_novo = st.selectbox(
@@ -148,7 +133,6 @@ def render():
             OPCOES_DIAS,
             index=idx_atual,
             format_func=lambda x: f"{x} dias" + (
-<<<<<<< HEAD
                 "  (mensal)" if x == 30 else
                 "  (bimestral)" if x == 60 else
                 "  (trimestral)" if x == 90 else
@@ -186,7 +170,6 @@ def render():
     st.caption(
         "Use uma senha longa e exclusiva. A nova senha deve possuir entre "
         "15 e 128 caracteres."
-=======
                 "  (mensal)"     if x == 30  else
                 "  (bimestral)"  if x == 60  else
                 "  (trimestral)" if x == 90  else
@@ -207,12 +190,10 @@ def render():
     st.caption(
         "Sua senha de acesso a esta igreja. Recomendamos usar uma senha forte "
         "com pelo menos 8 caracteres."
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     )
 
     with st.form("form_trocar_senha", clear_on_submit=True):
         senha_atual = st.text_input("Senha atual", type="password")
-<<<<<<< HEAD
         nova_senha = st.text_input("Nova senha", type="password")
         confirma = st.text_input("Confirmar nova senha", type="password")
 
@@ -221,7 +202,6 @@ def render():
             if not senha_atual:
                 erros.append("Informe a senha atual.")
             erros.extend(validar_nova_senha(nova_senha))
-=======
         nova_senha  = st.text_input("Nova senha", type="password")
         confirma    = st.text_input("Confirmar nova senha", type="password")
 
@@ -232,12 +212,10 @@ def render():
                 erros.append("Informe a senha atual.")
             if not nova_senha or len(nova_senha) < 6:
                 erros.append("Nova senha deve ter ao menos 6 caracteres.")
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             if nova_senha != confirma:
                 erros.append("Nova senha e confirmacao nao coincidem.")
 
             if erros:
-<<<<<<< HEAD
                 for erro in dict.fromkeys(erros):
                     st.error(erro)
             else:
@@ -253,7 +231,6 @@ def render():
                         st.rerun()
                     else:
                         st.error("Senha atual incorreta.")
-=======
                 for e in erros:
                     st.error(e)
             else:
@@ -262,4 +239,3 @@ def render():
                     st.toast("Senha alterada!")
                 else:
                     st.error("❌ Senha atual incorreta.")
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc

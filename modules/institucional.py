@@ -1,10 +1,7 @@
-<<<<<<< HEAD
 import base64
 import logging
 from pathlib import Path
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 import streamlit as st
 
 
@@ -15,7 +12,6 @@ AZUL_CLARO = "#EAF2FB"
 DOURADO = "#D4AF37"
 CINZA_TEXTO = "#1F2933"
 CINZA_SUAVE = "#F5F7FA"
-<<<<<<< HEAD
 LOGGER = logging.getLogger(__name__)
 TAMANHO_MAXIMO_LOGO = 5 * 1024 * 1024
 MIMES_LOGO_PERMITIDOS = {
@@ -25,8 +21,6 @@ MIMES_LOGO_PERMITIDOS = {
     "png": "image/png",
     "webp": "image/webp",
 }
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
 
 def _pagina_atual():
@@ -38,7 +32,6 @@ def _pagina_atual():
 
 def _img_b64(dados, ext):
     ext = str(ext or "png").lower().replace(".", "")
-<<<<<<< HEAD
     mime = MIMES_LOGO_PERMITIDOS.get(ext)
     if not mime:
         raise ValueError(f"Formato de logo não permitido: {ext}")
@@ -49,14 +42,12 @@ def _img_b64(dados, ext):
     if len(dados) > TAMANHO_MAXIMO_LOGO:
         raise ValueError("O logo excede o limite de 5 MB.")
 
-=======
     if ext in ("jpg", "jpeg"):
         mime = "image/jpeg"
     elif ext == "svg":
         mime = "image/svg+xml"
     else:
         mime = f"image/{ext}"
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     return "data:" + mime + ";base64," + base64.b64encode(dados).decode("utf-8")
 
 
@@ -77,11 +68,8 @@ def _logo_sistema_src():
             dados, ext = logo
             return _img_b64(dados, ext)
     except Exception:
-<<<<<<< HEAD
         LOGGER.exception("Não foi possível carregar o logo configurado no sistema.")
-=======
         pass
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
     # 2. Logo em arquivo local, caso exista no projeto
     try:
@@ -100,11 +88,8 @@ def _logo_sistema_src():
                 ext = arq.suffix.replace(".", "") or "png"
                 return _img_b64(arq.read_bytes(), ext)
     except Exception:
-<<<<<<< HEAD
         LOGGER.exception("Não foi possível carregar um logo local.")
-=======
         pass
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
     return ""
 
@@ -565,11 +550,8 @@ def _css_base():
 
         .fm-cta-inner {{
             max-width: 1180px;
-<<<<<<< HEAD
             margin: 0 auto;
-=======
             margin: 0 abackk
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             display: flex;
             justify-content: space-between;
             align-items: center;

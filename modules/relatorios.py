@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import datetime
 
 import pandas as pd
@@ -146,18 +145,15 @@ def _aplicar_filtros(df, periodo, tipo, categoria, subcategoria, id_cadastro, lo
     if lote_id != "Todos":
         filtrado = filtrado[filtrado["lote_id"] == lote_id]
     return filtrado
-=======
 import pandas as pd
 import streamlit as st
 
 from data.repository import carregar_lancamentos, carregar_cadastros
 from utils.helpers import formatar_moeda, preparar_df, gerar_csv, slug_da_sessao
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
 
 def render():
     slug = slug_da_sessao()
-<<<<<<< HEAD
     igreja = st.session_state.get("igreja", {})
     if not isinstance(igreja, dict):
         igreja = {}
@@ -231,7 +227,6 @@ def render():
         opcoes_vinculos[vinculo_sel],
         lote_sel,
     )
-=======
     st.subheader("Relatorios")
 
     df = carregar_lancamentos(slug)
@@ -284,12 +279,10 @@ def render():
     if sub_sel != "Todas":
         df_f = df_f[df_f["subcategoria"].fillna("").str.strip() == sub_sel]
 
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     if df_f.empty:
         st.info("Nenhum lancamento para os filtros selecionados.")
         return
 
-<<<<<<< HEAD
     entradas = df_f[df_f["tipo_norm"] == "ENTRADA"]
     saidas = df_f[df_f["tipo_norm"] == "SAIDA"]
     ent = entradas["valor"].sum()
@@ -460,7 +453,6 @@ def render():
                 f"prestacao_contas_{nome_periodo}.pdf",
                 "application/pdf",
             )
-=======
     ent  = df_f[df_f["tipo"].str.upper() == "ENTRADA"]["valor"].sum()
     sai  = df_f[df_f["tipo"].str.upper() == "SAIDA"]["valor"].sum()
     sald = ent - sai
@@ -543,4 +535,3 @@ def render():
             "resumo.csv",
             "text/csv",
         )
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc

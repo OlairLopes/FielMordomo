@@ -4,7 +4,6 @@ Definicao dos planos do FielMordomo e regras de acesso.
 
 PLANOS = {
     "basico": {
-<<<<<<< HEAD
         "nome": "Basico",
         "preco": "R$ 29,90/mes",
         "limite_membros": 50,
@@ -27,7 +26,6 @@ PLANOS = {
         "lancamento_lote": True,
         "backup_automatico": True,
         "cor": "#0F6E56",
-=======
         "nome":              "Basico",
         "preco":             "R$ 29,90/mes",
         "limite_membros":    50,
@@ -50,12 +48,10 @@ PLANOS = {
         "lancamento_lote":   True,
         "backup_automatico": True,
         "cor":               "#0F6E56",
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     },
 }
 
 
-<<<<<<< HEAD
 def _slug_plano(plano) -> str:
     return str(plano or "basico").strip().lower()
 
@@ -74,7 +70,6 @@ def pode_cadastrar_membro(plano, qtd_atual):
 def texto_limite(plano):
     limite = obter_plano(plano)["limite_membros"]
     return "ilimitado" if limite is None else str(limite)
-=======
 def obter_plano(slug_plano):
     return PLANOS.get((slug_plano or "basico").lower(), PLANOS["basico"])
 
@@ -93,7 +88,6 @@ def texto_limite(plano):
     if limite is None:
         return "ilimitado"
     return str(limite)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
 
 def tem_lancamento_lote(plano):
@@ -105,16 +99,13 @@ def tem_backup_automatico(plano):
 
 
 def proximo_plano(plano):
-<<<<<<< HEAD
     slug = _slug_plano(plano)
     if slug == "basico":
         return "profissional"
     return "premium"
 
-=======
     if plano == "basico":
         return "profissional"
     if plano == "profissional":
         return "premium"
     return "premium"
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
