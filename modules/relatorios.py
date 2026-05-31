@@ -1,0 +1,398 @@
+import datetime
+
+import pandas as pd
+import streamlit as st
+
+from data.repository import carregar_cadastros, carregar_lancamentos, obter_logo_igreja
+from report_exports import gerar_excel_relatorio, gerar_pdf_relatorio
+from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
+
+
+COLUNAS_LANCAMENTOS = {
+    "id_lancamento", "data", "tipo", "categoria", "valor",
+}
+COLUNAS_TEXTO = [
+    "tipo", "categoria", "subcategoria", "descricao", "forma_pagamento",
+    "nome_cadastro", "tipo_cadastro", "lote_id",
+]
+
+
+def _texto(serie):
+    return serie.fillna("").astype(str).str.strip()
+
+
+def _normalizar_lancamentos(df):
+    df = df.copy()
+    ausentes = sorted(COLUNAS_LANCAMENTOS - set(df.columns))
+    if ausentes:
+        return df, ausentes, 0, 0
+
+    for coluna in COLUNAS_TEXTO:
+        if coluna not in df.columns:
+            df[coluna] = ""
+        df[coluna] = _texto(df[coluna])
+
+    if "id_cadastro" not in df.columns:
+        df["id_cadastro"] = pd.NA
+
+    datas_originais = _texto(df["data"])
+    valores_originais = _texto(df["valor"])
+    df["data"] = pd.to_datetime(df["data"], errors="coerce")
+    valores = pd.to_numeric(df["valor"], errors="coerce")
+    datas_invalidas = int((datas_originais.ne("") & df["data"].isna()).sum())
+    valores_invalidos = int((valores_originais.ne("") & valores.isna()).sum())
+    df["valor"] = valores.fillna(0.0)
+    df["tipo_norm"] = _texto(df["tipo"]).str.upper()
+    df["categoria_norm"] = _texto(df["categoria"]).str.upper()
+    df["subcategoria"] = _texto(df["subcategoria"])
+    df["mes_ref"] = df["data"].dt.to_period("M")
+    return df, ausentes, datas_invalidas, valores_invalidos
+
+
+def _opcoes_vinculos(cad):
+    colunas = {"id_cadastro", "nome", "tipo_cadastro"}
+    if cad.empty or not colunas.issubset(cad.columns):
+        return {"Todos": None}
+
+    registros = cad.copy()
+    registros["nome"] = _texto(registros["nome"])
+    registros["tipo_cadastro"] = _texto(registros["tipo_cadastro"])
+    registros = registros[registros["nome"].ne("")]
+    registros = registros.drop_duplicates("id_cadastro").sort_values(
+        ["tipo_cadastro", "nome"]
+    )
+
+    opcoes = {"Todos": None}
+    for _, row in registros.iterrows():
+        try:
+            id_cadastro = int(row["id_cadastro"])
+        except (TypeError, ValueError):
+            continue
+        rotulo = f"{id_cadastro} | {row['tipo_cadastro']} | {row['nome']}"
+        opcoes[rotulo] = id_cadastro
+    return opcoes
+
+
+def _resumo_por(df, coluna, rotulo):
+    if df.empty:
+        return pd.DataFrame(columns=[rotulo, "Quantidade", "Valor total"])
+    base = df.copy()
+    base[coluna] = _texto(base[coluna]).replace("", "Nao informado")
+    resumo = (
+        base.groupby(coluna, dropna=False)
+        .agg(Quantidade=("id_lancamento", "count"), Valor=("valor", "sum"))
+        .reset_index()
+        .sort_values("Valor", ascending=False)
+        .rename(columns={coluna: rotulo, "Valor": "Valor total"})
+    )
+    return resumo
+
+
+def _formatar_resumo(df):
+    exibicao = df.copy()
+    if "Valor total" in exibicao.columns:
+        exibicao["Valor total"] = exibicao["Valor total"].apply(formatar_moeda)
+    return exibicao
+
+
+def _detalhes_exibicao(df):
+    colunas = [
+        "id_lancamento", "data", "tipo", "categoria", "subcategoria",
+        "descricao", "forma_pagamento", "nome_cadastro", "tipo_cadastro",
+        "lote_id", "valor",
+    ]
+    detalhes = df[[col for col in colunas if col in df.columns]].copy()
+    if "data" in detalhes.columns:
+        detalhes["data"] = detalhes["data"].dt.strftime("%d/%m/%Y").fillna("")
+    if "valor" in detalhes.columns:
+        detalhes["valor"] = detalhes["valor"].apply(formatar_moeda)
+    return detalhes.rename(columns={
+        "id_lancamento": "ID",
+        "data": "Data",
+        "tipo": "Tipo",
+        "categoria": "Categoria",
+        "subcategoria": "Subcategoria",
+        "descricao": "Descricao",
+        "forma_pagamento": "Pagamento",
+        "nome_cadastro": "Vinculado a",
+        "tipo_cadastro": "Tipo vinculo",
+        "lote_id": "Lote",
+        "valor": "Valor",
+    })
+
+
+def _detalhes_exportacao(df):
+    detalhes = df.copy()
+    detalhes["data"] = detalhes["data"].dt.strftime("%Y-%m-%d").fillna("")
+    remover = ["tipo_norm", "categoria_norm", "mes_ref"]
+    return detalhes.drop(columns=[c for c in remover if c in detalhes.columns])
+
+
+def _aplicar_filtros(df, periodo, tipo, categoria, subcategoria, id_cadastro, lote_id):
+    inicio, fim = periodo
+    filtrado = df[
+        df["data"].between(pd.Timestamp(inicio), pd.Timestamp(fim), inclusive="both")
+    ].copy()
+    if tipo != "Todos":
+        filtrado = filtrado[filtrado["tipo"] == tipo]
+    if categoria != "Todas":
+        filtrado = filtrado[filtrado["categoria"] == categoria]
+    if subcategoria != "Todas":
+        filtrado = filtrado[filtrado["subcategoria"] == subcategoria]
+    if id_cadastro is not None:
+        ids = pd.to_numeric(filtrado["id_cadastro"], errors="coerce")
+        filtrado = filtrado[ids == id_cadastro]
+    if lote_id != "Todos":
+        filtrado = filtrado[filtrado["lote_id"] == lote_id]
+    return filtrado
+
+
+def render():
+    slug = slug_da_sessao()
+    igreja = st.session_state.get("igreja", {})
+    if not isinstance(igreja, dict):
+        igreja = {}
+    st.subheader("Relatorios")
+
+    df_bruto = carregar_lancamentos(slug)
+    cad = carregar_cadastros(slug)
+    if df_bruto.empty:
+        st.info("Ainda nao ha lancamentos.")
+        return
+
+    df, ausentes, datas_invalidas, valores_invalidos = _normalizar_lancamentos(df_bruto)
+    if ausentes:
+        st.error("Relatorio indisponivel. Colunas ausentes: " + ", ".join(ausentes))
+        return
+
+    if datas_invalidas or valores_invalidos:
+        st.warning(
+            "Existem registros antigos com dados invalidos: "
+            f"{datas_invalidas} data(s) e {valores_invalidos} valor(es). "
+            "Esses registros devem ser revisados."
+        )
+
+    datas_validas = df["data"].dropna()
+    if datas_validas.empty:
+        st.error("Nao existem datas validas para gerar o relatorio.")
+        return
+
+    hoje = datetime.date.today()
+    data_min = datas_validas.min().date()
+    data_max = max(hoje, datas_validas.max().date())
+    fim_padrao = min(max(hoje, data_min), data_max)
+    inicio_padrao = max(data_min, fim_padrao.replace(day=1))
+
+    st.markdown("### Filtros")
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        periodo = st.date_input(
+            "Periodo",
+            value=(inicio_padrao, fim_padrao),
+            min_value=data_min,
+            max_value=data_max,
+            format="DD/MM/YYYY",
+        )
+    if not isinstance(periodo, (tuple, list)) or len(periodo) != 2:
+        st.info("Selecione a data inicial e a data final do relatorio.")
+        return
+
+    tipos = sorted(x for x in df["tipo"].unique() if x)
+    categorias = sorted(x for x in df["categoria"].unique() if x)
+    subcategorias = sorted(x for x in df["subcategoria"].unique() if x)
+    lotes = sorted(x for x in df["lote_id"].unique() if x)
+    opcoes_vinculos = _opcoes_vinculos(cad)
+
+    with f2:
+        tipo_sel = st.selectbox("Tipo", ["Todos"] + tipos)
+        categoria_sel = st.selectbox("Categoria", ["Todas"] + categorias)
+    with f3:
+        subcategoria_sel = st.selectbox("Subcategoria", ["Todas"] + subcategorias)
+        vinculo_sel = st.selectbox("Cadastro vinculado", list(opcoes_vinculos))
+
+    with st.expander("Filtros avancados", expanded=False):
+        lote_sel = st.selectbox("Lote", ["Todos"] + lotes)
+
+    df_f = _aplicar_filtros(
+        df,
+        periodo,
+        tipo_sel,
+        categoria_sel,
+        subcategoria_sel,
+        opcoes_vinculos[vinculo_sel],
+        lote_sel,
+    )
+    if df_f.empty:
+        st.info("Nenhum lancamento para os filtros selecionados.")
+        return
+
+    entradas = df_f[df_f["tipo_norm"] == "ENTRADA"]
+    saidas = df_f[df_f["tipo_norm"] == "SAIDA"]
+    ent = entradas["valor"].sum()
+    sai = saidas["valor"].sum()
+    saldo = ent - sai
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Entradas", formatar_moeda(ent))
+    k2.metric("Saidas", formatar_moeda(sai))
+    k3.metric("Saldo", formatar_moeda(saldo))
+    k4.metric("Lancamentos", len(df_f))
+
+    tab_resumo, tab_receitas, tab_despesas, tab_vinculos, tab_auditoria = st.tabs([
+        "Resumo", "Receitas", "Despesas", "Vinculos", "Auditoria",
+    ])
+
+    resumo_categoria = _resumo_por(df_f, "categoria", "Categoria")
+    resumo_subcategoria = _resumo_por(saidas, "subcategoria", "Subcategoria")
+
+    with tab_resumo:
+        st.markdown("### Evolucao mensal")
+        mensal = (
+            df_f.dropna(subset=["mes_ref"])
+            .groupby(["mes_ref", "tipo_norm"])["valor"]
+            .sum()
+            .unstack(fill_value=0.0)
+            .rename(columns={"ENTRADA": "Entradas", "SAIDA": "Saidas"})
+        )
+        for coluna in ("Entradas", "Saidas"):
+            if coluna not in mensal.columns:
+                mensal[coluna] = 0.0
+        mensal["Saldo"] = mensal["Entradas"] - mensal["Saidas"]
+        mensal.index = mensal.index.astype(str)
+        st.bar_chart(mensal[["Entradas", "Saidas"]])
+        st.dataframe(mensal, width="stretch")
+
+        st.markdown("### Totais por categoria")
+        st.dataframe(_formatar_resumo(resumo_categoria), width="stretch", hide_index=True)
+
+    with tab_receitas:
+        st.markdown("### Receitas por categoria")
+        st.dataframe(
+            _formatar_resumo(_resumo_por(entradas, "categoria", "Categoria")),
+            width="stretch",
+            hide_index=True,
+        )
+
+        st.markdown("### Dizimos por membro")
+        dizimos = entradas[entradas["categoria_norm"] == "DIZIMO"]
+        if dizimos.empty:
+            st.info("Sem dizimos no periodo.")
+        else:
+            por_membro = (
+                dizimos.assign(nome_cadastro=_texto(dizimos["nome_cadastro"]).replace("", "Nao vinculado"))
+                .groupby(["id_cadastro", "nome_cadastro"], dropna=False)
+                .agg(Quantidade=("id_lancamento", "count"), Valor=("valor", "sum"))
+                .reset_index()
+                .sort_values("Valor", ascending=False)
+                .rename(columns={
+                    "id_cadastro": "ID cadastro",
+                    "nome_cadastro": "Membro",
+                    "Valor": "Valor total",
+                })
+            )
+            st.dataframe(_formatar_resumo(por_membro), width="stretch", hide_index=True)
+
+    with tab_despesas:
+        st.markdown("### Despesas por subcategoria")
+        st.dataframe(_formatar_resumo(resumo_subcategoria), width="stretch", hide_index=True)
+
+        st.markdown("### Despesas por fornecedor")
+        fornecedores = saidas[saidas["tipo_cadastro"].str.upper() == "FORNECEDOR"]
+        if fornecedores.empty:
+            st.info("Sem despesas vinculadas a fornecedores.")
+        else:
+            por_fornecedor = (
+                fornecedores.assign(nome_cadastro=_texto(fornecedores["nome_cadastro"]).replace("", "Nao vinculado"))
+                .groupby(["id_cadastro", "nome_cadastro"], dropna=False)
+                .agg(Quantidade=("id_lancamento", "count"), Valor=("valor", "sum"))
+                .reset_index()
+                .sort_values("Valor", ascending=False)
+                .rename(columns={
+                    "id_cadastro": "ID cadastro",
+                    "nome_cadastro": "Fornecedor",
+                    "Valor": "Valor total",
+                })
+            )
+            st.dataframe(_formatar_resumo(por_fornecedor), width="stretch", hide_index=True)
+
+    with tab_vinculos:
+        sem_vinculo = df_f[df_f["id_cadastro"].isna()]
+        sem_subcategoria = saidas[_texto(saidas["subcategoria"]).eq("")]
+        lotes_qtd = int(_texto(df_f["lote_id"]).replace("", pd.NA).nunique(dropna=True))
+        v1, v2, v3 = st.columns(3)
+        v1.metric("Sem vinculo", len(sem_vinculo))
+        v2.metric("Despesas sem subcategoria", len(sem_subcategoria))
+        v3.metric("Lotes identificados", lotes_qtd)
+
+        if not sem_vinculo.empty:
+            st.markdown("### Lancamentos sem cadastro vinculado")
+            st.dataframe(_detalhes_exibicao(sem_vinculo), width="stretch", hide_index=True)
+
+    with tab_auditoria:
+        st.caption(
+            "A tabela detalhada preserva IDs e lotes para conferencia. "
+            "Evite compartilhar exportacoes sem necessidade, pois podem conter dados pessoais."
+        )
+        st.dataframe(_detalhes_exibicao(df_f), width="stretch", hide_index=True)
+
+    st.divider()
+    st.markdown("### Exportar")
+    nome_periodo = f"{periodo[0]:%Y%m%d}_{periodo[1]:%Y%m%d}"
+    e1, e2, e3 = st.columns(3)
+    with e1:
+        st.download_button(
+            "CSV detalhado",
+            gerar_csv(_detalhes_exportacao(df_f)),
+            f"lancamentos_{nome_periodo}.csv",
+            "text/csv",
+        )
+    with e2:
+        st.download_button(
+            "CSV por categoria",
+            gerar_csv(resumo_categoria),
+            f"resumo_categorias_{nome_periodo}.csv",
+            "text/csv",
+        )
+    with e3:
+        st.download_button(
+            "CSV despesas",
+            gerar_csv(resumo_subcategoria),
+            f"resumo_despesas_{nome_periodo}.csv",
+            "text/csv",
+        )
+
+    st.markdown("#### Prestacao de contas")
+    st.caption(
+        "O Excel consolida as analises em abas editaveis. "
+        "O PDF e indicado para impressao e compartilhamento formal."
+    )
+    try:
+        excel_bytes = gerar_excel_relatorio(
+            df_f, resumo_categoria, resumo_subcategoria, igreja, periodo
+        )
+        pdf_bytes = gerar_pdf_relatorio(
+            df_f,
+            resumo_categoria,
+            resumo_subcategoria,
+            igreja,
+            periodo,
+            logo=obter_logo_igreja(slug),
+        )
+    except Exception:
+        st.error("Nao foi possivel gerar os arquivos de prestacao de contas.")
+    else:
+        p1, p2 = st.columns(2)
+        with p1:
+            st.download_button(
+                "Excel consolidado",
+                excel_bytes,
+                f"prestacao_contas_{nome_periodo}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        with p2:
+            st.download_button(
+                "PDF de prestacao de contas",
+                pdf_bytes,
+                f"prestacao_contas_{nome_periodo}.pdf",
+                "application/pdf",
+            )

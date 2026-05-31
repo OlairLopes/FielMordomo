@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: fielmordomo
+    runtime: python
+    plan: starter
+    region: oregon
+    branch: main
+    buildCommand: python -m pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: mkdir -p .streamlit && cp /etc/secrets/secrets.toml .streamlit/secrets.toml && streamlit run app.py --server.port=10000 --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false --browser.gatherUsageStats=false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: PORT
+        value: "10000"
+      - key: RENDER_PERSISTENT_DISK
+        value: "true"
+      - key: FIELMORDOMO_DATA_DIR
+        value: /opt/render/project/src/dados
+    disk:
+      name: dados-fielmordomo
+      mountPath: /opt/render/project/src/dados
+      sizeGB: 1
