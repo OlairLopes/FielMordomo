@@ -245,17 +245,6 @@ def _render_logo_sidebar(slug=None):
 
 
 def _sidebar_igreja(pagina_atual, igreja):
-    icones = {
-        "home": "Inicio",
-        "cadastros": "Cadastros",
-        "lancamentos": "Financeiro",
-        "relatorios": "Relatorios",
-        "dashboard": "Dashboard",
-        "tesoureiros": "Responsaveis",
-        "aniversariantes": "Aniversarios",
-        "backup": "Backup",
-        "minha_conta": "Conta",
-    }
     with st.sidebar:
         _render_logo_sidebar(igreja.get("slug", ""))
         st.markdown(
@@ -267,7 +256,7 @@ def _sidebar_igreja(pagina_atual, igreja):
         )
         for chave, (rotulo, _) in PAGINAS_IGREJA.items():
             if st.button(
-                f"{icones.get(chave, '')} | {rotulo}",
+                rotulo,
                 key=f"sb_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
