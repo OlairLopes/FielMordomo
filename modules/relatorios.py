@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 import pandas as pd
 import streamlit as st
@@ -8,6 +9,7 @@ from report_exports import gerar_excel_relatorio, gerar_pdf_relatorio
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
 
+LOGGER = logging.getLogger(__name__)
 COLUNAS_LANCAMENTOS = {
     "id_lancamento", "data", "tipo", "categoria", "valor",
 }
@@ -260,16 +262,16 @@ def render():
         mensal["Saldo"] = mensal["Entradas"] - mensal["Saidas"]
         mensal.index = mensal.index.astype(str)
         st.bar_chart(mensal[["Entradas", "Saidas"]])
-        st.dataframe(mensal, width="stretch")
+        st.dataframe(mensal, use_container_width=True)
 
         st.markdown("### Totais por categoria")
-        st.dataframe(_formatar_resumo(resumo_categoria), width="stretch", hide_index=True)
+        st.dataframe(_formatar_resumo(resumo_categoria), use_container_width=True, hide_index=True)
 
     with tab_receitas:
         st.markdown("### Receitas por categoria")
         st.dataframe(
             _formatar_resumo(_resumo_por(entradas, "categoria", "Categoria")),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
 
@@ -290,11 +292,11 @@ def render():
                     "Valor": "Valor total",
                 })
             )
-            st.dataframe(_formatar_resumo(por_membro), width="stretch", hide_index=True)
+            st.dataframe(_formatar_resumo(por_membro), use_container_width=True, hide_index=True)
 
     with tab_despesas:
         st.markdown("### Despesas por subcategoria")
-        st.dataframe(_formatar_resumo(resumo_subcategoria), width="stretch", hide_index=True)
+        st.dataframe(_formatar_resumo(resumo_subcategoria), use_container_width=True, hide_index=True)
 
         st.markdown("### Despesas por fornecedor")
         fornecedores = saidas[saidas["tipo_cadastro"].str.upper() == "FORNECEDOR"]
@@ -313,7 +315,7 @@ def render():
                     "Valor": "Valor total",
                 })
             )
-            st.dataframe(_formatar_resumo(por_fornecedor), width="stretch", hide_index=True)
+            st.dataframe(_formatar_resumo(por_fornecedor), use_container_width=True, hide_index=True)
 
     with tab_vinculos:
         sem_vinculo = df_f[df_f["id_cadastro"].isna()]
@@ -326,14 +328,14 @@ def render():
 
         if not sem_vinculo.empty:
             st.markdown("### Lancamentos sem cadastro vinculado")
-            st.dataframe(_detalhes_exibicao(sem_vinculo), width="stretch", hide_index=True)
+            st.dataframe(_detalhes_exibicao(sem_vinculo), use_container_width=True, hide_index=True)
 
     with tab_auditoria:
         st.caption(
             "A tabela detalhada preserva IDs e lotes para conferencia. "
             "Evite compartilhar exportacoes sem necessidade, pois podem conter dados pessoais."
         )
-        st.dataframe(_detalhes_exibicao(df_f), width="stretch", hide_index=True)
+        st.dataframe(_detalhes_exibicao(df_f), use_container_width=True, hide_index=True)
 
     st.divider()
     st.markdown("### Exportar")
@@ -379,6 +381,7 @@ def render():
             logo=obter_logo_igreja(slug),
         )
     except Exception:
+        LOGGER.exception("Nao foi possivel gerar os arquivos de prestacao de contas.")
         st.error("Nao foi possivel gerar os arquivos de prestacao de contas.")
     else:
         p1, p2 = st.columns(2)
