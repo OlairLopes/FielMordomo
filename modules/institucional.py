@@ -729,9 +729,9 @@ def _home():
     return """
     <section class="fm-hero">
         <div class="fm-hero-text">
-            <div class="fm-eyebrow">✦ Gestão financeira para igrejas</div>
+            <div class="fm-eyebrow">✦ Gestão financeira para Igrejas</div>
 
-            <h1>Gestão financeira simples, segura e organizada para igrejas</h1>
+            <h1>Gestão financeira simples, segura e organizada para Igrejas</h1>
 
             <p>
                 Controle dízimos, ofertas, campanhas, missões, despesas, comprovantes
@@ -741,7 +741,7 @@ def _home():
 
             <div class="fm-actions">
                 <a class="fm-primary" href="?pagina=login">🔒 Acessar Sistema</a>
-                <a class="fm-secondary" href="#sobre">ⓘ Conhecer o FielMordomo</a>
+                <a class="fm-secondary" href="#sobre">ⓘ Conheça o FielMordomo</a>
             </div>
         </div>
 
