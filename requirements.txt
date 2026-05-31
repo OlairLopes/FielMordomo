@@ -1,10 +1,5 @@
-streamlit>=1.32.0
-pandas>=2.0.0
-plotly>=5.18.0
-openpyxl>=3.1.0
-<<<<<<< HEAD
-reportlab>=4.0.0
-requests>=2.31.0
-=======
--e .
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
+streamlit
+pandas
+plotly
+requests
+openpyxl
