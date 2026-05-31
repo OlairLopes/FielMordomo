@@ -6,7 +6,6 @@ import os
 import re
 import sqlite3
 import hashlib
-<<<<<<< HEAD
 import hmac
 import logging
 import math
@@ -15,17 +14,11 @@ import shutil
 import datetime
 import tempfile
 from contextlib import closing, contextmanager
-=======
-import shutil
-import datetime
-from contextlib import contextmanager
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 from pathlib import Path
 
 import pandas as pd
 
 
-<<<<<<< HEAD
 LOGGER = logging.getLogger(__name__)
 PBKDF2_ITERACOES = 600_000
 SENHA_MIN_CARACTERES = 15
@@ -49,8 +42,6 @@ class LimiteMembrosExcedido(ValueError):
     pass
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def _data_dir() -> Path:
     # 1. Prioridade maxima: variavel de ambiente FIELMORDOMO_DATA_DIR
     env = os.environ.get("FIELMORDOMO_DATA_DIR")
@@ -82,7 +73,6 @@ BACKUP_DIR.mkdir(exist_ok=True)
 
 
 def hash_senha(senha: str) -> str:
-<<<<<<< HEAD
     """Gera um hash lento com salt individual para armazenamento."""
     if not isinstance(senha, str) or not senha:
         raise ValueError("A senha nao pode ser vazia.")
@@ -132,9 +122,6 @@ def _verificar_senha(senha: str, hash_armazenado: str) -> tuple[bool, bool]:
         return valido, valido
 
     return False, False
-=======
-    return hashlib.sha256(senha.encode()).hexdigest()
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
 
 def slugify(texto: str) -> str:
@@ -143,7 +130,6 @@ def slugify(texto: str) -> str:
     return t.strip("-")[:40]
 
 
-<<<<<<< HEAD
 def _validar_slug(slug: str) -> str:
     slug = str(slug or "").strip().lower()
     if not SLUG_RE.fullmatch(slug):
@@ -170,8 +156,6 @@ def _validar_logo(dados, extensao) -> tuple[bytes, str]:
     return dados, ext
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def sanitizar(texto: str) -> str:
     t = str(texto).strip()
     if t.startswith(("=", "+", "-", "@")):
@@ -191,10 +175,7 @@ def _fazer_backup(db_path: Path):
 
 
 def salvar_logo_sistema(dados, extensao):
-<<<<<<< HEAD
     dados, extensao = _validar_logo(dados, extensao)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     for f in LOGOS_DIR.glob("sistema.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"sistema.{extensao}"
@@ -211,11 +192,8 @@ def obter_logo_sistema():
 
 
 def salvar_logo_igreja(slug, dados, extensao):
-<<<<<<< HEAD
     slug = _validar_slug(slug)
     dados, extensao = _validar_logo(dados, extensao)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     for f in LOGOS_DIR.glob(f"{slug}.*"):
         if f.stem.startswith("sidebar_"):
             continue
@@ -226,10 +204,7 @@ def salvar_logo_igreja(slug, dados, extensao):
 
 
 def obter_logo_igreja(slug):
-<<<<<<< HEAD
     slug = _validar_slug(slug)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     for ext in ("png", "jpg", "jpeg", "webp"):
         p = LOGOS_DIR / f"{slug}.{ext}"
         if p.exists():
@@ -238,10 +213,7 @@ def obter_logo_igreja(slug):
 
 
 def salvar_logo_sidebar_sistema(dados, extensao):
-<<<<<<< HEAD
     dados, extensao = _validar_logo(dados, extensao)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     for f in LOGOS_DIR.glob("sidebar_sistema.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"sidebar_sistema.{extensao}"
@@ -258,11 +230,8 @@ def obter_logo_sidebar_sistema():
 
 
 def salvar_logo_sidebar_igreja(slug, dados, extensao):
-<<<<<<< HEAD
     slug = _validar_slug(slug)
     dados, extensao = _validar_logo(dados, extensao)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     for f in LOGOS_DIR.glob(f"sidebar_{slug}.*"):
         f.unlink()
     caminho = LOGOS_DIR / f"sidebar_{slug}.{extensao}"
@@ -271,10 +240,7 @@ def salvar_logo_sidebar_igreja(slug, dados, extensao):
 
 
 def obter_logo_sidebar_igreja(slug):
-<<<<<<< HEAD
     slug = _validar_slug(slug)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     for ext in ("png", "jpg", "jpeg", "webp"):
         p = LOGOS_DIR / f"sidebar_{slug}.{ext}"
         if p.exists():
@@ -316,10 +282,7 @@ def _conn(db_path):
 
 
 def _tenant_db(slug):
-<<<<<<< HEAD
     slug = _validar_slug(slug)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     return TENANTS_DIR / f"{slug}.db"
 
 
@@ -341,7 +304,6 @@ def inicializar_master():
                 usuario    TEXT NOT NULL,
                 senha_hash TEXT NOT NULL
             );
-<<<<<<< HEAD
             CREATE TABLE IF NOT EXISTS ministerios (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome       TEXT NOT NULL,
@@ -394,17 +356,6 @@ def _garantir_ministerio_padrao(conn):
     )
 
 
-=======
-        """)
-        existe = conn.execute("SELECT 1 FROM super_admin LIMIT 1").fetchone()
-        if not existe:
-            conn.execute(
-                "INSERT INTO super_admin (usuario, senha_hash) VALUES (?, ?)",
-                ("admin", hash_senha("fielmordomo2024")),
-            )
-
-
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def inicializar_tenant(slug):
     db = _tenant_db(slug)
     with _conn(db) as conn:
@@ -437,16 +388,30 @@ def inicializar_tenant(slug):
                 tipo_cadastro   TEXT DEFAULT '',
                 descricao       TEXT DEFAULT '',
                 forma_pagamento TEXT DEFAULT 'Dinheiro',
-<<<<<<< HEAD
                 lote_id         TEXT DEFAULT '',
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                 valor           REAL NOT NULL
             );
             CREATE TABLE IF NOT EXISTS config_igreja (
                 chave TEXT PRIMARY KEY,
                 valor TEXT
             );
+            CREATE TABLE IF NOT EXISTS tesoureiros (
+                id_tesoureiro INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome          TEXT NOT NULL,
+                cpf           TEXT NOT NULL UNIQUE,
+                telefone      TEXT DEFAULT '',
+                email         TEXT DEFAULT '',
+                data_inicio   TEXT DEFAULT '',
+                data_fim      TEXT DEFAULT '',
+                situacao      TEXT NOT NULL DEFAULT 'Ativo',
+                principal     INTEGER NOT NULL DEFAULT 0,
+                observacoes   TEXT DEFAULT '',
+                criado_em     TEXT DEFAULT (datetime('now')),
+                atualizado_em TEXT DEFAULT (datetime('now'))
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_tesoureiro_principal_ativo
+                ON tesoureiros(principal)
+                WHERE principal=1 AND situacao='Ativo';
         """)
 
 
@@ -456,16 +421,12 @@ def _garantir_colunas_lancamentos(conn):
     for col, tipo in [
         ("subcategoria", "TEXT DEFAULT ''"),
         ("forma_pagamento", "TEXT DEFAULT 'Dinheiro'"),
-<<<<<<< HEAD
         ("lote_id", "TEXT DEFAULT ''"),
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     ]:
         if col not in cols:
             conn.execute(f"ALTER TABLE lancamentos ADD COLUMN {col} {tipo}")
 
 
-<<<<<<< HEAD
 def _dados_lancamento_validados(conn, l, lote_id=""):
     tipo = str(l.tipo or "").strip()
     categoria = str(l.categoria or "").strip()
@@ -515,8 +476,6 @@ def _dados_lancamento_validados(conn, l, lote_id=""):
     )
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def listar_igrejas():
     with _conn(MASTER_DB) as conn:
         return pd.read_sql_query(
@@ -525,7 +484,6 @@ def listar_igrejas():
         )
 
 
-<<<<<<< HEAD
 def listar_ministerios(incluir_inativos=False):
     with _conn(MASTER_DB) as conn:
         _garantir_ministerio_padrao(conn)
@@ -590,8 +548,6 @@ def listar_igrejas_ministerio(ministerio_id, incluir_inativas=False):
         )
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def buscar_igreja_por_slug(slug):
     with _conn(MASTER_DB) as conn:
         row = conn.execute("SELECT * FROM igrejas WHERE slug=? AND ativa=1", (slug,)).fetchone()
@@ -599,26 +555,16 @@ def buscar_igreja_por_slug(slug):
 
 
 def criar_igreja(igreja):
-<<<<<<< HEAD
     slug = _validar_slug(igreja.slug)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     with _conn(MASTER_DB) as conn:
         cur = conn.execute(
             """INSERT INTO igrejas (nome, slug, email_admin, senha_hash, plano)
                VALUES (?, ?, ?, ?, ?)""",
-<<<<<<< HEAD
             (sanitizar(igreja.nome), slug, sanitizar(igreja.email_admin),
              igreja.senha_hash, igreja.plano),
         )
         _garantir_ministerio_padrao(conn)
     inicializar_tenant(slug)
-=======
-            (sanitizar(igreja.nome), igreja.slug, sanitizar(igreja.email_admin),
-             igreja.senha_hash, igreja.plano),
-        )
-    inicializar_tenant(igreja.slug)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     return cur.lastrowid
 
 
@@ -631,19 +577,15 @@ def atualizar_igreja(id_igreja, nome, email, plano, ativa):
 
 
 def redefinir_senha_igreja(id_igreja, nova_senha):
-<<<<<<< HEAD
     erros = validar_nova_senha(nova_senha)
     if erros:
         raise ValueError(" ".join(erros))
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     with _conn(MASTER_DB) as conn:
         conn.execute("UPDATE igrejas SET senha_hash=? WHERE id=?",
                      (hash_senha(nova_senha), id_igreja))
 
 
 def excluir_igreja(id_igreja, slug):
-<<<<<<< HEAD
     slug = _validar_slug(slug)
     tenant_db = _tenant_db(slug)
     _fazer_backup(MASTER_DB)
@@ -753,33 +695,6 @@ def alterar_senha_super_admin(usuario, nova_senha):
     erros = validar_nova_senha(nova_senha)
     if erros:
         raise ValueError(" ".join(erros))
-=======
-    _fazer_backup(MASTER_DB)
-    _fazer_backup(_tenant_db(slug))
-    with _conn(MASTER_DB) as conn:
-        conn.execute("DELETE FROM igrejas WHERE id=?", (id_igreja,))
-
-
-def autenticar_super_admin(usuario, senha):
-    with _conn(MASTER_DB) as conn:
-        row = conn.execute(
-            "SELECT 1 FROM super_admin WHERE usuario=? AND senha_hash=?",
-            (usuario, hash_senha(senha)),
-        ).fetchone()
-    return row is not None
-
-
-def autenticar_igreja(slug, senha):
-    with _conn(MASTER_DB) as conn:
-        row = conn.execute(
-            "SELECT * FROM igrejas WHERE slug=? AND senha_hash=? AND ativa=1",
-            (slug, hash_senha(senha)),
-        ).fetchone()
-    return dict(row) if row else None
-
-
-def alterar_senha_super_admin(usuario, nova_senha):
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     with _conn(MASTER_DB) as conn:
         conn.execute("UPDATE super_admin SET senha_hash=? WHERE usuario=?",
                      (hash_senha(nova_senha), usuario))
@@ -829,7 +744,6 @@ def _garantir_colunas_cadastros(conn):
             conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
 
 
-<<<<<<< HEAD
 def _limite_membros_da_igreja(slug: str):
     with _conn(MASTER_DB) as conn:
         row = conn.execute(
@@ -859,21 +773,15 @@ def _garantir_limite_membros(conn, slug: str, id_excluir=None):
         )
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def inserir_cadastro(slug, c):
     db = _tenant_db(slug)
     cpf_limpo = "".join(d for d in c.cpf if d.isdigit()) if c.cpf else ""
     cep_limpo = "".join(d for d in c.cep if d.isdigit()) if c.cep else ""
     with _conn(db) as conn:
-<<<<<<< HEAD
         conn.execute("BEGIN IMMEDIATE")
         _garantir_colunas_cadastros(conn)
         if c.tipo_cadastro == "Membro":
             _garantir_limite_membros(conn, slug)
-=======
-        _garantir_colunas_cadastros(conn)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         cur = conn.execute(
             """INSERT INTO cadastros
                (tipo_cadastro, nome, funcao, congregacao, cpf,
@@ -895,14 +803,10 @@ def atualizar_cadastro(slug, c):
     cpf_limpo = "".join(d for d in c.cpf if d.isdigit()) if c.cpf else ""
     cep_limpo = "".join(d for d in c.cep if d.isdigit()) if c.cep else ""
     with _conn(db) as conn:
-<<<<<<< HEAD
         conn.execute("BEGIN IMMEDIATE")
         _garantir_colunas_cadastros(conn)
         if c.tipo_cadastro == "Membro":
             _garantir_limite_membros(conn, slug, id_excluir=c.id_cadastro)
-=======
-        _garantir_colunas_cadastros(conn)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         conn.execute(
             """UPDATE cadastros
                SET tipo_cadastro=?, nome=?, funcao=?, congregacao=?, cpf=?,
@@ -936,6 +840,148 @@ def cadastro_em_uso(slug, id_cadastro):
     return row is not None
 
 
+def _garantir_tabela_tesoureiros(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS tesoureiros (
+            id_tesoureiro INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome          TEXT NOT NULL,
+            cpf           TEXT NOT NULL UNIQUE,
+            telefone      TEXT DEFAULT '',
+            email         TEXT DEFAULT '',
+            data_inicio   TEXT DEFAULT '',
+            data_fim      TEXT DEFAULT '',
+            situacao      TEXT NOT NULL DEFAULT 'Ativo',
+            principal     INTEGER NOT NULL DEFAULT 0,
+            observacoes   TEXT DEFAULT '',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tesoureiro_principal_ativo
+            ON tesoureiros(principal)
+            WHERE principal=1 AND situacao='Ativo';
+    """)
+
+
+def carregar_tesoureiros(slug):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_tesoureiros(conn)
+        return pd.read_sql_query(
+            """SELECT * FROM tesoureiros
+               ORDER BY CASE WHEN situacao='Ativo' THEN 0 ELSE 1 END,
+                        principal DESC, nome""",
+            conn,
+        )
+
+
+def cpf_tesoureiro_existe(slug, cpf, id_excluir=None):
+    cpf_limpo = "".join(c for c in str(cpf or "") if c.isdigit())
+    if not cpf_limpo:
+        return False
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_tesoureiros(conn)
+        if id_excluir:
+            row = conn.execute(
+                "SELECT 1 FROM tesoureiros WHERE cpf=? AND id_tesoureiro!=? LIMIT 1",
+                (cpf_limpo, int(id_excluir)),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT 1 FROM tesoureiros WHERE cpf=? LIMIT 1", (cpf_limpo,)
+            ).fetchone()
+    return row is not None
+
+
+def inserir_tesoureiro(slug, tesoureiro):
+    _validar_tesoureiro(tesoureiro)
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _garantir_tabela_tesoureiros(conn)
+        duplicado = conn.execute(
+            "SELECT 1 FROM tesoureiros WHERE cpf=? LIMIT 1",
+            ("".join(c for c in str(tesoureiro.cpf or "") if c.isdigit()),),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe um tesoureiro cadastrado com este CPF.")
+        if tesoureiro.principal:
+            conn.execute(
+                "UPDATE tesoureiros SET principal=0, atualizado_em=datetime('now') "
+                "WHERE principal=1"
+            )
+        cur = conn.execute(
+            """INSERT INTO tesoureiros
+               (nome, cpf, telefone, email, data_inicio, data_fim, situacao,
+                principal, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            _dados_tesoureiro(tesoureiro),
+        )
+        return cur.lastrowid
+
+
+def atualizar_tesoureiro(slug, tesoureiro):
+    _validar_tesoureiro(tesoureiro)
+    if not tesoureiro.id_tesoureiro:
+        raise ValueError("Tesoureiro nao informado.")
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _garantir_tabela_tesoureiros(conn)
+        existe = conn.execute(
+            "SELECT 1 FROM tesoureiros WHERE id_tesoureiro=?",
+            (int(tesoureiro.id_tesoureiro),),
+        ).fetchone()
+        if not existe:
+            raise ValueError("Tesoureiro nao encontrado.")
+        duplicado = conn.execute(
+            """SELECT 1 FROM tesoureiros
+               WHERE cpf=? AND id_tesoureiro!=? LIMIT 1""",
+            (
+                "".join(c for c in str(tesoureiro.cpf or "") if c.isdigit()),
+                int(tesoureiro.id_tesoureiro),
+            ),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe um tesoureiro cadastrado com este CPF.")
+        if tesoureiro.principal:
+            conn.execute(
+                """UPDATE tesoureiros SET principal=0, atualizado_em=datetime('now')
+                   WHERE principal=1 AND id_tesoureiro!=?""",
+                (int(tesoureiro.id_tesoureiro),),
+            )
+        conn.execute(
+            """UPDATE tesoureiros
+               SET nome=?, cpf=?, telefone=?, email=?, data_inicio=?, data_fim=?,
+                   situacao=?, principal=?, observacoes=?, atualizado_em=datetime('now')
+               WHERE id_tesoureiro=?""",
+            _dados_tesoureiro(tesoureiro) + (int(tesoureiro.id_tesoureiro),),
+        )
+
+
+def _validar_tesoureiro(tesoureiro):
+    erros = tesoureiro.validar()
+    if erros:
+        raise ValueError(" ".join(erros))
+
+
+def _dados_tesoureiro(tesoureiro):
+    cpf_limpo = "".join(c for c in str(tesoureiro.cpf or "") if c.isdigit())
+    return (
+        sanitizar(tesoureiro.nome),
+        cpf_limpo,
+        sanitizar(tesoureiro.telefone),
+        sanitizar(tesoureiro.email),
+        str(tesoureiro.data_inicio or ""),
+        str(tesoureiro.data_fim or ""),
+        tesoureiro.situacao,
+        int(bool(tesoureiro.principal)),
+        sanitizar(tesoureiro.observacoes),
+    )
+
+
 def carregar_lancamentos(slug):
     db = _tenant_db(slug)
     if not db.exists():
@@ -951,7 +997,6 @@ def carregar_lancamentos(slug):
     return df
 
 
-<<<<<<< HEAD
 def carregar_dashboard_ministerio(ministerio_id, data_inicio, data_fim, incluir_inativas=False):
     """Consolida dados validados das igrejas vinculadas a um ministerio."""
     inicio = pd.Timestamp(data_inicio).normalize()
@@ -1096,13 +1141,10 @@ def _normalizar_lancamentos_dashboard(lanc):
     return df.loc[validos, colunas].copy(), int((~validos).sum())
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def inserir_lancamento(slug, l):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         _garantir_colunas_lancamentos(conn)
-<<<<<<< HEAD
         dados = _dados_lancamento_validados(conn, l)
         cur = conn.execute(
             """INSERT INTO lancamentos
@@ -1110,28 +1152,10 @@ def inserir_lancamento(slug, l):
                 descricao, forma_pagamento, lote_id, valor)
                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             dados,
-=======
-        cur = conn.execute(
-            """INSERT INTO lancamentos
-               (data, tipo, categoria, subcategoria, id_cadastro, nome_cadastro, tipo_cadastro,
-                descricao, forma_pagamento, valor)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (
-                l.data.isoformat() if hasattr(l.data, "isoformat") else str(l.data),
-                l.tipo, l.categoria,
-                sanitizar(getattr(l, "subcategoria", "")),
-                int(l.id_cadastro) if l.id_cadastro else None,
-                sanitizar(l.nome_cadastro), l.tipo_cadastro,
-                sanitizar(l.descricao),
-                getattr(l, "forma_pagamento", "Dinheiro"),
-                float(l.valor),
-            ),
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         )
         return cur.lastrowid
 
 
-<<<<<<< HEAD
 def inserir_lancamentos_lote(slug, lancamentos, lote_id=None):
     lancamentos = list(lancamentos)
     if not lancamentos:
@@ -1155,13 +1179,10 @@ def inserir_lancamentos_lote(slug, lancamentos, lote_id=None):
     return lote_id, ids
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def atualizar_lancamento(slug, l):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         _garantir_colunas_lancamentos(conn)
-<<<<<<< HEAD
         row = conn.execute(
             "SELECT lote_id FROM lancamentos WHERE id_lancamento=?", (l.id_lancamento,)
         ).fetchone()
@@ -1173,23 +1194,6 @@ def atualizar_lancamento(slug, l):
                nome_cadastro=?, tipo_cadastro=?, descricao=?, forma_pagamento=?, lote_id=?, valor=?
                WHERE id_lancamento=?""",
             dados + (l.id_lancamento,),
-=======
-        conn.execute(
-            """UPDATE lancamentos SET data=?, tipo=?, categoria=?, subcategoria=?, id_cadastro=?,
-               nome_cadastro=?, tipo_cadastro=?, descricao=?, forma_pagamento=?, valor=?
-               WHERE id_lancamento=?""",
-            (
-                l.data.isoformat() if hasattr(l.data, "isoformat") else str(l.data),
-                l.tipo, l.categoria,
-                sanitizar(getattr(l, "subcategoria", "")),
-                int(l.id_cadastro) if l.id_cadastro else None,
-                sanitizar(l.nome_cadastro), l.tipo_cadastro,
-                sanitizar(l.descricao),
-                getattr(l, "forma_pagamento", "Dinheiro"),
-                float(l.valor),
-                l.id_lancamento,
-            ),
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
         )
 
 
@@ -1228,12 +1232,9 @@ def salvar_config(chave: str, valor: str):
 
 
 def igreja_alterar_senha(slug: str, senha_atual: str, nova_senha: str) -> bool:
-<<<<<<< HEAD
     erros = validar_nova_senha(nova_senha)
     if erros:
         raise ValueError(" ".join(erros))
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     igreja = autenticar_igreja(slug, senha_atual)
     if not igreja:
         return False
@@ -1361,7 +1362,6 @@ def excluir_subcategoria_despesa(nome: str):
         conn.execute("DELETE FROM subcategorias_despesa WHERE nome=?", (nome,))
 
 
-<<<<<<< HEAD
 def _substituir_banco_validado(destino: Path, dados: bytes, tabelas_obrigatorias: set[str]):
     destino = Path(destino)
     destino.parent.mkdir(parents=True, exist_ok=True)
@@ -1395,8 +1395,6 @@ def _substituir_banco_validado(destino: Path, dados: bytes, tabelas_obrigatorias
             temporario.unlink(missing_ok=True)
 
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 def restaurar_backup_zip(zip_bytes: bytes) -> dict:
     import io
     import zipfile
@@ -1407,7 +1405,6 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
         "logos_restaurados": 0,
         "erros": [],
         "igrejas_recriadas": [],
-<<<<<<< HEAD
         "senhas_temporarias": {},
     }
 
@@ -1431,14 +1428,6 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
                 resultado["erros"].append("ZIP possui nomes de arquivo duplicados.")
                 return resultado
 
-=======
-    }
-
-    try:
-        buf = io.BytesIO(zip_bytes)
-        with zipfile.ZipFile(buf, "r") as zf:
-            arquivos = zf.namelist()
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
             bancos_tenants = {}
             arquivo_master = None
             arquivos_logos = []
@@ -1451,13 +1440,9 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
                 elif nome.endswith(".db") and "/banco_" in nome:
                     partes = nome.split("/")
                     if len(partes) == 2:
-<<<<<<< HEAD
                         slug_zip = _validar_slug(partes[0])
                         if partes[1] != f"banco_{slug_zip}.db":
                             raise ValueError(f"Nome de banco tenant invalido: {nome}")
-=======
-                        slug_zip = partes[0]
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                         bancos_tenants[slug_zip] = nome
 
             if not (bancos_tenants or arquivo_master or arquivos_logos):
@@ -1483,13 +1468,9 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
             if arquivo_master:
                 try:
                     dados_master = zf.read(arquivo_master)
-<<<<<<< HEAD
                     _substituir_banco_validado(
                         MASTER_DB, dados_master, {"igrejas", "super_admin"}
                     )
-=======
-                    MASTER_DB.write_bytes(dados_master)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                     resultado["master_restaurado"] = True
 
                     try:
@@ -1504,17 +1485,11 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
             for caminho_logo in arquivos_logos:
                 try:
                     nome_arquivo = caminho_logo.replace("logos/", "", 1)
-<<<<<<< HEAD
                     if not nome_arquivo or Path(nome_arquivo).name != nome_arquivo:
                         raise ValueError("Nome de arquivo invalido.")
                     extensao = Path(nome_arquivo).suffix.replace(".", "")
                     dados_logo = zf.read(caminho_logo)
                     dados_logo, _ = _validar_logo(dados_logo, extensao)
-=======
-                    if not nome_arquivo:
-                        continue
-                    dados_logo = zf.read(caminho_logo)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                     destino_logo = LOGOS_DIR / nome_arquivo
                     destino_logo.write_bytes(dados_logo)
                     resultado["logos_restaurados"] += 1
@@ -1532,13 +1507,9 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
                             pass
 
                     dados_db = zf.read(caminho_zip)
-<<<<<<< HEAD
                     _substituir_banco_validado(
                         db_destino, dados_db, {"cadastros", "lancamentos"}
                     )
-=======
-                    db_destino.write_bytes(dados_db)
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
 
                     if slug_zip not in slugs_existentes:
                         try:
@@ -1546,10 +1517,7 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
                                 conn_t.execute("SELECT COUNT(*) FROM cadastros").fetchone()
 
                             with _conn(MASTER_DB) as conn_m:
-<<<<<<< HEAD
                                 senha_temporaria = secrets.token_urlsafe(12)
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                                 conn_m.execute(
                                     """INSERT INTO igrejas (nome, slug, email_admin, senha_hash, plano, ativa)
                                        VALUES (?, ?, ?, ?, ?, ?)""",
@@ -1557,20 +1525,13 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
                                         slug_zip.replace("-", " ").title(),
                                         slug_zip,
                                         f"admin@{slug_zip}.com",
-<<<<<<< HEAD
                                         hash_senha(senha_temporaria),
-=======
-                                        hash_senha("fielmordomo2024"),
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                                         "basico",
                                         1,
                                     ),
                                 )
                             resultado["igrejas_recriadas"].append(slug_zip)
-<<<<<<< HEAD
                             resultado["senhas_temporarias"][slug_zip] = senha_temporaria
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
                         except Exception as ex_recriacao:
                             resultado["erros"].append(
                                 f"{slug_zip}: banco restaurado mas erro ao recriar no master: {ex_recriacao}"
@@ -1585,13 +1546,10 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
     except Exception as ex:
         resultado["erros"].append(f"Erro geral: {ex}")
 
-<<<<<<< HEAD
     try:
         inicializar_master()
     except Exception as ex:
         LOGGER.exception("Falha ao migrar master.db apos restauracao.")
         resultado["erros"].append(f"Erro ao migrar master.db restaurado: {ex}")
 
-=======
->>>>>>> 260a16ed078d5ed38360fa871afe8ae8dac6cacc
     return resultado
