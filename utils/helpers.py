@@ -1,6 +1,5 @@
 import time
 
-import hashlib
 import pandas as pd
 import streamlit as st
 
@@ -34,11 +33,6 @@ def obter_ativos(df_cad: pd.DataFrame, tipo: str) -> pd.DataFrame:
     situacoes = df_cad["situacao"].fillna("").astype(str).str.strip().str.upper()
     return (
         df_cad[(tipos == str(tipo).upper()) & (situacoes == "ATIVO")]
-    return (
-        df_cad[
-            (df_cad["tipo_cadastro"].str.strip().str.upper() == tipo.upper()) &
-            (df_cad["situacao"].str.strip().str.upper() == "ATIVO")
-        ]
         .drop_duplicates("id_cadastro")
         .sort_values("nome")
     )
@@ -84,12 +78,6 @@ def slug_da_sessao() -> str:
     if not isinstance(igreja, dict):
         return ""
     return str(igreja.get("slug", "") or "").strip().lower()
-def gerar_csv(df: pd.DataFrame) -> bytes:
-    return df.to_csv(index=False).encode("utf-8-sig")
-
-
-def slug_da_sessao() -> str:
-    return st.session_state.get("igreja", {}).get("slug", "")
 
 
 def confirmar_exclusao(key: str, label: str) -> bool:
@@ -118,17 +106,6 @@ def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
     if st.session_state.get(flag_ate, 0) > agora:
         return True
     st.session_state.pop(flag_ate, None)
-    """
-    Exibe campo de senha e valida contra o login da igreja.
-    A autorizacao persiste ate ser explicitamente revogada,
-    permitindo encadear com outras confirmacoes.
-    """
-    flag_mostrar = f"_auth_mostrar_{key}"
-    flag_ok      = f"_auth_ok_{key}"
-
-    # Ja autorizado anteriormente — mantem True para fluxos encadeados
-    if st.session_state.get(flag_ok):
-        return True
 
     if not st.session_state.get(flag_mostrar):
         if st.button(f"Autorizar para {acao}", key=f"btn_auth_{key}", type="primary"):
@@ -151,9 +128,6 @@ def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
             if slug and autenticar_igreja(slug, senha):
                 st.session_state[flag_mostrar] = False
                 st.session_state[flag_ate] = agora + AUTORIZACAO_TTL_SEGUNDOS
-            if autenticar_igreja(slug, senha):
-                st.session_state[flag_mostrar] = False
-                st.session_state[flag_ok]      = True
                 st.rerun()
             else:
                 st.error("Senha incorreta. Tente novamente.")
