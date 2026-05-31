@@ -702,7 +702,7 @@ def _navbar():
                 <a href="?pagina=inicio#sobre" target="_top">Sobre</a>
                 <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
                 <a href="?pagina=contato" target="_top">Contato</a>
-                <a href="?pagina=privacidade" target="_top">Privacidade</a>
+                <a href="?pagina=privacidade" target="_top">&#80;&#114;&#105;&#118;&#97;&#99;&#105;&#100;&#97;&#100;&#101;</a>
                 <a class="fm-btn-login" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
             </div>
         </div>
@@ -717,7 +717,7 @@ def _footer():
             <div>FielMordomo © 2026 — Sistema de gestão financeira para igrejas.</div>
             <div>
                 <a href="?pagina=contato" target="_top">Contato</a>
-                <a href="?pagina=privacidade" target="_top">Política de Privacidade</a>
+                <a href="?pagina=privacidade" target="_top">Pol&iacute;tica de Privacidade</a>
                 <a href="?pagina=termos" target="_top">Termos de Uso</a>
             </div>
         </div>
