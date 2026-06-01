@@ -149,7 +149,42 @@ def _aplicar_filtros(df, periodo, tipo, categoria, subcategoria, id_cadastro, lo
     return filtrado
 
 
+def _injetar_css():
+    st.markdown("""
+    <style>
+    .rel-filtros {
+        background:#F8FAFC;
+        border:1px solid #E2E8F0;
+        border-radius:14px;
+        margin:4px 0 14px;
+        padding:14px 16px 8px;
+    }
+    .rel-filtros strong { color:#0F172A;font-size:1rem; }
+    .rel-filtros span {
+        color:#64748B;
+        display:block;
+        font-size:.78rem;
+        margin-top:3px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+def _periodo_por_atualizacao(atalho, data_min, data_max, hoje):
+    fim = min(max(hoje, data_min), data_max)
+    if atalho == "Mes atual":
+        inicio = max(data_min, fim.replace(day=1))
+    elif atalho == "Ultimos 30 dias":
+        inicio = max(data_min, fim - datetime.timedelta(days=29))
+    elif atalho == "Ano atual":
+        inicio = max(data_min, datetime.date(fim.year, 1, 1))
+    else:
+        return None
+    return inicio, fim
+
+
 def render():
+    _injetar_css()
     slug = slug_da_sessao()
     igreja = st.session_state.get("igreja", {})
     if not isinstance(igreja, dict):
@@ -185,19 +220,47 @@ def render():
     fim_padrao = min(max(hoje, data_min), data_max)
     inicio_padrao = max(data_min, fim_padrao.replace(day=1))
 
-    st.markdown("### Filtros")
-    f1, f2, f3 = st.columns(3)
+    st.markdown(
+        '<div class="rel-filtros"><strong>Filtros do relatorio</strong>'
+        '<span>Defina o periodo e refine os lancamentos exibidos nas abas e exportacoes.</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    atalho = st.radio(
+        "Periodo rapido",
+        ["Mes atual", "Ultimos 30 dias", "Ano atual", "Personalizado"],
+        horizontal=True,
+        key="rel_periodo_atalho",
+    )
+    periodo_rapido = _periodo_por_atualizacao(atalho, data_min, data_max, hoje)
+    if periodo_rapido:
+        st.session_state["rel_inicio"] = periodo_rapido[0]
+        st.session_state["rel_fim"] = periodo_rapido[1]
+    else:
+        st.session_state.setdefault("rel_inicio", inicio_padrao)
+        st.session_state.setdefault("rel_fim", fim_padrao)
+
+    f1, f2 = st.columns(2)
     with f1:
-        periodo = st.date_input(
-            "Periodo",
-            value=(inicio_padrao, fim_padrao),
+        inicio = st.date_input(
+            "Data inicial",
             min_value=data_min,
             max_value=data_max,
             format="DD/MM/YYYY",
+            key="rel_inicio",
         )
-    if not isinstance(periodo, (tuple, list)) or len(periodo) != 2:
-        st.info("Selecione a data inicial e a data final do relatorio.")
+    with f2:
+        fim = st.date_input(
+            "Data final",
+            min_value=data_min,
+            max_value=data_max,
+            format="DD/MM/YYYY",
+            key="rel_fim",
+        )
+    if inicio > fim:
+        st.error("A data inicial nao pode ser posterior a data final.")
         return
+    periodo = (inicio, fim)
 
     tipos = sorted(x for x in df["tipo"].unique() if x)
     categorias = sorted(x for x in df["categoria"].unique() if x)
@@ -205,10 +268,11 @@ def render():
     lotes = sorted(x for x in df["lote_id"].unique() if x)
     opcoes_vinculos = _opcoes_vinculos(cad)
 
-    with f2:
+    f3, f4 = st.columns(2)
+    with f3:
         tipo_sel = st.selectbox("Tipo", ["Todos"] + tipos)
         categoria_sel = st.selectbox("Categoria", ["Todas"] + categorias)
-    with f3:
+    with f4:
         subcategoria_sel = st.selectbox("Subcategoria", ["Todas"] + subcategorias)
         vinculo_sel = st.selectbox("Cadastro vinculado", list(opcoes_vinculos))
 
