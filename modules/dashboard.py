@@ -784,75 +784,74 @@ def render():
                 st.plotly_chart(fig_dizimos, use_container_width=True, config=CONFIG_PLOTLY)
 
             _secao_dashboard(
-                "Perfil das contribuicoes",
-                "Ranking de dizimos por membro e entradas de membros agrupadas pela funcao cadastrada.",
+                "Dizimos por membro - top 8",
+                "Membros com os maiores valores registrados no periodo analisado.",
             )
-            perfil1, perfil2 = st.columns(2)
-            with perfil1:
-                st.caption("Dizimos por membro - top 8")
-                dizimos_membros = dizimos_periodo[dizimos_periodo["id_cadastro"].notna()].merge(
-                    membros[["id_cadastro", "nome"]],
-                    on="id_cadastro",
-                    how="inner",
-                )
-                ranking_membros = (
-                    dizimos_membros.groupby("nome", as_index=False)["valor"].sum()
-                    .sort_values("valor", ascending=False)
-                    .head(8)
-                    .sort_values("valor")
-                )
-                if ranking_membros.empty:
-                    st.info("Sem dizimos vinculados a membros no periodo.")
-                else:
-                    fig_ranking = go.Figure(go.Bar(
-                        x=ranking_membros["valor"],
-                        y=ranking_membros["nome"],
-                        orientation="h",
-                        marker_color=CORES["dizimo"],
-                        text=[formatar_moeda(valor) for valor in ranking_membros["valor"]],
-                        textposition="outside",
-                        textfont=dict(size=10, color="#CBD5E1"),
-                    ))
-                    fig_ranking.update_layout(**_layout_grafico(
-                        altura=max(280, len(ranking_membros) * 40 + 80),
-                        xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
-                        yaxis=dict(fixedrange=True, showgrid=False),
-                    ))
-                    st.plotly_chart(fig_ranking, use_container_width=True, config=CONFIG_PLOTLY)
+            dizimos_membros = dizimos_periodo[dizimos_periodo["id_cadastro"].notna()].merge(
+                membros[["id_cadastro", "nome"]],
+                on="id_cadastro",
+                how="inner",
+            )
+            ranking_membros = (
+                dizimos_membros.groupby("nome", as_index=False)["valor"].sum()
+                .sort_values("valor", ascending=False)
+                .head(8)
+                .sort_values("valor")
+            )
+            if ranking_membros.empty:
+                st.info("Sem dizimos vinculados a membros no periodo.")
+            else:
+                fig_ranking = go.Figure(go.Bar(
+                    x=ranking_membros["valor"],
+                    y=ranking_membros["nome"],
+                    orientation="h",
+                    marker_color=CORES["dizimo"],
+                    text=[formatar_moeda(valor) for valor in ranking_membros["valor"]],
+                    textposition="outside",
+                    textfont=dict(size=10, color="#CBD5E1"),
+                ))
+                fig_ranking.update_layout(**_layout_grafico(
+                    altura=max(280, len(ranking_membros) * 40 + 80),
+                    xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
+                    yaxis=dict(fixedrange=True, showgrid=False),
+                ))
+                st.plotly_chart(fig_ranking, use_container_width=True, config=CONFIG_PLOTLY)
 
-            with perfil2:
-                st.caption("Entradas de membros por funcao")
-                entradas_membros = df_pastoral[
-                    (df_pastoral["tipo_norm"] == "ENTRADA")
-                    & (df_pastoral["tipo_cadastro"].str.upper() == "MEMBRO")
-                    & df_pastoral["id_cadastro"].notna()
-                ].merge(
-                    membros[["id_cadastro", "funcao"]],
-                    on="id_cadastro",
-                    how="inner",
-                )
-                entradas_membros["funcao"] = _texto(entradas_membros["funcao"]).replace("", "Sem funcao")
-                resumo_funcoes = (
-                    entradas_membros.groupby("funcao", as_index=False)["valor"].sum()
-                    .sort_values("valor", ascending=False)
-                )
-                if resumo_funcoes.empty:
-                    st.info("Sem entradas vinculadas a membros no periodo.")
-                else:
-                    fig_funcoes = go.Figure(go.Bar(
-                        x=resumo_funcoes["funcao"],
-                        y=resumo_funcoes["valor"],
-                        marker_color="#8B5CF6",
-                        text=[formatar_moeda(valor) for valor in resumo_funcoes["valor"]],
-                        textposition="outside",
-                        textfont=dict(size=10, color="#CBD5E1"),
-                    ))
-                    fig_funcoes.update_layout(**_layout_grafico(
-                        altura=320,
-                        xaxis=dict(fixedrange=True, showgrid=False),
-                        yaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
-                    ))
-                    st.plotly_chart(fig_funcoes, use_container_width=True, config=CONFIG_PLOTLY)
+            _secao_dashboard(
+                "Entradas de membros por funcao",
+                "Valores recebidos agrupados pela funcao cadastrada dos membros.",
+            )
+            entradas_membros = df_pastoral[
+                (df_pastoral["tipo_norm"] == "ENTRADA")
+                & (df_pastoral["tipo_cadastro"].str.upper() == "MEMBRO")
+                & df_pastoral["id_cadastro"].notna()
+            ].merge(
+                membros[["id_cadastro", "funcao"]],
+                on="id_cadastro",
+                how="inner",
+            )
+            entradas_membros["funcao"] = _texto(entradas_membros["funcao"]).replace("", "Sem funcao")
+            resumo_funcoes = (
+                entradas_membros.groupby("funcao", as_index=False)["valor"].sum()
+                .sort_values("valor", ascending=False)
+            )
+            if resumo_funcoes.empty:
+                st.info("Sem entradas vinculadas a membros no periodo.")
+            else:
+                fig_funcoes = go.Figure(go.Bar(
+                    x=resumo_funcoes["funcao"],
+                    y=resumo_funcoes["valor"],
+                    marker_color="#8B5CF6",
+                    text=[formatar_moeda(valor) for valor in resumo_funcoes["valor"]],
+                    textposition="outside",
+                    textfont=dict(size=10, color="#CBD5E1"),
+                ))
+                fig_funcoes.update_layout(**_layout_grafico(
+                    altura=320,
+                    xaxis=dict(fixedrange=True, showgrid=False),
+                    yaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
+                ))
+                st.plotly_chart(fig_funcoes, use_container_width=True, config=CONFIG_PLOTLY)
 
             _secao_dashboard(
                 "Membros que requerem acompanhamento",
@@ -928,35 +927,34 @@ def render():
 
             _secao_dashboard(
                 "Frequencia de contribuicoes",
-                "Quantidade de registros por membro no periodo analisado. A lista inclui quem nao contribuiu.",
+                "Quantidade de registros por membro no periodo analisado. O grafico exibe somente quem contribuiu.",
             )
             frequencia = _frequencia_membros(membros, dizimos_periodo)
             if frequencia.empty:
                 st.info("Nao ha membros ativos para exibir.")
             else:
-                grafico_freq = frequencia.sort_values(["Contribuicoes", "Nome"], ascending=[True, False])
-                cores_freq = [
-                    CORES["entrada"] if quantidade else "#475569"
-                    for quantidade in grafico_freq["Contribuicoes"]
-                ]
-                fig_freq = go.Figure(go.Bar(
-                    x=grafico_freq["Contribuicoes"],
-                    y=grafico_freq["Nome"],
-                    orientation="h",
-                    marker_color=cores_freq,
-                    text=[
-                        str(quantidade) if quantidade else "Sem contribuicao"
-                        for quantidade in grafico_freq["Contribuicoes"]
-                    ],
-                    textposition="outside",
-                    textfont=dict(size=10, color="#CBD5E1"),
-                ))
-                fig_freq.update_layout(**_layout_grafico(
-                    altura=max(340, len(grafico_freq) * 30 + 100),
-                    xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
-                    yaxis=dict(fixedrange=True, showgrid=False),
-                ))
-                st.plotly_chart(fig_freq, use_container_width=True, config=CONFIG_PLOTLY)
+                grafico_freq = frequencia[frequencia["Contribuicoes"] > 0].sort_values(
+                    ["Contribuicoes", "Nome"],
+                    ascending=[True, False],
+                )
+                if grafico_freq.empty:
+                    st.info("Nenhum membro registrou contribuicao no periodo analisado.")
+                else:
+                    fig_freq = go.Figure(go.Bar(
+                        x=grafico_freq["Contribuicoes"],
+                        y=grafico_freq["Nome"],
+                        orientation="h",
+                        marker_color=CORES["entrada"],
+                        text=[str(quantidade) for quantidade in grafico_freq["Contribuicoes"]],
+                        textposition="outside",
+                        textfont=dict(size=10, color="#CBD5E1"),
+                    ))
+                    fig_freq.update_layout(**_layout_grafico(
+                        altura=max(340, len(grafico_freq) * 30 + 100),
+                        xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
+                        yaxis=dict(fixedrange=True, showgrid=False),
+                    ))
+                    st.plotly_chart(fig_freq, use_container_width=True, config=CONFIG_PLOTLY)
                 freq_exportacao = frequencia.copy()
                 freq_exportacao["Valor total"] = freq_exportacao["Valor total"].apply(formatar_moeda)
                 st.download_button(
