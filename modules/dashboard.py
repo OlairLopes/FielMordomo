@@ -235,7 +235,11 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
         labels=resumo[rotulos],
         values=resumo[valores],
         hole=.68,
-        textinfo="none",
+        textinfo="label+percent",
+        textposition="outside",
+        textfont=dict(size=11, color="#CBD5E1"),
+        hovertemplate="<b>%{label}</b><br>%{percent}<br>%{customdata}<extra></extra>",
+        customdata=[formatar_moeda(valor) for valor in resumo[valores]],
         marker=dict(
             colors=cores or PALETA[:len(resumo)],
             line=dict(color="#1E293B", width=2),
@@ -249,9 +253,10 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
         font=dict(size=16, color="#F1F5F9"),
     )
     fig.update_layout(**_layout_grafico(
-        altura=370,
+        altura=430,
+        margem=dict(t=25, b=95, l=70, r=70),
         showlegend=True,
-        legend=dict(orientation="v", y=.5, x=1.02, font=dict(size=11)),
+        legend=dict(orientation="h", y=-.18, x=.5, xanchor="center", font=dict(size=11)),
     ))
     return fig
 
@@ -259,6 +264,7 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
 def _grafico_ranking(resumo, rotulos, valores, cor):
     dados = resumo.sort_values(valores, ascending=True)
     fig = go.Figure(go.Bar(
+        name="Valor",
         x=dados[valores],
         y=dados[rotulos],
         orientation="h",
@@ -269,6 +275,7 @@ def _grafico_ranking(resumo, rotulos, valores, cor):
     ))
     fig.update_layout(**_layout_grafico(
         altura=max(320, len(dados) * 34 + 100),
+        showlegend=False,
         xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
         yaxis=dict(fixedrange=True, showgrid=False),
     ))
@@ -462,10 +469,12 @@ def render():
         ])
         fig.update_layout(**_layout_grafico(
             altura=430,
+            margem=dict(t=55, b=40, l=20, r=20),
             barmode="group",
+            showlegend=True,
             xaxis=dict(fixedrange=True, gridcolor="#334155"),
             yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
-            legend=dict(orientation="h", y=-.15),
+            legend=dict(orientation="h", y=1.12, x=0),
         ))
         st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
@@ -573,6 +582,7 @@ def render():
         })
         if pendencias["Quantidade"].sum():
             fig_qualidade = go.Figure(go.Bar(
+                name="Pendencias",
                 x=pendencias["Quantidade"],
                 y=pendencias["Pendencia"],
                 orientation="h",
@@ -583,6 +593,7 @@ def render():
             ))
             fig_qualidade.update_layout(**_layout_grafico(
                 altura=340,
+                showlegend=False,
                 xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
                 yaxis=dict(fixedrange=True, showgrid=False),
             ))
@@ -604,15 +615,45 @@ def render():
                 pass
 
             dizimos = df[(df["tipo_norm"] == "ENTRADA") & (df["categoria_norm"] == "DIZIMO")]
-            inicio_12m = (mes_ref - 11).start_time
-            fim_12m = mes_ref.end_time
-            dizimos_12m = dizimos[dizimos["data"].between(inicio_12m, fim_12m, inclusive="both")]
+            inicio_padrao = max(df["data"].min().date(), (mes_ref - 11).start_time.date())
+            fim_padrao = min(df["data"].max().date(), mes_ref.end_time.date())
+            f1, f2 = st.columns(2)
+            with f1:
+                inicio_pastoral = st.date_input(
+                    "Analisar contribuicoes de",
+                    value=inicio_padrao,
+                    format="DD/MM/YYYY",
+                    key=_sk("pastoral_inicio", slug),
+                )
+            with f2:
+                fim_pastoral = st.date_input(
+                    "Ate",
+                    value=fim_padrao,
+                    format="DD/MM/YYYY",
+                    key=_sk("pastoral_fim", slug),
+                )
+            if inicio_pastoral > fim_pastoral:
+                st.error("A data inicial nao pode ser posterior a data final.")
+                inicio_pastoral = fim_pastoral
+
+            df_pastoral = _periodo(df, inicio_pastoral, fim_pastoral)
+            dizimos_periodo = df_pastoral[
+                (df_pastoral["tipo_norm"] == "ENTRADA")
+                & (df_pastoral["categoria_norm"] == "DIZIMO")
+            ]
+            mes_fim_pastoral = pd.Period(fim_pastoral, freq="M")
+            mes_inicio_pastoral = pd.Period(inicio_pastoral, freq="M")
+            qtd_meses_pastoral = max(1, (mes_fim_pastoral - mes_inicio_pastoral).n + 1)
 
             _secao_dashboard(
                 "Evolucao dos dizimos",
-                "Total arrecadado mes a mes nos ultimos 12 meses, com linha de tendencia.",
+                "Total arrecadado mes a mes no periodo analisado, com linha de tendencia.",
             )
-            serie_dizimos = _serie_mensal(dizimos, mes_ref)
+            serie_dizimos = _serie_mensal(
+                dizimos_periodo,
+                mes_fim_pastoral,
+                quantidade=qtd_meses_pastoral,
+            )
             valores_dizimos = serie_dizimos["entradas"].tolist()
             if not any(valor > 0 for valor in valores_dizimos):
                 st.info("Ainda nao ha dizimos registrados para exibir a evolucao mensal.")
@@ -642,6 +683,77 @@ def render():
                     legend=dict(orientation="h", y=-0.15),
                 ))
                 st.plotly_chart(fig_dizimos, use_container_width=True, config=CONFIG_PLOTLY)
+
+            _secao_dashboard(
+                "Perfil das contribuicoes",
+                "Ranking de dizimos por membro e entradas de membros agrupadas pela funcao cadastrada.",
+            )
+            perfil1, perfil2 = st.columns(2)
+            with perfil1:
+                st.caption("Dizimos por membro - top 8")
+                dizimos_membros = dizimos_periodo[dizimos_periodo["id_cadastro"].notna()].merge(
+                    membros[["id_cadastro", "nome"]],
+                    on="id_cadastro",
+                    how="inner",
+                )
+                ranking_membros = (
+                    dizimos_membros.groupby("nome", as_index=False)["valor"].sum()
+                    .sort_values("valor", ascending=False)
+                    .head(8)
+                    .sort_values("valor")
+                )
+                if ranking_membros.empty:
+                    st.info("Sem dizimos vinculados a membros no periodo.")
+                else:
+                    fig_ranking = go.Figure(go.Bar(
+                        x=ranking_membros["valor"],
+                        y=ranking_membros["nome"],
+                        orientation="h",
+                        marker_color=CORES["dizimo"],
+                        text=[formatar_moeda(valor) for valor in ranking_membros["valor"]],
+                        textposition="outside",
+                        textfont=dict(size=10, color="#CBD5E1"),
+                    ))
+                    fig_ranking.update_layout(**_layout_grafico(
+                        altura=max(280, len(ranking_membros) * 40 + 80),
+                        xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
+                        yaxis=dict(fixedrange=True, showgrid=False),
+                    ))
+                    st.plotly_chart(fig_ranking, use_container_width=True, config=CONFIG_PLOTLY)
+
+            with perfil2:
+                st.caption("Entradas de membros por funcao")
+                entradas_membros = df_pastoral[
+                    (df_pastoral["tipo_norm"] == "ENTRADA")
+                    & (df_pastoral["tipo_cadastro"].str.upper() == "MEMBRO")
+                    & df_pastoral["id_cadastro"].notna()
+                ].merge(
+                    membros[["id_cadastro", "funcao"]],
+                    on="id_cadastro",
+                    how="inner",
+                )
+                entradas_membros["funcao"] = _texto(entradas_membros["funcao"]).replace("", "Sem funcao")
+                resumo_funcoes = (
+                    entradas_membros.groupby("funcao", as_index=False)["valor"].sum()
+                    .sort_values("valor", ascending=False)
+                )
+                if resumo_funcoes.empty:
+                    st.info("Sem entradas vinculadas a membros no periodo.")
+                else:
+                    fig_funcoes = go.Figure(go.Bar(
+                        x=resumo_funcoes["funcao"],
+                        y=resumo_funcoes["valor"],
+                        marker_color="#8B5CF6",
+                        text=[formatar_moeda(valor) for valor in resumo_funcoes["valor"]],
+                        textposition="outside",
+                        textfont=dict(size=10, color="#CBD5E1"),
+                    ))
+                    fig_funcoes.update_layout(**_layout_grafico(
+                        altura=320,
+                        xaxis=dict(fixedrange=True, showgrid=False),
+                        yaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
+                    ))
+                    st.plotly_chart(fig_funcoes, use_container_width=True, config=CONFIG_PLOTLY)
 
             _secao_dashboard(
                 "Membros que requerem acompanhamento",
@@ -683,20 +795,20 @@ def render():
 
             _secao_dashboard(
                 "Participacao dos dizimistas",
-                "Membros ativos que registraram ao menos uma contribuicao no mes selecionado.",
+                "Membros ativos que registraram ao menos uma contribuicao no periodo analisado.",
             )
-            qtd_mes, total_membros, percentual_mes = _participacao_dizimistas(ref, membros)
-            nao_dizimistas = max(total_membros - qtd_mes, 0)
+            qtd_periodo, total_membros, percentual_periodo = _participacao_dizimistas(df_pastoral, membros)
+            nao_dizimistas = max(total_membros - qtd_periodo, 0)
             if total_membros:
                 fig_participacao = go.Figure(go.Pie(
-                    labels=["Dizimistas", "Sem contribuicao no mes"],
-                    values=[qtd_mes, nao_dizimistas],
+                    labels=["Dizimistas", "Sem contribuicao no periodo"],
+                    values=[qtd_periodo, nao_dizimistas],
                     hole=.7,
                     textinfo="none",
                     marker=dict(colors=[CORES["entrada"], "#374151"], line=dict(color="#1E293B", width=2)),
                 ))
                 fig_participacao.add_annotation(
-                    text=f"<b>{percentual_mes:.1f}%</b><br><span style='font-size:12px'>dizimistas</span>",
+                    text=f"<b>{percentual_periodo:.1f}%</b><br><span style='font-size:12px'>dizimistas</span>",
                     x=.5,
                     y=.5,
                     showarrow=False,
@@ -710,16 +822,16 @@ def render():
                 st.plotly_chart(fig_participacao, use_container_width=True, config=CONFIG_PLOTLY)
                 p1, p2, p3 = st.columns(3)
                 p1.metric("Membros ativos", total_membros)
-                p2.metric("Dizimistas no mes", qtd_mes)
-                p3.metric("Sem contribuicao no mes", nao_dizimistas)
+                p2.metric("Dizimistas no periodo", qtd_periodo)
+                p3.metric("Sem contribuicao no periodo", nao_dizimistas)
             else:
                 st.info("Nao ha membros ativos cadastrados.")
 
             _secao_dashboard(
                 "Frequencia de contribuicoes",
-                "Quantidade de registros por membro nos ultimos 12 meses. A lista inclui quem nao contribuiu.",
+                "Quantidade de registros por membro no periodo analisado. A lista inclui quem nao contribuiu.",
             )
-            frequencia = _frequencia_membros(membros, dizimos_12m)
+            frequencia = _frequencia_membros(membros, dizimos_periodo)
             if frequencia.empty:
                 st.info("Nao ha membros ativos para exibir.")
             else:
@@ -751,7 +863,7 @@ def render():
                 st.download_button(
                     "Exportar lista completa de frequencia",
                     gerar_csv(freq_exportacao),
-                    "frequencia_dizimos_12_meses.csv",
+                    "frequencia_dizimos_periodo.csv",
                     "text/csv",
                     key=_sk("csv_frequencia", slug),
                 )
@@ -768,7 +880,7 @@ def render():
                 selecionado = st.selectbox("Consultar membro", ["Selecione"] + list(opcoes), key=_sk("membro", slug))
                 if selecionado != "Selecione":
                     id_membro = opcoes[selecionado]
-                    dados = dizimos[dizimos["id_cadastro"] == id_membro].copy()
+                    dados = dizimos_periodo[dizimos_periodo["id_cadastro"] == id_membro].copy()
                     ultimos_dados = dados.sort_values("data", ascending=False)
                     ultima_data = (
                         ultimos_dados.iloc[0]["data"].strftime("%d/%m/%Y")
