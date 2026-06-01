@@ -16,16 +16,18 @@ from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
 
 CORES = {
-    "entrada": "#10B981",
-    "saida": "#EF4444",
-    "saldo": "#3B82F6",
-    "dizimo": "#8B5CF6",
+    "entrada": "#1D9E75",
+    "saida": "#D85A30",
+    "saldo": "#185FA5",
+    "dizimo": "#185FA5",
+    "despesa": "#D85A30",
+    "funcao": "#534AB7",
     "alerta": "#F59E0B",
     "neutro": "#64748B",
 }
 PALETA = [
-    "#10B981", "#3B82F6", "#F59E0B", "#8B5CF6", "#EC4899",
-    "#14B8A6", "#F97316", "#6366F1", "#94A3B8",
+    "#1D9E75", "#185FA5", "#D85A30", "#534AB7", "#F59E0B",
+    "#0F6E56", "#378ADD", "#D4537E", "#888780",
 ]
 CONFIG_PLOTLY = {
     "displayModeBar": False,
@@ -620,7 +622,7 @@ def render():
                 "Subcategorias ordenadas pelo valor realizado no mes.",
             )
             st.plotly_chart(
-                _grafico_ranking(resumo, "Subcategoria", "Valor", CORES["saida"]),
+                _grafico_ranking(resumo, "Subcategoria", "Valor", CORES["despesa"]),
                 use_container_width=True,
                 config=CONFIG_PLOTLY,
             )
@@ -841,7 +843,7 @@ def render():
                 fig_funcoes = go.Figure(go.Bar(
                     x=resumo_funcoes["funcao"],
                     y=resumo_funcoes["valor"],
-                    marker_color="#8B5CF6",
+                    marker_color=CORES["funcao"],
                     text=[formatar_moeda(valor) for valor in resumo_funcoes["valor"]],
                     textposition="outside",
                     textfont=dict(size=10, color="#CBD5E1"),
@@ -1021,12 +1023,6 @@ def render():
                     st.caption("Presenca mensal das contribuicoes no periodo analisado")
                     _cartoes_fidelidade(resumo_individual)
                     _mensagem_fidelidade(selecionado.split(" | ", 1)[-1], resumo_individual)
-                    if not dados.empty:
-                        detalhe = dados[["data", "valor", "forma_pagamento", "descricao"]].copy()
-                        detalhe = detalhe.sort_values("data", ascending=False)
-                        detalhe["data"] = detalhe["data"].dt.strftime("%d/%m/%Y")
-                        detalhe["valor"] = detalhe["valor"].apply(formatar_moeda)
-                        st.dataframe(detalhe, use_container_width=True, hide_index=True)
 
     st.divider()
     st.download_button(
