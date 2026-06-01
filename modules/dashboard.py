@@ -336,6 +336,80 @@ def _frequencia_membros(membros, dizimos):
     return pd.DataFrame(linhas)
 
 
+def _meses_periodo(inicio, fim):
+    primeiro = pd.Period(inicio, freq="M")
+    ultimo = pd.Period(fim, freq="M")
+    return [primeiro + i for i in range((ultimo - primeiro).n + 1)]
+
+
+def _resumo_individual_mensal(dados, meses):
+    resumo = {}
+    if not dados.empty:
+        resumo = (
+            dados.groupby("mes_periodo")["valor"]
+            .agg(["count", "sum"])
+            .to_dict("index")
+        )
+
+    linhas = []
+    for mes in meses:
+        registro = resumo.get(mes, {})
+        linhas.append({
+            "mes": mes,
+            "rotulo": _mes_label(mes),
+            "quantidade": int(registro.get("count", 0)),
+            "valor": float(registro.get("sum", 0.0)),
+        })
+    return linhas
+
+
+def _avaliacao_fidelidade(resumo_mensal):
+    total_meses = len(resumo_mensal)
+    meses_com_contribuicao = sum(1 for mes in resumo_mensal if mes["quantidade"] > 0)
+    taxa = (meses_com_contribuicao / total_meses * 100) if total_meses else 0.0
+    if meses_com_contribuicao == 0:
+        return taxa, "Sem contribuicoes no periodo", "critico"
+    if taxa < 50:
+        return taxa, "Frequencia baixa: avaliar necessidade de acompanhamento pastoral", "atencao"
+    if taxa < 80:
+        return taxa, "Frequencia moderada: observar a regularidade das contribuicoes", "moderado"
+    return taxa, "Boa regularidade de contribuicoes no periodo", "positivo"
+
+
+def _cartoes_fidelidade(resumo_mensal):
+    cartoes = ['<div class="fidelidade-grid">']
+    for mes in resumo_mensal:
+        if mes["quantidade"]:
+            classe = "presente"
+            detalhe = f'{mes["quantidade"]}x | {formatar_moeda(mes["valor"])}'
+        else:
+            classe = "ausente"
+            detalhe = "Sem dizimo"
+        cartoes.append(
+            f'<div class="fidelidade-mes {classe}"><strong>{_escape(mes["rotulo"])}</strong>'
+            f'<span>{_escape(detalhe)}</span></div>'
+        )
+    cartoes.append("</div>")
+    st.markdown("".join(cartoes), unsafe_allow_html=True)
+
+
+def _mensagem_fidelidade(nome, resumo_mensal):
+    taxa, titulo, classe = _avaliacao_fidelidade(resumo_mensal)
+    meses_presentes = sum(1 for mes in resumo_mensal if mes["quantidade"] > 0)
+    total_meses = len(resumo_mensal)
+    complemento = (
+        "Recomenda-se avaliacao humana e, quando apropriado, contato ou visita pastoral."
+        if classe in {"critico", "atencao"}
+        else "Use esta informacao como apoio ao acompanhamento pastoral."
+    )
+    st.markdown(
+        f'<div class="fidelidade-aviso {classe}"><strong>{_escape(titulo)}</strong>'
+        f'<span>{_escape(nome)} contribuiu em {meses_presentes} de {total_meses} meses '
+        f'({taxa:.1f}% de fidelidade mensal). {_escape(complemento)}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _injetar_css():
     st.markdown("""
     <style>
@@ -355,6 +429,23 @@ def _injetar_css():
     .pastoral-card.amarelo strong { color:#F59E0B; }
     .pastoral-card.laranja strong { color:#F97316; }
     .pastoral-card.vermelho strong { color:#EF4444; }
+    .fidelidade-grid { display:flex;flex-wrap:wrap;gap:8px;margin:14px 0; }
+    .fidelidade-mes { border-radius:8px;min-width:96px;padding:9px 11px;text-align:center; }
+    .fidelidade-mes strong { display:block;font-size:.8rem; }
+    .fidelidade-mes span { display:block;font-size:.7rem;margin-top:4px; }
+    .fidelidade-mes.presente { background:#065F46;color:#ECFDF5; }
+    .fidelidade-mes.ausente { background:#374151;color:#CBD5E1;opacity:.75; }
+    .fidelidade-aviso { background:#1E293B;border-left:4px solid;border-radius:8px;margin:12px 0 18px;padding:13px 16px; }
+    .fidelidade-aviso strong { display:block;font-size:.95rem; }
+    .fidelidade-aviso span { color:#CBD5E1;display:block;font-size:.82rem;margin-top:5px; }
+    .fidelidade-aviso.critico { border-color:#DC2626; }
+    .fidelidade-aviso.critico strong { color:#F87171; }
+    .fidelidade-aviso.atencao { border-color:#F97316; }
+    .fidelidade-aviso.atencao strong { color:#FB923C; }
+    .fidelidade-aviso.moderado { border-color:#F59E0B; }
+    .fidelidade-aviso.moderado strong { color:#FBBF24; }
+    .fidelidade-aviso.positivo { border-color:#10B981; }
+    .fidelidade-aviso.positivo strong { color:#34D399; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -886,10 +977,20 @@ def render():
                         ultimos_dados.iloc[0]["data"].strftime("%d/%m/%Y")
                         if not ultimos_dados.empty else "Sem registro"
                     )
-                    i1, i2, i3 = st.columns(3)
+                    meses_individual = _meses_periodo(inicio_pastoral, fim_pastoral)
+                    resumo_individual = _resumo_individual_mensal(dados, meses_individual)
+                    meses_com_dizimo = sum(
+                        1 for mes in resumo_individual if mes["quantidade"] > 0
+                    )
+                    fidelidade = (
+                        meses_com_dizimo / len(meses_individual) * 100
+                        if meses_individual else 0.0
+                    )
+                    i1, i2, i3, i4 = st.columns(4)
                     i1.metric("Contribuicoes registradas", len(dados))
                     i2.metric("Valor total registrado", formatar_moeda(dados["valor"].sum()))
                     i3.metric("Ultima contribuicao", ultima_data)
+                    i4.metric("Fidelidade mensal", f"{fidelidade:.1f}%")
                     if dados.empty:
                         st.info("Nao ha contribuicoes registradas no periodo analisado.")
                     else:
@@ -911,6 +1012,10 @@ def render():
                             yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
                         ))
                         st.plotly_chart(fig_membro, use_container_width=True, config=CONFIG_PLOTLY)
+                    st.caption("Presenca mensal das contribuicoes no periodo analisado")
+                    _cartoes_fidelidade(resumo_individual)
+                    _mensagem_fidelidade(selecionado.split(" | ", 1)[-1], resumo_individual)
+                    if not dados.empty:
                         detalhe = dados[["data", "valor", "forma_pagamento", "descricao"]].copy()
                         detalhe = detalhe.sort_values("data", ascending=False)
                         detalhe["data"] = detalhe["data"].dt.strftime("%d/%m/%Y")
