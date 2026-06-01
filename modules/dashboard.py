@@ -231,14 +231,22 @@ def _secao_dashboard(titulo, subtitulo):
 
 def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
     total = float(resumo[valores].sum())
+    percentuais = [
+        (float(valor) / total * 100) if total else 0.0
+        for valor in resumo[valores]
+    ]
+    legendas = [
+        f"{rotulo} {percentual:.1f}%"
+        for rotulo, percentual in zip(resumo[rotulos], percentuais)
+    ]
     fig = go.Figure(go.Pie(
-        labels=resumo[rotulos],
+        labels=legendas,
         values=resumo[valores],
         hole=.68,
-        textinfo="label+percent",
+        textinfo="label",
         textposition="outside",
         textfont=dict(size=11, color="#CBD5E1"),
-        hovertemplate="<b>%{label}</b><br>%{percent}<br>%{customdata}<extra></extra>",
+        hovertemplate="<b>%{label}</b><br>%{customdata}<extra></extra>",
         customdata=[formatar_moeda(valor) for valor in resumo[valores]],
         marker=dict(
             colors=cores or PALETA[:len(resumo)],
