@@ -305,9 +305,12 @@ def _renderizar_igreja():
     _, caminho_modulo = PAGINAS_IGREJA[pagina]
     try:
         _importar(caminho_modulo).render()
-    except Exception:
+    except Exception as ex:
         LOGGER.exception("Falha ao carregar a pagina %s.", pagina)
-        st.error("Nao foi possivel carregar esta pagina. Consulte o log do sistema.")
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
 
 
 def main():
