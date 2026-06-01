@@ -5,6 +5,7 @@ import html
 import logging
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from data.repository import carregar_dashboard_ministerio, listar_ministerios
@@ -17,6 +18,11 @@ CORES = {
     "saida": "#EF4444",
     "resultado": "#3B82F6",
     "alerta": "#F59E0B",
+}
+CONFIG_PLOTLY = {
+    "displayModeBar": False,
+    "responsive": True,
+    "scrollZoom": False,
 }
 
 
@@ -48,18 +54,69 @@ def _injetar_css():
         .min-label {color:#64748B;font-size:.74rem;text-transform:uppercase;letter-spacing:.04em}
         .min-value {color:#0F172A;font-size:1.35rem;font-weight:750;margin-top:5px}
         .min-note {color:#64748B;font-size:.73rem;margin-top:5px}
+        .min-section {color:#0F172A;font-size:1rem;font-weight:700;margin:18px 0 10px;
+            padding-bottom:8px;border-bottom:1px solid #E2E8F0}
+        .min-section span {color:#64748B;display:block;font-size:.78rem;font-weight:400;margin-top:3px}
+        .stPlotlyChart {background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;
+            padding:10px;box-shadow:0 4px 12px rgba(15,23,42,.04)}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
+def _secao(titulo, subtitulo):
+    st.markdown(
+        f'<div class="min-section">{_escape(titulo)}'
+        f'<span>{_escape(subtitulo)}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _figura_mensal(mensal):
-    return mensal.set_index("mes")[["entradas", "saidas", "resultado"]].rename(columns={
-        "entradas": "Entradas",
-        "saidas": "Saidas",
-        "resultado": "Resultado",
-    })
+    fig = go.Figure([
+        go.Bar(
+            name="Entradas",
+            x=mensal["mes"],
+            y=mensal["entradas"],
+            marker_color=CORES["entrada"],
+            text=[formatar_moeda(valor) if valor else "" for valor in mensal["entradas"]],
+            textposition="outside",
+            textfont=dict(size=10, color="#475569"),
+        ),
+        go.Bar(
+            name="Saidas",
+            x=mensal["mes"],
+            y=mensal["saidas"],
+            marker_color=CORES["saida"],
+            text=[formatar_moeda(valor) if valor else "" for valor in mensal["saidas"]],
+            textposition="outside",
+            textfont=dict(size=10, color="#475569"),
+        ),
+        go.Scatter(
+            name="Resultado",
+            x=mensal["mes"],
+            y=mensal["resultado"],
+            mode="lines+markers",
+            line=dict(color=CORES["resultado"], width=3),
+            marker=dict(size=7),
+        ),
+    ])
+    fig.update_layout(
+        template="plotly_white",
+        barmode="group",
+        height=430,
+        margin=dict(t=55, b=35, l=20, r=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#475569"),
+        legend=dict(orientation="h", y=1.14, x=0),
+        hovermode="x unified",
+        dragmode=False,
+        xaxis=dict(fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis=dict(fixedrange=True, gridcolor="#E2E8F0", tickformat=",.0f"),
+    )
+    return fig
 
 
 def _resumo_por_coluna(df, coluna):
@@ -83,7 +140,15 @@ def _tab_visao(dados):
     if mensal.empty:
         st.info("Nao ha movimentacoes validas no periodo selecionado.")
     else:
-        st.bar_chart(_figura_mensal(mensal), use_container_width=True)
+        _secao(
+            "Evolucao financeira consolidada",
+            "Barras com entradas e saidas; linha com o resultado mensal das congregacoes.",
+        )
+        st.plotly_chart(
+            _figura_mensal(mensal),
+            use_container_width=True,
+            config=CONFIG_PLOTLY,
+        )
 
     st.markdown("#### Resultado por congregacao")
     congregacoes = dados["por_igreja"].sort_values("resultado", ascending=False)
