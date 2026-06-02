@@ -21,6 +21,10 @@ SEXO_OPC = ["Masculino", "Feminino", ""]
 TIPOS_CADASTRO = ["Membro", "Fornecedor"]
 
 
+def _rotulo_tipo_cadastro(tipo):
+    return "Fornecedor (empresa)" if tipo == "Fornecedor" else tipo
+
+
 def _formatar_cpf(cpf):
     digits = "".join(c for c in cpf if c.isdigit())
     if len(digits) == 11:
@@ -145,6 +149,7 @@ def render():
         tipo = st.selectbox(
             "Tipo",
             TIPOS_CADASTRO,
+            format_func=_rotulo_tipo_cadastro,
             key="novo_tipo",
         )
 
@@ -346,6 +351,7 @@ def render():
         tipo_edit = st.selectbox(
             "Tipo",
             tipo_opc,
+            format_func=_rotulo_tipo_cadastro,
             index=tipo_opc.index(sel["tipo_cadastro"])
             if sel["tipo_cadastro"] in tipo_opc else 0,
             key=kp + "tipo"
