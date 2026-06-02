@@ -51,6 +51,7 @@ PAGINAS_IGREJA = {
 PAGINAS_TESOUREIRO = {
     "lancamentos": ("Lancamentos", "modules.lancamentos"),
     "cadastros": ("Membros", "modules.cadastros"),
+    "relatorios": ("Relatorios", "modules.relatorios"),
 }
 
 
