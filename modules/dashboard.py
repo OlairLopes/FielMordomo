@@ -232,6 +232,23 @@ def _secao_dashboard(titulo, subtitulo):
     )
 
 
+def _legenda_cores():
+    itens = [
+        ("Entradas", CORES["entrada"]),
+        ("Saidas e despesas", CORES["saida"]),
+        ("Saldo e dizimos", CORES["saldo"]),
+        ("Funcoes", CORES["funcao"]),
+        ("Alertas", CORES["alerta"]),
+    ]
+    legenda = ['<div class="dash-legenda">']
+    for titulo, cor in itens:
+        legenda.append(
+            f'<span><i style="background:{_escape(cor)}"></i>{_escape(titulo)}</span>'
+        )
+    legenda.append("</div>")
+    st.markdown("".join(legenda), unsafe_allow_html=True)
+
+
 def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
     total = float(resumo[valores].sum())
     percentuais = [
@@ -581,6 +598,9 @@ def _injetar_css():
     .stPlotlyChart { background:#1E293B;border:1px solid #334155;border-radius:14px;padding:10px; }
     .dash-section { color:#F1F5F9;font-size:1rem;margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid #334155; }
     .dash-section span { color:#94A3B8;display:block;font-size:.78rem;font-weight:400;margin-top:3px; }
+    .dash-legenda { display:flex;flex-wrap:wrap;gap:9px 16px;margin:10px 0 14px; }
+    .dash-legenda span { color:#CBD5E1;font-size:.78rem;white-space:nowrap; }
+    .dash-legenda i { border-radius:50%;display:inline-block;height:10px;margin-right:6px;width:10px; }
     .pastoral-card { background:#1E293B;border:1px solid #334155;border-radius:12px;padding:14px;text-align:center;height:100%; }
     .pastoral-card div { color:#CBD5E1;font-size:.78rem; }
     .pastoral-card strong { display:block;font-size:1.9rem;margin-top:5px; }
@@ -679,6 +699,7 @@ def render():
 
     st.markdown("## Dashboard Financeiro")
     st.caption("Visao executiva para decisao, conferencia e acompanhamento de tendencias.")
+    _legenda_cores()
     c1, c2, c3, c4 = st.columns(4)
     with c1: _card("Entradas", formatar_moeda(ent), f"{_variacao(ent, ent_ant)} vs mes anterior")
     with c2: _card("Saidas", formatar_moeda(sai), f"{_variacao(sai, sai_ant)} vs mes anterior")
