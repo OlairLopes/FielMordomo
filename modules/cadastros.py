@@ -18,6 +18,7 @@ FUNCOES = [
 ]
 
 SEXO_OPC = ["Masculino", "Feminino", ""]
+TIPOS_CADASTRO = ["Membro", "Fornecedor"]
 
 
 def _formatar_cpf(cpf):
@@ -139,9 +140,11 @@ def render():
 
         # >>> TIPO FORA DO FORM <<< — atualiza dinamicamente os outros campos
         st.markdown("**Dados principais**")
+        if st.session_state.get("novo_tipo") not in TIPOS_CADASTRO:
+            st.session_state.pop("novo_tipo", None)
         tipo = st.selectbox(
             "Tipo",
-            ["Membro", "Fornecedor"],
+            TIPOS_CADASTRO,
             key="novo_tipo",
         )
 
@@ -338,7 +341,7 @@ def render():
 
         st.markdown("**Dados principais**")
 
-        tipo_opc = ["Membro", "Fornecedor"]
+        tipo_opc = TIPOS_CADASTRO
 
         tipo_edit = st.selectbox(
             "Tipo",
