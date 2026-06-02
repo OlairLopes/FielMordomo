@@ -32,8 +32,10 @@ PALETA = [
 ]
 CONFIG_PLOTLY = {
     "displayModeBar": False,
+    "displaylogo": False,
     "responsive": True,
     "scrollZoom": False,
+    "doubleClick": False,
 }
 MESES_PT = [
     "", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
@@ -212,6 +214,7 @@ def _faixas_acompanhamento(membros, dizimos, hoje, dias_ativo):
 def _layout_grafico(altura=380, margem=None, **extras):
     layout = {
         "template": "plotly_dark",
+        "autosize": True,
         "height": altura,
         "margin": margem or dict(t=25, b=35, l=20, r=20),
         "paper_bgcolor": "rgba(0,0,0,0)",
@@ -600,7 +603,28 @@ def _injetar_css():
         border:1px solid #334155;
         border-radius:14px;
         box-shadow:0 10px 24px rgba(0,0,0,.28);
+        box-sizing:border-box;
+        max-width:100%;
+        min-width:0;
+        overflow:hidden;
         padding:10px;
+        width:100%;
+    }
+    [data-testid="stPlotlyChart"] > div,
+    [data-testid="stPlotlyChart"] .js-plotly-plot,
+    [data-testid="stPlotlyChart"] .plot-container,
+    [data-testid="stPlotlyChart"] .svg-container {
+        box-sizing:border-box;
+        max-width:100%!important;
+        min-width:0!important;
+        width:100%!important;
+    }
+    @media (max-width:640px) {
+        .stPlotlyChart, [data-testid="stPlotlyChart"] {
+            border-radius:10px;
+            box-shadow:0 6px 16px rgba(0,0,0,.24);
+            padding:4px;
+        }
     }
     .dash-section { color:#F1F5F9;font-size:1rem;margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid #334155; }
     .dash-section span { color:#94A3B8;display:block;font-size:.78rem;font-weight:400;margin-top:3px; }

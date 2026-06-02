@@ -21,8 +21,10 @@ CORES = {
 }
 CONFIG_PLOTLY = {
     "displayModeBar": False,
+    "displaylogo": False,
     "responsive": True,
     "scrollZoom": False,
+    "doubleClick": False,
 }
 
 
@@ -62,7 +64,28 @@ def _injetar_css():
             border:1px solid #E2E8F0;
             border-radius:14px;
             box-shadow:0 10px 24px rgba(15,23,42,.14);
+            box-sizing:border-box;
+            max-width:100%;
+            min-width:0;
+            overflow:hidden;
             padding:10px;
+            width:100%;
+        }
+        [data-testid="stPlotlyChart"] > div,
+        [data-testid="stPlotlyChart"] .js-plotly-plot,
+        [data-testid="stPlotlyChart"] .plot-container,
+        [data-testid="stPlotlyChart"] .svg-container {
+            box-sizing:border-box;
+            max-width:100%!important;
+            min-width:0!important;
+            width:100%!important;
+        }
+        @media (max-width:640px) {
+            .stPlotlyChart, [data-testid="stPlotlyChart"] {
+                border-radius:10px;
+                box-shadow:0 6px 16px rgba(15,23,42,.12);
+                padding:4px;
+            }
         }
         </style>
         """,
@@ -109,6 +132,7 @@ def _figura_mensal(mensal):
     ])
     fig.update_layout(
         template="plotly_white",
+        autosize=True,
         barmode="group",
         height=430,
         margin=dict(t=55, b=35, l=20, r=20),

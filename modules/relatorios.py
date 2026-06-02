@@ -23,8 +23,11 @@ CORES = {
     "saida": "#D85A30",
 }
 CONFIG_PLOTLY = {
+    "displayModeBar": False,
     "displaylogo": False,
-    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+    "responsive": True,
+    "scrollZoom": False,
+    "doubleClick": False,
 }
 
 
@@ -122,6 +125,7 @@ def _grafico_barras_mensal(mensal):
             hovertemplate=f"<b>{coluna}</b><br>Mes: %{{x}}<br>%{{customdata}}<extra></extra>",
         ))
     fig.update_layout(
+        autosize=True,
         barmode="group",
         height=440,
         margin=dict(l=20, r=20, t=20, b=20),
@@ -134,8 +138,9 @@ def _grafico_barras_mensal(mensal):
             xanchor="left",
             x=0,
         ),
-        xaxis=dict(title="Mes", showgrid=False),
-        yaxis=dict(title="Valor (R$)", gridcolor="rgba(148,163,184,0.22)"),
+        dragmode=False,
+        xaxis=dict(title="Mes", showgrid=False, fixedrange=True),
+        yaxis=dict(title="Valor (R$)", gridcolor="rgba(148,163,184,0.22)", fixedrange=True),
     )
     return fig
 
@@ -214,7 +219,28 @@ def _injetar_css():
         border:1px solid #E2E8F0;
         border-radius:14px;
         box-shadow:0 10px 24px rgba(15,23,42,.14);
+        box-sizing:border-box;
+        max-width:100%;
+        min-width:0;
+        overflow:hidden;
         padding:10px;
+        width:100%;
+    }
+    [data-testid="stPlotlyChart"] > div,
+    [data-testid="stPlotlyChart"] .js-plotly-plot,
+    [data-testid="stPlotlyChart"] .plot-container,
+    [data-testid="stPlotlyChart"] .svg-container {
+        box-sizing:border-box;
+        max-width:100%!important;
+        min-width:0!important;
+        width:100%!important;
+    }
+    @media (max-width:640px) {
+        .stPlotlyChart, [data-testid="stPlotlyChart"] {
+            border-radius:10px;
+            box-shadow:0 6px 16px rgba(15,23,42,.12);
+            padding:4px;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
