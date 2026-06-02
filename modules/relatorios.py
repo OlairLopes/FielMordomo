@@ -2,6 +2,7 @@ import datetime
 import logging
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from data.repository import carregar_cadastros, carregar_lancamentos, obter_logo_igreja
@@ -17,6 +18,14 @@ COLUNAS_TEXTO = [
     "tipo", "categoria", "subcategoria", "descricao", "forma_pagamento",
     "nome_cadastro", "tipo_cadastro", "lote_id",
 ]
+CORES = {
+    "entrada": "#1D9E75",
+    "saida": "#D85A30",
+}
+CONFIG_PLOTLY = {
+    "displaylogo": False,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+}
 
 
 def _texto(serie):
@@ -95,6 +104,40 @@ def _formatar_resumo(df):
     if "Valor total" in exibicao.columns:
         exibicao["Valor total"] = exibicao["Valor total"].apply(formatar_moeda)
     return exibicao
+
+
+def _grafico_barras_mensal(mensal):
+    fig = go.Figure()
+    for coluna, cor in (("Entradas", CORES["entrada"]), ("Saidas", CORES["saida"])):
+        valores = mensal[coluna].tolist()
+        fig.add_trace(go.Bar(
+            name=coluna,
+            x=mensal.index.tolist(),
+            y=valores,
+            marker_color=cor,
+            text=[formatar_moeda(valor) if valor else "" for valor in valores],
+            textposition="outside",
+            cliponaxis=False,
+            customdata=[formatar_moeda(valor) for valor in valores],
+            hovertemplate=f"<b>{coluna}</b><br>Mes: %{{x}}<br>%{{customdata}}<extra></extra>",
+        ))
+    fig.update_layout(
+        barmode="group",
+        height=440,
+        margin=dict(l=20, r=20, t=20, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
+        xaxis=dict(title="Mes", showgrid=False),
+        yaxis=dict(title="Valor (R$)", gridcolor="rgba(148,163,184,0.22)"),
+    )
+    return fig
 
 
 def _detalhes_exibicao(df):
@@ -325,7 +368,11 @@ def render():
                 mensal[coluna] = 0.0
         mensal["Saldo"] = mensal["Entradas"] - mensal["Saidas"]
         mensal.index = mensal.index.astype(str)
-        st.bar_chart(mensal[["Entradas", "Saidas"]])
+        st.plotly_chart(
+            _grafico_barras_mensal(mensal),
+            use_container_width=True,
+            config=CONFIG_PLOTLY,
+        )
         st.dataframe(mensal, use_container_width=True)
 
         st.markdown("### Totais por categoria")
