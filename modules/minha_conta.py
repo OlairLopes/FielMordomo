@@ -38,6 +38,17 @@ def _config_dias(slug):
     return dias if dias in OPCOES_DIAS else DIAS_DIZIMISTA_ATIVO_DEFAULT
 
 
+def _numero_config(valor, padrao=0.0):
+    texto = str(valor or "").strip().replace("R$", "").replace(" ", "")
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    try:
+        numero = float(texto)
+    except (TypeError, ValueError):
+        return float(padrao)
+    return numero if numero >= 0 else float(padrao)
+
+
 def render():
     st.subheader("Minha Conta")
 
@@ -78,6 +89,12 @@ def render():
         assinatura_atual = obter_config_igreja(
             slug, "nome_assinatura_comprovante", "Responsavel"
         )
+        reserva_atual = _numero_config(
+            obter_config_igreja(slug, "reserva_financeira_disponivel", "0")
+        )
+        meta_reserva_atual = int(_numero_config(
+            obter_config_igreja(slug, "meta_reserva_meses", "3"), 3
+        ))
     except Exception:
         LOGGER.exception("Nao foi possivel carregar as configuracoes da igreja.")
         st.error("Nao foi possivel carregar as configuracoes. Tente novamente.")
@@ -112,15 +129,42 @@ def render():
             help="Exemplo: Pr. Joao Silva ou Tesoureiro Responsavel.",
         )
 
+        st.markdown("**Saude financeira**")
+        st.caption(
+            "Informe a reserva financeira separada para emergencias e a meta de cobertura. "
+            "Esses valores alimentam o painel de saude financeira."
+        )
+        reserva_nova = st.text_input(
+            "Reserva financeira disponivel",
+            value=f"{reserva_atual:.2f}".replace(".", ","),
+            help="Informe apenas recursos realmente disponiveis como reserva.",
+        )
+        opcoes_meta = list(range(1, 13))
+        meta_reserva_nova = st.selectbox(
+            "Meta de cobertura da reserva",
+            opcoes_meta,
+            index=opcoes_meta.index(meta_reserva_atual) if meta_reserva_atual in opcoes_meta else 2,
+            format_func=lambda meses: f"{meses} mes(es)",
+        )
+
         if st.form_submit_button("Salvar configuracoes", type="primary"):
             assinatura_nova = assinatura_nova.strip()
+            reserva_numero = _numero_config(reserva_nova, -1)
             if not assinatura_nova:
                 st.error("Informe o nome da assinatura dos comprovantes.")
+            elif reserva_numero < 0:
+                st.error("Informe uma reserva financeira valida.")
             else:
                 try:
                     salvar_config_igreja(slug, "dias_dizimista_ativo", str(dias_novo))
                     salvar_config_igreja(
                         slug, "nome_assinatura_comprovante", assinatura_nova
+                    )
+                    salvar_config_igreja(
+                        slug, "reserva_financeira_disponivel", f"{reserva_numero:.2f}"
+                    )
+                    salvar_config_igreja(
+                        slug, "meta_reserva_meses", str(meta_reserva_nova)
                     )
                 except Exception:
                     LOGGER.exception("Nao foi possivel salvar as configuracoes da igreja.")

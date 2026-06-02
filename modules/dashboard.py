@@ -300,6 +300,154 @@ def _tabela_monetaria(df, coluna_valor="Valor"):
     return tabela
 
 
+def _numero_config(valor, padrao=0.0):
+    texto = str(valor or "").strip().replace("R$", "").replace(" ", "")
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    try:
+        numero = float(texto)
+    except (TypeError, ValueError):
+        return float(padrao)
+    return numero if numero >= 0 else float(padrao)
+
+
+def _indicadores_saude(df, mes_ref, reserva, meta_reserva):
+    serie = _serie_mensal(df, mes_ref, quantidade=6)
+    recentes = serie.tail(3)
+    media_entradas = float(recentes["entradas"].mean()) if not recentes.empty else 0.0
+    media_saidas = float(recentes["saidas"].mean()) if not recentes.empty else 0.0
+    resultado_medio = media_entradas - media_saidas
+    cobertura = (reserva / media_saidas) if media_saidas > 0 else None
+    ate_referencia = df[df["mes_periodo"] <= mes_ref]
+    saldo_acumulado = _totais(ate_referencia)[2]
+    projecoes = pd.DataFrame({
+        "Horizonte": ["30 dias", "60 dias", "90 dias"],
+        "Meses": [1, 2, 3],
+    })
+    projecoes["Saldo projetado"] = (
+        saldo_acumulado + projecoes["Meses"] * resultado_medio
+    )
+
+    alertas = []
+    if cobertura is not None and cobertura < meta_reserva:
+        alertas.append((
+            "critico",
+            f"A reserva cobre {cobertura:.1f} mes(es), abaixo da meta de {meta_reserva} mes(es).",
+        ))
+    if saldo_acumulado < 0:
+        alertas.append((
+            "critico",
+            "O saldo acumulado dos lancamentos registrados esta negativo.",
+        ))
+    if not serie.empty and float(serie.iloc[-1]["saldo"]) < 0:
+        alertas.append((
+            "atencao",
+            "O mes selecionado fechou com mais saidas do que entradas.",
+        ))
+    if len(serie) >= 2:
+        saida_atual = float(serie.iloc[-1]["saidas"])
+        saida_anterior = float(serie.iloc[-2]["saidas"])
+        if saida_anterior > 0 and saida_atual > saida_anterior * 1.2:
+            variacao = ((saida_atual - saida_anterior) / saida_anterior) * 100
+            alertas.append((
+                "atencao",
+                f"As despesas cresceram {variacao:.1f}% em relacao ao mes anterior.",
+            ))
+    if len(serie) >= 3:
+        entradas = serie["entradas"].tail(3).tolist()
+        if entradas[0] > entradas[1] > entradas[2]:
+            alertas.append((
+                "atencao",
+                "As entradas cairam por dois meses consecutivos.",
+            ))
+    if (projecoes["Saldo projetado"] < 0).any():
+        primeiro = projecoes[projecoes["Saldo projetado"] < 0].iloc[0]["Horizonte"]
+        alertas.append((
+            "critico",
+            f"A projecao indica saldo negativo em ate {primeiro}.",
+        ))
+
+    return {
+        "serie": serie,
+        "media_entradas": media_entradas,
+        "media_saidas": media_saidas,
+        "resultado_medio": resultado_medio,
+        "cobertura": cobertura,
+        "saldo_acumulado": saldo_acumulado,
+        "projecoes": projecoes,
+        "alertas": alertas,
+    }
+
+
+def _render_saude_financeira(df, mes_ref, slug):
+    reserva = _numero_config(
+        obter_config_igreja(slug, "reserva_financeira_disponivel", "0")
+    )
+    meta_reserva = int(_numero_config(
+        obter_config_igreja(slug, "meta_reserva_meses", "3"), 3
+    ))
+    if meta_reserva < 1:
+        meta_reserva = 3
+    saude = _indicadores_saude(df, mes_ref, reserva, meta_reserva)
+
+    _secao_dashboard(
+        "Saude financeira",
+        "Indicadores para apoio a decisao. A projecao utiliza os lancamentos registrados e a media dos ultimos tres meses.",
+    )
+    s1, s2, s3, s4 = st.columns(4)
+    with s1:
+        _card("Reserva disponivel", formatar_moeda(reserva), "Configurada em Minha Conta")
+    with s2:
+        cobertura = saude["cobertura"]
+        valor_cobertura = f"{cobertura:.1f} mes(es)" if cobertura is not None else "Sem despesas"
+        _card("Cobertura da reserva", valor_cobertura, f"Meta: {meta_reserva} mes(es)")
+    with s3:
+        _card("Despesa media mensal", formatar_moeda(saude["media_saidas"]), "Media dos ultimos 3 meses")
+    with s4:
+        _card("Resultado medio mensal", formatar_moeda(saude["resultado_medio"]), "Entradas - saidas")
+
+    _secao_dashboard(
+        "Alertas executivos",
+        "Pontos que merecem avaliacao antes de assumir novos compromissos financeiros.",
+    )
+    if saude["alertas"]:
+        for nivel, mensagem in saude["alertas"]:
+            st.markdown(
+                f'<div class="saude-alerta {nivel}">{_escape(mensagem)}</div>',
+                unsafe_allow_html=True,
+            )
+    else:
+        st.success("Nenhum alerta financeiro relevante foi identificado.")
+
+    _secao_dashboard(
+        "Projecao de caixa",
+        "Estimativa baseada no saldo acumulado registrado e no resultado medio mensal recente.",
+    )
+    projecoes = saude["projecoes"]
+    fig_projecao = go.Figure(go.Bar(
+        x=projecoes["Horizonte"],
+        y=projecoes["Saldo projetado"],
+        marker_color=[
+            CORES["entrada"] if valor >= 0 else CORES["saida"]
+            for valor in projecoes["Saldo projetado"]
+        ],
+        text=[formatar_moeda(valor) for valor in projecoes["Saldo projetado"]],
+        textposition="outside",
+        textfont=dict(size=11, color="#CBD5E1"),
+    ))
+    fig_projecao.update_layout(**_layout_grafico(
+        altura=340,
+        xaxis=dict(fixedrange=True, showgrid=False),
+        yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
+    ))
+    st.plotly_chart(fig_projecao, use_container_width=True, config=CONFIG_PLOTLY)
+    st.caption(
+        f"Saldo acumulado registrado ate {_mes_label(mes_ref)}: "
+        f"{formatar_moeda(saude['saldo_acumulado'])}. "
+        "A projecao nao substitui conciliacao bancaria nem planejamento orcamentario."
+    )
+
+
 def _cartao_atencao(titulo, quantidade, percentual, classe):
     st.markdown(
         f'<div class="pastoral-card {classe}"><div>{_escape(titulo)}</div>'
@@ -457,6 +605,10 @@ def _injetar_css():
     .fidelidade-aviso.moderado strong { color:#FBBF24; }
     .fidelidade-aviso.positivo { border-color:#10B981; }
     .fidelidade-aviso.positivo strong { color:#34D399; }
+    .saude-alerta { background:#1E293B;border-left:4px solid;border-radius:8px;
+        color:#CBD5E1;font-size:.86rem;margin:8px 0;padding:12px 15px; }
+    .saude-alerta.critico { border-color:#DC2626; }
+    .saude-alerta.atencao { border-color:#F59E0B; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -538,8 +690,9 @@ def render():
     with a2: _card("Saidas YTD", formatar_moeda(sai_ytd))
     with a3: _card("Saldo YTD", formatar_moeda(saldo_ytd))
 
-    tab_visao, tab_despesas, tab_receitas, tab_qualidade, tab_pastoral = st.tabs([
-        "Visao Executiva", "Despesas", "Receitas", "Qualidade", "Acompanhamento Pastoral",
+    tab_visao, tab_saude, tab_despesas, tab_receitas, tab_qualidade, tab_pastoral = st.tabs([
+        "Visao Executiva", "Saude Financeira", "Despesas", "Receitas", "Qualidade",
+        "Acompanhamento Pastoral",
     ])    
 
     with tab_visao:
@@ -606,6 +759,9 @@ def render():
                 use_container_width=True,
                 config=CONFIG_PLOTLY,
             )
+
+    with tab_saude:
+        _render_saude_financeira(df, mes_ref, slug)
 
     with tab_despesas:
         saidas = ref[ref["tipo_norm"] == "SAIDA"].copy()
