@@ -1282,6 +1282,59 @@ def salvar_config_igreja(slug: str, chave: str, valor: str):
         )
 
 
+CHAVE_SENHA_PASTORAL = "senha_pastoral_hash"
+
+
+def senha_pastoral_configurada(slug: str) -> bool:
+    return bool(obter_config_igreja(slug, CHAVE_SENHA_PASTORAL, ""))
+
+
+def definir_senha_pastoral(slug: str, senha_igreja: str, nova_senha: str) -> bool:
+    erros = validar_nova_senha(nova_senha)
+    if erros:
+        raise ValueError(" ".join(erros))
+    igreja = autenticar_igreja(slug, senha_igreja)
+    if not igreja:
+        return False
+
+    slug = _validar_slug(slug)
+    with _conn(MASTER_DB) as conn:
+        row = conn.execute(
+            "SELECT senha_hash FROM igrejas WHERE slug=? AND ativa=1",
+            (slug,),
+        ).fetchone()
+    igual_principal, _ = _verificar_senha(
+        nova_senha, row["senha_hash"] if row else ""
+    )
+    if igual_principal:
+        raise ValueError("A senha pastoral deve ser diferente da senha principal.")
+
+    salvar_config_igreja(slug, CHAVE_SENHA_PASTORAL, hash_senha(nova_senha))
+    return True
+
+
+def autenticar_senha_pastoral(slug: str, senha: str) -> bool:
+    try:
+        db = _tenant_db(slug)
+    except ValueError:
+        return False
+    if not db.exists():
+        inicializar_tenant(slug)
+
+    chave_login = "pastoral"
+    with _conn(db) as conn:
+        _garantir_tabela_config_igreja(conn)
+        if _autenticacao_bloqueada(conn, chave_login):
+            return False
+        row = conn.execute(
+            "SELECT valor FROM config_igreja WHERE chave=?",
+            (CHAVE_SENHA_PASTORAL,),
+        ).fetchone()
+        valido, _ = _verificar_senha(senha, row["valor"] if row else "")
+        _registrar_resultado_login(conn, chave_login, valido)
+    return valido
+
+
 SUBCATEGORIAS_DESPESA_PADRAO = [
     "Alimentacao",
     "Limpeza e higienizacao",

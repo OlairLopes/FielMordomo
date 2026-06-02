@@ -7,10 +7,11 @@ import streamlit as st
 
 from data.repository import (
     DIAS_DIZIMISTA_ATIVO_DEFAULT,
-    autenticar_igreja,
+    autenticar_senha_pastoral,
     carregar_cadastros,
     carregar_lancamentos,
     obter_config_igreja,
+    senha_pastoral_configurada,
 )
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
@@ -475,14 +476,20 @@ def _autorizacao_pastoral(slug):
     if st.session_state.get(chave, 0) > agora:
         return True
     st.session_state.pop(chave, None)
+    if not senha_pastoral_configurada(slug):
+        st.info(
+            "Cadastre uma senha exclusiva para o acompanhamento pastoral "
+            "na pagina Minha Conta."
+        )
+        return False
     with st.form(_sk("pastoral_form", slug)):
-        senha = st.text_input("Confirme a senha da igreja", type="password")
+        senha = st.text_input("Senha do acompanhamento pastoral", type="password")
         if st.form_submit_button("Acessar acompanhamento pastoral", type="primary"):
-            if autenticar_igreja(slug, senha):
+            if autenticar_senha_pastoral(slug, senha):
                 st.session_state[chave] = agora + 5 * 60
                 st.rerun()
             else:
-                st.error("Senha incorreta.")
+                st.error("Senha pastoral incorreta.")
     return False
 
 

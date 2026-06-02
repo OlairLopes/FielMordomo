@@ -4,9 +4,11 @@ import streamlit as st
 
 from data.repository import (
     DIAS_DIZIMISTA_ATIVO_DEFAULT,
+    definir_senha_pastoral,
     igreja_alterar_senha,
     obter_config_igreja,
     salvar_config_igreja,
+    senha_pastoral_configurada,
     validar_nova_senha,
 )
 from utils.helpers import slug_da_sessao
@@ -128,7 +130,72 @@ def render():
                     st.rerun()
 
     st.divider()
-    st.markdown("### 🔒 Alterar senha")
+    st.markdown("### Senha do acompanhamento pastoral")
+    st.caption(
+        "Cadastre uma senha exclusiva para proteger os dados individuais de contribuicao. "
+        "Ela deve ser diferente da senha principal da igreja."
+    )
+    try:
+        pastoral_configurada = senha_pastoral_configurada(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel consultar a senha pastoral.")
+        pastoral_configurada = False
+        st.error("Nao foi possivel verificar a configuracao da senha pastoral.")
+    else:
+        if pastoral_configurada:
+            st.success("Senha pastoral cadastrada. Use o formulario para substitui-la.")
+        else:
+            st.warning("Cadastre uma senha pastoral para liberar o acompanhamento pastoral.")
+
+    with st.form("form_senha_pastoral", clear_on_submit=True):
+        senha_principal = st.text_input(
+            "Senha principal da igreja",
+            type="password",
+            key="senha_principal_para_pastoral",
+        )
+        nova_senha_pastoral = st.text_input(
+            "Nova senha pastoral",
+            type="password",
+            key="nova_senha_pastoral",
+        )
+        confirma_senha_pastoral = st.text_input(
+            "Confirmar senha pastoral",
+            type="password",
+            key="confirma_senha_pastoral",
+        )
+        if st.form_submit_button(
+            "Salvar senha pastoral" if not pastoral_configurada else "Alterar senha pastoral",
+            type="primary",
+        ):
+            erros = []
+            if not senha_principal:
+                erros.append("Informe a senha principal da igreja.")
+            erros.extend(validar_nova_senha(nova_senha_pastoral))
+            if nova_senha_pastoral != confirma_senha_pastoral:
+                erros.append("Senha pastoral e confirmacao nao coincidem.")
+
+            if erros:
+                for erro in dict.fromkeys(erros):
+                    st.error(erro)
+            else:
+                try:
+                    alterada = definir_senha_pastoral(
+                        slug, senha_principal, nova_senha_pastoral
+                    )
+                except ValueError as ex:
+                    st.error(str(ex))
+                except Exception:
+                    LOGGER.exception("Nao foi possivel salvar a senha pastoral.")
+                    st.error("Nao foi possivel salvar a senha pastoral. Tente novamente.")
+                else:
+                    if alterada:
+                        st.success("Senha pastoral salva com sucesso.")
+                        st.rerun()
+                    else:
+                        st.error("Senha principal incorreta.")
+
+    st.divider()
+    st.markdown("### Alterar senha principal")
     st.caption(
         "Use uma senha longa e exclusiva. A nova senha deve possuir entre "
         "15 e 128 caracteres."
