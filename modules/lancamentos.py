@@ -28,10 +28,15 @@ FORMAS_PAGAMENTO = [
     "Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque",
     "Cartao Debito", "Cartao Credito",
 ]
+TIPOS_VINCULO = ["Nenhum", "Membro", "Fornecedor"]
 
 LOGGER = logging.getLogger(__name__)
 API_VERSION_RE = re.compile(r"^v\d+\.\d+$")
 PHONE_NUMBER_ID_RE = re.compile(r"^\d+$")
+
+
+def _rotulo_vinculo(tipo):
+    return "Fornecedor (empresa)" if tipo == "Fornecedor" else tipo
 
 
 def _ck(sufixo, slug):
@@ -570,8 +575,9 @@ def render():
             vinc_pad = "Nenhum"
 
         vincular = st.selectbox(
-            "Vincular a", ["Nenhum", "Membro", "Fornecedor"],
-            index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad),
+            "Vincular a", TIPOS_VINCULO,
+            index=TIPOS_VINCULO.index(vinc_pad),
+            format_func=_rotulo_vinculo,
             key=f"nl_vincular_{cnt}",
         )
 
@@ -590,7 +596,7 @@ def render():
                 st.warning("Nenhum fornecedor ativo cadastrado.")
             else:
                 opc = montar_opcoes(fornec)
-                esc = st.selectbox("Fornecedor", list(opc.keys()), key=f"nl_fornecedor_{cnt}")
+                esc = st.selectbox("Fornecedor (empresa)", list(opc.keys()), key=f"nl_fornecedor_{cnt}")
                 l = opc[esc]
                 id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
@@ -651,8 +657,9 @@ def render():
 
             vinc_pad_l = "Membro" if tipo_lote == "Entrada" else "Fornecedor"
             vincular_lote = st.selectbox(
-                "Vincular a", ["Nenhum", "Membro", "Fornecedor"],
-                index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_l),
+                "Vincular a", TIPOS_VINCULO,
+                index=TIPOS_VINCULO.index(vinc_pad_l),
+                format_func=_rotulo_vinculo,
                 key="lote_vincular",
             )
 
@@ -671,7 +678,7 @@ def render():
                     st.warning("Nenhum fornecedor ativo cadastrado.")
                 else:
                     opc = montar_opcoes(fornec)
-                    esc = st.selectbox("Fornecedor", list(opc.keys()), key="lote_fornecedor")
+                    esc = st.selectbox("Fornecedor (empresa)", list(opc.keys()), key="lote_fornecedor")
                     l = opc[esc]
                     id_cad_l, nome_cad_l, tipo_cad_l = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
@@ -939,8 +946,9 @@ def render():
                       else "Fornecedor" if vinc_str == "FORNECEDOR"
                       else "Membro" if vinc_str == "MEMBRO"
                       else "Nenhum")
-        vincular_e = st.selectbox("Vincular a", ["Nenhum", "Membro", "Fornecedor"],
-                                  index=["Nenhum", "Membro", "Fornecedor"].index(vinc_pad_e),
+        vincular_e = st.selectbox("Vincular a", TIPOS_VINCULO,
+                                  index=TIPOS_VINCULO.index(vinc_pad_e),
+                                  format_func=_rotulo_vinculo,
                                   key=kp + "vinc")
 
         id_e, nome_e, tipo_e2 = None, "", ""
@@ -963,7 +971,7 @@ def render():
             )
             if opc:
                 chaves = list(opc.keys())
-                esc = st.selectbox("Fornecedor", chaves,
+                esc = st.selectbox("Fornecedor (empresa)", chaves,
                                    index=chaves.index(chave) if chave in chaves else 0,
                                    key=kp + "forn")
                 l = opc[esc]
