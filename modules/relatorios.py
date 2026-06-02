@@ -209,6 +209,13 @@ def _injetar_css():
         font-size:.78rem;
         margin-top:3px;
     }
+    .stPlotlyChart, [data-testid="stPlotlyChart"] {
+        background:#FFFFFF;
+        border:1px solid #E2E8F0;
+        border-radius:14px;
+        box-shadow:0 10px 24px rgba(15,23,42,.14);
+        padding:10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 

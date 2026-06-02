@@ -595,7 +595,13 @@ def _injetar_css():
     .dash-label { color:#94A3B8;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em; }
     .dash-value { color:#F8FAFC;font-size:1.45rem;font-weight:700;margin-top:5px; }
     .dash-note { color:#CBD5E1;font-size:.76rem;margin-top:5px; }
-    .stPlotlyChart { background:#1E293B;border:1px solid #334155;border-radius:14px;padding:10px; }
+    .stPlotlyChart, [data-testid="stPlotlyChart"] {
+        background:#1E293B;
+        border:1px solid #334155;
+        border-radius:14px;
+        box-shadow:0 10px 24px rgba(0,0,0,.28);
+        padding:10px;
+    }
     .dash-section { color:#F1F5F9;font-size:1rem;margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid #334155; }
     .dash-section span { color:#94A3B8;display:block;font-size:.78rem;font-weight:400;margin-top:3px; }
     .dash-legenda { display:flex;flex-wrap:wrap;gap:9px 16px;margin:10px 0 14px; }
