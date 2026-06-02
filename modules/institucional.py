@@ -164,8 +164,8 @@ def _css_base():
             display: block;
             width: auto;
             height: auto;
-            max-width: 180px;
-            max-height: 54px;
+            max-width: 240px;
+            max-height: 72px;
             object-fit: contain;
         }}
 
@@ -646,8 +646,8 @@ def _css_base():
             }}
 
             .fm-logo-img {{
-                max-width: 150px;
-                max-height: 46px;
+                max-width: 190px;
+                max-height: 58px;
             }}
 
             .fm-hero {{
@@ -896,7 +896,7 @@ def _privacidade():
     return """
     <div class="fm-simple-page">
         <div class="fm-simple-card">
-            <h1>Política de Privacidade</h1>
+            <h1>Pol&iacute;tica de Privacidade</h1>
 
             <p>
                 O FielMordomo respeita a privacidade dos usuários e das instituições cadastradas.
