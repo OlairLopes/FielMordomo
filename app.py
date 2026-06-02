@@ -48,6 +48,10 @@ PAGINAS_IGREJA = {
     "backup": ("Backup", "modules.backup"),
     "minha_conta": ("Minha conta", "modules.minha_conta"),
 }
+PAGINAS_TESOUREIRO = {
+    "lancamentos": ("Lancamentos", "modules.lancamentos"),
+    "cadastros": ("Membros", "modules.cadastros"),
+}
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -281,6 +285,30 @@ def _sidebar_admin():
             _auth().logout()
 
 
+def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
+    with st.sidebar:
+        _render_logo_sidebar(igreja.get("slug", ""))
+        st.markdown(
+            '<div class="sidebar-info">'
+            f'<b>{_esc(tesoureiro.get("nome", "Tesoureiro"))}</b>'
+            '<div class="plano">Acesso restrito operacional</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        for chave, (rotulo, _) in PAGINAS_TESOUREIRO.items():
+            if st.button(
+                rotulo,
+                key=f"sb_tesoureiro_{chave}",
+                use_container_width=True,
+                type="primary" if pagina_atual == chave else "secondary",
+            ):
+                st.session_state["pagina"] = chave
+                st.rerun()
+        st.divider()
+        if st.button("Sair", key="sb_sair_tesoureiro", use_container_width=True):
+            _auth().logout()
+
+
 def _renderizar_admin():
     _sidebar_admin()
     try:
@@ -313,6 +341,30 @@ def _renderizar_igreja():
         )
 
 
+def _renderizar_tesoureiro():
+    igreja = st.session_state.get("igreja", {})
+    tesoureiro = st.session_state.get("tesoureiro", {})
+    if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(tesoureiro, dict):
+        st.error("Sessao invalida. Faca login novamente.")
+        if st.button("Voltar ao login"):
+            _auth().logout()
+        return
+    pagina = st.session_state.get("pagina", "lancamentos")
+    if pagina not in PAGINAS_TESOUREIRO:
+        pagina = "lancamentos"
+        st.session_state["pagina"] = pagina
+    _sidebar_tesoureiro(pagina, igreja, tesoureiro)
+    _, caminho_modulo = PAGINAS_TESOUREIRO[pagina]
+    try:
+        _importar(caminho_modulo).render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao carregar a pagina %s para o tesoureiro.", pagina)
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
+
+
 def main():
     _bloquear_acesso_fora_do_dominio_oficial()
     _resolver_rota_publica()
@@ -325,6 +377,8 @@ def main():
         _renderizar_admin()
     elif modo == "igreja":
         _renderizar_igreja()
+    elif modo == "tesoureiro":
+        _renderizar_tesoureiro()
     else:
         st.error("Modo de acesso invalido. Faca login novamente.")
         if st.button("Sair"):

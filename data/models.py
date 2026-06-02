@@ -144,6 +144,8 @@ class Lancamento:
 class Tesoureiro:
     nome: str
     cpf: str
+    usuario: str = ""
+    senha: str = ""
     telefone: str = ""
     email: str = ""
     data_inicio: str = ""
@@ -159,6 +161,8 @@ class Tesoureiro:
             erros.append("Nome e obrigatorio.")
         if not validar_cpf(self.cpf):
             erros.append("CPF invalido.")
+        if not self.usuario.strip():
+            erros.append("Usuario de acesso e obrigatorio.")
         if self.email.strip() and not EMAIL_RE.fullmatch(self.email.strip()):
             erros.append("E-mail invalido.")
         if self.situacao not in ("Ativo", "Inativo"):

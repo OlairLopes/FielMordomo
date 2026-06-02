@@ -28,6 +28,7 @@ TAMANHO_MAXIMO_ZIP = 100 * 1024 * 1024
 TAMANHO_MAXIMO_ARQUIVOS_ZIP = 500 * 1024 * 1024
 EXTENSOES_LOGO_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
+USUARIO_TESOUREIRO_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{2,38}[a-z0-9])?$")
 HASH_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 LIMITES_MEMBROS_PLANO = {"basico": 50, "profissional": 250, "premium": None}
 CATEGORIAS_ENTRADA = {"Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD"}
@@ -399,6 +400,8 @@ def inicializar_tenant(slug):
                 id_tesoureiro INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome          TEXT NOT NULL,
                 cpf           TEXT NOT NULL UNIQUE,
+                usuario       TEXT NOT NULL DEFAULT '',
+                senha_hash    TEXT NOT NULL DEFAULT '',
                 telefone      TEXT DEFAULT '',
                 email         TEXT DEFAULT '',
                 data_inicio   TEXT DEFAULT '',
@@ -846,6 +849,8 @@ def _garantir_tabela_tesoureiros(conn):
             id_tesoureiro INTEGER PRIMARY KEY AUTOINCREMENT,
             nome          TEXT NOT NULL,
             cpf           TEXT NOT NULL UNIQUE,
+            usuario       TEXT NOT NULL DEFAULT '',
+            senha_hash    TEXT NOT NULL DEFAULT '',
             telefone      TEXT DEFAULT '',
             email         TEXT DEFAULT '',
             data_inicio   TEXT DEFAULT '',
@@ -860,6 +865,17 @@ def _garantir_tabela_tesoureiros(conn):
             ON tesoureiros(principal)
             WHERE principal=1 AND situacao='Ativo';
     """)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(tesoureiros)").fetchall()]
+    for col, tipo in [
+        ("usuario", "TEXT NOT NULL DEFAULT ''"),
+        ("senha_hash", "TEXT NOT NULL DEFAULT ''"),
+    ]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE tesoureiros ADD COLUMN {col} {tipo}")
+    conn.execute(
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_tesoureiro_usuario
+           ON tesoureiros(usuario) WHERE usuario!=''"""
+    )
 
 
 def carregar_tesoureiros(slug):
@@ -897,6 +913,9 @@ def cpf_tesoureiro_existe(slug, cpf, id_excluir=None):
 
 def inserir_tesoureiro(slug, tesoureiro):
     _validar_tesoureiro(tesoureiro)
+    erros_senha = validar_nova_senha(tesoureiro.senha)
+    if erros_senha:
+        raise ValueError(" ".join(erros_senha))
     db = _tenant_db(slug)
     with _conn(db) as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -907,6 +926,11 @@ def inserir_tesoureiro(slug, tesoureiro):
         ).fetchone()
         if duplicado:
             raise ValueError("Ja existe um tesoureiro cadastrado com este CPF.")
+        usuario = _normalizar_usuario_tesoureiro(tesoureiro.usuario)
+        if conn.execute(
+            "SELECT 1 FROM tesoureiros WHERE usuario=? LIMIT 1", (usuario,)
+        ).fetchone():
+            raise ValueError("Ja existe um tesoureiro com este usuario.")
         if tesoureiro.principal:
             conn.execute(
                 "UPDATE tesoureiros SET principal=0, atualizado_em=datetime('now') "
@@ -914,10 +938,10 @@ def inserir_tesoureiro(slug, tesoureiro):
             )
         cur = conn.execute(
             """INSERT INTO tesoureiros
-               (nome, cpf, telefone, email, data_inicio, data_fim, situacao,
-                principal, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            _dados_tesoureiro(tesoureiro),
+               (nome, cpf, usuario, senha_hash, telefone, email, data_inicio,
+                data_fim, situacao, principal, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            _dados_tesoureiro(tesoureiro, incluir_credenciais=True),
         )
         return cur.lastrowid
 
@@ -946,19 +970,41 @@ def atualizar_tesoureiro(slug, tesoureiro):
         ).fetchone()
         if duplicado:
             raise ValueError("Ja existe um tesoureiro cadastrado com este CPF.")
+        usuario = _normalizar_usuario_tesoureiro(tesoureiro.usuario)
+        if conn.execute(
+            """SELECT 1 FROM tesoureiros
+               WHERE usuario=? AND id_tesoureiro!=? LIMIT 1""",
+            (usuario, int(tesoureiro.id_tesoureiro)),
+        ).fetchone():
+            raise ValueError("Ja existe um tesoureiro com este usuario.")
         if tesoureiro.principal:
             conn.execute(
                 """UPDATE tesoureiros SET principal=0, atualizado_em=datetime('now')
                    WHERE principal=1 AND id_tesoureiro!=?""",
                 (int(tesoureiro.id_tesoureiro),),
             )
-        conn.execute(
-            """UPDATE tesoureiros
-               SET nome=?, cpf=?, telefone=?, email=?, data_inicio=?, data_fim=?,
-                   situacao=?, principal=?, observacoes=?, atualizado_em=datetime('now')
-               WHERE id_tesoureiro=?""",
-            _dados_tesoureiro(tesoureiro) + (int(tesoureiro.id_tesoureiro),),
-        )
+        dados = _dados_tesoureiro(tesoureiro)
+        if tesoureiro.senha:
+            erros_senha = validar_nova_senha(tesoureiro.senha)
+            if erros_senha:
+                raise ValueError(" ".join(erros_senha))
+            conn.execute(
+                """UPDATE tesoureiros
+                   SET nome=?, cpf=?, usuario=?, telefone=?, email=?, data_inicio=?,
+                       data_fim=?, situacao=?, principal=?, observacoes=?,
+                       senha_hash=?, atualizado_em=datetime('now')
+                   WHERE id_tesoureiro=?""",
+                dados + (hash_senha(tesoureiro.senha), int(tesoureiro.id_tesoureiro)),
+            )
+        else:
+            conn.execute(
+                """UPDATE tesoureiros
+                   SET nome=?, cpf=?, usuario=?, telefone=?, email=?, data_inicio=?,
+                       data_fim=?, situacao=?, principal=?, observacoes=?,
+                       atualizado_em=datetime('now')
+                   WHERE id_tesoureiro=?""",
+                dados + (int(tesoureiro.id_tesoureiro),),
+            )
 
 
 def _validar_tesoureiro(tesoureiro):
@@ -967,11 +1013,22 @@ def _validar_tesoureiro(tesoureiro):
         raise ValueError(" ".join(erros))
 
 
-def _dados_tesoureiro(tesoureiro):
+def _normalizar_usuario_tesoureiro(usuario):
+    usuario = str(usuario or "").strip().lower()
+    if not USUARIO_TESOUREIRO_RE.fullmatch(usuario):
+        raise ValueError(
+            "Usuario invalido. Use de 4 a 40 caracteres: letras minusculas, "
+            "numeros, ponto, hifen ou sublinhado."
+        )
+    return usuario
+
+
+def _dados_tesoureiro(tesoureiro, incluir_credenciais=False):
     cpf_limpo = "".join(c for c in str(tesoureiro.cpf or "") if c.isdigit())
-    return (
+    dados = (
         sanitizar(tesoureiro.nome),
         cpf_limpo,
+        _normalizar_usuario_tesoureiro(tesoureiro.usuario),
         sanitizar(tesoureiro.telefone),
         sanitizar(tesoureiro.email),
         str(tesoureiro.data_inicio or ""),
@@ -980,6 +1037,55 @@ def _dados_tesoureiro(tesoureiro):
         int(bool(tesoureiro.principal)),
         sanitizar(tesoureiro.observacoes),
     )
+    if incluir_credenciais:
+        return dados[:3] + (hash_senha(tesoureiro.senha),) + dados[3:]
+    return dados
+
+
+def autenticar_tesoureiro(slug, usuario, senha):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_tesoureiro(usuario)
+    except ValueError:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    chave = f"tesoureiro:{usuario}"
+    with _conn(db) as conn:
+        _garantir_tabela_tesoureiros(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+        row = conn.execute(
+            """SELECT id_tesoureiro, nome, usuario, senha_hash
+               FROM tesoureiros
+               WHERE usuario=? AND situacao='Ativo'""",
+            (usuario,),
+        ).fetchone()
+        valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
+        _registrar_resultado_login(conn, chave, valido)
+        if valido and migrar:
+            conn.execute(
+                "UPDATE tesoureiros SET senha_hash=? WHERE id_tesoureiro=?",
+                (hash_senha(senha), row["id_tesoureiro"]),
+            )
+    if not row or not valido:
+        return None
+    igreja_publica = {
+        chave: igreja[chave]
+        for chave in ("id", "nome", "slug", "email_admin", "plano", "ativa", "criada_em")
+    }
+    return {
+        "igreja": igreja_publica,
+        "tesoureiro": {
+            "id": row["id_tesoureiro"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+        },
+    }
 
 
 def carregar_lancamentos(slug):

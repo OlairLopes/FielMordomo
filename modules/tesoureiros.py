@@ -11,8 +11,9 @@ from data.repository import (
     atualizar_tesoureiro,
     carregar_tesoureiros,
     inserir_tesoureiro,
+    validar_nova_senha,
 )
-from utils.helpers import slug_da_sessao
+from utils.helpers import slug_da_sessao, solicitar_autorizacao
 
 
 LOGGER = logging.getLogger(__name__)
@@ -91,6 +92,13 @@ def _form_novo(slug):
             st.caption("O CPF identifica o responsavel e nao sera exibido integralmente na listagem.")
             nome = st.text_input("Nome completo *")
             cpf = st.text_input("CPF *", placeholder="000.000.000-00")
+            usuario = st.text_input(
+                "Usuario de acesso *",
+                placeholder="ex: tesouraria.central",
+                help="Use letras minusculas, numeros, ponto, hifen ou sublinhado.",
+            )
+            senha = st.text_input("Senha inicial *", type="password")
+            confirma_senha = st.text_input("Confirmar senha inicial *", type="password")
             c1, c2 = st.columns(2)
             with c1:
                 telefone = st.text_input("Telefone")
@@ -102,9 +110,18 @@ def _form_novo(slug):
                 principal = st.checkbox("Responsavel principal")
             observacoes = st.text_area("Observacoes")
             if st.form_submit_button("Cadastrar", type="primary"):
+                erros_senha = validar_nova_senha(senha)
+                if senha != confirma_senha:
+                    erros_senha.append("Senha e confirmacao nao coincidem.")
+                if erros_senha:
+                    for erro in dict.fromkeys(erros_senha):
+                        st.error(erro)
+                    return
                 tesoureiro = Tesoureiro(
                     nome=nome,
                     cpf=cpf,
+                    usuario=usuario,
+                    senha=senha,
                     telefone=telefone,
                     email=email,
                     data_inicio=_data_iso(data_inicio),
@@ -124,11 +141,12 @@ def _tabela_resumo(df):
     tabela["Fim"] = tabela["data_fim"].map(_formatar_data)
     tabela = tabela.rename(columns={
         "nome": "Nome",
+        "usuario": "Usuario",
         "telefone": "Telefone",
         "email": "E-mail",
         "situacao": "Situacao",
     })
-    return tabela[["Nome", "CPF", "Telefone", "E-mail", "Inicio", "Fim", "Situacao", "Principal"]]
+    return tabela[["Nome", "Usuario", "CPF", "Telefone", "E-mail", "Inicio", "Fim", "Situacao", "Principal"]]
 
 
 def _form_editar(slug, df):
@@ -146,6 +164,13 @@ def _form_editar(slug, df):
         st.caption("Para preservar o historico, encerre a atuacao em vez de excluir o registro.")
         nome = st.text_input("Nome completo *", value=str(row["nome"] or ""))
         cpf = st.text_input("CPF *", value=str(row["cpf"] or ""))
+        usuario = st.text_input("Usuario de acesso *", value=str(row["usuario"] or ""))
+        senha = st.text_input(
+            "Nova senha",
+            type="password",
+            help="Deixe em branco para manter a senha atual.",
+        )
+        confirma_senha = st.text_input("Confirmar nova senha", type="password")
         c1, c2 = st.columns(2)
         with c1:
             telefone = st.text_input("Telefone", value=str(row["telefone"] or ""))
@@ -173,10 +198,19 @@ def _form_editar(slug, df):
         )
         observacoes = st.text_area("Observacoes", value=str(row["observacoes"] or ""))
         if st.form_submit_button("Salvar alteracoes", type="primary"):
+            erros_senha = validar_nova_senha(senha) if senha else []
+            if senha != confirma_senha:
+                erros_senha.append("Senha e confirmacao nao coincidem.")
+            if erros_senha:
+                for erro in dict.fromkeys(erros_senha):
+                    st.error(erro)
+                return
             tesoureiro = Tesoureiro(
                 id_tesoureiro=id_tesoureiro,
                 nome=nome,
                 cpf=cpf,
+                usuario=usuario,
+                senha=senha,
                 telefone=telefone,
                 email=email,
                 data_inicio=_data_iso(data_inicio),
@@ -195,9 +229,15 @@ def render():
         st.error("Sessao invalida. Faca login novamente.")
         return
     st.subheader("Tesoureiros")
+    if not solicitar_autorizacao(
+        "gerenciar_tesoureiros",
+        "gerenciar acessos de tesoureiros",
+    ):
+        st.caption("Confirme a senha principal da igreja para administrar credenciais.")
+        return
     st.caption(
-        "Cadastre os responsaveis financeiros desta congregacao e preserve o historico "
-        "dos periodos de atuacao."
+        "Cadastre credenciais para os responsaveis financeiros. Tesoureiros ativos "
+        "podem entrar no sistema somente para registrar lancamentos."
     )
     df = _carregar(slug)
     ativos = int((df["situacao"] == "Ativo").sum()) if not df.empty else 0
