@@ -714,7 +714,7 @@ def _footer():
     return """
     <div class="fm-footer">
         <div class="fm-footer-inner">
-            <div>FielMordomo © 2026 — Sistema de gestão financeira para igrejas.</div>
+            <div>FielMordomo © 2026 — Sistema de Gestão Financeira para Igrejas.</div>
             <div>
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
@@ -729,7 +729,7 @@ def _home():
     return """
     <section class="fm-hero">
         <div class="fm-hero-text">
-            <div class="fm-eyebrow">✦ Gestão financeira para Igrejas</div>
+            <div class="fm-eyebrow">✦ Gestão Financeira para Igrejas</div>
 
             <h1>Gestão financeira simples, segura e organizada para Igrejas</h1>
 
@@ -1051,4 +1051,3 @@ def render_institucional():
 
     html_final = _css_base() + '<div class="fm-page">' + _conteudo_da_pagina() + "</div>"
     _render_html(html_final)
-    

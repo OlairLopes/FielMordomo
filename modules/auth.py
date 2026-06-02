@@ -138,7 +138,7 @@ def tela_login():
         st.markdown(
             "<p style='text-align:center;color:var(--color-text-secondary);"
             "font-size:0.9rem;margin-bottom:1.5rem'>"
-            "Gestao financeira para igrejas</p>",
+            "Gestão Financeira para Igrejas</p>",
             unsafe_allow_html=True,
         )
 
