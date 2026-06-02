@@ -79,6 +79,25 @@ def _auth():
     return _importar("modules.auth")
 
 
+def _validar_contrato_auth(auth):
+    funcoes_obrigatorias = ("tela_login", "modo_atual", "logout")
+    ausentes = [
+        nome for nome in funcoes_obrigatorias
+        if not callable(getattr(auth, nome, None))
+    ]
+    if not ausentes:
+        return
+    LOGGER.error(
+        "Modulo modules.auth incompativel. Funcoes ausentes: %s.",
+        ", ".join(ausentes),
+    )
+    st.error(
+        "A atualizacao do sistema esta incompleta. "
+        "Publique tambem o arquivo modules/auth.py atualizado."
+    )
+    st.stop()
+
+
 def _dominios_permitidos():
     adicionais = {
         host.strip().lower()
@@ -369,6 +388,7 @@ def main():
     _bloquear_acesso_fora_do_dominio_oficial()
     _resolver_rota_publica()
     auth = _auth()
+    _validar_contrato_auth(auth)
     if not auth.tela_login():
         st.stop()
     _injetar_css()
