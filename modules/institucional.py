@@ -1051,3 +1051,4 @@ def render_institucional():
 
     html_final = _css_base() + '<div class="fm-page">' + _conteudo_da_pagina() + "</div>"
     _render_html(html_final)
+    
