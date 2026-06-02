@@ -57,8 +57,13 @@ def _injetar_css():
         .min-section {color:#0F172A;font-size:1rem;font-weight:700;margin:18px 0 10px;
             padding-bottom:8px;border-bottom:1px solid #E2E8F0}
         .min-section span {color:#64748B;display:block;font-size:.78rem;font-weight:400;margin-top:3px}
-        .stPlotlyChart {background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;
-            padding:10px;box-shadow:0 4px 12px rgba(15,23,42,.04)}
+        .stPlotlyChart, [data-testid="stPlotlyChart"] {
+            background:#FFFFFF;
+            border:1px solid #E2E8F0;
+            border-radius:14px;
+            box-shadow:0 10px 24px rgba(15,23,42,.14);
+            padding:10px;
+        }
         </style>
         """,
         unsafe_allow_html=True,
