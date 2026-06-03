@@ -186,7 +186,20 @@ def _esc(valor):
 def _injetar_css():
     st.markdown(
         """
+        <meta name="google" content="notranslate">
+        <meta name="translate" content="no">
         <style>
+        html,body,.stApp,[data-testid="stAppViewContainer"] {
+            -webkit-locale:"pt-BR";
+        }
+        .stApp,[data-testid="stAppViewContainer"],
+        section[data-testid="stSidebar"],
+        [data-testid="stSidebarContent"],
+        [data-testid="stMarkdownContainer"],
+        label,button,input,textarea,select {
+            translate:no;
+        }
+        .notranslate { translate:no; }
         header[data-testid="stHeader"] {background:transparent!important;height:3rem!important}
         #MainMenu,footer {display:none!important}
         [data-testid="stSidebarCollapsedControl"] {display:flex!important;visibility:visible!important;
@@ -218,6 +231,17 @@ def _injetar_css():
         .block-container {padding-top:3.5rem!important;padding-left:2rem!important;
             padding-right:2rem!important;max-width:100%!important}
         </style>
+        <script>
+        (function () {
+            const root = window.parent && window.parent.document
+                ? window.parent.document
+                : document;
+            root.documentElement.setAttribute("lang", "pt-BR");
+            root.documentElement.setAttribute("translate", "no");
+            root.body && root.body.setAttribute("translate", "no");
+            root.body && root.body.classList.add("notranslate");
+        })();
+        </script>
         """,
         unsafe_allow_html=True,
     )

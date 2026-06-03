@@ -102,13 +102,17 @@ def _marca_fielmordomo_html():
 
 def _css_base():
     return f"""
+    <meta name="google" content="notranslate">
+    <meta name="translate" content="no">
     <style>
         * {{
             box-sizing: border-box;
+            translate: no;
         }}
 
         html {{
             scroll-behavior: smooth;
+            -webkit-locale: "pt-BR";
         }}
 
         body {{
@@ -1028,6 +1032,8 @@ def _render_html(html_final: str):
 def render_institucional():
     st.markdown(
         """
+        <meta name="google" content="notranslate">
+        <meta name="translate" content="no">
         <style>
             .block-container {
                 padding: 0 !important;
@@ -1049,5 +1055,10 @@ def render_institucional():
         unsafe_allow_html=True,
     )
 
-    html_final = _css_base() + '<div class="fm-page">' + _conteudo_da_pagina() + "</div>"
+    html_final = (
+        _css_base()
+        + '<div class="fm-page notranslate" translate="no" lang="pt-BR">'
+        + _conteudo_da_pagina()
+        + "</div>"
+    )
     _render_html(html_final)
