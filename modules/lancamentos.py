@@ -584,6 +584,9 @@ def _gerar_html_fechamento_caixa(lancamentos, igreja, slug, data_inicio, data_fi
             tipo = _html(row.get("tipo", "-"))
             categoria = _html(row.get("categoria", "-"))
             subcategoria = _html(row.get("subcategoria", "") or "")
+            nome_vinc = _html(row.get("nome_cadastro", "") or "Sem vinculo")
+            tipo_vinc = _html(row.get("tipo_cadastro", "") or "")
+            vinculo = nome_vinc + (f" ({tipo_vinc})" if tipo_vinc else "")
             forma = _html(row.get("forma_pagamento", "") or "-")
             valor = _html(formatar_moeda(row.get("valor", 0)))
             desc = _html(row.get("descricao", "") or "")
@@ -594,6 +597,7 @@ def _gerar_html_fechamento_caixa(lancamentos, igreja, slug, data_inicio, data_fi
                 '<div class="item">'
                 f'<div><strong>#{id_txt}</strong> {data_txt} - {tipo}</div>'
                 f'<div>{categoria}{complemento}</div>'
+                f'<div class="vinculo">Vinculado: {vinculo}</div>'
                 f'<div class="linha"><span class="label">{forma}</span><span class="valor">{valor}</span></div>'
                 '</div>'
             )
@@ -622,6 +626,7 @@ body {{ background: #f0f0f0; display: flex; justify-content: center; padding: 20
 .valor-total {{ text-align: center; font-size: 20px; font-weight: bold; margin: 8px 0 4px; }}
 .item {{ border-top: 1px dashed #bbb; padding: 6px 0; font-size: 10px; }}
 .item strong {{ font-size: 10px; }}
+.vinculo {{ color: #333; font-size: 10px; font-weight: 700; margin-top: 2px; word-break: break-word; }}
 .vazio {{ text-align: center; color: #666; font-size: 10px; padding: 10px 0; }}
 .assinatura-bloco {{ margin-top: 12px; display: flex; justify-content: center; gap: 18px; }}
 .assinatura-item {{ flex: 1; max-width: 46%; }}
