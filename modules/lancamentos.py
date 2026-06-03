@@ -518,6 +518,164 @@ body {{ background: #f0f0f0; display: flex; justify-content: center; padding: 20
 </body></html>"""
 
 
+def _gerar_html_fechamento_caixa(lancamentos, igreja, slug, data_inicio, data_fim,
+                                 forma_pagamento="Todas"):
+    nome_igreja = _html(igreja.get("nome", "Igreja"))
+    data_emissao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    periodo = (
+        data_inicio.strftime("%d/%m/%Y")
+        if data_inicio == data_fim
+        else f"{data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
+    )
+
+    df = lancamentos.copy()
+    if df.empty:
+        entradas = saidas = saldo = 0.0
+        qtd = 0
+    else:
+        df["tipo_norm"] = df["tipo"].fillna("").astype(str).str.upper().str.strip()
+        df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0.0)
+        entradas = float(df[df["tipo_norm"] == "ENTRADA"]["valor"].sum())
+        saidas = float(df[df["tipo_norm"] == "SAIDA"]["valor"].sum())
+        saldo = entradas - saidas
+        qtd = len(df)
+
+    logo_b64 = _logo_base64(slug)
+    logo_html = ""
+    if logo_b64:
+        logo_html = (
+            '<div style="text-align:center;margin-bottom:6px">'
+            f'<img src="{logo_b64}" style="max-height:60px;max-width:160px;object-fit:contain"/>'
+            '</div>'
+        )
+
+    sep = "-" * 42
+    sep2 = "=" * 42
+
+    resumo_pag_html = ""
+    if not df.empty and "forma_pagamento" in df.columns:
+        resumo_pag = (
+            df.assign(forma_pagamento=df["forma_pagamento"].fillna("").astype(str).str.strip().replace("", "Nao informado"))
+            .groupby("forma_pagamento", as_index=False)["valor"]
+            .sum()
+            .sort_values("valor", ascending=False)
+        )
+        for _, row in resumo_pag.iterrows():
+            resumo_pag_html += (
+                '<div class="linha">'
+                f'<span class="label">{_html(row["forma_pagamento"])}</span>'
+                f'<span class="valor">{_html(formatar_moeda(row["valor"]))}</span>'
+                '</div>'
+            )
+    else:
+        resumo_pag_html = '<div class="linha"><span class="label">Sem movimento</span><span class="valor">R$ 0,00</span></div>'
+
+    itens_html = ""
+    if df.empty:
+        itens_html = '<div class="vazio">Sem lancamentos para os filtros selecionados.</div>'
+    else:
+        ordenado = df.copy()
+        ordenado["data_dt"] = pd.to_datetime(ordenado["data"], errors="coerce")
+        ordenado = ordenado.sort_values(["data_dt", "id_lancamento"], na_position="last")
+        for _, row in ordenado.iterrows():
+            data_row = row.get("data_dt")
+            data_txt = data_row.strftime("%d/%m") if pd.notna(data_row) else "--/--"
+            id_txt = str(int(row["id_lancamento"])).zfill(6) if pd.notna(row.get("id_lancamento")) else "------"
+            tipo = _html(row.get("tipo", "-"))
+            categoria = _html(row.get("categoria", "-"))
+            subcategoria = _html(row.get("subcategoria", "") or "")
+            forma = _html(row.get("forma_pagamento", "") or "-")
+            valor = _html(formatar_moeda(row.get("valor", 0)))
+            desc = _html(row.get("descricao", "") or "")
+            complemento = f" / {subcategoria}" if subcategoria else ""
+            if desc:
+                complemento += f" - {desc}"
+            itens_html += (
+                '<div class="item">'
+                f'<div><strong>#{id_txt}</strong> {data_txt} - {tipo}</div>'
+                f'<div>{categoria}{complemento}</div>'
+                f'<div class="linha"><span class="label">{forma}</span><span class="valor">{valor}</span></div>'
+                '</div>'
+            )
+
+    responsavel = _html(_assinatura_igreja(slug))
+    return f"""
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
+<title>Fechamento de Caixa - 2a Via</title>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ background: #f0f0f0; display: flex; justify-content: center; padding: 20px; }}
+.cupom {{ background: white; width: 360px; padding: 16px 14px;
+         font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #111;
+         box-shadow: 2px 2px 8px rgba(0,0,0,0.15); }}
+.centro {{ text-align: center; }}
+.nome-igreja {{ font-size: 14px; font-weight: bold; text-align: center;
+               text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 2px; }}
+.subtitulo {{ text-align: center; font-size: 10px; color: #555; margin-bottom: 4px; }}
+.sep {{ color: #aaa; margin: 6px 0; letter-spacing: -1px; }}
+.sep2 {{ color: #333; margin: 6px 0; letter-spacing: -1px; }}
+.badge {{ text-align: center; font-size: 13px; font-weight: bold;
+          letter-spacing: 0.08em; padding: 4px 0; margin: 4px 0; }}
+.linha {{ display: flex; justify-content: space-between; gap: 8px; margin: 3px 0; font-size: 11px; }}
+.linha .label {{ color: #555; }}
+.linha .valor {{ font-weight: 700; text-align: right; }}
+.valor-total {{ text-align: center; font-size: 20px; font-weight: bold; margin: 8px 0 4px; }}
+.item {{ border-top: 1px dashed #bbb; padding: 6px 0; font-size: 10px; }}
+.item strong {{ font-size: 10px; }}
+.vazio {{ text-align: center; color: #666; font-size: 10px; padding: 10px 0; }}
+.assinatura-bloco {{ margin-top: 12px; display: flex; justify-content: center; gap: 18px; }}
+.assinatura-item {{ flex: 1; max-width: 46%; }}
+.assinatura-linha {{ border-top: 1px dashed #aaa; margin-top: 28px; padding-top: 4px;
+                    text-align: center; font-size: 10px; color: #555; }}
+.rodape {{ text-align: center; font-size: 9px; color: #888; margin-top: 8px; }}
+@media print {{
+  body {{ background: white; padding: 0; }}
+  .cupom {{ box-shadow: none; width: 100%; max-width: 360px; margin: 0 auto; }}
+  .btn-imprimir {{ display: none !important; }}
+}}
+</style></head><body>
+
+<div style="text-align:center;margin-bottom:12px">
+  <button class="btn-imprimir" onclick="window.print()"
+    style="background:#0F6E56;color:white;border:none;padding:8px 24px;
+           border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">
+    Imprimir 2a via
+  </button>
+</div>
+
+<div class="cupom">
+  {logo_html}
+  <div class="nome-igreja">{nome_igreja}</div>
+  <div class="subtitulo">Fechamento de Caixa</div>
+  <div class="badge">*** 2a VIA ***</div>
+  <div class="sep centro">{sep}</div>
+  <div class="linha"><span class="label">Periodo</span><span class="valor">{_html(periodo)}</span></div>
+  <div class="linha"><span class="label">Filtro pagamento</span><span class="valor">{_html(forma_pagamento)}</span></div>
+  <div class="linha"><span class="label">Emitido</span><span class="valor">{_html(data_emissao)}</span></div>
+  <div class="linha"><span class="label">Lancamentos</span><span class="valor">{qtd}</span></div>
+  <div class="sep2 centro">{sep2}</div>
+  <div class="linha"><span class="label">Entradas</span><span class="valor">{_html(formatar_moeda(entradas))}</span></div>
+  <div class="linha"><span class="label">Saidas</span><span class="valor">{_html(formatar_moeda(saidas))}</span></div>
+  <div class="subtitulo">SALDO DO FECHAMENTO</div>
+  <div class="valor-total">{_html(formatar_moeda(saldo))}</div>
+  <div class="sep2 centro">{sep2}</div>
+  <div class="badge">FORMAS DE PAGAMENTO</div>
+  {resumo_pag_html}
+  <div class="sep centro">{sep}</div>
+  <div class="badge">DETALHAMENTO</div>
+  {itens_html}
+  <div class="sep centro">{sep}</div>
+  <div class="assinatura-bloco">
+    <div class="assinatura-item"><div class="assinatura-linha">Tesoureiro</div></div>
+    <div class="assinatura-item"><div class="assinatura-linha">{responsavel}</div></div>
+  </div>
+  <div class="rodape">FielMordomo - Sistema de Gestao Financeira para Igrejas</div>
+</div>
+
+<script>window.onload = function() {{ setTimeout(function(){{ window.print(); }}, 800); }};</script>
+</body></html>"""
+
+
 def render():
     slug = slug_da_sessao()
     df_cad = _get_cad(slug)
@@ -880,6 +1038,106 @@ def render():
                     mime="text/html",
                     use_container_width=True,
                 )
+
+    with st.expander("2a via do cupom / fechamento de caixa", expanded=False):
+        if df_lanc.empty:
+            st.info("Nenhum lancamento ainda.")
+        else:
+            st.caption(
+                "Gere uma segunda via consolidada para conferencia e assinatura "
+                "do fechamento de caixa."
+            )
+            df_caixa_base = df_lanc.copy()
+            df_caixa_base["data_dt"] = pd.to_datetime(df_caixa_base["data"], errors="coerce")
+            datas_validas = df_caixa_base["data_dt"].dropna()
+            hoje = datetime.date.today()
+            data_min = datas_validas.min().date() if not datas_validas.empty else hoje
+            data_max = datas_validas.max().date() if not datas_validas.empty else hoje
+            inicio_default = min(max(hoje, data_min), data_max)
+            fim_default = inicio_default
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                inicio_caixa = st.date_input(
+                    "Data inicial",
+                    value=inicio_default,
+                    min_value=data_min,
+                    max_value=data_max,
+                    format="DD/MM/YYYY",
+                    key=_sk("caixa_inicio", slug),
+                )
+            with c2:
+                fim_caixa = st.date_input(
+                    "Data final",
+                    value=fim_default,
+                    min_value=data_min,
+                    max_value=data_max,
+                    format="DD/MM/YYYY",
+                    key=_sk("caixa_fim", slug),
+                )
+            with c3:
+                forma_caixa = st.selectbox(
+                    "Forma de pagamento",
+                    ["Todas"] + FORMAS_PAGAMENTO,
+                    key=_sk("caixa_forma", slug),
+                )
+
+            if inicio_caixa > fim_caixa:
+                st.error("A data inicial nao pode ser posterior a data final.")
+            else:
+                df_caixa = df_caixa_base[
+                    df_caixa_base["data_dt"].between(
+                        pd.Timestamp(inicio_caixa),
+                        pd.Timestamp(fim_caixa),
+                        inclusive="both",
+                    )
+                ].copy()
+                if forma_caixa != "Todas":
+                    df_caixa = df_caixa[
+                        df_caixa["forma_pagamento"].fillna("").astype(str) == forma_caixa
+                    ].copy()
+
+                df_caixa["valor"] = pd.to_numeric(df_caixa["valor"], errors="coerce").fillna(0.0)
+                df_caixa["tipo_norm"] = df_caixa["tipo"].fillna("").astype(str).str.upper().str.strip()
+                entradas_caixa = float(df_caixa[df_caixa["tipo_norm"] == "ENTRADA"]["valor"].sum())
+                saidas_caixa = float(df_caixa[df_caixa["tipo_norm"] == "SAIDA"]["valor"].sum())
+                saldo_caixa = entradas_caixa - saidas_caixa
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Entradas", formatar_moeda(entradas_caixa))
+                m2.metric("Saidas", formatar_moeda(saidas_caixa))
+                m3.metric("Saldo", formatar_moeda(saldo_caixa))
+                m4.metric("Lancamentos", len(df_caixa))
+
+                if df_caixa.empty:
+                    st.warning("Nenhum lancamento encontrado para os filtros selecionados.")
+                else:
+                    if st.button(
+                        "Gerar 2a via do fechamento",
+                        type="primary",
+                        key=_sk("caixa_gerar", slug),
+                    ):
+                        html_caixa = _gerar_html_fechamento_caixa(
+                            df_caixa,
+                            igreja,
+                            slug,
+                            inicio_caixa,
+                            fim_caixa,
+                            forma_pagamento=forma_caixa,
+                        )
+                        components.html(html_caixa, height=760, scrolling=True)
+                        sufixo_periodo = (
+                            f"{inicio_caixa:%Y%m%d}"
+                            if inicio_caixa == fim_caixa
+                            else f"{inicio_caixa:%Y%m%d}_{fim_caixa:%Y%m%d}"
+                        )
+                        st.download_button(
+                            "Baixar 2a via do fechamento",
+                            data=html_caixa,
+                            file_name=f"fechamento_caixa_2a_via_{sufixo_periodo}.html",
+                            mime="text/html",
+                            use_container_width=True,
+                        )
 
     with st.expander("Editar ou excluir lancamento", expanded=False):
         if df_lanc.empty:
