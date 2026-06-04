@@ -465,6 +465,10 @@ def _garantir_tabelas_ebd(conn):
             data        TEXT NOT NULL,
             tema        TEXT DEFAULT '',
             professor   TEXT DEFAULT '',
+            qtd_revistas INTEGER NOT NULL DEFAULT 0,
+            qtd_biblias  INTEGER NOT NULL DEFAULT 0,
+            qtd_harpas   INTEGER NOT NULL DEFAULT 0,
+            ofertas      REAL NOT NULL DEFAULT 0,
             observacoes TEXT DEFAULT '',
             criado_em   TEXT DEFAULT (datetime('now')),
             UNIQUE(id_classe, data)
@@ -483,7 +487,9 @@ def _garantir_tabelas_ebd(conn):
             id_classe   INTEGER REFERENCES ebd_classes(id_classe),
             classe_nome TEXT DEFAULT '',
             professor   TEXT NOT NULL,
+            telefone_professor TEXT DEFAULT '',
             auxiliar    TEXT DEFAULT '',
+            telefone_auxiliar TEXT DEFAULT '',
             tema        TEXT DEFAULT '',
             observacoes TEXT DEFAULT '',
             criado_em   TEXT DEFAULT (datetime('now'))
@@ -497,6 +503,27 @@ def _garantir_tabelas_ebd(conn):
         CREATE INDEX IF NOT EXISTS idx_ebd_escala_data
             ON ebd_escala_professores(data);
     """)
+    cols_escala = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(ebd_escala_professores)").fetchall()
+    ]
+    for coluna in ("telefone_professor", "telefone_auxiliar"):
+        if coluna not in cols_escala:
+            conn.execute(
+                f"ALTER TABLE ebd_escala_professores ADD COLUMN {coluna} TEXT DEFAULT ''"
+            )
+    cols_aulas = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(ebd_aulas)").fetchall()
+    ]
+    for coluna, tipo in (
+        ("qtd_revistas", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_biblias", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_harpas", "INTEGER NOT NULL DEFAULT 0"),
+        ("ofertas", "REAL NOT NULL DEFAULT 0"),
+    ):
+        if coluna not in cols_aulas:
+            conn.execute(f"ALTER TABLE ebd_aulas ADD COLUMN {coluna} {tipo}")
 
 
 def listar_ebd_classes(slug, incluir_inativas=False):
@@ -665,7 +692,8 @@ def listar_ebd_aulas(slug, data_inicio=None, data_fim=None, id_classe=None):
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
         return pd.read_sql_query(
             f"""SELECT a.id_aula, a.id_classe, c.nome AS classe, a.data,
-                       a.tema, a.professor, a.observacoes,
+                       a.tema, a.professor, a.qtd_revistas, a.qtd_biblias,
+                       a.qtd_harpas, a.ofertas, a.observacoes,
                        COUNT(p.id_presenca) AS matriculados,
                        SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presentes
                 FROM ebd_aulas a
@@ -673,30 +701,57 @@ def listar_ebd_aulas(slug, data_inicio=None, data_fim=None, id_classe=None):
                 LEFT JOIN ebd_presencas p ON p.id_aula=a.id_aula
                 {filtro}
                 GROUP BY a.id_aula, a.id_classe, c.nome, a.data, a.tema,
-                         a.professor, a.observacoes
+                         a.professor, a.qtd_revistas, a.qtd_biblias,
+                         a.qtd_harpas, a.ofertas, a.observacoes
                 ORDER BY a.data DESC, c.nome""",
             conn,
             params=params,
         )
 
 
-def salvar_ebd_chamada(slug, id_classe, data, tema="", professor="", observacoes="", presencas=None):
+def salvar_ebd_chamada(
+    slug,
+    id_classe,
+    data,
+    tema="",
+    professor="",
+    observacoes="",
+    presencas=None,
+    qtd_revistas=0,
+    qtd_biblias=0,
+    qtd_harpas=0,
+    ofertas=0,
+):
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
     presencas = presencas or {}
+    try:
+        qtd_revistas = max(int(qtd_revistas or 0), 0)
+        qtd_biblias = max(int(qtd_biblias or 0), 0)
+        qtd_harpas = max(int(qtd_harpas or 0), 0)
+        ofertas = max(float(ofertas or 0), 0.0)
+    except (TypeError, ValueError) as ex:
+        raise ValueError("Informe valores validos para revistas, biblias, harpas e ofertas.") from ex
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         cur = conn.execute(
-            """INSERT INTO ebd_aulas (id_classe, data, tema, professor, observacoes)
-               VALUES (?, ?, ?, ?, ?)
+            """INSERT INTO ebd_aulas
+               (id_classe, data, tema, professor, qtd_revistas, qtd_biblias,
+                qtd_harpas, ofertas, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id_classe, data) DO UPDATE SET
                    tema=excluded.tema,
                    professor=excluded.professor,
+                   qtd_revistas=excluded.qtd_revistas,
+                   qtd_biblias=excluded.qtd_biblias,
+                   qtd_harpas=excluded.qtd_harpas,
+                   ofertas=excluded.ofertas,
                    observacoes=excluded.observacoes""",
             (
                 int(id_classe), str(data), sanitizar(tema),
-                sanitizar(professor), sanitizar(observacoes),
+                sanitizar(professor), qtd_revistas, qtd_biblias,
+                qtd_harpas, ofertas, sanitizar(observacoes),
             ),
         )
         row = conn.execute(
@@ -800,7 +855,8 @@ def listar_ebd_escala(slug, data_inicio=None, data_fim=None):
         return pd.read_sql_query(
             f"""SELECT e.id_escala, e.data, e.id_classe,
                        COALESCE(c.nome, e.classe_nome) AS classe,
-                       e.professor, e.auxiliar, e.tema, e.observacoes
+                       e.professor, e.telefone_professor, e.auxiliar,
+                       e.telefone_auxiliar, e.tema, e.observacoes
                 FROM ebd_escala_professores e
                 LEFT JOIN ebd_classes c ON c.id_classe=e.id_classe
                 {filtro}
@@ -810,7 +866,19 @@ def listar_ebd_escala(slug, data_inicio=None, data_fim=None):
         )
 
 
-def salvar_ebd_escala(slug, data, professor, id_classe=None, classe_nome="", auxiliar="", tema="", observacoes="", id_escala=None):
+def salvar_ebd_escala(
+    slug,
+    data,
+    professor,
+    id_classe=None,
+    classe_nome="",
+    auxiliar="",
+    tema="",
+    observacoes="",
+    id_escala=None,
+    telefone_professor="",
+    telefone_auxiliar="",
+):
     professor = sanitizar(professor)
     if not professor:
         raise ValueError("Professor e obrigatorio.")
@@ -825,7 +893,9 @@ def salvar_ebd_escala(slug, data, professor, id_classe=None, classe_nome="", aux
             id_classe,
             sanitizar(classe_nome),
             professor,
+            sanitizar(telefone_professor),
             sanitizar(auxiliar),
+            sanitizar(telefone_auxiliar),
             sanitizar(tema),
             sanitizar(observacoes),
         )
@@ -833,15 +903,17 @@ def salvar_ebd_escala(slug, data, professor, id_classe=None, classe_nome="", aux
             conn.execute(
                 """UPDATE ebd_escala_professores
                    SET data=?, id_classe=?, classe_nome=?, professor=?,
-                       auxiliar=?, tema=?, observacoes=?
+                       telefone_professor=?, auxiliar=?, telefone_auxiliar=?,
+                       tema=?, observacoes=?
                    WHERE id_escala=?""",
                 (*dados, int(id_escala)),
             )
             return int(id_escala)
         cur = conn.execute(
             """INSERT INTO ebd_escala_professores
-               (data, id_classe, classe_nome, professor, auxiliar, tema, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (data, id_classe, classe_nome, professor, telefone_professor,
+                auxiliar, telefone_auxiliar, tema, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             dados,
         )
         return cur.lastrowid

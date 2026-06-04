@@ -1,4 +1,7 @@
 import datetime
+import html
+import urllib.parse
+from collections import defaultdict
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -15,6 +18,7 @@ from data.repository import (
     listar_ebd_matriculas,
     relatorio_ebd_frequencia,
     relatorio_ebd_resumo_classes,
+    obter_config_igreja,
     salvar_ebd_chamada,
     salvar_ebd_classe,
     salvar_ebd_escala,
@@ -31,6 +35,15 @@ CORES = {
     "cinza": "#64748B",
 }
 CONFIG_PLOTLY = {"displayModeBar": False, "responsive": True}
+MENSAGEM_ESCALA_PADRAO = """Paz do Senhor, {nome}!
+
+Voce esta escalado(a) para servir na EBD.
+Data: {data}
+Classe: {classe}
+Funcao: {funcao}
+Tema: {tema}
+
+Contamos com sua presenca e dedicacao. Deus abencoe!"""
 
 
 def _hoje():
@@ -54,6 +67,66 @@ def _pct(valor):
         return f"{float(valor):.1f}%"
     except Exception:
         return "0.0%"
+
+
+def _moeda(valor):
+    try:
+        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "R$ 0,00"
+
+
+def _limpar_tel(tel):
+    return "".join(c for c in str(tel or "") if c.isdigit())
+
+
+def _normalizar_tel_brasil(tel):
+    tel_limpo = _limpar_tel(tel)
+    if not tel_limpo:
+        return ""
+    while tel_limpo.startswith("0"):
+        tel_limpo = tel_limpo[1:]
+    if len(tel_limpo) in (10, 11):
+        tel_limpo = "55" + tel_limpo
+    return tel_limpo if len(tel_limpo) in (12, 13) and tel_limpo.startswith("55") else ""
+
+
+def _link_whatsapp(tel, mensagem):
+    numero = _normalizar_tel_brasil(tel)
+    if not numero:
+        return ""
+    return f"https://wa.me/{numero}?text={urllib.parse.quote(mensagem)}"
+
+
+def _mensagem_escala(slug, row, nome, funcao):
+    data = _fmt_data(row.get("data", ""))
+    classe = str(row.get("classe", "") or "EBD").strip()
+    tema = str(row.get("tema", "") or "").strip()
+    modelo = obter_config_igreja(slug, "mensagem_whatsapp_escala_ebd", MENSAGEM_ESCALA_PADRAO)
+    dados = defaultdict(
+        str,
+        nome=nome,
+        data=data,
+        classe=classe,
+        funcao=funcao,
+        tema=tema or "A definir",
+    )
+    return str(modelo or MENSAGEM_ESCALA_PADRAO).format_map(dados)
+
+
+def _botao_whatsapp(label, telefone, mensagem, key):
+    link = _link_whatsapp(telefone, mensagem)
+    if not link:
+        st.caption(f"{label}: informe um WhatsApp valido para gerar o aviso.")
+        return
+    st.markdown(
+        f'<a href="{html.escape(link, quote=True)}" target="_blank" '
+        'style="display:inline-block;padding:0.55rem 0.85rem;border-radius:10px;'
+        'background:#1D9E75;color:white;text-decoration:none;font-weight:700;'
+        'box-shadow:0 8px 18px rgba(29,158,117,.25)">'
+        f'{html.escape(label)}</a>',
+        unsafe_allow_html=True,
+    )
 
 
 def _metricas_ebd(resumo, aulas):
@@ -252,11 +325,19 @@ def _render_chamada(slug):
     tema_atual = ""
     professor_atual = ""
     obs_atual = ""
+    revistas_atual = 0
+    biblias_atual = 0
+    harpas_atual = 0
+    ofertas_atual = 0.0
     if not aulas.empty:
         aula = aulas.iloc[0]
         tema_atual = aula.get("tema", "")
         professor_atual = aula.get("professor", "")
         obs_atual = aula.get("observacoes", "")
+        revistas_atual = int(aula.get("qtd_revistas", 0) or 0)
+        biblias_atual = int(aula.get("qtd_biblias", 0) or 0)
+        harpas_atual = int(aula.get("qtd_harpas", 0) or 0)
+        ofertas_atual = float(aula.get("ofertas", 0) or 0)
         from data.repository import carregar_ebd_presencas
         df_pres = carregar_ebd_presencas(slug, int(aula["id_aula"]))
         presencas_salvas = {
@@ -268,6 +349,33 @@ def _render_chamada(slug):
         c1, c2 = st.columns(2)
         tema = c1.text_input("Tema da aula", value=tema_atual)
         professor = c2.text_input("Professor", value=professor_atual)
+        st.markdown("#### Recursos e ofertas da aula")
+        r1, r2, r3, r4 = st.columns(4)
+        qtd_revistas = r1.number_input(
+            "Quantidade de revistas",
+            min_value=0,
+            step=1,
+            value=revistas_atual,
+        )
+        qtd_biblias = r2.number_input(
+            "Quantidade de Biblias",
+            min_value=0,
+            step=1,
+            value=biblias_atual,
+        )
+        qtd_harpas = r3.number_input(
+            "Quantidade de harpas",
+            min_value=0,
+            step=1,
+            value=harpas_atual,
+        )
+        ofertas = r4.number_input(
+            "Ofertas",
+            min_value=0.0,
+            step=1.0,
+            value=ofertas_atual,
+            format="%.2f",
+        )
         obs = st.text_area("Observacoes da aula", value=obs_atual)
         st.caption("Marque os alunos presentes. Alunos desmarcados serao contabilizados como falta.")
         dados = matriculas[["id_matricula", "nome_aluno"]].copy()
@@ -296,6 +404,10 @@ def _render_chamada(slug):
                 professor,
                 obs,
                 presencas,
+                qtd_revistas,
+                qtd_biblias,
+                qtd_harpas,
+                ofertas,
             )
             st.success("Chamada salva.")
             st.rerun()
@@ -314,6 +426,12 @@ def _render_relatorios(slug):
     resumo = relatorio_ebd_resumo_classes(slug, inicio.isoformat(), fim.isoformat())
     freq = relatorio_ebd_frequencia(slug, inicio.isoformat(), fim.isoformat())
     _metricas_ebd(resumo, aulas)
+    if not aulas.empty:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Revistas", int(aulas["qtd_revistas"].fillna(0).sum()))
+        c2.metric("Biblias", int(aulas["qtd_biblias"].fillna(0).sum()))
+        c3.metric("Harpas", int(aulas["qtd_harpas"].fillna(0).sum()))
+        c4.metric("Ofertas EBD", _moeda(aulas["ofertas"].fillna(0).sum()))
 
     st.markdown("#### Frequencia por classe")
     _grafico_frequencia_classes(resumo)
@@ -354,13 +472,18 @@ def _render_relatorios(slug):
     else:
         aulas_exibir = aulas.copy()
         aulas_exibir["data"] = aulas_exibir["data"].apply(_fmt_data)
+        aulas_exibir["ofertas"] = aulas_exibir["ofertas"].apply(_moeda)
         aulas_exibir["frequencia"] = (
             aulas_exibir["presentes"].fillna(0)
             / aulas_exibir["matriculados"].replace(0, 1).fillna(1)
             * 100
         ).round(1).apply(_pct)
         st.dataframe(
-            aulas_exibir[["data", "classe", "tema", "professor", "matriculados", "presentes", "frequencia"]],
+            aulas_exibir[[
+                "data", "classe", "tema", "professor", "matriculados",
+                "presentes", "frequencia", "qtd_revistas", "qtd_biblias",
+                "qtd_harpas", "ofertas",
+            ]],
             use_container_width=True,
             hide_index=True,
         )
@@ -379,7 +502,10 @@ def _render_escala(slug):
         classe_label = c2.selectbox("Classe", list(op_classes.keys()))
         c3, c4 = st.columns(2)
         professor = c3.text_input("Professor")
-        auxiliar = c4.text_input("Auxiliar")
+        telefone_professor = c4.text_input("WhatsApp do professor", placeholder="Ex.: 62999999999")
+        c5, c6 = st.columns(2)
+        auxiliar = c5.text_input("Auxiliar")
+        telefone_auxiliar = c6.text_input("WhatsApp do auxiliar", placeholder="Opcional")
         tema = st.text_input("Tema/assunto")
         obs = st.text_area("Observacoes")
         classe_nome = "" if op_classes[classe_label] else classe_label
@@ -394,6 +520,8 @@ def _render_escala(slug):
                     auxiliar,
                     tema,
                     obs,
+                    telefone_professor=telefone_professor,
+                    telefone_auxiliar=telefone_auxiliar,
                 )
                 st.success("Escala salva.")
                 st.rerun()
@@ -410,10 +538,31 @@ def _render_escala(slug):
     exibir = escala.copy()
     exibir["data"] = exibir["data"].apply(_fmt_data)
     st.dataframe(
-        exibir[["data", "classe", "professor", "auxiliar", "tema", "observacoes"]],
+        exibir[[
+            "data", "classe", "professor", "telefone_professor",
+            "auxiliar", "telefone_auxiliar", "tema", "observacoes",
+        ]],
         use_container_width=True,
         hide_index=True,
     )
+    st.markdown("#### Avisos por WhatsApp")
+    st.caption("Clique para abrir o WhatsApp com a mensagem pronta para cada professor escalado.")
+    for _, row in escala.iterrows():
+        titulo = f'{_fmt_data(row["data"])} - {row.get("classe", "EBD")} - {row["professor"]}'
+        with st.expander(titulo):
+            c1, c2 = st.columns(2)
+            with c1:
+                mensagem = _mensagem_escala(slug, row, row["professor"], "Professor")
+                _botao_whatsapp("Avisar professor", row.get("telefone_professor", ""), mensagem, f"prof_{row['id_escala']}")
+                st.text_area("Mensagem ao professor", value=mensagem, height=180, key=f"msg_prof_{row['id_escala']}")
+            with c2:
+                auxiliar = str(row.get("auxiliar", "") or "").strip()
+                if auxiliar:
+                    mensagem = _mensagem_escala(slug, row, auxiliar, "Auxiliar")
+                    _botao_whatsapp("Avisar auxiliar", row.get("telefone_auxiliar", ""), mensagem, f"aux_{row['id_escala']}")
+                    st.text_area("Mensagem ao auxiliar", value=mensagem, height=180, key=f"msg_aux_{row['id_escala']}")
+                else:
+                    st.info("Nenhum auxiliar informado para esta escala.")
     st.download_button(
         "Baixar escala CSV",
         data=gerar_csv(escala),
