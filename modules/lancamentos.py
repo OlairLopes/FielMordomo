@@ -23,7 +23,7 @@ from utils.helpers import (
 )
 from utils.planos import tem_lancamento_lote, obter_plano, proximo_plano
 
-CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD"]
+CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD", "Saldo Ano Anterior", "Outros"]
 FORMAS_PAGAMENTO = [
     "Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque",
     "Cartao Debito", "Cartao Credito",
