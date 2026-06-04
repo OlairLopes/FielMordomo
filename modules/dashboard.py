@@ -903,6 +903,16 @@ def render():
                 qualidade["despesas_sem_subcategoria"],
             ],
         })
+        pendencias["Status"] = pendencias["Quantidade"].apply(
+            lambda qtd: "Pendente" if qtd else "OK"
+        )
+        pendencias["Acao sugerida"] = [
+            "Corrigir ou excluir lancamentos com data ausente/invalida.",
+            "Corrigir valores que nao foram reconhecidos como numero.",
+            "Revisar lancamentos com valor zerado ou negativo.",
+            "Vincular lancamentos a membro ou fornecedor quando aplicavel.",
+            "Classificar despesas em uma subcategoria.",
+        ]
         if pendencias["Quantidade"].sum():
             fig_qualidade = go.Figure(go.Bar(
                 name="Pendencias",
@@ -923,6 +933,12 @@ def render():
             st.plotly_chart(fig_qualidade, use_container_width=True, config=CONFIG_PLOTLY)
         else:
             st.success("Nenhuma pendencia identificada nos dados.")
+        st.markdown("#### Tabela de pendencias")
+        st.dataframe(
+            pendencias[["Pendencia", "Quantidade", "Status", "Acao sugerida"]],
+            use_container_width=True,
+            hide_index=True,
+        )
         st.caption("Registros invalidos sao excluidos dos KPIs ate serem corrigidos.")
 
     with tab_pastoral:
