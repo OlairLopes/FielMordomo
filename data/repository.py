@@ -31,7 +31,10 @@ SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
 USUARIO_TESOUREIRO_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{2,38}[a-z0-9])?$")
 HASH_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 LIMITES_MEMBROS_PLANO = {"basico": 50, "profissional": 250, "premium": None}
-CATEGORIAS_ENTRADA = {"Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD"}
+CATEGORIAS_ENTRADA = {
+    "Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD",
+    "Saldo ano anterior",
+}
 FORMAS_PAGAMENTO = {
     "Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque",
     "Cartao Debito", "Cartao Credito",
@@ -1481,8 +1484,12 @@ def _garantir_tabela_subcategorias_despesa(conn):
 
 
 def _db_subcategorias(slug: str | None = None) -> Path:
+    try:
+        slug = _validar_slug(slug) if slug else ""
+    except ValueError:
+        LOGGER.warning("Slug invalido ao carregar subcategorias: %r", slug)
+        return MASTER_DB
     if slug:
-        slug = _validar_slug(slug)
         db = _tenant_db(slug)
         if not db.exists():
             inicializar_tenant(slug)

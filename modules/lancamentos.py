@@ -23,7 +23,10 @@ from utils.helpers import (
 )
 from utils.planos import tem_lancamento_lote, obter_plano, proximo_plano
 
-CATEGORIAS_ENTRADA = ["Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD", "Saldo Ano Anterior", "Outros"]
+CATEGORIAS_ENTRADA = [
+    "Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD",
+    "Saldo ano anterior",
+]
 FORMAS_PAGAMENTO = [
     "Pix", "Dinheiro", "Transferencia", "Boleto", "Cheque",
     "Cartao Debito", "Cartao Credito",
@@ -117,6 +120,15 @@ def _normalizar_tel_brasil(tel):
 
 def _assinatura_igreja(slug):
     return obter_config_igreja(slug, "nome_assinatura_comprovante", "Responsavel")
+
+
+def _subcategorias_despesa_seguras(slug):
+    try:
+        return listar_subcategorias_despesa(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar subcategorias de despesa.")
+        st.warning("Nao foi possivel carregar as subcategorias de despesa.")
+        return []
 
 
 def _valor_texto(valor):
@@ -785,7 +797,7 @@ def render():
             cat = "Despesa"
             st.text_input("Categoria", value="Despesa", disabled=True, key=f"nl_cat_d_{cnt}")
 
-            subcategorias = listar_subcategorias_despesa(slug)
+            subcategorias = _subcategorias_despesa_seguras(slug)
             if subcategorias:
                 subcategoria_nl = st.selectbox(
                     "Subcategoria",
@@ -927,7 +939,7 @@ def render():
                 cat_lote_item = "Despesa"
                 st.text_input("Categoria", value="Despesa", disabled=True, key="lote_cat_d_item")
 
-                subcategorias_lote = listar_subcategorias_despesa(slug)
+                subcategorias_lote = _subcategorias_despesa_seguras(slug)
                 if subcategorias_lote:
                     subcategoria_lote_item = st.selectbox(
                         "Subcategoria",
@@ -1255,7 +1267,7 @@ def render():
             cat_e = "Despesa"
             st.text_input("Categoria", value="Despesa", disabled=True, key=kp + "cat_d")
 
-            subcategorias_edit = listar_subcategorias_despesa(slug)
+            subcategorias_edit = _subcategorias_despesa_seguras(slug)
             subcat_atual = _valor_texto(sel.get("subcategoria", "")) if "subcategoria" in sel.index else ""
             if subcategorias_edit:
                 opcoes_sub = [""] + subcategorias_edit
