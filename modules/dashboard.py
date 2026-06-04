@@ -252,8 +252,19 @@ def _legenda_cores():
     st.markdown("".join(legenda), unsafe_allow_html=True)
 
 
-def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
+def _grafico_rosca(
+    resumo,
+    rotulos,
+    valores,
+    cores=None,
+    total_label="Total",
+    valor_central=None,
+    label_central=None,
+    cor_central="#F1F5F9",
+):
     total = float(resumo[valores].sum())
+    valor_centro = total if valor_central is None else float(valor_central)
+    label_centro = total_label if label_central is None else label_central
     percentuais = [
         (float(valor) / total * 100) if total else 0.0
         for valor in resumo[valores]
@@ -278,11 +289,11 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
         ),
     ))
     fig.add_annotation(
-        text=f"<b>{formatar_moeda(total)}</b><br><span style='font-size:11px'>{total_label}</span>",
+        text=f"<b>{formatar_moeda(valor_centro)}</b><br><span style='font-size:11px'>{label_centro}</span>",
         x=.5,
         y=.5,
         showarrow=False,
-        font=dict(size=16, color="#F1F5F9"),
+        font=dict(size=16, color=cor_central),
     )
     fig.update_layout(**_layout_grafico(
         altura=560,
@@ -813,7 +824,10 @@ def render():
                     "Tipo",
                     "Valor",
                     [CORES["entrada"], CORES["saida"]],
-                    "Movimentado",
+                    "Composicao",
+                    valor_central=saldo,
+                    label_central="Saldo do mes",
+                    cor_central=CORES["entrada"] if saldo >= 0 else CORES["saida"],
                 ),
                 use_container_width=True,
                 config=CONFIG_PLOTLY,
