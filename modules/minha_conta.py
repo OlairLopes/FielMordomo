@@ -4,8 +4,11 @@ import streamlit as st
 
 from data.repository import (
     DIAS_DIZIMISTA_ATIVO_DEFAULT,
+    adicionar_subcategoria_despesa,
     definir_senha_pastoral,
+    excluir_subcategoria_despesa,
     igreja_alterar_senha,
+    listar_subcategorias_despesa,
     obter_config_igreja,
     salvar_config_igreja,
     senha_pastoral_configurada,
@@ -172,6 +175,78 @@ def render():
                 else:
                     st.toast("Configuracoes salvas!")
                     st.rerun()
+
+    st.divider()
+    st.markdown("### Subcategorias de despesas")
+    st.caption(
+        "Cadastre as classificacoes usadas nos lancamentos de saida. "
+        "Essa lista pertence a esta igreja e aparece no modulo Lancamentos."
+    )
+
+    try:
+        subcategorias = listar_subcategorias_despesa(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar as subcategorias de despesa.")
+        subcategorias = []
+        st.error("Nao foi possivel carregar as subcategorias.")
+
+    if subcategorias:
+        st.dataframe(
+            [{"Subcategoria": nome} for nome in subcategorias],
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("Nenhuma subcategoria cadastrada.")
+
+    with st.form("form_adicionar_subcategoria", clear_on_submit=True):
+        nova_subcategoria = st.text_input(
+            "Nova subcategoria",
+            max_chars=80,
+            placeholder="Exemplo: Agua, Energia, Missoes, Manutencao...",
+        )
+        if st.form_submit_button("Adicionar subcategoria", type="primary"):
+            nome = nova_subcategoria.strip()
+            if not nome:
+                st.error("Informe o nome da subcategoria.")
+            else:
+                try:
+                    adicionada = adicionar_subcategoria_despesa(nome, slug)
+                except Exception:
+                    LOGGER.exception("Nao foi possivel adicionar a subcategoria.")
+                    st.error("Nao foi possivel adicionar a subcategoria.")
+                else:
+                    if adicionada:
+                        st.toast("Subcategoria adicionada!")
+                        st.rerun()
+                    else:
+                        st.warning("Essa subcategoria ja existe ou e invalida.")
+
+    if subcategorias:
+        with st.form("form_excluir_subcategoria"):
+            remover_subcategoria = st.selectbox(
+                "Subcategoria para excluir",
+                subcategorias,
+                help=(
+                    "A exclusao remove a opcao da lista. Lancamentos antigos "
+                    "continuam preservando o texto ja salvo."
+                ),
+            )
+            confirmar_remocao = st.checkbox(
+                "Confirmo que desejo remover esta subcategoria da lista"
+            )
+            if st.form_submit_button("Excluir subcategoria"):
+                if not confirmar_remocao:
+                    st.error("Confirme a exclusao antes de continuar.")
+                else:
+                    try:
+                        excluir_subcategoria_despesa(remover_subcategoria, slug)
+                    except Exception:
+                        LOGGER.exception("Nao foi possivel excluir a subcategoria.")
+                        st.error("Nao foi possivel excluir a subcategoria.")
+                    else:
+                        st.toast("Subcategoria excluida.")
+                        st.rerun()
 
     st.divider()
     st.markdown("### Senha do acompanhamento pastoral")

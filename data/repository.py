@@ -1480,9 +1480,19 @@ def _garantir_tabela_subcategorias_despesa(conn):
     """)
 
 
-def listar_subcategorias_despesa() -> list:
-    """Retorna lista de nomes das subcategorias de despesa cadastradas (em ordem alfabetica)."""
-    with _conn(MASTER_DB) as conn:
+def _db_subcategorias(slug: str | None = None) -> Path:
+    if slug:
+        slug = _validar_slug(slug)
+        db = _tenant_db(slug)
+        if not db.exists():
+            inicializar_tenant(slug)
+        return db
+    return MASTER_DB
+
+
+def listar_subcategorias_despesa(slug: str | None = None) -> list:
+    """Retorna lista de nomes das subcategorias de despesa cadastradas."""
+    with _conn(_db_subcategorias(slug)) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         qtd = conn.execute("SELECT COUNT(*) AS n FROM subcategorias_despesa").fetchone()["n"]
         if qtd == 0:
@@ -1498,11 +1508,11 @@ def listar_subcategorias_despesa() -> list:
     return [r["nome"] for r in rows]
 
 
-def adicionar_subcategoria_despesa(nome: str) -> bool:
+def adicionar_subcategoria_despesa(nome: str, slug: str | None = None) -> bool:
     nome = sanitizar(nome).strip()
     if not nome:
         return False
-    with _conn(MASTER_DB) as conn:
+    with _conn(_db_subcategorias(slug)) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         try:
             conn.execute(
@@ -1515,8 +1525,8 @@ def adicionar_subcategoria_despesa(nome: str) -> bool:
             return False
 
 
-def excluir_subcategoria_despesa(nome: str):
-    with _conn(MASTER_DB) as conn:
+def excluir_subcategoria_despesa(nome: str, slug: str | None = None):
+    with _conn(_db_subcategorias(slug)) as conn:
         _garantir_tabela_subcategorias_despesa(conn)
         conn.execute("DELETE FROM subcategorias_despesa WHERE nome=?", (nome,))
 

@@ -785,7 +785,7 @@ def render():
             cat = "Despesa"
             st.text_input("Categoria", value="Despesa", disabled=True, key=f"nl_cat_d_{cnt}")
 
-            subcategorias = listar_subcategorias_despesa()
+            subcategorias = listar_subcategorias_despesa(slug)
             if subcategorias:
                 subcategoria_nl = st.selectbox(
                     "Subcategoria",
@@ -927,7 +927,7 @@ def render():
                 cat_lote_item = "Despesa"
                 st.text_input("Categoria", value="Despesa", disabled=True, key="lote_cat_d_item")
 
-                subcategorias_lote = listar_subcategorias_despesa()
+                subcategorias_lote = listar_subcategorias_despesa(slug)
                 if subcategorias_lote:
                     subcategoria_lote_item = st.selectbox(
                         "Subcategoria",
@@ -1255,7 +1255,7 @@ def render():
             cat_e = "Despesa"
             st.text_input("Categoria", value="Despesa", disabled=True, key=kp + "cat_d")
 
-            subcategorias_edit = listar_subcategorias_despesa()
+            subcategorias_edit = listar_subcategorias_despesa(slug)
             subcat_atual = _valor_texto(sel.get("subcategoria", "")) if "subcategoria" in sel.index else ""
             if subcategorias_edit:
                 opcoes_sub = [""] + subcategorias_edit
