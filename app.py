@@ -43,6 +43,7 @@ PAGINAS_IGREJA = {
     "lancamentos": ("Lancamentos", "modules.lancamentos"),
     "relatorios": ("Relatorios", "modules.relatorios"),
     "dashboard": ("Dashboard", "modules.dashboard"),
+    "ebd": ("EBD", "modules.ebd"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),
     "aniversariantes": ("Aniversarios", "modules.aniversariantes"),
     "backup": ("Backup", "modules.backup"),
