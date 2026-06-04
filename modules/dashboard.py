@@ -263,6 +263,7 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
         for rotulo, percentual in zip(resumo[rotulos], percentuais)
     ]
     fig = go.Figure(go.Pie(
+        name=total_label,
         labels=legendas,
         values=resumo[valores],
         hole=.68,
@@ -293,7 +294,7 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
             yanchor="top",
             x=.5,
             xanchor="center",
-            font=dict(size=11),
+            font=dict(size=11, color="#E2E8F0"),
         ),
     ))
     return fig
@@ -981,13 +982,14 @@ def render():
                 st.info("Ainda nao ha dizimos registrados para exibir a evolucao mensal.")
             else:
                 fig_dizimos = go.Figure(go.Bar(
+                    name="Dizimos",
                     x=serie_dizimos["rotulo"],
                     y=valores_dizimos,
                     marker_color=CORES["dizimo"],
                     text=[formatar_moeda(v) if v else "" for v in valores_dizimos],
                     textposition="outside",
                     textfont=dict(size=10, color="#CBD5E1"),
-                    name="Dizimos",
+                    showlegend=True,
                 ))
                 if sum(1 for valor in valores_dizimos if valor > 0) >= 3:
                     tendencia = pd.Series(valores_dizimos).rolling(3, min_periods=1).mean()
@@ -1010,6 +1012,7 @@ def render():
                         yanchor="top",
                         x=.5,
                         xanchor="center",
+                        font=dict(size=11, color="#E2E8F0"),
                     ),
                 ))
                 st.plotly_chart(fig_dizimos, use_container_width=True, config=CONFIG_PLOTLY)
@@ -1130,6 +1133,7 @@ def render():
             nao_dizimistas = max(total_membros - qtd_periodo, 0)
             if total_membros:
                 fig_participacao = go.Figure(go.Pie(
+                    name="Participacao",
                     labels=["Dizimistas", "Sem contribuicao no periodo"],
                     values=[qtd_periodo, nao_dizimistas],
                     hole=.7,
@@ -1153,6 +1157,7 @@ def render():
                         yanchor="top",
                         x=.5,
                         xanchor="center",
+                        font=dict(size=11, color="#E2E8F0"),
                     ),
                 ))
                 st.plotly_chart(fig_participacao, use_container_width=True, config=CONFIG_PLOTLY)
