@@ -171,6 +171,65 @@ def _grafico_frequencia_classes(resumo):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
 
+def _grafico_totais_ebd(titulo, dados):
+    if not dados:
+        st.info("Sem dados para gerar o grafico.")
+        return
+    df = pd.DataFrame(
+        [{"Indicador": chave, "Total": valor} for chave, valor in dados.items()]
+    )
+    fig = go.Figure(go.Bar(
+        name="Total",
+        x=df["Indicador"],
+        y=df["Total"],
+        marker_color=[
+            CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
+            "#7C3AED", "#0891B2", "#B45309",
+        ][:len(df)],
+        text=[
+            _moeda(v) if "Oferta" in str(k) else str(int(v))
+            for k, v in dados.items()
+        ],
+        textposition="outside",
+        hovertemplate="<b>%{x}</b><br>Total: %{text}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=titulo,
+        height=430,
+        margin=dict(t=60, b=80, l=25, r=25),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(fixedrange=True),
+        yaxis=dict(fixedrange=True, gridcolor="#E2E8F0"),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+
+
+def _totais_aulas(aulas):
+    if aulas.empty:
+        return {
+            "Matriculados": 0,
+            "Presentes": 0,
+            "Ausentes": 0,
+            "Visitantes": 0,
+            "Biblias": 0,
+            "Revistas": 0,
+            "Harpas": 0,
+            "Ofertas": 0.0,
+        }
+    return {
+        "Matriculados": int(aulas["matriculados"].fillna(0).sum()),
+        "Presentes": int(aulas["presentes"].fillna(0).sum()),
+        "Ausentes": int(aulas["ausentes"].fillna(0).sum()),
+        "Visitantes": int(aulas["visitantes"].fillna(0).sum()),
+        "Biblias": int(aulas["qtd_biblias"].fillna(0).sum()),
+        "Revistas": int(aulas["qtd_revistas"].fillna(0).sum()),
+        "Harpas": int(aulas["qtd_harpas"].fillna(0).sum()),
+        "Ofertas": float(aulas["ofertas"].fillna(0).sum()),
+    }
+
+
 def _classes_opcoes(df_classes):
     return {
         f'{int(row["id_classe"])} - {row["nome"]}': int(row["id_classe"])
@@ -325,6 +384,10 @@ def _render_chamada(slug):
     tema_atual = ""
     professor_atual = ""
     obs_atual = ""
+    matriculados_atual = int(len(matriculas))
+    presentes_atual = int(len(matriculas))
+    ausentes_atual = 0
+    visitantes_atual = 0
     revistas_atual = 0
     biblias_atual = 0
     harpas_atual = 0
@@ -334,6 +397,10 @@ def _render_chamada(slug):
         tema_atual = aula.get("tema", "")
         professor_atual = aula.get("professor", "")
         obs_atual = aula.get("observacoes", "")
+        matriculados_atual = int(aula.get("matriculados", matriculados_atual) or 0)
+        presentes_atual = int(aula.get("presentes", presentes_atual) or 0)
+        ausentes_atual = int(aula.get("ausentes", ausentes_atual) or 0)
+        visitantes_atual = int(aula.get("visitantes", visitantes_atual) or 0)
         revistas_atual = int(aula.get("qtd_revistas", 0) or 0)
         biblias_atual = int(aula.get("qtd_biblias", 0) or 0)
         harpas_atual = int(aula.get("qtd_harpas", 0) or 0)
@@ -349,22 +416,48 @@ def _render_chamada(slug):
         c1, c2 = st.columns(2)
         tema = c1.text_input("Tema da aula", value=tema_atual)
         professor = c2.text_input("Professor", value=professor_atual)
+        st.markdown("#### Totais da chamada")
+        t1, t2, t3, t4 = st.columns(4)
+        qtd_matriculados = t1.number_input(
+            "Matriculados",
+            min_value=0,
+            step=1,
+            value=matriculados_atual,
+        )
+        qtd_presentes = t2.number_input(
+            "Presentes",
+            min_value=0,
+            step=1,
+            value=presentes_atual,
+        )
+        qtd_ausentes = t3.number_input(
+            "Ausentes",
+            min_value=0,
+            step=1,
+            value=ausentes_atual,
+        )
+        qtd_visitantes = t4.number_input(
+            "Visitantes",
+            min_value=0,
+            step=1,
+            value=visitantes_atual,
+        )
         st.markdown("#### Recursos e ofertas da aula")
         r1, r2, r3, r4 = st.columns(4)
         qtd_revistas = r1.number_input(
-            "Quantidade de revistas",
+            "Revistas",
             min_value=0,
             step=1,
             value=revistas_atual,
         )
         qtd_biblias = r2.number_input(
-            "Quantidade de Biblias",
+            "Biblias",
             min_value=0,
             step=1,
             value=biblias_atual,
         )
         qtd_harpas = r3.number_input(
-            "Quantidade de harpas",
+            "Harpas",
             min_value=0,
             step=1,
             value=harpas_atual,
@@ -404,6 +497,10 @@ def _render_chamada(slug):
                 professor,
                 obs,
                 presencas,
+                qtd_matriculados,
+                qtd_presentes,
+                qtd_ausentes,
+                qtd_visitantes,
                 qtd_revistas,
                 qtd_biblias,
                 qtd_harpas,
@@ -425,13 +522,34 @@ def _render_relatorios(slug):
     aulas = listar_ebd_aulas(slug, inicio.isoformat(), fim.isoformat())
     resumo = relatorio_ebd_resumo_classes(slug, inicio.isoformat(), fim.isoformat())
     freq = relatorio_ebd_frequencia(slug, inicio.isoformat(), fim.isoformat())
-    _metricas_ebd(resumo, aulas)
-    if not aulas.empty:
+
+    st.markdown("#### Relatorio geral")
+    if aulas.empty:
+        st.info("Nenhuma aula registrada no periodo selecionado.")
+    else:
+        totais = _totais_aulas(aulas)
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Revistas", int(aulas["qtd_revistas"].fillna(0).sum()))
-        c2.metric("Biblias", int(aulas["qtd_biblias"].fillna(0).sum()))
-        c3.metric("Harpas", int(aulas["qtd_harpas"].fillna(0).sum()))
-        c4.metric("Ofertas EBD", _moeda(aulas["ofertas"].fillna(0).sum()))
+        c1.metric("Total de matriculados", totais["Matriculados"])
+        c2.metric("Total de presentes", totais["Presentes"])
+        c3.metric("Total de ausentes", totais["Ausentes"])
+        c4.metric("Total de visitantes", totais["Visitantes"])
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("Biblias", totais["Biblias"])
+        c6.metric("Revistas", totais["Revistas"])
+        c7.metric("Harpas", totais["Harpas"])
+        c8.metric("Total de ofertas", _moeda(totais["Ofertas"]))
+
+        st.markdown("#### Grafico por classe")
+        classes = sorted(aulas["classe"].dropna().astype(str).unique().tolist())
+        classe_escolhida = st.selectbox("Escolha a classe", classes, key="grafico_ebd_classe")
+        aulas_classe = aulas[aulas["classe"].astype(str) == classe_escolhida]
+        _grafico_totais_ebd(
+            f"Resumo da classe {classe_escolhida}",
+            _totais_aulas(aulas_classe),
+        )
+
+        st.markdown("#### Grafico geral da EBD")
+        _grafico_totais_ebd("Resumo geral da EBD", totais)
 
     st.markdown("#### Frequencia por classe")
     _grafico_frequencia_classes(resumo)
@@ -446,47 +564,47 @@ def _render_relatorios(slug):
             mime="text/csv",
         )
 
-    st.markdown("#### Relatorio individual por aluno")
-    if freq.empty:
-        st.info("Sem chamadas registradas no periodo.")
-    else:
-        freq = freq.copy()
-        total = freq["presencas"] + freq["faltas"]
-        freq["frequencia_pct"] = (freq["presencas"] / total.where(total > 0, 1) * 100).round(1)
-        freq["acompanhamento"] = freq["frequencia_pct"].apply(
-            lambda v: "Acompanhar aluno/familia" if v < 60 else "Regular"
-        )
-        exibicao = freq.copy()
-        exibicao["frequencia_pct"] = exibicao["frequencia_pct"].apply(_pct)
-        st.dataframe(exibicao, use_container_width=True, hide_index=True)
-        st.download_button(
-            "Baixar relatorio de alunos CSV",
-            data=gerar_csv(freq),
-            file_name="relatorio_ebd_alunos.csv",
-            mime="text/csv",
-        )
+    with st.expander("Relatorio individual por aluno", expanded=False):
+        if freq.empty:
+            st.info("Sem chamadas registradas no periodo.")
+        else:
+            freq = freq.copy()
+            total = freq["presencas"] + freq["faltas"]
+            freq["frequencia_pct"] = (freq["presencas"] / total.where(total > 0, 1) * 100).round(1)
+            freq["acompanhamento"] = freq["frequencia_pct"].apply(
+                lambda v: "Acompanhar aluno/familia" if v < 60 else "Regular"
+            )
+            exibicao = freq.copy()
+            exibicao["frequencia_pct"] = exibicao["frequencia_pct"].apply(_pct)
+            st.dataframe(exibicao, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Baixar relatorio de alunos CSV",
+                data=gerar_csv(freq),
+                file_name="relatorio_ebd_alunos.csv",
+                mime="text/csv",
+            )
 
-    st.markdown("#### Aulas registradas")
-    if aulas.empty:
-        st.info("Nenhuma aula no periodo.")
-    else:
-        aulas_exibir = aulas.copy()
-        aulas_exibir["data"] = aulas_exibir["data"].apply(_fmt_data)
-        aulas_exibir["ofertas"] = aulas_exibir["ofertas"].apply(_moeda)
-        aulas_exibir["frequencia"] = (
-            aulas_exibir["presentes"].fillna(0)
-            / aulas_exibir["matriculados"].replace(0, 1).fillna(1)
-            * 100
-        ).round(1).apply(_pct)
-        st.dataframe(
-            aulas_exibir[[
-                "data", "classe", "tema", "professor", "matriculados",
-                "presentes", "frequencia", "qtd_revistas", "qtd_biblias",
-                "qtd_harpas", "ofertas",
-            ]],
-            use_container_width=True,
-            hide_index=True,
-        )
+    with st.expander("Aulas registradas", expanded=False):
+        if aulas.empty:
+            st.info("Nenhuma aula no periodo.")
+        else:
+            aulas_exibir = aulas.copy()
+            aulas_exibir["data"] = aulas_exibir["data"].apply(_fmt_data)
+            aulas_exibir["ofertas"] = aulas_exibir["ofertas"].apply(_moeda)
+            aulas_exibir["frequencia"] = (
+                aulas_exibir["presentes"].fillna(0)
+                / aulas_exibir["matriculados"].replace(0, 1).fillna(1)
+                * 100
+            ).round(1).apply(_pct)
+            st.dataframe(
+                aulas_exibir[[
+                    "data", "classe", "tema", "professor", "matriculados",
+                    "presentes", "ausentes", "visitantes", "frequencia",
+                    "qtd_revistas", "qtd_biblias", "qtd_harpas", "ofertas",
+                ]],
+                use_container_width=True,
+                hide_index=True,
+            )
 
 
 def _render_escala(slug):
