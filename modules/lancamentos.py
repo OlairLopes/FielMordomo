@@ -552,54 +552,116 @@ def _gerar_html_fechamento_caixa(lancamentos, igreja, slug, data_inicio, data_fi
     sep = "-" * 42
     sep2 = "=" * 42
 
-    resumo_pag_html = ""
-    if not df.empty and "forma_pagamento" in df.columns:
+    def _resumo_formas_html(titulo, dataframe, total):
+        html_secao = f'<div class="subsecao-titulo">{_html(titulo)}</div>'
+        if dataframe.empty or "forma_pagamento" not in dataframe.columns:
+            return (
+                html_secao
+                + '<div class="linha"><span class="label">Sem movimento</span>'
+                '<span class="valor">R$ 0,00</span></div>'
+                '<div class="linha total-pagamento"><span class="label">Total</span>'
+                '<span class="valor">R$ 0,00</span></div>'
+            )
         resumo_pag = (
-            df.assign(forma_pagamento=df["forma_pagamento"].fillna("").astype(str).str.strip().replace("", "Nao informado"))
+            dataframe.assign(
+                forma_pagamento=dataframe["forma_pagamento"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .replace("", "Nao informado")
+            )
             .groupby("forma_pagamento", as_index=False)["valor"]
             .sum()
             .sort_values("valor", ascending=False)
         )
+        linhas = []
         for _, row in resumo_pag.iterrows():
-            resumo_pag_html += (
+            linhas.append(
                 '<div class="linha">'
                 f'<span class="label">{_html(row["forma_pagamento"])}</span>'
                 f'<span class="valor">{_html(formatar_moeda(row["valor"]))}</span>'
                 '</div>'
             )
-    else:
-        resumo_pag_html = '<div class="linha"><span class="label">Sem movimento</span><span class="valor">R$ 0,00</span></div>'
+        linhas.append(
+            '<div class="linha total-pagamento">'
+            f'<span class="label">Total {len(dataframe)} lancamento(s)</span>'
+            f'<span class="valor">{_html(formatar_moeda(total))}</span>'
+            '</div>'
+        )
+        return html_secao + "".join(linhas)
 
-    itens_html = ""
+    if df.empty:
+        resumo_pag_html = (
+            _resumo_formas_html("ENTRADAS", df, 0.0)
+            + _resumo_formas_html("SAIDAS", df, 0.0)
+        )
+    else:
+        resumo_pag_html = (
+            _resumo_formas_html("ENTRADAS", df[df["tipo_norm"] == "ENTRADA"], entradas)
+            + _resumo_formas_html("SAIDAS", df[df["tipo_norm"] == "SAIDA"], saidas)
+        )
+
+    def _item_fechamento_html(row):
+        data_row = row.get("data_dt")
+        data_txt = data_row.strftime("%d/%m") if pd.notna(data_row) else "--/--"
+        id_txt = str(int(row["id_lancamento"])).zfill(6) if pd.notna(row.get("id_lancamento")) else "------"
+        tipo = _html(row.get("tipo", "-"))
+        categoria = _html(row.get("categoria", "-"))
+        subcategoria = _html(row.get("subcategoria", "") or "")
+        nome_vinc = _html(row.get("nome_cadastro", "") or "Sem vinculo")
+        tipo_vinc = _html(row.get("tipo_cadastro", "") or "")
+        vinculo = nome_vinc + (f" ({tipo_vinc})" if tipo_vinc else "")
+        forma = _html(row.get("forma_pagamento", "") or "-")
+        valor = _html(formatar_moeda(row.get("valor", 0)))
+        desc = _html(row.get("descricao", "") or "")
+        complemento = f" / {subcategoria}" if subcategoria else ""
+        if desc:
+            complemento += f" - {desc}"
+        return (
+            '<div class="item">'
+            f'<div><strong>#{id_txt}</strong> {data_txt} - {tipo}</div>'
+            f'<div>{categoria}{complemento}</div>'
+            f'<div class="vinculo">Vinculado: {vinculo}</div>'
+            f'<div class="linha"><span class="label">{forma}</span><span class="valor">{valor}</span></div>'
+            '</div>'
+        )
+
+    def _secao_fechamento_html(titulo, dataframe, total):
+        if dataframe.empty:
+            return (
+                f'<div class="secao-titulo">{_html(titulo)}</div>'
+                '<div class="vazio">Sem lancamentos nesta secao.</div>'
+                '<div class="linha total-secao"><span class="label">Total</span>'
+                '<span class="valor">R$ 0,00</span></div>'
+            )
+        itens = "".join(_item_fechamento_html(row) for _, row in dataframe.iterrows())
+        return (
+            f'<div class="secao-titulo">{_html(titulo)}</div>'
+            f"{itens}"
+            '<div class="linha total-secao">'
+            f'<span class="label">Total {len(dataframe)} lancamento(s)</span>'
+            f'<span class="valor">{_html(formatar_moeda(total))}</span>'
+            '</div>'
+        )
+
     if df.empty:
         itens_html = '<div class="vazio">Sem lancamentos para os filtros selecionados.</div>'
     else:
         ordenado = df.copy()
         ordenado["data_dt"] = pd.to_datetime(ordenado["data"], errors="coerce")
         ordenado = ordenado.sort_values(["data_dt", "id_lancamento"], na_position="last")
-        for _, row in ordenado.iterrows():
-            data_row = row.get("data_dt")
-            data_txt = data_row.strftime("%d/%m") if pd.notna(data_row) else "--/--"
-            id_txt = str(int(row["id_lancamento"])).zfill(6) if pd.notna(row.get("id_lancamento")) else "------"
-            tipo = _html(row.get("tipo", "-"))
-            categoria = _html(row.get("categoria", "-"))
-            subcategoria = _html(row.get("subcategoria", "") or "")
-            nome_vinc = _html(row.get("nome_cadastro", "") or "Sem vinculo")
-            tipo_vinc = _html(row.get("tipo_cadastro", "") or "")
-            vinculo = nome_vinc + (f" ({tipo_vinc})" if tipo_vinc else "")
-            forma = _html(row.get("forma_pagamento", "") or "-")
-            valor = _html(formatar_moeda(row.get("valor", 0)))
-            desc = _html(row.get("descricao", "") or "")
-            complemento = f" / {subcategoria}" if subcategoria else ""
-            if desc:
-                complemento += f" - {desc}"
-            itens_html += (
-                '<div class="item">'
-                f'<div><strong>#{id_txt}</strong> {data_txt} - {tipo}</div>'
-                f'<div>{categoria}{complemento}</div>'
-                f'<div class="vinculo">Vinculado: {vinculo}</div>'
-                f'<div class="linha"><span class="label">{forma}</span><span class="valor">{valor}</span></div>'
-                '</div>'
+        entradas_df = ordenado[ordenado["tipo_norm"] == "ENTRADA"]
+        saidas_df = ordenado[ordenado["tipo_norm"] == "SAIDA"]
+        outros_df = ordenado[~ordenado["tipo_norm"].isin(["ENTRADA", "SAIDA"])]
+        itens_html = (
+            _secao_fechamento_html("ENTRADAS", entradas_df, entradas)
+            + _secao_fechamento_html("SAIDAS", saidas_df, saidas)
+        )
+        if not outros_df.empty:
+            itens_html += _secao_fechamento_html(
+                "OUTROS LANCAMENTOS",
+                outros_df,
+                float(outros_df["valor"].sum()),
             )
 
     responsavel = _html(_assinatura_igreja(slug))
@@ -624,8 +686,15 @@ body {{ background: #f0f0f0; display: flex; justify-content: center; padding: 20
 .linha .label {{ color: #555; }}
 .linha .valor {{ font-weight: 700; text-align: right; }}
 .valor-total {{ text-align: center; font-size: 20px; font-weight: bold; margin: 8px 0 4px; }}
+.subsecao-titulo {{ font-size: 11px; font-weight: 800; margin-top: 7px; text-align: center; }}
+.total-pagamento {{ border-top: 1px dashed #999; margin-bottom: 5px; padding-top: 4px; }}
+.total-pagamento .label, .total-pagamento .valor {{ color: #111; font-weight: 800; }}
 .item {{ border-top: 1px dashed #bbb; padding: 6px 0; font-size: 10px; }}
 .item strong {{ font-size: 10px; }}
+.secao-titulo {{ border-top: 2px solid #333; font-size: 12px; font-weight: 800;
+                letter-spacing: .08em; margin-top: 8px; padding-top: 7px; text-align: center; }}
+.total-secao {{ border-top: 1px solid #333; font-size: 12px; margin: 6px 0 8px; padding-top: 5px; }}
+.total-secao .label, .total-secao .valor {{ color: #111; font-weight: 800; }}
 .vinculo {{ color: #333; font-size: 10px; font-weight: 700; margin-top: 2px; word-break: break-word; }}
 .vazio {{ text-align: center; color: #666; font-size: 10px; padding: 10px 0; }}
 .assinatura-bloco {{ margin-top: 12px; display: flex; justify-content: center; gap: 18px; }}
