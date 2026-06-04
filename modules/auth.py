@@ -9,6 +9,7 @@ import streamlit as st
 
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
+    autenticar_ebd_secretario,
     inicializar_master, obter_logo_sistema, obter_config,
 )
 
@@ -28,7 +29,7 @@ def _normalizar_whatsapp(numero: str) -> str:
     return numero
 
 
-def _iniciar_sessao(modo: str, igreja=None, tesoureiro=None):
+def _iniciar_sessao(modo: str, igreja=None, tesoureiro=None, secretario_ebd=None):
     _limpar_sessao()
     st.session_state["autenticado"] = True
     st.session_state["modo"] = modo
@@ -36,10 +37,15 @@ def _iniciar_sessao(modo: str, igreja=None, tesoureiro=None):
         st.session_state["igreja"] = igreja
     if tesoureiro is not None:
         st.session_state["tesoureiro"] = tesoureiro
+    if secretario_ebd is not None:
+        st.session_state["secretario_ebd"] = secretario_ebd
 
 
 def _limpar_sessao():
-    for key in ("autenticado", "modo", "igreja", "tesoureiro", "pagina", "mostrar_recuperacao"):
+    for key in (
+        "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
+        "pagina", "mostrar_recuperacao",
+    ):
         st.session_state.pop(key, None)
     for key in list(st.session_state.keys()):
         if key.startswith(("df_", "lote_", "nl_counter_", "dashboard_", "_auth_", "_edit_", "_del_")):
@@ -149,7 +155,7 @@ def tela_login():
 
         modo = st.radio(
             "Tipo de acesso",
-            ["Igreja", "Tesoureiro", "Administrador do sistema"],
+            ["Igreja", "Tesoureiro", "EBD", "Administrador do sistema"],
             horizontal=True,
             label_visibility="collapsed",
         )
@@ -159,6 +165,8 @@ def tela_login():
             _login_igreja()
         elif modo == "Tesoureiro":
             _login_tesoureiro()
+        elif modo == "EBD":
+            _login_ebd()
         else:
             _login_admin()
 
@@ -235,6 +243,33 @@ def _login_tesoureiro():
                     tesoureiro=acesso["tesoureiro"],
                 )
                 st.toast(f"Bem-vindo, {acesso['tesoureiro']['nome']}!")
+                st.rerun()
+            else:
+                st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")
+
+
+def _login_ebd():
+    with st.form("form_login_ebd"):
+        st.markdown("#### Acesso da EBD")
+        st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo EBD.")
+        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        usuario = st.text_input("Usuario da EBD")
+        senha = st.text_input("Senha", type="password")
+
+        if st.form_submit_button("Entrar", type="primary", use_container_width=True):
+            slug = slug.strip().lower()
+            usuario = usuario.strip().lower()
+            if not slug or not usuario or not senha:
+                st.error("Preencha todos os campos.")
+                return
+            acesso = autenticar_ebd_secretario(slug, usuario, senha)
+            if acesso:
+                _iniciar_sessao(
+                    "secretario_ebd",
+                    igreja=acesso["igreja"],
+                    secretario_ebd=acesso["secretario_ebd"],
+                )
+                st.toast(f"Bem-vindo, {acesso['secretario_ebd']['nome']}!")
                 st.rerun()
             else:
                 st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")

@@ -12,10 +12,12 @@ from data.repository import (
     encerrar_ebd_matricula,
     excluir_ebd_classe,
     excluir_ebd_escala,
+    inativar_ebd_secretario,
     listar_ebd_aulas,
     listar_ebd_classes,
     listar_ebd_escala,
     listar_ebd_matriculas,
+    listar_ebd_secretarios,
     relatorio_ebd_frequencia,
     relatorio_ebd_resumo_classes,
     obter_config_igreja,
@@ -23,6 +25,7 @@ from data.repository import (
     salvar_ebd_classe,
     salvar_ebd_escala,
     salvar_ebd_matricula,
+    salvar_ebd_secretario,
 )
 from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
 
@@ -362,15 +365,25 @@ def _render_classes(slug):
             st.rerun()
 
 
-def _render_chamada(slug):
+def _render_chamada(slug, id_classe_fixo=None):
     st.markdown("### Chamada por classe")
     df_classes = listar_ebd_classes(slug)
     if df_classes.empty:
         st.info("Cadastre uma classe antes de registrar chamada.")
         return
+    if id_classe_fixo:
+        df_classes = df_classes[df_classes["id_classe"] == int(id_classe_fixo)]
+        if df_classes.empty:
+            st.error("Sua classe vinculada nao esta ativa ou nao foi encontrada.")
+            return
     op_classes = _classes_opcoes(df_classes)
     c1, c2 = st.columns([2, 1])
-    classe_label = c1.selectbox("Classe", list(op_classes.keys()), key="chamada_classe")
+    classe_label = c1.selectbox(
+        "Classe",
+        list(op_classes.keys()),
+        key="chamada_classe",
+        disabled=bool(id_classe_fixo),
+    )
     data_aula = c2.date_input("Data da aula", value=_hoje())
     id_classe = op_classes[classe_label]
 
@@ -700,6 +713,128 @@ def _render_escala(slug):
         st.rerun()
 
 
+def _render_secretarios(slug):
+    st.markdown("### Secretarios da EBD")
+    st.caption(
+        "Cadastre acessos restritos: secretario de classe acessa somente a chamada "
+        "da classe vinculada; secretario geral acessa todo o modulo EBD."
+    )
+    df_classes = listar_ebd_classes(slug)
+    if df_classes.empty:
+        st.info("Cadastre uma classe antes de criar secretario de classe.")
+    op_classes = {"Selecione": None}
+    op_classes.update(_classes_opcoes(df_classes))
+
+    with st.expander("Cadastrar secretario", expanded=False):
+        with st.form("form_ebd_secretario"):
+            c1, c2 = st.columns(2)
+            nome = c1.text_input("Nome")
+            usuario = c2.text_input("Usuario", help="Use letras, numeros, ponto, hifen ou underline.")
+            c3, c4 = st.columns(2)
+            senha = c3.text_input("Senha", type="password")
+            perfil_rotulo = c4.selectbox(
+                "Perfil",
+                ["Secretario de classe", "Secretario geral"],
+            )
+            perfil = "geral" if perfil_rotulo == "Secretario geral" else "classe"
+            id_classe = None
+            if perfil == "classe":
+                classe_label = st.selectbox("Classe vinculada", list(op_classes.keys()))
+                id_classe = op_classes[classe_label]
+            c5, c6 = st.columns(2)
+            telefone = c5.text_input("Telefone / WhatsApp")
+            email = c6.text_input("E-mail")
+            observacoes = st.text_area("Observacoes")
+            if st.form_submit_button("Salvar secretario", type="primary"):
+                try:
+                    salvar_ebd_secretario(
+                        slug, nome, usuario, senha, perfil, id_classe,
+                        telefone, email, "Ativo", observacoes,
+                    )
+                    st.success("Secretario da EBD cadastrado.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    df = listar_ebd_secretarios(slug)
+    if df.empty:
+        st.info("Nenhum secretario da EBD cadastrado.")
+        return
+
+    exibir = df.copy()
+    exibir["perfil"] = exibir["perfil"].map({
+        "classe": "Secretario de classe",
+        "geral": "Secretario geral",
+    }).fillna(exibir["perfil"])
+    st.dataframe(
+        exibir[["nome", "usuario", "perfil", "classe", "telefone", "email", "situacao"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown("#### Editar acesso")
+    opcoes = {
+        f'{int(row["id_secretario"])} - {row["nome"]} - {row["usuario"]}': row
+        for _, row in df.iterrows()
+    }
+    selecionado = st.selectbox("Selecionar secretario", ["Selecione"] + list(opcoes.keys()))
+    if selecionado == "Selecione":
+        return
+    row = opcoes[selecionado]
+    id_secretario = int(row["id_secretario"])
+    with st.form(f"form_editar_secretario_ebd_{id_secretario}"):
+        c1, c2 = st.columns(2)
+        nome = c1.text_input("Nome", value=row["nome"])
+        usuario = c2.text_input("Usuario", value=row["usuario"])
+        perfil_atual = "Secretario geral" if row["perfil"] == "geral" else "Secretario de classe"
+        c3, c4 = st.columns(2)
+        senha = c3.text_input("Nova senha", type="password", help="Deixe em branco para manter a senha atual.")
+        perfil_rotulo = c4.selectbox(
+            "Perfil",
+            ["Secretario de classe", "Secretario geral"],
+            index=1 if perfil_atual == "Secretario geral" else 0,
+        )
+        perfil = "geral" if perfil_rotulo == "Secretario geral" else "classe"
+        id_classe = None
+        if perfil == "classe":
+            classe_labels = list(op_classes.keys())
+            classe_atual = "Selecione"
+            for label, valor in op_classes.items():
+                if valor and row.get("id_classe") and int(valor) == int(row["id_classe"]):
+                    classe_atual = label
+                    break
+            classe_label = st.selectbox(
+                "Classe vinculada",
+                classe_labels,
+                index=classe_labels.index(classe_atual) if classe_atual in classe_labels else 0,
+            )
+            id_classe = op_classes[classe_label]
+        c5, c6 = st.columns(2)
+        telefone = c5.text_input("Telefone / WhatsApp", value=row.get("telefone", ""))
+        email = c6.text_input("E-mail", value=row.get("email", ""))
+        situacao = st.selectbox(
+            "Situacao",
+            ["Ativo", "Inativo"],
+            index=0 if row.get("situacao") == "Ativo" else 1,
+        )
+        observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+        if st.form_submit_button("Atualizar secretario", type="primary"):
+            try:
+                salvar_ebd_secretario(
+                    slug, nome, usuario, senha, perfil, id_classe, telefone,
+                    email, situacao, observacoes, id_secretario,
+                )
+                st.success("Secretario da EBD atualizado.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    if confirmar_exclusao(f"inativar_secretario_ebd_{id_secretario}", "Inativar secretario selecionado"):
+        inativar_ebd_secretario(slug, id_secretario)
+        st.success("Secretario inativado.")
+        st.rerun()
+
+
 def render():
     st.subheader("EBD")
     st.caption("Gestao de classes, chamada, frequencia e escala de professores da Escola Biblica Dominical.")
@@ -708,12 +843,33 @@ def render():
         st.error("Sessao invalida. Faca login novamente.")
         return
 
-    tab_classes, tab_chamada, tab_relatorios, tab_escala = st.tabs([
+    secretario = st.session_state.get("secretario_ebd", {})
+    modo = st.session_state.get("modo", "")
+    if modo == "secretario_ebd" and isinstance(secretario, dict):
+        perfil = secretario.get("perfil", "classe")
+        if perfil == "classe":
+            st.info(
+                f"Acesso de secretario de classe: {secretario.get('classe', 'classe vinculada')}."
+            )
+            _render_chamada(slug, secretario.get("id_classe"))
+            return
+        st.info("Acesso de secretario geral da EBD.")
+
+    pode_gerenciar_secretarios = (
+        modo != "secretario_ebd"
+        or secretario.get("perfil") == "geral"
+    )
+    abas = [
         "Classes e alunos",
         "Chamada",
         "Relatorios",
         "Escala de professores",
-    ])
+    ]
+    if pode_gerenciar_secretarios:
+        abas.append("Secretarios")
+
+    tabs = st.tabs(abas)
+    tab_classes, tab_chamada, tab_relatorios, tab_escala = tabs[:4]
     with tab_classes:
         _render_classes(slug)
     with tab_chamada:
@@ -722,3 +878,6 @@ def render():
         _render_relatorios(slug)
     with tab_escala:
         _render_escala(slug)
+    if pode_gerenciar_secretarios:
+        with tabs[4]:
+            _render_secretarios(slug)

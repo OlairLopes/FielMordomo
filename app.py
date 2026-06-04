@@ -54,6 +54,9 @@ PAGINAS_TESOUREIRO = {
     "cadastros": ("Membros", "modules.cadastros"),
     "relatorios": ("Relatorios", "modules.relatorios"),
 }
+PAGINAS_EBD = {
+    "ebd": ("EBD", "modules.ebd"),
+}
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -354,6 +357,26 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
             _auth().logout()
 
 
+def _sidebar_secretario_ebd(igreja, secretario):
+    perfil = "Secretario geral" if secretario.get("perfil") == "geral" else "Secretario de classe"
+    classe = secretario.get("classe") or "EBD"
+    with st.sidebar:
+        _render_logo_sidebar(igreja.get("slug", ""))
+        st.markdown(
+            '<div class="sidebar-info">'
+            f'<b>{_esc(secretario.get("nome", "Secretario EBD"))}</b>'
+            f'<div class="plano">{_esc(perfil)} - {_esc(classe)}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("EBD", key="sb_secretario_ebd", use_container_width=True, type="primary"):
+            st.session_state["pagina"] = "ebd"
+            st.rerun()
+        st.divider()
+        if st.button("Sair", key="sb_sair_secretario_ebd", use_container_width=True):
+            _auth().logout()
+
+
 def _renderizar_admin():
     _sidebar_admin()
     try:
@@ -410,6 +433,26 @@ def _renderizar_tesoureiro():
         )
 
 
+def _renderizar_secretario_ebd():
+    igreja = st.session_state.get("igreja", {})
+    secretario = st.session_state.get("secretario_ebd", {})
+    if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(secretario, dict):
+        st.error("Sessao invalida. Faca login novamente.")
+        if st.button("Voltar ao login"):
+            _auth().logout()
+        return
+    st.session_state["pagina"] = "ebd"
+    _sidebar_secretario_ebd(igreja, secretario)
+    try:
+        _importar("modules.ebd").render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao carregar EBD para secretario.")
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
+
+
 def main():
     _bloquear_acesso_fora_do_dominio_oficial()
     _resolver_rota_publica()
@@ -425,6 +468,8 @@ def main():
         _renderizar_igreja()
     elif modo == "tesoureiro":
         _renderizar_tesoureiro()
+    elif modo == "secretario_ebd":
+        _renderizar_secretario_ebd()
     else:
         st.error("Modo de acesso invalido. Faca login novamente.")
         if st.button("Sair"):

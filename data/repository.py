@@ -29,6 +29,7 @@ TAMANHO_MAXIMO_ARQUIVOS_ZIP = 500 * 1024 * 1024
 EXTENSOES_LOGO_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
 USUARIO_TESOUREIRO_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{2,38}[a-z0-9])?$")
+USUARIO_EBD_RE = USUARIO_TESOUREIRO_RE
 HASH_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 LIMITES_MEMBROS_PLANO = {"basico": 50, "profissional": 250, "premium": None}
 CATEGORIAS_ENTRADA = {
@@ -465,6 +466,10 @@ def _garantir_tabelas_ebd(conn):
             data        TEXT NOT NULL,
             tema        TEXT DEFAULT '',
             professor   TEXT DEFAULT '',
+            qtd_matriculados INTEGER NOT NULL DEFAULT 0,
+            qtd_presentes    INTEGER NOT NULL DEFAULT 0,
+            qtd_ausentes     INTEGER NOT NULL DEFAULT 0,
+            qtd_visitantes   INTEGER NOT NULL DEFAULT 0,
             qtd_revistas INTEGER NOT NULL DEFAULT 0,
             qtd_biblias  INTEGER NOT NULL DEFAULT 0,
             qtd_harpas   INTEGER NOT NULL DEFAULT 0,
@@ -502,6 +507,22 @@ def _garantir_tabelas_ebd(conn):
             ON ebd_presencas(id_aula);
         CREATE INDEX IF NOT EXISTS idx_ebd_escala_data
             ON ebd_escala_professores(data);
+        CREATE TABLE IF NOT EXISTS ebd_secretarios (
+            id_secretario INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome          TEXT NOT NULL,
+            usuario       TEXT NOT NULL UNIQUE,
+            senha_hash    TEXT NOT NULL,
+            perfil        TEXT NOT NULL DEFAULT 'classe',
+            id_classe     INTEGER REFERENCES ebd_classes(id_classe),
+            telefone      TEXT DEFAULT '',
+            email         TEXT DEFAULT '',
+            situacao      TEXT NOT NULL DEFAULT 'Ativo',
+            observacoes   TEXT DEFAULT '',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_ebd_secretarios_usuario
+            ON ebd_secretarios(usuario);
     """)
     cols_escala = [
         row[1]
@@ -517,6 +538,10 @@ def _garantir_tabelas_ebd(conn):
         for row in conn.execute("PRAGMA table_info(ebd_aulas)").fetchall()
     ]
     for coluna, tipo in (
+        ("qtd_matriculados", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_presentes", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_ausentes", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_visitantes", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_revistas", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_biblias", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_harpas", "INTEGER NOT NULL DEFAULT 0"),
@@ -692,16 +717,31 @@ def listar_ebd_aulas(slug, data_inicio=None, data_fim=None, id_classe=None):
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
         return pd.read_sql_query(
             f"""SELECT a.id_aula, a.id_classe, c.nome AS classe, a.data,
-                       a.tema, a.professor, a.qtd_revistas, a.qtd_biblias,
+                       a.tema, a.professor,
+                       CASE WHEN a.qtd_matriculados > 0
+                            THEN a.qtd_matriculados
+                            ELSE COUNT(p.id_presenca)
+                       END AS matriculados,
+                       CASE WHEN a.qtd_presentes > 0
+                            THEN a.qtd_presentes
+                            ELSE SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END)
+                       END AS presentes,
+                       CASE WHEN a.qtd_ausentes > 0
+                            THEN a.qtd_ausentes
+                            ELSE SUM(CASE WHEN p.presente=0 THEN 1 ELSE 0 END)
+                       END AS ausentes,
+                       a.qtd_visitantes AS visitantes,
+                       a.qtd_revistas, a.qtd_biblias,
                        a.qtd_harpas, a.ofertas, a.observacoes,
-                       COUNT(p.id_presenca) AS matriculados,
-                       SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presentes
+                       COUNT(p.id_presenca) AS matriculados_lista,
+                       SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presentes_lista
                 FROM ebd_aulas a
                 JOIN ebd_classes c ON c.id_classe=a.id_classe
                 LEFT JOIN ebd_presencas p ON p.id_aula=a.id_aula
                 {filtro}
                 GROUP BY a.id_aula, a.id_classe, c.nome, a.data, a.tema,
-                         a.professor, a.qtd_revistas, a.qtd_biblias,
+                         a.professor, a.qtd_matriculados, a.qtd_presentes,
+                         a.qtd_ausentes, a.qtd_visitantes, a.qtd_revistas, a.qtd_biblias,
                          a.qtd_harpas, a.ofertas, a.observacoes
                 ORDER BY a.data DESC, c.nome""",
             conn,
@@ -717,6 +757,10 @@ def salvar_ebd_chamada(
     professor="",
     observacoes="",
     presencas=None,
+    qtd_matriculados=0,
+    qtd_presentes=0,
+    qtd_ausentes=0,
+    qtd_visitantes=0,
     qtd_revistas=0,
     qtd_biblias=0,
     qtd_harpas=0,
@@ -727,22 +771,31 @@ def salvar_ebd_chamada(
         inicializar_tenant(slug)
     presencas = presencas or {}
     try:
+        qtd_matriculados = max(int(qtd_matriculados or 0), 0)
+        qtd_presentes = max(int(qtd_presentes or 0), 0)
+        qtd_ausentes = max(int(qtd_ausentes or 0), 0)
+        qtd_visitantes = max(int(qtd_visitantes or 0), 0)
         qtd_revistas = max(int(qtd_revistas or 0), 0)
         qtd_biblias = max(int(qtd_biblias or 0), 0)
         qtd_harpas = max(int(qtd_harpas or 0), 0)
         ofertas = max(float(ofertas or 0), 0.0)
     except (TypeError, ValueError) as ex:
-        raise ValueError("Informe valores validos para revistas, biblias, harpas e ofertas.") from ex
+        raise ValueError("Informe valores validos para a chamada da EBD.") from ex
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         cur = conn.execute(
             """INSERT INTO ebd_aulas
-               (id_classe, data, tema, professor, qtd_revistas, qtd_biblias,
+               (id_classe, data, tema, professor, qtd_matriculados, qtd_presentes,
+                qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
                 qtd_harpas, ofertas, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id_classe, data) DO UPDATE SET
                    tema=excluded.tema,
                    professor=excluded.professor,
+                   qtd_matriculados=excluded.qtd_matriculados,
+                   qtd_presentes=excluded.qtd_presentes,
+                   qtd_ausentes=excluded.qtd_ausentes,
+                   qtd_visitantes=excluded.qtd_visitantes,
                    qtd_revistas=excluded.qtd_revistas,
                    qtd_biblias=excluded.qtd_biblias,
                    qtd_harpas=excluded.qtd_harpas,
@@ -750,7 +803,8 @@ def salvar_ebd_chamada(
                    observacoes=excluded.observacoes""",
             (
                 int(id_classe), str(data), sanitizar(tema),
-                sanitizar(professor), qtd_revistas, qtd_biblias,
+                sanitizar(professor), qtd_matriculados, qtd_presentes,
+                qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
                 qtd_harpas, ofertas, sanitizar(observacoes),
             ),
         )
@@ -924,6 +978,173 @@ def excluir_ebd_escala(slug, id_escala):
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         conn.execute("DELETE FROM ebd_escala_professores WHERE id_escala=?", (int(id_escala),))
+
+
+def _normalizar_usuario_ebd(usuario):
+    usuario = str(usuario or "").strip().lower()
+    if not USUARIO_EBD_RE.fullmatch(usuario):
+        raise ValueError("Usuario deve ter 3 a 40 caracteres, usando letras, numeros, ponto, hifen ou underline.")
+    return usuario
+
+
+def listar_ebd_secretarios(slug, incluir_inativos=True):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_ebd(conn)
+        where = "" if incluir_inativos else "WHERE s.situacao='Ativo'"
+        return pd.read_sql_query(
+            f"""SELECT s.id_secretario, s.nome, s.usuario, s.perfil,
+                       s.id_classe, c.nome AS classe, s.telefone, s.email,
+                       s.situacao, s.observacoes, s.criado_em, s.atualizado_em
+                FROM ebd_secretarios s
+                LEFT JOIN ebd_classes c ON c.id_classe=s.id_classe
+                {where}
+                ORDER BY s.situacao, s.nome""",
+            conn,
+        )
+
+
+def salvar_ebd_secretario(
+    slug,
+    nome,
+    usuario,
+    senha="",
+    perfil="classe",
+    id_classe=None,
+    telefone="",
+    email="",
+    situacao="Ativo",
+    observacoes="",
+    id_secretario=None,
+):
+    nome = sanitizar(nome)
+    usuario = _normalizar_usuario_ebd(usuario)
+    perfil = str(perfil or "").strip().lower()
+    situacao = str(situacao or "Ativo").strip()
+    if not nome:
+        raise ValueError("Nome do secretario e obrigatorio.")
+    if perfil not in {"classe", "geral"}:
+        raise ValueError("Perfil de secretario invalido.")
+    if situacao not in {"Ativo", "Inativo"}:
+        raise ValueError("Situacao invalida.")
+    id_classe = int(id_classe) if id_classe else None
+    if perfil == "classe" and not id_classe:
+        raise ValueError("Secretario de classe precisa estar vinculado a uma classe.")
+    if not id_secretario:
+        erros_senha = validar_nova_senha(senha)
+        if erros_senha:
+            raise ValueError(" ".join(erros_senha))
+    elif senha:
+        erros_senha = validar_nova_senha(senha)
+        if erros_senha:
+            raise ValueError(" ".join(erros_senha))
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_ebd(conn)
+        duplicado = conn.execute(
+            """SELECT 1 FROM ebd_secretarios
+               WHERE usuario=? AND (? IS NULL OR id_secretario!=?) LIMIT 1""",
+            (usuario, int(id_secretario) if id_secretario else None, int(id_secretario) if id_secretario else None),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe um secretario da EBD com este usuario.")
+        dados = (
+            nome, usuario, perfil, id_classe, sanitizar(telefone),
+            sanitizar(email), situacao, sanitizar(observacoes),
+        )
+        if id_secretario:
+            if senha:
+                conn.execute(
+                    """UPDATE ebd_secretarios
+                       SET nome=?, usuario=?, perfil=?, id_classe=?, telefone=?,
+                           email=?, situacao=?, observacoes=?,
+                           senha_hash=?, atualizado_em=datetime('now')
+                       WHERE id_secretario=?""",
+                    dados + (hash_senha(senha), int(id_secretario)),
+                )
+            else:
+                conn.execute(
+                    """UPDATE ebd_secretarios
+                       SET nome=?, usuario=?, perfil=?, id_classe=?, telefone=?,
+                           email=?, situacao=?, observacoes=?,
+                           atualizado_em=datetime('now')
+                       WHERE id_secretario=?""",
+                    dados + (int(id_secretario),),
+                )
+            return int(id_secretario)
+        cur = conn.execute(
+            """INSERT INTO ebd_secretarios
+               (nome, usuario, senha_hash, perfil, id_classe, telefone, email,
+                situacao, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (nome, usuario, hash_senha(senha), perfil, id_classe, sanitizar(telefone),
+             sanitizar(email), situacao, sanitizar(observacoes)),
+        )
+        return cur.lastrowid
+
+
+def inativar_ebd_secretario(slug, id_secretario):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_ebd(conn)
+        conn.execute(
+            """UPDATE ebd_secretarios
+               SET situacao='Inativo', atualizado_em=datetime('now')
+               WHERE id_secretario=?""",
+            (int(id_secretario),),
+        )
+
+
+def autenticar_ebd_secretario(slug, usuario, senha):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_ebd(usuario)
+    except ValueError:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    chave = f"ebd:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_ebd(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+        row = conn.execute(
+            """SELECT s.id_secretario, s.nome, s.usuario, s.senha_hash,
+                      s.perfil, s.id_classe, c.nome AS classe
+               FROM ebd_secretarios s
+               LEFT JOIN ebd_classes c ON c.id_classe=s.id_classe
+               WHERE s.usuario=? AND s.situacao='Ativo'""",
+            (usuario,),
+        ).fetchone()
+        valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
+        _registrar_resultado_login(conn, chave, valido)
+        if valido and migrar:
+            conn.execute(
+                "UPDATE ebd_secretarios SET senha_hash=? WHERE id_secretario=?",
+                (hash_senha(senha), row["id_secretario"]),
+            )
+    if not row or not valido:
+        return None
+    return {
+        "igreja": igreja,
+        "secretario_ebd": {
+            "id": row["id_secretario"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+            "perfil": row["perfil"],
+            "id_classe": row["id_classe"],
+            "classe": row["classe"] or "",
+        },
+    }
 
 
 def _dados_lancamento_validados(conn, l, lote_id=""):
