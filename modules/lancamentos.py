@@ -1,8 +1,10 @@
 import datetime
 import base64
 import html
+import io
 import logging
 import re
+import unicodedata
 import urllib.parse
 
 import pandas as pd
@@ -32,6 +34,20 @@ FORMAS_PAGAMENTO = [
     "Cartao Debito", "Cartao Credito",
 ]
 TIPOS_VINCULO = ["Nenhum", "Membro", "Fornecedor"]
+MESES_PDF_PIX = {
+    "jan": 1,
+    "fev": 2,
+    "mar": 3,
+    "abr": 4,
+    "mai": 5,
+    "jun": 6,
+    "jul": 7,
+    "ago": 8,
+    "set": 9,
+    "out": 10,
+    "nov": 11,
+    "dez": 12,
+}
 
 LOGGER = logging.getLogger(__name__)
 API_VERSION_RE = re.compile(r"^v\d+\.\d+$")
@@ -133,6 +149,213 @@ def _subcategorias_despesa_seguras(slug):
 
 def _valor_texto(valor):
     return "" if pd.isna(valor) else str(valor or "")
+
+
+def _normalizar_texto_importacao(valor):
+    texto = str(valor if valor is not None else "").strip().lower()
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def _ler_csv_pix(arquivo):
+    dados = arquivo.getvalue()
+    for encoding in ("utf-8-sig", "utf-8", "latin1"):
+        try:
+            return pd.read_csv(io.BytesIO(dados), sep=None, engine="python", encoding=encoding)
+        except Exception:
+            continue
+    raise ValueError("Nao foi possivel ler o CSV. Verifique o arquivo ou a codificacao.")
+
+
+def _ano_periodo_pdf_pix(texto):
+    match = re.search(r"Periodo:\s*\d{2}/\d{2}/(\d{4})\s*-\s*\d{2}/\d{2}/(\d{4})", texto)
+    if not match:
+        match = re.search(r"Per\S*odo:\s*\d{2}/\d{2}/(\d{4})\s*-\s*\d{2}/\d{2}/(\d{4})", texto)
+    if match:
+        return int(match.group(2))
+    return datetime.date.today().year
+
+
+def _extrair_nome_pdf_pix(trecho):
+    antes_valor = re.split(r"\s+R\$\s*[\d.]+,\d{2}", trecho, maxsplit=1)[0]
+    antes_valor = re.sub(r"\s+[•\u2022*]{3}\.\d{3}\.\d{3}-[•\u2022*]{2}.*$", "", antes_valor)
+    antes_valor = re.sub(r"\s+\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}.*$", "", antes_valor)
+    antes_valor = re.sub(r"^\d{2}\.\d{3}\.\d{3}\s+", "", antes_valor)
+    return re.sub(r"\s+", " ", antes_valor).strip()
+
+
+def _extrair_pdf_pix(arquivo):
+    try:
+        from pypdf import PdfReader
+    except ImportError as ex:
+        raise ValueError(
+            "Para importar PDF, adicione pypdf ao requirements.txt."
+        ) from ex
+
+    reader = PdfReader(io.BytesIO(arquivo.getvalue()))
+    texto = "\n".join((page.extract_text() or "") for page in reader.pages)
+    if not texto.strip():
+        raise ValueError("O PDF nao possui texto extraivel. Converta para CSV ou use OCR.")
+
+    ano = _ano_periodo_pdf_pix(texto)
+    registros = []
+    for linha in texto.splitlines():
+        linha = re.sub(r"\s+", " ", linha).strip()
+        if not re.match(r"^\d{2}/[A-Za-zÀ-ÿ]{3}\b", linha):
+            continue
+
+        data_match = re.match(r"^(\d{2})/([A-Za-zÀ-ÿ]{3})\s+", linha)
+        tx_match = re.search(r"\b(E[A-Za-z0-9]{20,})\b\s+(.+)$", linha)
+        valores = re.findall(r"R\$\s*([\d.]+,\d{2})", linha)
+        if not data_match or not tx_match or len(valores) < 2:
+            continue
+
+        mes = MESES_PDF_PIX.get(_normalizar_texto_importacao(data_match.group(2))[:3])
+        if not mes:
+            continue
+        dia = int(data_match.group(1))
+        try:
+            data = datetime.date(ano, mes, dia)
+        except ValueError:
+            continue
+
+        nome = _extrair_nome_pdf_pix(tx_match.group(2))
+        if not nome:
+            continue
+        registros.append({
+            "data": data.strftime("%d/%m/%Y"),
+            "membro": nome,
+            "valor": valores[-1],
+            "transacao_pix": tx_match.group(1),
+        })
+
+    if not registros:
+        raise ValueError("Nao encontrei recebimentos Pix no formato esperado deste PDF.")
+    return pd.DataFrame(registros)
+
+
+def _ler_arquivo_pix(arquivo):
+    nome = str(getattr(arquivo, "name", "") or "").lower()
+    if nome.endswith(".pdf"):
+        return _extrair_pdf_pix(arquivo)
+    return _ler_csv_pix(arquivo)
+
+
+def _detectar_coluna(colunas, candidatos):
+    normalizadas = {_normalizar_texto_importacao(col): col for col in colunas}
+    for candidato in candidatos:
+        alvo = _normalizar_texto_importacao(candidato)
+        for normalizada, original in normalizadas.items():
+            if alvo in normalizada:
+                return original
+    return colunas[0] if colunas else None
+
+
+def _valor_importacao(valor):
+    texto = str(valor if valor is not None else "").strip()
+    texto = texto.replace("R$", "").replace(" ", "")
+    negativo = texto.startswith("(") and texto.endswith(")")
+    texto = texto.strip("()")
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    texto = re.sub(r"[^0-9.\-]", "", texto)
+    try:
+        numero = float(texto)
+    except ValueError:
+        return 0.0
+    if negativo:
+        numero = -abs(numero)
+    return abs(numero)
+
+
+def _preparar_importacao_dizimos_pix(
+    df_csv, membros, df_lanc, col_data, col_nome, col_valor, col_transacao=None
+):
+    mapa_membros = {}
+    for _, membro in membros.iterrows():
+        nome = str(membro.get("nome", "") or "")
+        chave = _normalizar_texto_importacao(nome)
+        if chave:
+            mapa_membros[chave] = membro
+
+    existentes = set()
+    transacoes_existentes = set()
+    if not df_lanc.empty:
+        base = df_lanc.copy()
+        base["data_key"] = pd.to_datetime(base["data"], errors="coerce").dt.date
+        base["valor_key"] = pd.to_numeric(base["valor"], errors="coerce").round(2)
+        if "descricao" in base.columns:
+            transacoes_existentes = {
+                tx for desc in base["descricao"].fillna("").astype(str)
+                for tx in re.findall(r"\bE[A-Za-z0-9]{20,}\b", desc)
+            }
+        ids = pd.to_numeric(base.get("id_cadastro", pd.Series(dtype=float)), errors="coerce")
+        for _, row in base.iterrows():
+            if str(row.get("tipo", "")).strip() != "Entrada":
+                continue
+            if str(row.get("categoria", "")).strip() != "Dizimo":
+                continue
+            if str(row.get("forma_pagamento", "")).strip() != "Pix":
+                continue
+            id_cadastro = ids.loc[row.name] if row.name in ids.index else pd.NA
+            if pd.isna(row.get("data_key")) or pd.isna(id_cadastro):
+                continue
+            existentes.add((row["data_key"], int(id_cadastro), float(row["valor_key"])))
+
+    linhas = []
+    lancamentos = []
+    for idx, row in df_csv.iterrows():
+        data = pd.to_datetime(row.get(col_data), errors="coerce", dayfirst=True)
+        valor = _valor_importacao(row.get(col_valor))
+        nome_bruto = str(row.get(col_nome, "") or "").strip()
+        transacao = str(row.get(col_transacao, "") or "").strip() if col_transacao else ""
+        membro = mapa_membros.get(_normalizar_texto_importacao(nome_bruto))
+
+        status = "Pronto"
+        motivo = ""
+        if pd.isna(data):
+            status, motivo = "Ignorado", "Data invalida"
+        elif valor <= 0:
+            status, motivo = "Ignorado", "Valor invalido"
+        elif membro is None:
+            status, motivo = "Ignorado", "Membro nao encontrado pelo nome"
+        elif transacao and transacao in transacoes_existentes:
+            status, motivo = "Ignorado", "Transacao Pix ja importada"
+        else:
+            chave = (data.date(), int(membro["id_cadastro"]), round(float(valor), 2))
+            if chave in existentes:
+                status, motivo = "Ignorado", "Duplicado provavel"
+
+        if status == "Pronto":
+            descricao = "Importado de Pix"
+            if transacao:
+                descricao += f" - {transacao}"
+            lancamentos.append(Lancamento(
+                data=data.date(),
+                tipo="Entrada",
+                categoria="Dizimo",
+                valor=float(valor),
+                descricao=descricao,
+                forma_pagamento="Pix",
+                id_cadastro=int(membro["id_cadastro"]),
+                nome_cadastro=str(membro["nome"]),
+                tipo_cadastro=str(membro["tipo_cadastro"]),
+            ))
+
+        linhas.append({
+            "Linha": idx + 1,
+            "Data": data.strftime("%d/%m/%Y") if pd.notna(data) else "",
+            "Membro informado": nome_bruto,
+            "Membro vinculado": str(membro["nome"]) if membro is not None else "",
+            "Valor": formatar_moeda(valor),
+            "Transacao Pix": transacao,
+            "Status": status,
+            "Motivo": motivo,
+        })
+
+    return pd.DataFrame(linhas), lancamentos
 
 
 def _link_whatsapp(tel, mensagem):
@@ -881,6 +1104,143 @@ def render():
                 st.session_state[nl_counter_key] += 1
                 st.toast("Lancamento salvo!")
                 st.rerun()
+
+    with st.expander("Importar dizimos via Pix (CSV ou PDF)", expanded=False):
+        st.caption(
+            "Use um CSV do banco, uma planilha exportada ou o PDF de recebimentos Pix "
+            "no modelo analisado. Os registros serao lancados como Entrada > Dizimo > Pix."
+        )
+        st.info(
+            "PDFs de outros bancos podem ter estrutura diferente. Sempre confira a "
+            "pre-visualizacao antes de importar."
+        )
+
+        if membros.empty:
+            st.warning("Cadastre membros ativos antes de importar dizimos.")
+        else:
+            modelo = pd.DataFrame([
+                {
+                    "data": "04/06/2026",
+                    "membro": "Nome do membro",
+                    "valor": "100,00",
+                }
+            ])
+            st.download_button(
+                "Baixar modelo CSV",
+                gerar_csv(modelo),
+                "modelo_importacao_dizimos_pix.csv",
+                "text/csv",
+                key=_sk("csv_modelo_pix", slug),
+            )
+
+            arquivo_pix = st.file_uploader(
+                "Arquivo CSV ou PDF dos Pix",
+                type=["csv", "pdf"],
+                key=_sk("upload_pix_csv", slug),
+            )
+            if arquivo_pix:
+                try:
+                    df_pix_csv = _ler_arquivo_pix(arquivo_pix)
+                except ValueError as ex:
+                    st.error(str(ex))
+                except Exception:
+                    LOGGER.exception("Nao foi possivel processar o CSV de Pix.")
+                    st.error("Nao foi possivel processar o CSV enviado.")
+                else:
+                    if df_pix_csv.empty:
+                        st.warning("O CSV enviado esta vazio.")
+                    else:
+                        colunas = list(df_pix_csv.columns)
+                        col_data_padrao = _detectar_coluna(colunas, ["data", "dt", "date"])
+                        col_nome_padrao = _detectar_coluna(
+                            colunas,
+                            ["membro", "nome", "pagador", "remetente", "cliente", "descricao"],
+                        )
+                        col_valor_padrao = _detectar_coluna(
+                            colunas,
+                            ["valor", "amount", "quantia", "credito", "entrada"],
+                        )
+                        col_transacao_padrao = (
+                            _detectar_coluna(colunas, ["transacao_pix", "transacao", "txid", "endtoend"])
+                            if any(_normalizar_texto_importacao(c) in {
+                                "transacao pix", "transacao", "txid", "endtoend"
+                            } for c in colunas)
+                            else None
+                        )
+
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            col_data = st.selectbox(
+                                "Coluna da data",
+                                colunas,
+                                index=colunas.index(col_data_padrao),
+                                key=_sk("pix_col_data", slug),
+                            )
+                        with c2:
+                            col_nome = st.selectbox(
+                                "Coluna do nome do membro",
+                                colunas,
+                                index=colunas.index(col_nome_padrao),
+                                key=_sk("pix_col_nome", slug),
+                            )
+                        with c3:
+                            col_valor = st.selectbox(
+                                "Coluna do valor",
+                                colunas,
+                                index=colunas.index(col_valor_padrao),
+                                key=_sk("pix_col_valor", slug),
+                            )
+                        col_transacao = None
+                        if col_transacao_padrao:
+                            col_transacao = col_transacao_padrao
+                            st.caption(
+                                f"Identificador Pix detectado em: {col_transacao_padrao}"
+                            )
+
+                        preview, lancamentos_importar = _preparar_importacao_dizimos_pix(
+                            df_pix_csv,
+                            membros,
+                            df_lanc,
+                            col_data,
+                            col_nome,
+                            col_valor,
+                            col_transacao=col_transacao,
+                        )
+                        total_prontos = int((preview["Status"] == "Pronto").sum())
+                        total_ignorados = int((preview["Status"] != "Pronto").sum())
+                        p1, p2, p3 = st.columns(3)
+                        p1.metric("Linhas no CSV", len(preview))
+                        p2.metric("Prontas para importar", total_prontos)
+                        p3.metric("Ignoradas", total_ignorados)
+
+                        st.dataframe(preview, use_container_width=True, hide_index=True)
+
+                        if total_prontos:
+                            if st.button(
+                                "Importar dizimos Pix validos",
+                                type="primary",
+                                key=_sk("pix_importar", slug),
+                            ):
+                                try:
+                                    lote_id, ids = inserir_lancamentos_lote(
+                                        slug,
+                                        lancamentos_importar,
+                                        lote_id=f"PIX-{datetime.datetime.now():%Y%m%d%H%M%S}",
+                                    )
+                                except ValueError as ex:
+                                    st.error(str(ex))
+                                except Exception:
+                                    LOGGER.exception("Falha ao importar dizimos Pix.")
+                                    st.error("Nao foi possivel importar os dizimos Pix.")
+                                else:
+                                    _invalida()
+                                    st.success(
+                                        f"{len(ids)} dizimo(s) importado(s) com sucesso. "
+                                        f"Lote: {lote_id}"
+                                    )
+                                    st.rerun()
+                        else:
+                            st.warning("Nenhuma linha valida para importar.")
 
     if tem_lancamento_lote(plano_igreja):
         with st.expander("Lancamento em lote (multiplos itens)", expanded=False):
