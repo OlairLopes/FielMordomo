@@ -284,10 +284,17 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
         font=dict(size=16, color="#F1F5F9"),
     )
     fig.update_layout(**_layout_grafico(
-        altura=430,
-        margem=dict(t=25, b=95, l=70, r=70),
+        altura=470,
+        margem=dict(t=25, b=135, l=70, r=70),
         showlegend=True,
-        legend=dict(orientation="h", y=-.18, x=.5, xanchor="center", font=dict(size=11)),
+        legend=dict(
+            orientation="h",
+            y=-.24,
+            yanchor="top",
+            x=.5,
+            xanchor="center",
+            font=dict(size=11),
+        ),
     ))
     return fig
 
@@ -992,10 +999,18 @@ def render():
                         name="Tendencia",
                     ))
                 fig_dizimos.update_layout(**_layout_grafico(
-                    altura=390,
+                    altura=430,
+                    margem=dict(t=25, b=105, l=20, r=20),
+                    showlegend=True,
                     xaxis=dict(fixedrange=True, gridcolor="#334155"),
                     yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
-                    legend=dict(orientation="h", y=-0.15),
+                    legend=dict(
+                        orientation="h",
+                        y=-.22,
+                        yanchor="top",
+                        x=.5,
+                        xanchor="center",
+                    ),
                 ))
                 st.plotly_chart(fig_dizimos, use_container_width=True, config=CONFIG_PLOTLY)
 
@@ -1129,9 +1144,16 @@ def render():
                     font=dict(size=25, color="#F1F5F9"),
                 )
                 fig_participacao.update_layout(**_layout_grafico(
-                    altura=340,
+                    altura=390,
+                    margem=dict(t=25, b=110, l=35, r=35),
                     showlegend=True,
-                    legend=dict(orientation="h", y=-.05, x=.5, xanchor="center"),
+                    legend=dict(
+                        orientation="h",
+                        y=-.22,
+                        yanchor="top",
+                        x=.5,
+                        xanchor="center",
+                    ),
                 ))
                 st.plotly_chart(fig_participacao, use_container_width=True, config=CONFIG_PLOTLY)
                 p1, p2, p3 = st.columns(3)
