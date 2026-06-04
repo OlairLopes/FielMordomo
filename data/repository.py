@@ -987,6 +987,13 @@ def _normalizar_usuario_ebd(usuario):
     return usuario
 
 
+def _validar_pin_ebd(pin):
+    pin = str(pin or "").strip()
+    if not re.fullmatch(r"\d{4}", pin):
+        raise ValueError("O PIN do secretario da EBD deve possuir exatamente 4 digitos.")
+    return pin
+
+
 def listar_ebd_secretarios(slug, incluir_inativos=True):
     db = _tenant_db(slug)
     if not db.exists():
@@ -1033,13 +1040,9 @@ def salvar_ebd_secretario(
     if perfil == "classe" and not id_classe:
         raise ValueError("Secretario de classe precisa estar vinculado a uma classe.")
     if not id_secretario:
-        erros_senha = validar_nova_senha(senha)
-        if erros_senha:
-            raise ValueError(" ".join(erros_senha))
+        senha = _validar_pin_ebd(senha)
     elif senha:
-        erros_senha = validar_nova_senha(senha)
-        if erros_senha:
-            raise ValueError(" ".join(erros_senha))
+        senha = _validar_pin_ebd(senha)
 
     db = _tenant_db(slug)
     if not db.exists():

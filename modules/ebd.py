@@ -731,7 +731,7 @@ def _render_secretarios(slug):
             nome = c1.text_input("Nome")
             usuario = c2.text_input("Usuario", help="Use letras, numeros, ponto, hifen ou underline.")
             c3, c4 = st.columns(2)
-            senha = c3.text_input("Senha", type="password")
+            senha = c3.text_input("PIN de 4 digitos", type="password", max_chars=4)
             perfil_rotulo = c4.selectbox(
                 "Perfil",
                 ["Secretario de classe", "Secretario geral"],
@@ -788,7 +788,12 @@ def _render_secretarios(slug):
         usuario = c2.text_input("Usuario", value=row["usuario"])
         perfil_atual = "Secretario geral" if row["perfil"] == "geral" else "Secretario de classe"
         c3, c4 = st.columns(2)
-        senha = c3.text_input("Nova senha", type="password", help="Deixe em branco para manter a senha atual.")
+        senha = c3.text_input(
+            "Novo PIN de 4 digitos",
+            type="password",
+            max_chars=4,
+            help="Deixe em branco para manter o PIN atual.",
+        )
         perfil_rotulo = c4.selectbox(
             "Perfil",
             ["Secretario de classe", "Secretario geral"],

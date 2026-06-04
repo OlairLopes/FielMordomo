@@ -254,7 +254,7 @@ def _login_ebd():
         st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo EBD.")
         slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
         usuario = st.text_input("Usuario da EBD")
-        senha = st.text_input("Senha", type="password")
+        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = slug.strip().lower()
@@ -272,7 +272,7 @@ def _login_ebd():
                 st.toast(f"Bem-vindo, {acesso['secretario_ebd']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")
+                st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
 
 
 def logout():
