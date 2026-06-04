@@ -267,9 +267,9 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
         labels=legendas,
         values=resumo[valores],
         hole=.68,
-        textinfo="label",
+        textinfo="percent",
         textposition="outside",
-        textfont=dict(size=11, color="#CBD5E1"),
+        textfont=dict(size=12, color="#CBD5E1"),
         hovertemplate="<b>%{label}</b><br>%{customdata}<extra></extra>",
         customdata=[formatar_moeda(valor) for valor in resumo[valores]],
         marker=dict(
@@ -285,12 +285,12 @@ def _grafico_rosca(resumo, rotulos, valores, cores=None, total_label="Total"):
         font=dict(size=16, color="#F1F5F9"),
     )
     fig.update_layout(**_layout_grafico(
-        altura=470,
-        margem=dict(t=25, b=135, l=70, r=70),
+        altura=560,
+        margem=dict(t=30, b=175, l=105, r=105),
         showlegend=True,
         legend=dict(
             orientation="h",
-            y=-.24,
+            y=-.30,
             yanchor="top",
             x=.5,
             xanchor="center",
