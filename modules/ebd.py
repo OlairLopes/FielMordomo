@@ -256,6 +256,60 @@ def _membros_opcoes(slug):
     return opcoes, membros
 
 
+def _selecionar_pessoa_escala(slug, titulo, key_prefix, obrigatorio=False):
+    op_membros, df_membros = _membros_opcoes(slug)
+    origem = st.radio(
+        titulo,
+        ["Buscar no cadastro de membros", "Inserir manualmente"],
+        horizontal=True,
+        key=f"{key_prefix}_origem",
+    )
+    if origem == "Buscar no cadastro de membros" and op_membros:
+        membro_label = st.selectbox(
+            f"{titulo} - membro",
+            list(op_membros.keys()),
+            key=f"{key_prefix}_membro",
+        )
+        id_cadastro = op_membros[membro_label]
+        row = df_membros[df_membros["id_cadastro"] == id_cadastro].iloc[0]
+        nome = str(row.get("nome", "") or "")
+        telefone = str(row.get("telefone", "") or "")
+        funcao = str(row.get("funcao", "") or "")
+        st.caption(f"Funcao preenchida pelo cadastro: {funcao or 'sem funcao informada'}")
+        return nome, telefone, funcao
+    if origem == "Buscar no cadastro de membros":
+        st.warning("Nao ha membros ativos cadastrados. Use a insercao manual.")
+    c1, c2 = st.columns(2)
+    nome = c1.text_input(
+        f"{titulo} - nome manual",
+        key=f"{key_prefix}_nome_manual",
+    )
+    telefone = c2.text_input(
+        f"{titulo} - WhatsApp",
+        key=f"{key_prefix}_telefone_manual",
+        placeholder="Opcional",
+    )
+    funcao = st.text_input(
+        f"{titulo} - funcao",
+        key=f"{key_prefix}_funcao_manual",
+        value="",
+        help="Preencha manualmente quando a pessoa nao estiver no cadastro.",
+    )
+    if obrigatorio and not nome.strip():
+        st.caption("Informe o nome antes de salvar.")
+    return nome, telefone, funcao
+
+
+def _escala_da_aula(slug, data_aula, id_classe):
+    escala = listar_ebd_escala(slug, data_aula.isoformat(), data_aula.isoformat())
+    if escala.empty:
+        return None
+    escala_classe = escala[escala["id_classe"].fillna(0).astype(int) == int(id_classe)]
+    if escala_classe.empty:
+        return None
+    return escala_classe.iloc[0].to_dict()
+
+
 def _render_classes(slug):
     st.markdown("### Classes e alunos")
     df_classes = listar_ebd_classes(slug, incluir_inativas=True)
@@ -393,6 +447,7 @@ def _render_chamada(slug, id_classe_fixo=None):
         return
 
     aulas = listar_ebd_aulas(slug, data_aula.isoformat(), data_aula.isoformat(), id_classe)
+    escala_aula = _escala_da_aula(slug, data_aula, id_classe)
     presencas_salvas = {}
     tema_atual = ""
     professor_atual = ""
@@ -424,32 +479,26 @@ def _render_chamada(slug, id_classe_fixo=None):
             int(row["id_matricula"]): bool(row["presente"])
             for _, row in df_pres.iterrows()
         }
+    elif escala_aula:
+        tema_atual = str(escala_aula.get("tema", "") or "")
+        professor_atual = str(escala_aula.get("professor", "") or "")
 
     with st.form("form_ebd_chamada"):
+        if escala_aula:
+            st.success(
+                "Tema e professor preenchidos automaticamente pela escala de professores."
+            )
+        else:
+            st.info("Nenhuma escala encontrada para esta classe e data.")
         c1, c2 = st.columns(2)
         tema = c1.text_input("Tema da aula", value=tema_atual)
         professor = c2.text_input("Professor", value=professor_atual)
         st.markdown("#### Totais da chamada")
-        t1, t2, t3, t4 = st.columns(4)
-        qtd_matriculados = t1.number_input(
-            "Matriculados",
-            min_value=0,
-            step=1,
-            value=matriculados_atual,
+        st.caption(
+            "Matriculados, presentes e ausentes serao calculados automaticamente "
+            "pela lista marcada abaixo."
         )
-        qtd_presentes = t2.number_input(
-            "Presentes",
-            min_value=0,
-            step=1,
-            value=presentes_atual,
-        )
-        qtd_ausentes = t3.number_input(
-            "Ausentes",
-            min_value=0,
-            step=1,
-            value=ausentes_atual,
-        )
-        qtd_visitantes = t4.number_input(
+        qtd_visitantes = st.number_input(
             "Visitantes",
             min_value=0,
             step=1,
@@ -497,6 +546,14 @@ def _render_chamada(slug, id_classe_fixo=None):
                 "presente": st.column_config.CheckboxColumn("Presente"),
             },
         )
+        qtd_matriculados_calc = int(len(editado))
+        qtd_presentes_calc = int(editado["presente"].fillna(False).astype(bool).sum())
+        qtd_ausentes_calc = max(qtd_matriculados_calc - qtd_presentes_calc, 0)
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Matriculados", qtd_matriculados_calc)
+        m2.metric("Presentes", qtd_presentes_calc)
+        m3.metric("Ausentes", qtd_ausentes_calc)
+        m4.metric("Visitantes", qtd_visitantes)
         if st.form_submit_button("Salvar chamada", type="primary"):
             presencas = {
                 int(row["id_matricula"]): bool(row["presente"])
@@ -510,9 +567,9 @@ def _render_chamada(slug, id_classe_fixo=None):
                 professor,
                 obs,
                 presencas,
-                qtd_matriculados,
-                qtd_presentes,
-                qtd_ausentes,
+                qtd_matriculados_calc,
+                qtd_presentes_calc,
+                qtd_ausentes_calc,
                 qtd_visitantes,
                 qtd_revistas,
                 qtd_biblias,
@@ -631,9 +688,15 @@ def _render_escala(slug):
         c1, c2 = st.columns(2)
         data = c1.date_input("Data", value=_hoje())
         classe_label = c2.selectbox("Classe", list(op_classes.keys()))
-        c3, c4 = st.columns(2)
-        professor = c3.text_input("Professor")
-        telefone_professor = c4.text_input("WhatsApp do professor", placeholder="Ex.: 62999999999")
+        st.markdown("#### Professor")
+        professor, telefone_professor, funcao_professor = _selecionar_pessoa_escala(
+            slug, "Professor", "escala_professor", obrigatorio=True
+        )
+        st.markdown("#### Superintendente")
+        superintendente, telefone_superintendente, _ = _selecionar_pessoa_escala(
+            slug, "Superintendente", "escala_superintendente"
+        )
+        st.markdown("#### Auxiliar")
         c5, c6 = st.columns(2)
         auxiliar = c5.text_input("Auxiliar")
         telefone_auxiliar = c6.text_input("WhatsApp do auxiliar", placeholder="Opcional")
@@ -652,6 +715,9 @@ def _render_escala(slug):
                     tema,
                     obs,
                     telefone_professor=telefone_professor,
+                    funcao_professor=funcao_professor,
+                    superintendente=superintendente,
+                    telefone_superintendente=telefone_superintendente,
                     telefone_auxiliar=telefone_auxiliar,
                 )
                 st.success("Escala salva.")
@@ -670,7 +736,8 @@ def _render_escala(slug):
     exibir["data"] = exibir["data"].apply(_fmt_data)
     st.dataframe(
         exibir[[
-            "data", "classe", "professor", "telefone_professor",
+            "data", "classe", "professor", "funcao_professor",
+            "telefone_professor", "superintendente", "telefone_superintendente",
             "auxiliar", "telefone_auxiliar", "tema", "observacoes",
         ]],
         use_container_width=True,
@@ -687,6 +754,20 @@ def _render_escala(slug):
                 _botao_whatsapp("Avisar professor", row.get("telefone_professor", ""), mensagem, f"prof_{row['id_escala']}")
                 st.text_area("Mensagem ao professor", value=mensagem, height=180, key=f"msg_prof_{row['id_escala']}")
             with c2:
+                superintendente = str(row.get("superintendente", "") or "").strip()
+                if superintendente:
+                    mensagem = _mensagem_escala(slug, row, superintendente, "Superintendente")
+                    _botao_whatsapp(
+                        "Avisar superintendente",
+                        row.get("telefone_superintendente", ""),
+                        mensagem,
+                        f"sup_{row['id_escala']}",
+                    )
+                    st.text_area("Mensagem ao superintendente", value=mensagem, height=180, key=f"msg_sup_{row['id_escala']}")
+                else:
+                    st.info("Nenhum superintendente informado para esta escala.")
+            c3, _ = st.columns(2)
+            with c3:
                 auxiliar = str(row.get("auxiliar", "") or "").strip()
                 if auxiliar:
                     mensagem = _mensagem_escala(slug, row, auxiliar, "Auxiliar")

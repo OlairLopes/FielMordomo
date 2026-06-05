@@ -492,7 +492,10 @@ def _garantir_tabelas_ebd(conn):
             id_classe   INTEGER REFERENCES ebd_classes(id_classe),
             classe_nome TEXT DEFAULT '',
             professor   TEXT NOT NULL,
+            funcao_professor TEXT DEFAULT '',
             telefone_professor TEXT DEFAULT '',
+            superintendente TEXT DEFAULT '',
+            telefone_superintendente TEXT DEFAULT '',
             auxiliar    TEXT DEFAULT '',
             telefone_auxiliar TEXT DEFAULT '',
             tema        TEXT DEFAULT '',
@@ -528,7 +531,13 @@ def _garantir_tabelas_ebd(conn):
         row[1]
         for row in conn.execute("PRAGMA table_info(ebd_escala_professores)").fetchall()
     ]
-    for coluna in ("telefone_professor", "telefone_auxiliar"):
+    for coluna in (
+        "funcao_professor",
+        "telefone_professor",
+        "superintendente",
+        "telefone_superintendente",
+        "telefone_auxiliar",
+    ):
         if coluna not in cols_escala:
             conn.execute(
                 f"ALTER TABLE ebd_escala_professores ADD COLUMN {coluna} TEXT DEFAULT ''"
@@ -909,8 +918,9 @@ def listar_ebd_escala(slug, data_inicio=None, data_fim=None):
         return pd.read_sql_query(
             f"""SELECT e.id_escala, e.data, e.id_classe,
                        COALESCE(c.nome, e.classe_nome) AS classe,
-                       e.professor, e.telefone_professor, e.auxiliar,
-                       e.telefone_auxiliar, e.tema, e.observacoes
+                       e.professor, e.funcao_professor, e.telefone_professor,
+                       e.superintendente, e.telefone_superintendente,
+                       e.auxiliar, e.telefone_auxiliar, e.tema, e.observacoes
                 FROM ebd_escala_professores e
                 LEFT JOIN ebd_classes c ON c.id_classe=e.id_classe
                 {filtro}
@@ -931,6 +941,9 @@ def salvar_ebd_escala(
     observacoes="",
     id_escala=None,
     telefone_professor="",
+    funcao_professor="",
+    superintendente="",
+    telefone_superintendente="",
     telefone_auxiliar="",
 ):
     professor = sanitizar(professor)
@@ -947,7 +960,10 @@ def salvar_ebd_escala(
             id_classe,
             sanitizar(classe_nome),
             professor,
+            sanitizar(funcao_professor),
             sanitizar(telefone_professor),
+            sanitizar(superintendente),
+            sanitizar(telefone_superintendente),
             sanitizar(auxiliar),
             sanitizar(telefone_auxiliar),
             sanitizar(tema),
@@ -957,7 +973,9 @@ def salvar_ebd_escala(
             conn.execute(
                 """UPDATE ebd_escala_professores
                    SET data=?, id_classe=?, classe_nome=?, professor=?,
-                       telefone_professor=?, auxiliar=?, telefone_auxiliar=?,
+                       funcao_professor=?, telefone_professor=?,
+                       superintendente=?, telefone_superintendente=?,
+                       auxiliar=?, telefone_auxiliar=?,
                        tema=?, observacoes=?
                    WHERE id_escala=?""",
                 (*dados, int(id_escala)),
@@ -965,9 +983,10 @@ def salvar_ebd_escala(
             return int(id_escala)
         cur = conn.execute(
             """INSERT INTO ebd_escala_professores
-               (data, id_classe, classe_nome, professor, telefone_professor,
+               (data, id_classe, classe_nome, professor, funcao_professor,
+                telefone_professor, superintendente, telefone_superintendente,
                 auxiliar, telefone_auxiliar, tema, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             dados,
         )
         return cur.lastrowid
