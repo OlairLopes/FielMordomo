@@ -301,7 +301,9 @@ def _selecionar_pessoa_escala(slug, titulo, key_prefix, obrigatorio=False):
 
 
 def _escala_da_aula(slug, data_aula, id_classe):
-    escala = listar_ebd_escala(slug, data_aula.isoformat(), data_aula.isoformat())
+    escala = listar_ebd_escala(
+        slug, data_aula.isoformat(), data_aula.isoformat(), id_classe
+    )
     if escala.empty:
         return None
     escala_classe = escala[escala["id_classe"].fillna(0).astype(int) == int(id_classe)]
@@ -431,15 +433,59 @@ def _render_chamada(slug, id_classe_fixo=None):
             st.error("Sua classe vinculada nao esta ativa ou nao foi encontrada.")
             return
     op_classes = _classes_opcoes(df_classes)
-    c1, c2 = st.columns([2, 1])
-    classe_label = c1.selectbox(
+    classe_label = st.selectbox(
         "Classe",
         list(op_classes.keys()),
         key="chamada_classe",
         disabled=bool(id_classe_fixo),
     )
-    data_aula = c2.date_input("Data da aula", value=_hoje())
     id_classe = op_classes[classe_label]
+
+    escala_classe = listar_ebd_escala(slug, id_classe=id_classe)
+    chamadas_salvas = listar_ebd_aulas(slug, id_classe=id_classe)
+    opcoes_modo = ["Registrar/editar pela escala"]
+    if not chamadas_salvas.empty:
+        opcoes_modo.append("Editar chamada salva")
+    modo_chamada = st.radio(
+        "Modo da chamada",
+        opcoes_modo,
+        horizontal=True,
+        key="modo_chamada_ebd",
+    )
+
+    escala_aula = None
+    if modo_chamada == "Editar chamada salva":
+        op_chamadas = {
+            f'{_fmt_data(row["data"])} - {row["classe"]} - {row.get("tema", "") or "sem tema"}': row
+            for _, row in chamadas_salvas.iterrows()
+        }
+        chamada_label = st.selectbox(
+            "Chamada salva para editar",
+            list(op_chamadas.keys()),
+            key="editar_chamada_salva",
+        )
+        chamada_row = op_chamadas[chamada_label]
+        data_aula = datetime.date.fromisoformat(str(chamada_row["data"]))
+        escala_aula = _escala_da_aula(slug, data_aula, id_classe)
+        st.info(f"Editando chamada salva de {_fmt_data(data_aula.isoformat())}.")
+    else:
+        if escala_classe.empty:
+            st.warning(
+                "Nao ha escala de professores cadastrada para esta classe. "
+                "Cadastre uma escala antes de registrar a chamada."
+            )
+            return
+        op_escalas = {
+            f'{_fmt_data(row["data"])} - {row.get("tema", "") or "sem tema"} - {row["professor"]}': row
+            for _, row in escala_classe.iterrows()
+        }
+        escala_label = st.selectbox(
+            "Data da chamada conforme escala",
+            list(op_escalas.keys()),
+            key="escala_para_chamada",
+        )
+        escala_aula = op_escalas[escala_label]
+        data_aula = datetime.date.fromisoformat(str(escala_aula["data"]))
 
     matriculas = listar_ebd_matriculas(slug, id_classe)
     if matriculas.empty:
@@ -447,7 +493,6 @@ def _render_chamada(slug, id_classe_fixo=None):
         return
 
     aulas = listar_ebd_aulas(slug, data_aula.isoformat(), data_aula.isoformat(), id_classe)
-    escala_aula = _escala_da_aula(slug, data_aula, id_classe)
     presencas_salvas = {}
     tema_atual = ""
     professor_atual = ""

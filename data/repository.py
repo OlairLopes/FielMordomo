@@ -900,7 +900,7 @@ def relatorio_ebd_resumo_classes(slug, data_inicio=None, data_fim=None):
     return resumo
 
 
-def listar_ebd_escala(slug, data_inicio=None, data_fim=None):
+def listar_ebd_escala(slug, data_inicio=None, data_fim=None, id_classe=None):
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
@@ -914,6 +914,9 @@ def listar_ebd_escala(slug, data_inicio=None, data_fim=None):
         if data_fim:
             where.append("e.data<=?")
             params.append(str(data_fim))
+        if id_classe:
+            where.append("e.id_classe=?")
+            params.append(int(id_classe))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
         return pd.read_sql_query(
             f"""SELECT e.id_escala, e.data, e.id_classe,
