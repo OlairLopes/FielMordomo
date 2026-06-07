@@ -661,6 +661,7 @@ def _css_base():
             padding: 16px 24px;
             box-shadow: 0 10px 26px rgba(8,42,74,0.06);
             border: 1px solid rgba(8,42,74,0.08);
+            margin-bottom: 0;
         }}
 
         .fm-update-card h1 {{
@@ -1312,7 +1313,7 @@ def render_institucional():
                 }
                 div[data-testid="stForm"] {
                     max-width: 920px;
-                    margin: -4px auto 12px auto !important;
+                    margin: 10px auto 12px auto !important;
                     padding: 0 24px !important;
                 }
                 div[data-testid="stAlert"] {
