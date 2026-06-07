@@ -647,7 +647,12 @@ def _css_base():
         .fm-update-page {{
             max-width: 920px;
             margin: 0 auto;
-            padding: 6px 24px 6px;
+            padding: 14px 24px 6px;
+        }}
+
+        .fm-page.fm-page-update {{
+            min-height: auto;
+            background: {CINZA_SUAVE};
         }}
 
         .fm-update-card {{
@@ -1287,6 +1292,10 @@ def render_institucional():
                     margin: 0 !important;
                     max-width: 100% !important;
                 }
+                main .block-container > div:first-child {
+                    margin-top: 0 !important;
+                    padding-top: 0 !important;
+                }
                 div[data-testid="stVerticalBlock"] {
                     gap: 0 !important;
                 }
@@ -1294,9 +1303,16 @@ def render_institucional():
                     padding-top: 0 !important;
                     margin-top: 0 !important;
                 }
+                div[data-testid="stHtml"] {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                div[data-testid="stHtml"] iframe {
+                    min-height: 0 !important;
+                }
                 div[data-testid="stForm"] {
                     max-width: 920px;
-                    margin: 0 auto 12px auto !important;
+                    margin: -4px auto 12px auto !important;
                     padding: 0 24px !important;
                 }
                 div[data-testid="stAlert"] {
@@ -1310,7 +1326,7 @@ def render_institucional():
         st.markdown(
             _html_sem_indentacao(
                 _css_base()
-                + '<div class="fm-page notranslate" translate="no" lang="pt-BR">'
+                + '<div class="fm-page fm-page-update notranslate" translate="no" lang="pt-BR">'
                 + _navbar()
             ),
             unsafe_allow_html=True,
