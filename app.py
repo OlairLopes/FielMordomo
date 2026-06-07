@@ -28,6 +28,7 @@ DOMINIOS_PERMITIDOS_PADRAO = {
 }
 PAGINAS_INSTITUCIONAIS = {
     "", "inicio", "sobre", "recursos", "contato", "privacidade", "termos",
+    "atualizar-cadastro",
 }
 ROTA_LOGIN = "login"
 TAMANHO_MAXIMO_LOGO = 5 * 1024 * 1024
