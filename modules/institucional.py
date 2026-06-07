@@ -647,21 +647,21 @@ def _css_base():
         .fm-update-page {{
             max-width: 920px;
             margin: 0 auto;
-            padding: 18px 24px 10px;
+            padding: 6px 24px 6px;
         }}
 
         .fm-update-card {{
             background: white;
             border-radius: 18px;
-            padding: 22px 28px;
+            padding: 16px 24px;
             box-shadow: 0 10px 26px rgba(8,42,74,0.06);
             border: 1px solid rgba(8,42,74,0.08);
         }}
 
         .fm-update-card h1 {{
             color: {AZUL_ESCURO};
-            font-size: 30px;
-            margin: 0 0 8px;
+            font-size: 26px;
+            margin: 0 0 6px;
         }}
 
         .fm-update-card p {{
@@ -1275,23 +1275,42 @@ def render_institucional():
         st.markdown(
             """
             <style>
+                .stApp {
+                    background: #F5F7FA !important;
+                }
                 .block-container {
-                    padding-top: 0 !important;
+                    padding: 0 0 1rem 0 !important;
+                    margin: 0 !important;
+                    max-width: 100% !important;
                 }
                 div[data-testid="stVerticalBlock"] {
-                    gap: 0.55rem;
+                    gap: 0 !important;
+                }
+                div[data-testid="stVerticalBlock"] > div {
+                    padding-top: 0 !important;
+                    margin-top: 0 !important;
+                }
+                div[data-testid="stForm"] {
+                    max-width: 920px;
+                    margin: 0 auto 12px auto !important;
+                    padding: 0 24px !important;
+                }
+                div[data-testid="stAlert"] {
+                    max-width: 920px;
+                    margin: 8px auto !important;
                 }
             </style>
             """,
             unsafe_allow_html=True,
         )
-        _render_html(
+        st.markdown(
             _css_base()
             + '<div class="fm-page notranslate" translate="no" lang="pt-BR">'
-            + _navbar()
+            + _navbar(),
+            unsafe_allow_html=True,
         )
         _render_atualizar_cadastro_publico()
-        _render_html(_footer() + "</div>")
+        st.markdown(_footer() + "</div>", unsafe_allow_html=True)
         return
 
     html_final = (
