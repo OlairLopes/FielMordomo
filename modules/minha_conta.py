@@ -20,6 +20,15 @@ from utils.planos import obter_plano
 
 LOGGER = logging.getLogger(__name__)
 OPCOES_DIAS = [30, 60, 90, 120]
+MENSAGEM_ESCALA_EBD_PADRAO = """Paz do Senhor, {nome}!
+
+Voce esta escalado(a) para servir na EBD.
+Data: {data}
+Classe: {classe}
+Funcao: {funcao}
+Tema: {tema}
+
+Contamos com sua presenca e dedicacao. Deus abencoe!"""
 
 
 def _encerrar_sessao():
@@ -98,6 +107,12 @@ def render():
         meta_reserva_atual = int(_numero_config(
             obter_config_igreja(slug, "meta_reserva_meses", "3"), 3
         ))
+        mensagem_ebd_atual = obter_config_igreja(
+            slug, "mensagem_whatsapp_escala_ebd", MENSAGEM_ESCALA_EBD_PADRAO
+        )
+        codigo_cadastro_atual = obter_config_igreja(
+            slug, "codigo_atualizacao_cadastral", ""
+        )
     except Exception:
         LOGGER.exception("Nao foi possivel carregar as configuracoes da igreja.")
         st.error("Nao foi possivel carregar as configuracoes. Tente novamente.")
@@ -150,6 +165,29 @@ def render():
             format_func=lambda meses: f"{meses} mes(es)",
         )
 
+        st.markdown("**Mensagem da escala da EBD**")
+        st.caption(
+            "Use as variaveis {nome}, {data}, {classe}, {funcao} e {tema}. "
+            "Elas serao preenchidas automaticamente ao gerar o aviso pelo WhatsApp."
+        )
+        mensagem_ebd_nova = st.text_area(
+            "Modelo da mensagem WhatsApp para professores da EBD",
+            value=str(mensagem_ebd_atual or MENSAGEM_ESCALA_EBD_PADRAO),
+            height=180,
+        )
+
+        st.markdown("**Atualizacao cadastral publica**")
+        st.caption(
+            "Codigo divulgado internamente para membros atualizarem ou enviarem "
+            "pre-cadastro pela pagina institucional."
+        )
+        codigo_cadastro_novo = st.text_input(
+            "Codigo de atualizacao cadastral",
+            value=str(codigo_cadastro_atual or ""),
+            max_chars=30,
+            help="Exemplo: AD2026 ou MEMBROS2026.",
+        )
+
         if st.form_submit_button("Salvar configuracoes", type="primary"):
             assinatura_nova = assinatura_nova.strip()
             reserva_numero = _numero_config(reserva_nova, -1)
@@ -168,6 +206,12 @@ def render():
                     )
                     salvar_config_igreja(
                         slug, "meta_reserva_meses", str(meta_reserva_nova)
+                    )
+                    salvar_config_igreja(
+                        slug, "mensagem_whatsapp_escala_ebd", mensagem_ebd_nova.strip()
+                    )
+                    salvar_config_igreja(
+                        slug, "codigo_atualizacao_cadastral", codigo_cadastro_novo.strip()
                     )
                 except Exception:
                     LOGGER.exception("Nao foi possivel salvar as configuracoes da igreja.")

@@ -1489,6 +1489,28 @@ def _garantir_colunas_cadastros(conn):
             conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
 
 
+def _garantir_tabela_pre_cadastros(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pre_cadastros_membros (
+            id_pre_cadastro INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome            TEXT NOT NULL,
+            cpf             TEXT NOT NULL,
+            data_nascimento TEXT NOT NULL,
+            sexo            TEXT DEFAULT '',
+            telefone        TEXT DEFAULT '',
+            logradouro      TEXT DEFAULT '',
+            numero          TEXT DEFAULT '',
+            bairro          TEXT DEFAULT '',
+            cidade          TEXT DEFAULT '',
+            cep             TEXT DEFAULT '',
+            status          TEXT NOT NULL DEFAULT 'Pendente',
+            observacoes     TEXT DEFAULT '',
+            criado_em       TEXT DEFAULT (datetime('now')),
+            atualizado_em   TEXT DEFAULT (datetime('now'))
+        )
+    """)
+
+
 def _limite_membros_da_igreja(slug: str):
     with _conn(MASTER_DB) as conn:
         row = conn.execute(
@@ -1566,6 +1588,235 @@ def atualizar_cadastro(slug, c):
              sanitizar(c.numero), sanitizar(c.bairro),
              sanitizar(c.cidade), cep_limpo,
              c.situacao, c.id_cadastro),
+        )
+
+
+def localizar_cadastro_publico(slug, cpf, data_nascimento):
+    slug = _validar_slug(slug)
+    cpf_limpo = "".join(c for c in str(cpf or "") if c.isdigit())
+    data_nascimento = str(data_nascimento or "").strip()
+    if len(cpf_limpo) != 11 or not data_nascimento:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_colunas_cadastros(conn)
+        row = conn.execute(
+            """SELECT id_cadastro, tipo_cadastro, nome, funcao, congregacao, cpf,
+                      data_nascimento, sexo, telefone, logradouro, numero,
+                      bairro, cidade, cep, situacao
+               FROM cadastros
+               WHERE cpf=? AND data_nascimento=? AND UPPER(TRIM(tipo_cadastro))='MEMBRO'
+               LIMIT 1""",
+            (cpf_limpo, data_nascimento),
+        ).fetchone()
+    if not row:
+        return None
+    dados = dict(row)
+    dados["igreja_nome"] = igreja.get("nome", "")
+    return dados
+
+
+def atualizar_cadastro_publico(slug, id_cadastro, cpf, data_nascimento, dados):
+    slug = _validar_slug(slug)
+    cpf_limpo = "".join(c for c in str(cpf or "") if c.isdigit())
+    data_nascimento = str(data_nascimento or "").strip()
+    if len(cpf_limpo) != 11 or not data_nascimento:
+        raise ValueError("CPF e data de nascimento sao obrigatorios.")
+    nome = sanitizar(dados.get("nome", ""))
+    if not nome:
+        raise ValueError("Nome e obrigatorio.")
+    cep_limpo = "".join(c for c in str(dados.get("cep", "")) if c.isdigit())
+    if cep_limpo and len(cep_limpo) != 8:
+        raise ValueError("CEP invalido. Informe 8 digitos.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _garantir_colunas_cadastros(conn)
+        row = conn.execute(
+            """SELECT id_cadastro FROM cadastros
+               WHERE id_cadastro=? AND cpf=? AND data_nascimento=?
+                     AND UPPER(TRIM(tipo_cadastro))='MEMBRO'
+               LIMIT 1""",
+            (int(id_cadastro), cpf_limpo, data_nascimento),
+        ).fetchone()
+        if not row:
+            raise ValueError("Cadastro nao localizado para os dados informados.")
+        conn.execute(
+            """UPDATE cadastros
+               SET nome=?, sexo=?, telefone=?, logradouro=?, numero=?,
+                   bairro=?, cidade=?, cep=?
+               WHERE id_cadastro=?""",
+            (
+                nome,
+                sanitizar(dados.get("sexo", "")),
+                sanitizar(dados.get("telefone", "")),
+                sanitizar(dados.get("logradouro", "")),
+                sanitizar(dados.get("numero", "")),
+                sanitizar(dados.get("bairro", "")),
+                sanitizar(dados.get("cidade", "")),
+                cep_limpo,
+                int(id_cadastro),
+            ),
+        )
+
+
+def validar_codigo_atualizacao_cadastral(slug, codigo):
+    try:
+        slug = _validar_slug(slug)
+    except ValueError:
+        return False
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return False
+    codigo_config = obter_config_igreja(slug, "codigo_atualizacao_cadastral", "")
+    if not codigo_config:
+        return False
+    return hmac.compare_digest(str(codigo_config).strip(), str(codigo or "").strip())
+
+
+def criar_pre_cadastro_publico(slug, dados):
+    slug = _validar_slug(slug)
+    nome = sanitizar(dados.get("nome", ""))
+    cpf_limpo = "".join(c for c in str(dados.get("cpf", "")) if c.isdigit())
+    data_nascimento = str(dados.get("data_nascimento", "") or "").strip()
+    if not nome:
+        raise ValueError("Nome e obrigatorio.")
+    if len(cpf_limpo) != 11:
+        raise ValueError("CPF invalido.")
+    if not data_nascimento:
+        raise ValueError("Data de nascimento e obrigatoria.")
+    cep_limpo = "".join(c for c in str(dados.get("cep", "")) if c.isdigit())
+    if cep_limpo and len(cep_limpo) != 8:
+        raise ValueError("CEP invalido. Informe 8 digitos.")
+    if cpf_existe(slug, cpf_limpo):
+        raise ValueError("Ja existe cadastro com este CPF. Use a atualizacao cadastral.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _garantir_tabela_pre_cadastros(conn)
+        pendente = conn.execute(
+            """SELECT 1 FROM pre_cadastros_membros
+               WHERE cpf=? AND status='Pendente' LIMIT 1""",
+            (cpf_limpo,),
+        ).fetchone()
+        if pendente:
+            raise ValueError("Ja existe um pre-cadastro pendente para este CPF.")
+        cur = conn.execute(
+            """INSERT INTO pre_cadastros_membros
+               (nome, cpf, data_nascimento, sexo, telefone, logradouro, numero,
+                bairro, cidade, cep, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                nome,
+                cpf_limpo,
+                data_nascimento,
+                sanitizar(dados.get("sexo", "")),
+                sanitizar(dados.get("telefone", "")),
+                sanitizar(dados.get("logradouro", "")),
+                sanitizar(dados.get("numero", "")),
+                sanitizar(dados.get("bairro", "")),
+                sanitizar(dados.get("cidade", "")),
+                cep_limpo,
+                sanitizar(dados.get("observacoes", "")),
+            ),
+        )
+        return cur.lastrowid
+
+
+def listar_pre_cadastros_membros(slug, status="Pendente"):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_pre_cadastros(conn)
+        where = ""
+        params = []
+        if status:
+            where = "WHERE status=?"
+            params.append(status)
+        return pd.read_sql_query(
+            f"""SELECT * FROM pre_cadastros_membros
+                {where}
+                ORDER BY criado_em DESC""",
+            conn,
+            params=params,
+        )
+
+
+def atualizar_status_pre_cadastro(slug, id_pre_cadastro, status, observacoes=""):
+    status = str(status or "").strip()
+    if status not in {"Pendente", "Aprovado", "Rejeitado", "Duplicado"}:
+        raise ValueError("Status de pre-cadastro invalido.")
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_pre_cadastros(conn)
+        conn.execute(
+            """UPDATE pre_cadastros_membros
+               SET status=?, observacoes=?, atualizado_em=datetime('now')
+               WHERE id_pre_cadastro=?""",
+            (status, sanitizar(observacoes), int(id_pre_cadastro)),
+        )
+
+
+def aprovar_pre_cadastro_membro(slug, id_pre_cadastro):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _garantir_colunas_cadastros(conn)
+        _garantir_tabela_pre_cadastros(conn)
+        row = conn.execute(
+            """SELECT * FROM pre_cadastros_membros
+               WHERE id_pre_cadastro=? AND status='Pendente'""",
+            (int(id_pre_cadastro),),
+        ).fetchone()
+        if not row:
+            raise ValueError("Pre-cadastro pendente nao localizado.")
+        cpf_ja_cadastrado = conn.execute(
+            "SELECT 1 FROM cadastros WHERE cpf=? LIMIT 1", (row["cpf"],)
+        ).fetchone()
+        if cpf_ja_cadastrado:
+            conn.execute(
+                """UPDATE pre_cadastros_membros
+                   SET status='Duplicado', atualizado_em=datetime('now')
+                   WHERE id_pre_cadastro=?""",
+                (int(id_pre_cadastro),),
+            )
+            raise ValueError("CPF ja cadastrado. Pre-cadastro marcado como duplicado.")
+        _garantir_limite_membros(conn, slug)
+        conn.execute(
+            """INSERT INTO cadastros
+               (tipo_cadastro, nome, funcao, congregacao, cpf, data_nascimento,
+                sexo, telefone, logradouro, numero, bairro, cidade, cep, situacao)
+               VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Ativo')""",
+            (
+                "Membro",
+                sanitizar(row["nome"]),
+                slug,
+                row["cpf"],
+                row["data_nascimento"],
+                sanitizar(row["sexo"]),
+                sanitizar(row["telefone"]),
+                sanitizar(row["logradouro"]),
+                sanitizar(row["numero"]),
+                sanitizar(row["bairro"]),
+                sanitizar(row["cidade"]),
+                row["cep"],
+            ),
+        )
+        conn.execute(
+            """UPDATE pre_cadastros_membros
+               SET status='Aprovado', atualizado_em=datetime('now')
+               WHERE id_pre_cadastro=?""",
+            (int(id_pre_cadastro),),
         )
 
 

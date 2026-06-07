@@ -6,6 +6,8 @@ from data.models import Cadastro, limpar_documento
 from data.repository import (
     carregar_cadastros, inserir_cadastro, atualizar_cadastro,
     excluir_cadastro, cadastro_em_uso, cpf_existe, LimiteMembrosExcedido,
+    aprovar_pre_cadastro_membro, atualizar_status_pre_cadastro,
+    listar_pre_cadastros_membros,
 )
 from utils.helpers import confirmar_exclusao, slug_da_sessao, solicitar_autorizacao
 from utils.planos import obter_plano, pode_cadastrar_membro, proximo_plano
@@ -114,6 +116,64 @@ def render():
 
     # Congregacao FIXA = identificador/slug da igreja logada
     congregacao_fixa = _congregacao_da_sessao(slug, igreja)
+
+    with st.expander("Pre-cadastros pendentes", expanded=False):
+        try:
+            pre = listar_pre_cadastros_membros(slug, "Pendente")
+        except Exception:
+            pre = pd.DataFrame()
+            st.error("Nao foi possivel carregar os pre-cadastros.")
+        if pre.empty:
+            st.info("Nenhum pre-cadastro pendente.")
+        else:
+            exibir_pre = pre.copy()
+            exibir_pre["cpf"] = exibir_pre["cpf"].apply(_formatar_cpf)
+            exibir_pre["data_nascimento"] = exibir_pre["data_nascimento"].apply(_formatar_data)
+            st.dataframe(
+                exibir_pre[[
+                    "id_pre_cadastro", "nome", "cpf", "data_nascimento",
+                    "sexo", "telefone", "cidade", "status", "criado_em",
+                ]],
+                use_container_width=True,
+                hide_index=True,
+            )
+            op_pre = {
+                f'{int(row["id_pre_cadastro"])} | {row["nome"]} | {row["cpf"]}': row
+                for _, row in pre.iterrows()
+            }
+            selecionado_pre = st.selectbox(
+                "Selecionar pre-cadastro",
+                ["Selecione"] + list(op_pre.keys()),
+                key="sel_pre_cadastro",
+            )
+            if selecionado_pre != "Selecione":
+                row_pre = op_pre[selecionado_pre]
+                st.write(row_pre.to_dict())
+                c_aprovar, c_rejeitar, c_dup = st.columns(3)
+                with c_aprovar:
+                    if st.button("Aprovar como membro", type="primary"):
+                        try:
+                            aprovar_pre_cadastro_membro(slug, int(row_pre["id_pre_cadastro"]))
+                        except Exception as exc:
+                            st.error(str(exc))
+                        else:
+                            _invalida(slug)
+                            st.success("Pre-cadastro aprovado e membro criado.")
+                            st.rerun()
+                with c_rejeitar:
+                    if st.button("Rejeitar"):
+                        atualizar_status_pre_cadastro(
+                            slug, int(row_pre["id_pre_cadastro"]), "Rejeitado"
+                        )
+                        st.success("Pre-cadastro rejeitado.")
+                        st.rerun()
+                with c_dup:
+                    if st.button("Marcar duplicado"):
+                        atualizar_status_pre_cadastro(
+                            slug, int(row_pre["id_pre_cadastro"]), "Duplicado"
+                        )
+                        st.success("Pre-cadastro marcado como duplicado.")
+                        st.rerun()
 
     if not df.empty and "tipo_cadastro" in df.columns:
         tipos = df["tipo_cadastro"].fillna("").astype(str).str.strip().str.upper()

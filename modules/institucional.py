@@ -1,4 +1,5 @@
 import base64
+import datetime
 import logging
 from pathlib import Path
 
@@ -705,6 +706,7 @@ def _navbar():
             <div class="fm-menu">
                 <a href="?pagina=inicio#sobre" target="_top">Sobre</a>
                 <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
+                <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
                 <a class="fm-btn-login" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
@@ -721,6 +723,7 @@ def _footer():
             <div>FielMordomo © 2026 — Sistema de Gestão Financeira para Igrejas.</div>
             <div>
                 <a href="?pagina=contato" target="_top">Contato</a>
+                <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
                 <a href="?pagina=termos" target="_top">Termos de Uso</a>
             </div>
@@ -1000,6 +1003,192 @@ def _termos():
     """
 
 
+def _render_atualizar_cadastro_publico():
+    from data.repository import (
+        atualizar_cadastro_publico,
+        criar_pre_cadastro_publico,
+        localizar_cadastro_publico,
+        validar_codigo_atualizacao_cadastral,
+    )
+
+    st.markdown(
+        """
+        <div class="fm-simple-page">
+          <div class="fm-simple-card">
+            <h1>Atualizacao de cadastro</h1>
+            <p>
+              Informe os dados de identificacao para localizar seu cadastro.
+              O CPF e a data de nascimento sao usados apenas para confirmar sua identidade.
+              Caso seu cadastro ainda nao exista, voce podera enviar um pre-cadastro
+              para analise da secretaria da igreja.
+            </p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("form_localizar_cadastro_publico"):
+        c1, c2 = st.columns(2)
+        slug = c1.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        codigo = c2.text_input("Codigo de atualizacao cadastral", type="password")
+        c3, c4 = st.columns(2)
+        cpf = c3.text_input("CPF")
+        data_nascimento = c4.date_input(
+            "Data de nascimento",
+            value=datetime.date(2000, 1, 1),
+            format="DD/MM/YYYY",
+        )
+        if st.form_submit_button("Localizar cadastro", type="primary"):
+            if not slug or not codigo or not cpf or not data_nascimento:
+                st.error("Informe igreja, codigo, CPF e data de nascimento.")
+            else:
+                slug_limpo = slug.strip().lower()
+                if not validar_codigo_atualizacao_cadastral(slug_limpo, codigo):
+                    st.error("Codigo de atualizacao cadastral invalido.")
+                    return
+                try:
+                    cadastro = localizar_cadastro_publico(
+                        slug_limpo,
+                        cpf,
+                        data_nascimento.isoformat(),
+                    )
+                except Exception:
+                    LOGGER.exception("Falha ao localizar cadastro publico.")
+                    cadastro = None
+                if not cadastro:
+                    st.warning(
+                        "Cadastro nao localizado. Voce pode conferir os dados ou "
+                        "enviar um pre-cadastro para analise da secretaria."
+                    )
+                    st.session_state["cadastro_publico_slug"] = slug_limpo
+                    st.session_state["cadastro_publico_cpf"] = "".join(
+                        c for c in str(cpf) if c.isdigit()
+                    )
+                    st.session_state["cadastro_publico_data"] = data_nascimento.isoformat()
+                    st.session_state["cadastro_publico_dados"] = None
+                    st.session_state["mostrar_pre_cadastro_publico"] = True
+                    st.rerun()
+                else:
+                    st.session_state["cadastro_publico_slug"] = slug_limpo
+                    st.session_state["cadastro_publico_cpf"] = "".join(
+                        c for c in str(cpf) if c.isdigit()
+                    )
+                    st.session_state["cadastro_publico_data"] = data_nascimento.isoformat()
+                    st.session_state["cadastro_publico_dados"] = cadastro
+                    st.session_state["mostrar_pre_cadastro_publico"] = False
+                    st.success("Cadastro localizado. Confira e atualize seus dados abaixo.")
+                    st.rerun()
+
+    cadastro = st.session_state.get("cadastro_publico_dados")
+    slug_salvo = st.session_state.get("cadastro_publico_slug", "")
+    cpf_salvo = st.session_state.get("cadastro_publico_cpf", "")
+    data_salva = st.session_state.get("cadastro_publico_data", "")
+    if not cadastro and st.session_state.get("mostrar_pre_cadastro_publico"):
+        st.markdown("### Enviar pre-cadastro")
+        st.caption(
+            "Seu pre-cadastro sera enviado para analise. A secretaria da igreja "
+            "precisara aprovar antes de virar cadastro oficial."
+        )
+        with st.form("form_pre_cadastro_publico"):
+            nome = st.text_input("Nome completo")
+            c1, c2 = st.columns(2)
+            sexo = c1.selectbox("Sexo", ["", "Masculino", "Feminino"])
+            telefone = c2.text_input("Telefone / WhatsApp")
+            st.markdown("**Endereco**")
+            c3, c4 = st.columns([3, 1])
+            logradouro = c3.text_input("Logradouro")
+            numero = c4.text_input("Numero")
+            c5, c6, c7 = st.columns(3)
+            bairro = c5.text_input("Bairro")
+            cidade = c6.text_input("Cidade")
+            cep = c7.text_input("CEP")
+            observacoes = st.text_area("Observacoes")
+            if st.form_submit_button("Enviar pre-cadastro", type="primary"):
+                try:
+                    criar_pre_cadastro_publico(
+                        slug_salvo,
+                        {
+                            "nome": nome,
+                            "cpf": cpf_salvo,
+                            "data_nascimento": data_salva,
+                            "sexo": sexo,
+                            "telefone": telefone,
+                            "logradouro": logradouro,
+                            "numero": numero,
+                            "bairro": bairro,
+                            "cidade": cidade,
+                            "cep": cep,
+                            "observacoes": observacoes,
+                        },
+                    )
+                except Exception as exc:
+                    st.error(str(exc))
+                else:
+                    st.success("Pre-cadastro enviado para analise da secretaria.")
+                    st.session_state["mostrar_pre_cadastro_publico"] = False
+        return
+
+    if not cadastro:
+        return
+
+    st.info(f"Igreja: {cadastro.get('igreja_nome', slug_salvo)}")
+    with st.form("form_atualizar_cadastro_publico"):
+        nome = st.text_input("Nome completo", value=cadastro.get("nome", ""))
+        c1, c2 = st.columns(2)
+        sexo = c1.selectbox(
+            "Sexo",
+            ["", "Masculino", "Feminino"],
+            index=["", "Masculino", "Feminino"].index(cadastro.get("sexo", ""))
+            if cadastro.get("sexo", "") in ["", "Masculino", "Feminino"] else 0,
+        )
+        telefone = c2.text_input("Telefone / WhatsApp", value=cadastro.get("telefone", ""))
+        st.markdown("**Endereco**")
+        c3, c4 = st.columns([3, 1])
+        logradouro = c3.text_input("Logradouro", value=cadastro.get("logradouro", ""))
+        numero = c4.text_input("Numero", value=cadastro.get("numero", ""))
+        c5, c6, c7 = st.columns(3)
+        bairro = c5.text_input("Bairro", value=cadastro.get("bairro", ""))
+        cidade = c6.text_input("Cidade", value=cadastro.get("cidade", ""))
+        cep = c7.text_input("CEP", value=cadastro.get("cep", ""))
+
+        st.caption("CPF e data de nascimento nao sao alterados por este formulario.")
+        if st.form_submit_button("Salvar atualizacao", type="primary"):
+            try:
+                atualizar_cadastro_publico(
+                    slug_salvo,
+                    cadastro["id_cadastro"],
+                    cpf_salvo,
+                    data_salva,
+                    {
+                        "nome": nome,
+                        "sexo": sexo,
+                        "telefone": telefone,
+                        "logradouro": logradouro,
+                        "numero": numero,
+                        "bairro": bairro,
+                        "cidade": cidade,
+                        "cep": cep,
+                    },
+                )
+            except Exception as exc:
+                st.error(str(exc))
+            else:
+                st.success("Cadastro atualizado com sucesso.")
+                st.session_state.pop("cadastro_publico_dados", None)
+
+    if st.button("Limpar e localizar outro cadastro"):
+        for key in (
+            "cadastro_publico_slug",
+            "cadastro_publico_cpf",
+            "cadastro_publico_data",
+            "cadastro_publico_dados",
+            "mostrar_pre_cadastro_publico",
+        ):
+            st.session_state.pop(key, None)
+        st.rerun()
+
+
 def _conteudo_da_pagina():
     pagina = _pagina_atual()
 
@@ -1054,6 +1243,16 @@ def render_institucional():
         """,
         unsafe_allow_html=True,
     )
+
+    if _pagina_atual() == "atualizar-cadastro":
+        _render_html(
+            _css_base()
+            + '<div class="fm-page notranslate" translate="no" lang="pt-BR">'
+            + _navbar()
+        )
+        _render_atualizar_cadastro_publico()
+        _render_html(_footer() + "</div>")
+        return
 
     html_final = (
         _css_base()
