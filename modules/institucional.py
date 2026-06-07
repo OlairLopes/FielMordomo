@@ -644,6 +644,33 @@ def _css_base():
             font-size: 16px;
         }}
 
+        .fm-update-page {{
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 18px 24px 10px;
+        }}
+
+        .fm-update-card {{
+            background: white;
+            border-radius: 18px;
+            padding: 22px 28px;
+            box-shadow: 0 10px 26px rgba(8,42,74,0.06);
+            border: 1px solid rgba(8,42,74,0.08);
+        }}
+
+        .fm-update-card h1 {{
+            color: {AZUL_ESCURO};
+            font-size: 30px;
+            margin: 0 0 8px;
+        }}
+
+        .fm-update-card p {{
+            color: #4B5563;
+            line-height: 1.55;
+            font-size: 15px;
+            margin: 0;
+        }}
+
         @media (max-width: 900px) {{
             .fm-navbar {{
                 align-items: flex-start;
@@ -1013,8 +1040,8 @@ def _render_atualizar_cadastro_publico():
 
     st.markdown(
         """
-        <div class="fm-simple-page">
-          <div class="fm-simple-card">
+        <div class="fm-update-page">
+          <div class="fm-update-card">
             <h1>Atualizacao de cadastro</h1>
             <p>
               Informe os dados de identificacao para localizar seu cadastro.
@@ -1245,6 +1272,19 @@ def render_institucional():
     )
 
     if _pagina_atual() == "atualizar-cadastro":
+        st.markdown(
+            """
+            <style>
+                .block-container {
+                    padding-top: 0 !important;
+                }
+                div[data-testid="stVerticalBlock"] {
+                    gap: 0.55rem;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         _render_html(
             _css_base()
             + '<div class="fm-page notranslate" translate="no" lang="pt-BR">'
