@@ -1245,6 +1245,10 @@ def _render_html(html_final: str):
         st.markdown(html_final, unsafe_allow_html=True)
 
 
+def _html_sem_indentacao(html_final: str) -> str:
+    return "\n".join(linha.strip() for linha in str(html_final).splitlines() if linha.strip())
+
+
 def render_institucional():
     st.markdown(
         """
@@ -1304,13 +1308,15 @@ def render_institucional():
             unsafe_allow_html=True,
         )
         st.markdown(
-            _css_base()
-            + '<div class="fm-page notranslate" translate="no" lang="pt-BR">'
-            + _navbar(),
+            _html_sem_indentacao(
+                _css_base()
+                + '<div class="fm-page notranslate" translate="no" lang="pt-BR">'
+                + _navbar()
+            ),
             unsafe_allow_html=True,
         )
         _render_atualizar_cadastro_publico()
-        st.markdown(_footer() + "</div>", unsafe_allow_html=True)
+        st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
         return
 
     html_final = (
