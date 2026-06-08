@@ -1055,6 +1055,32 @@ def _render_atualizar_cadastro_publico():
                 continue
         return ""
 
+    def _formatar_data_br(valor):
+        texto = str(valor or "").strip()
+        if not texto:
+            return ""
+        for formato in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.datetime.strptime(texto, formato).date().strftime("%d/%m/%Y")
+            except ValueError:
+                continue
+        return texto
+
+    def _parse_data_opcional(valor):
+        texto = str(valor or "").strip()
+        if not texto:
+            return ""
+        return _parse_data_nascimento(texto)
+
+    estado_civil_opcoes = ["", "Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viuvo(a)", "Uniao estavel"]
+    tipo_membro_opcoes = ["", "Membro", "Congregado"]
+    funcao_opcoes = [
+        "", "Membro", "Congregado", "Auxiliar", "Pastor", "Diacono",
+        "Diaconisa", "Presbitero", "Evangelista", "Cooperador",
+        "Dirigente", "Secretario", "Tesoureiro", "Professor", "Lider",
+        "Missionario(a)",
+    ]
+
     st.markdown(
         """
         <div class="fm-update-page">
@@ -1085,6 +1111,7 @@ def _render_atualizar_cadastro_publico():
         )
         if st.form_submit_button("Localizar cadastro", type="primary"):
             data_nascimento = _parse_data_nascimento(data_nascimento_txt)
+            data_nascimento_br = _formatar_data_br(data_nascimento)
             if not slug or not codigo or not cpf or not data_nascimento:
                 st.error("Informe igreja, codigo, CPF e data de nascimento.")
             else:
@@ -1111,6 +1138,7 @@ def _render_atualizar_cadastro_publico():
                         c for c in str(cpf) if c.isdigit()
                     )
                     st.session_state["cadastro_publico_data"] = data_nascimento
+                    st.session_state["cadastro_publico_data_br"] = data_nascimento_br
                     st.session_state["cadastro_publico_dados"] = None
                     st.session_state["mostrar_pre_cadastro_publico"] = True
                     st.rerun()
@@ -1120,6 +1148,7 @@ def _render_atualizar_cadastro_publico():
                         c for c in str(cpf) if c.isdigit()
                     )
                     st.session_state["cadastro_publico_data"] = data_nascimento
+                    st.session_state["cadastro_publico_data_br"] = data_nascimento_br
                     st.session_state["cadastro_publico_dados"] = cadastro
                     st.session_state["mostrar_pre_cadastro_publico"] = False
                     st.success("Cadastro localizado. Confira e atualize seus dados abaixo.")
@@ -1129,17 +1158,25 @@ def _render_atualizar_cadastro_publico():
     slug_salvo = st.session_state.get("cadastro_publico_slug", "")
     cpf_salvo = st.session_state.get("cadastro_publico_cpf", "")
     data_salva = st.session_state.get("cadastro_publico_data", "")
+    data_salva_br = st.session_state.get("cadastro_publico_data_br", _formatar_data_br(data_salva))
     if not cadastro and st.session_state.get("mostrar_pre_cadastro_publico"):
         st.markdown("### Enviar pre-cadastro")
         st.caption(
             "Seu pre-cadastro sera enviado para analise. A secretaria da igreja "
             "precisara aprovar antes de virar cadastro oficial."
         )
+        st.info(f"Data de nascimento informada: {data_salva_br}")
         with st.form("form_pre_cadastro_publico"):
             nome = st.text_input("Nome completo")
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             sexo = c1.selectbox("Sexo", ["", "Masculino", "Feminino"])
-            telefone = c2.text_input("Telefone / WhatsApp")
+            estado_civil = c2.selectbox("Estado civil", estado_civil_opcoes)
+            tipo_membro = c3.selectbox("Tipo", tipo_membro_opcoes)
+            funcao = st.selectbox("Funcao ministerial", funcao_opcoes)
+            b1, b2, b3 = st.columns(3)
+            batismo_aguas_txt = b1.text_input("Data de batismo nas aguas", placeholder="Ex.: 26/06/1979")
+            batismo_espirito_txt = b2.text_input("Data de batismo no Espirito Santo", placeholder="Ex.: 26/06/1979")
+            telefone = b3.text_input("Telefone / WhatsApp")
             st.markdown("**Endereco**")
             c3, c4 = st.columns([3, 1])
             logradouro = c3.text_input("Logradouro")
@@ -1150,6 +1187,14 @@ def _render_atualizar_cadastro_publico():
             cep = c7.text_input("CEP")
             observacoes = st.text_area("Observacoes")
             if st.form_submit_button("Enviar pre-cadastro", type="primary"):
+                batismo_aguas = _parse_data_opcional(batismo_aguas_txt)
+                batismo_espirito = _parse_data_opcional(batismo_espirito_txt)
+                if batismo_aguas_txt.strip() and not batismo_aguas:
+                    st.error("Data de batismo nas aguas invalida. Use DD/MM/AAAA.")
+                    return
+                if batismo_espirito_txt.strip() and not batismo_espirito:
+                    st.error("Data de batismo no Espirito Santo invalida. Use DD/MM/AAAA.")
+                    return
                 try:
                     criar_pre_cadastro_publico(
                         slug_salvo,
@@ -1158,6 +1203,11 @@ def _render_atualizar_cadastro_publico():
                             "cpf": cpf_salvo,
                             "data_nascimento": data_salva,
                             "sexo": sexo,
+                            "estado_civil": estado_civil,
+                            "tipo_membro": tipo_membro,
+                            "funcao": funcao,
+                            "data_batismo_aguas": batismo_aguas,
+                            "data_batismo_espirito_santo": batismo_espirito,
                             "telefone": telefone,
                             "logradouro": logradouro,
                             "numero": numero,
@@ -1178,6 +1228,7 @@ def _render_atualizar_cadastro_publico():
         return
 
     st.info(f"Igreja: {cadastro.get('igreja_nome', slug_salvo)}")
+    st.caption(f"Data de nascimento confirmada: {data_salva_br}")
     with st.form("form_atualizar_cadastro_publico"):
         nome = st.text_input("Nome completo", value=cadastro.get("nome", ""))
         c1, c2 = st.columns(2)
@@ -1187,7 +1238,38 @@ def _render_atualizar_cadastro_publico():
             index=["", "Masculino", "Feminino"].index(cadastro.get("sexo", ""))
             if cadastro.get("sexo", "") in ["", "Masculino", "Feminino"] else 0,
         )
-        telefone = c2.text_input("Telefone / WhatsApp", value=cadastro.get("telefone", ""))
+        estado_civil_atual = cadastro.get("estado_civil", "")
+        estado_civil = c2.selectbox(
+            "Estado civil",
+            estado_civil_opcoes,
+            index=estado_civil_opcoes.index(estado_civil_atual)
+            if estado_civil_atual in estado_civil_opcoes else 0,
+        )
+        c_tipo, c_funcao = st.columns(2)
+        tipo_atual = cadastro.get("tipo_membro", "")
+        tipo_membro = c_tipo.selectbox(
+            "Tipo",
+            tipo_membro_opcoes,
+            index=tipo_membro_opcoes.index(tipo_atual) if tipo_atual in tipo_membro_opcoes else 0,
+        )
+        funcao_atual = cadastro.get("funcao", "")
+        funcao = c_funcao.selectbox(
+            "Funcao ministerial",
+            funcao_opcoes,
+            index=funcao_opcoes.index(funcao_atual) if funcao_atual in funcao_opcoes else 0,
+        )
+        b1, b2, b3 = st.columns(3)
+        batismo_aguas_txt = b1.text_input(
+            "Data de batismo nas aguas",
+            value=_formatar_data_br(cadastro.get("data_batismo_aguas", "")),
+            placeholder="Ex.: 26/06/1979",
+        )
+        batismo_espirito_txt = b2.text_input(
+            "Data de batismo no Espirito Santo",
+            value=_formatar_data_br(cadastro.get("data_batismo_espirito_santo", "")),
+            placeholder="Ex.: 26/06/1979",
+        )
+        telefone = b3.text_input("Telefone / WhatsApp", value=cadastro.get("telefone", ""))
         st.markdown("**Endereco**")
         c3, c4 = st.columns([3, 1])
         logradouro = c3.text_input("Logradouro", value=cadastro.get("logradouro", ""))
@@ -1199,6 +1281,14 @@ def _render_atualizar_cadastro_publico():
 
         st.caption("CPF e data de nascimento nao sao alterados por este formulario.")
         if st.form_submit_button("Salvar atualizacao", type="primary"):
+            batismo_aguas = _parse_data_opcional(batismo_aguas_txt)
+            batismo_espirito = _parse_data_opcional(batismo_espirito_txt)
+            if batismo_aguas_txt.strip() and not batismo_aguas:
+                st.error("Data de batismo nas aguas invalida. Use DD/MM/AAAA.")
+                return
+            if batismo_espirito_txt.strip() and not batismo_espirito:
+                st.error("Data de batismo no Espirito Santo invalida. Use DD/MM/AAAA.")
+                return
             try:
                 atualizar_cadastro_publico(
                     slug_salvo,
@@ -1208,6 +1298,11 @@ def _render_atualizar_cadastro_publico():
                     {
                         "nome": nome,
                         "sexo": sexo,
+                        "estado_civil": estado_civil,
+                        "tipo_membro": tipo_membro,
+                        "funcao": funcao,
+                        "data_batismo_aguas": batismo_aguas,
+                        "data_batismo_espirito_santo": batismo_espirito,
                         "telefone": telefone,
                         "logradouro": logradouro,
                         "numero": numero,
@@ -1227,6 +1322,7 @@ def _render_atualizar_cadastro_publico():
             "cadastro_publico_slug",
             "cadastro_publico_cpf",
             "cadastro_publico_data",
+            "cadastro_publico_data_br",
             "cadastro_publico_dados",
             "mostrar_pre_cadastro_publico",
         ):

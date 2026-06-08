@@ -1450,6 +1450,7 @@ def carregar_cadastros(slug):
     if not db.exists():
         inicializar_tenant(slug)
     with _conn(db) as conn:
+        _garantir_colunas_cadastros(conn)
         df = pd.read_sql_query("SELECT * FROM cadastros ORDER BY nome", conn)
     return df
 
@@ -1478,6 +1479,10 @@ def _garantir_colunas_cadastros(conn):
         ("cpf", "TEXT DEFAULT ''"),
         ("data_nascimento", "TEXT DEFAULT ''"),
         ("sexo", "TEXT DEFAULT ''"),
+        ("estado_civil", "TEXT DEFAULT ''"),
+        ("tipo_membro", "TEXT DEFAULT ''"),
+        ("data_batismo_aguas", "TEXT DEFAULT ''"),
+        ("data_batismo_espirito_santo", "TEXT DEFAULT ''"),
         ("telefone", "TEXT DEFAULT ''"),
         ("logradouro", "TEXT DEFAULT ''"),
         ("numero", "TEXT DEFAULT ''"),
@@ -1497,6 +1502,11 @@ def _garantir_tabela_pre_cadastros(conn):
             cpf             TEXT NOT NULL,
             data_nascimento TEXT NOT NULL,
             sexo            TEXT DEFAULT '',
+            estado_civil    TEXT DEFAULT '',
+            tipo_membro     TEXT DEFAULT '',
+            funcao          TEXT DEFAULT '',
+            data_batismo_aguas TEXT DEFAULT '',
+            data_batismo_espirito_santo TEXT DEFAULT '',
             telefone        TEXT DEFAULT '',
             logradouro      TEXT DEFAULT '',
             numero          TEXT DEFAULT '',
@@ -1509,6 +1519,19 @@ def _garantir_tabela_pre_cadastros(conn):
             atualizado_em   TEXT DEFAULT (datetime('now'))
         )
     """)
+    cols = [
+        r[1]
+        for r in conn.execute("PRAGMA table_info(pre_cadastros_membros)").fetchall()
+    ]
+    for col, tipo in [
+        ("estado_civil", "TEXT DEFAULT ''"),
+        ("tipo_membro", "TEXT DEFAULT ''"),
+        ("funcao", "TEXT DEFAULT ''"),
+        ("data_batismo_aguas", "TEXT DEFAULT ''"),
+        ("data_batismo_espirito_santo", "TEXT DEFAULT ''"),
+    ]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE pre_cadastros_membros ADD COLUMN {col} {tipo}")
 
 
 def _limite_membros_da_igreja(slug: str):
@@ -1608,7 +1631,8 @@ def localizar_cadastro_publico(slug, cpf, data_nascimento):
         row = conn.execute(
             """SELECT id_cadastro, tipo_cadastro, nome, funcao, congregacao, cpf,
                       data_nascimento, sexo, telefone, logradouro, numero,
-                      bairro, cidade, cep, situacao
+                      bairro, cidade, cep, situacao, estado_civil, tipo_membro,
+                      data_batismo_aguas, data_batismo_espirito_santo
                FROM cadastros
                WHERE cpf=? AND data_nascimento=? AND UPPER(TRIM(tipo_cadastro))='MEMBRO'
                LIMIT 1""",
@@ -1650,12 +1674,18 @@ def atualizar_cadastro_publico(slug, id_cadastro, cpf, data_nascimento, dados):
             raise ValueError("Cadastro nao localizado para os dados informados.")
         conn.execute(
             """UPDATE cadastros
-               SET nome=?, sexo=?, telefone=?, logradouro=?, numero=?,
-                   bairro=?, cidade=?, cep=?
+               SET nome=?, sexo=?, estado_civil=?, tipo_membro=?, funcao=?,
+                   data_batismo_aguas=?, data_batismo_espirito_santo=?,
+                   telefone=?, logradouro=?, numero=?, bairro=?, cidade=?, cep=?
                WHERE id_cadastro=?""",
             (
                 nome,
                 sanitizar(dados.get("sexo", "")),
+                sanitizar(dados.get("estado_civil", "")),
+                sanitizar(dados.get("tipo_membro", "")),
+                sanitizar(dados.get("funcao", "")),
+                sanitizar(dados.get("data_batismo_aguas", "")),
+                sanitizar(dados.get("data_batismo_espirito_santo", "")),
                 sanitizar(dados.get("telefone", "")),
                 sanitizar(dados.get("logradouro", "")),
                 sanitizar(dados.get("numero", "")),
@@ -1712,14 +1742,20 @@ def criar_pre_cadastro_publico(slug, dados):
             raise ValueError("Ja existe um pre-cadastro pendente para este CPF.")
         cur = conn.execute(
             """INSERT INTO pre_cadastros_membros
-               (nome, cpf, data_nascimento, sexo, telefone, logradouro, numero,
-                bairro, cidade, cep, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (nome, cpf, data_nascimento, sexo, estado_civil, tipo_membro,
+                funcao, data_batismo_aguas, data_batismo_espirito_santo,
+                telefone, logradouro, numero, bairro, cidade, cep, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 nome,
                 cpf_limpo,
                 data_nascimento,
                 sanitizar(dados.get("sexo", "")),
+                sanitizar(dados.get("estado_civil", "")),
+                sanitizar(dados.get("tipo_membro", "")),
+                sanitizar(dados.get("funcao", "")),
+                sanitizar(dados.get("data_batismo_aguas", "")),
+                sanitizar(dados.get("data_batismo_espirito_santo", "")),
                 sanitizar(dados.get("telefone", "")),
                 sanitizar(dados.get("logradouro", "")),
                 sanitizar(dados.get("numero", "")),
@@ -1795,15 +1831,22 @@ def aprovar_pre_cadastro_membro(slug, id_pre_cadastro):
         conn.execute(
             """INSERT INTO cadastros
                (tipo_cadastro, nome, funcao, congregacao, cpf, data_nascimento,
-                sexo, telefone, logradouro, numero, bairro, cidade, cep, situacao)
-               VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Ativo')""",
+                sexo, estado_civil, tipo_membro, data_batismo_aguas,
+                data_batismo_espirito_santo, telefone, logradouro, numero,
+                bairro, cidade, cep, situacao)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Ativo')""",
             (
                 "Membro",
                 sanitizar(row["nome"]),
+                sanitizar(row["funcao"]),
                 slug,
                 row["cpf"],
                 row["data_nascimento"],
                 sanitizar(row["sexo"]),
+                sanitizar(row["estado_civil"]),
+                sanitizar(row["tipo_membro"]),
+                sanitizar(row["data_batismo_aguas"]),
+                sanitizar(row["data_batismo_espirito_santo"]),
                 sanitizar(row["telefone"]),
                 sanitizar(row["logradouro"]),
                 sanitizar(row["numero"]),

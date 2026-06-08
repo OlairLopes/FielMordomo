@@ -132,7 +132,8 @@ def render():
             st.dataframe(
                 exibir_pre[[
                     "id_pre_cadastro", "nome", "cpf", "data_nascimento",
-                    "sexo", "telefone", "cidade", "status", "criado_em",
+                    "sexo", "estado_civil", "tipo_membro", "funcao",
+                    "telefone", "cidade", "status", "criado_em",
                 ]],
                 use_container_width=True,
                 hide_index=True,
