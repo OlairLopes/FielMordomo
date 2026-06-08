@@ -1044,6 +1044,17 @@ def _render_atualizar_cadastro_publico():
         validar_codigo_atualizacao_cadastral,
     )
 
+    def _parse_data_nascimento(valor):
+        texto = str(valor or "").strip()
+        if not texto:
+            return ""
+        for formato in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
+            try:
+                return datetime.datetime.strptime(texto, formato).date().isoformat()
+            except ValueError:
+                continue
+        return ""
+
     st.markdown(
         """
         <div class="fm-update-page">
@@ -1067,12 +1078,13 @@ def _render_atualizar_cadastro_publico():
         codigo = c2.text_input("Codigo de atualizacao cadastral", type="password")
         c3, c4 = st.columns(2)
         cpf = c3.text_input("CPF")
-        data_nascimento = c4.date_input(
+        data_nascimento_txt = c4.text_input(
             "Data de nascimento",
-            value=datetime.date(2000, 1, 1),
-            format="DD/MM/YYYY",
+            placeholder="Ex.: 26/06/1979",
+            help="Informe no formato dia/mes/ano.",
         )
         if st.form_submit_button("Localizar cadastro", type="primary"):
+            data_nascimento = _parse_data_nascimento(data_nascimento_txt)
             if not slug or not codigo or not cpf or not data_nascimento:
                 st.error("Informe igreja, codigo, CPF e data de nascimento.")
             else:
@@ -1084,7 +1096,7 @@ def _render_atualizar_cadastro_publico():
                     cadastro = localizar_cadastro_publico(
                         slug_limpo,
                         cpf,
-                        data_nascimento.isoformat(),
+                        data_nascimento,
                     )
                 except Exception:
                     LOGGER.exception("Falha ao localizar cadastro publico.")
@@ -1098,7 +1110,7 @@ def _render_atualizar_cadastro_publico():
                     st.session_state["cadastro_publico_cpf"] = "".join(
                         c for c in str(cpf) if c.isdigit()
                     )
-                    st.session_state["cadastro_publico_data"] = data_nascimento.isoformat()
+                    st.session_state["cadastro_publico_data"] = data_nascimento
                     st.session_state["cadastro_publico_dados"] = None
                     st.session_state["mostrar_pre_cadastro_publico"] = True
                     st.rerun()
@@ -1107,7 +1119,7 @@ def _render_atualizar_cadastro_publico():
                     st.session_state["cadastro_publico_cpf"] = "".join(
                         c for c in str(cpf) if c.isdigit()
                     )
-                    st.session_state["cadastro_publico_data"] = data_nascimento.isoformat()
+                    st.session_state["cadastro_publico_data"] = data_nascimento
                     st.session_state["cadastro_publico_dados"] = cadastro
                     st.session_state["mostrar_pre_cadastro_publico"] = False
                     st.success("Cadastro localizado. Confira e atualize seus dados abaixo.")
