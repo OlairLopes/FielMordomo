@@ -1,11 +1,13 @@
 import datetime
 import html
+import json
 import urllib.parse
 from collections import defaultdict
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 from data.repository import (
     carregar_cadastros,
@@ -748,6 +750,76 @@ def _superintendente_filhos_do_rei(slug):
         str(row.get("telefone_superintendente", "") or ""),
     )
 
+
+def _avisos_whatsapp_escala(slug, escala):
+    avisos = []
+    for _, row in escala.iterrows():
+        pessoas = [
+            (
+                "Professor",
+                str(row.get("professor", "") or "").strip(),
+                row.get("telefone_professor", ""),
+            ),
+            (
+                "Superintendente",
+                str(row.get("superintendente", "") or "").strip(),
+                row.get("telefone_superintendente", ""),
+            ),
+            (
+                "Auxiliar",
+                str(row.get("auxiliar", "") or "").strip(),
+                row.get("telefone_auxiliar", ""),
+            ),
+        ]
+        for funcao, nome, telefone in pessoas:
+            if not nome:
+                continue
+            mensagem = _mensagem_escala(slug, row, nome, funcao)
+            link = _link_whatsapp(telefone, mensagem)
+            if link:
+                avisos.append(
+                    {
+                        "nome": nome,
+                        "funcao": funcao,
+                        "data": _fmt_data(row.get("data", "")),
+                        "classe": str(row.get("classe", "") or "EBD"),
+                        "url": link,
+                    }
+                )
+    return avisos
+
+
+def _botao_envio_avisos_escala(slug, escala):
+    avisos = _avisos_whatsapp_escala(slug, escala)
+    if not avisos:
+        st.warning("Nenhum aviso com WhatsApp valido foi encontrado na escala filtrada.")
+        return
+
+    payload = json.dumps(avisos, ensure_ascii=False)
+    componentes_html = f"""
+    <button
+        type="button"
+        onclick='const avisos = {payload}; avisos.forEach((aviso, indice) => setTimeout(() => window.open(aviso.url, "_blank"), indice * 650));'
+        style="
+            width:100%;
+            padding:0.7rem 1rem;
+            border:0;
+            border-radius:10px;
+            background:#1D9E75;
+            color:#fff;
+            font-weight:700;
+            cursor:pointer;
+            box-shadow:0 8px 18px rgba(29,158,117,.25);
+        "
+    >
+        Iniciar envio dos avisos ({len(avisos)})
+    </button>
+    <div style="margin-top:0.45rem;color:#64748B;font-size:0.88rem;">
+        Abre uma conversa do WhatsApp por aviso preparado. Se o navegador bloquear abas, permita pop-ups para esta pagina.
+    </div>
+    """
+    components.html(componentes_html, height=92)
+
 def _render_escala(slug):
     st.markdown("### Escala de professores")
     df_classes = listar_ebd_classes(slug)
@@ -945,37 +1017,8 @@ def _render_escala(slug):
                     st.error(str(exc))
 
     st.markdown("#### Avisos por WhatsApp")
-    st.caption("Clique para abrir o WhatsApp com a mensagem pronta para cada professor escalado.")
-    for _, row in escala.iterrows():
-        titulo = f'{_fmt_data(row["data"])} - {row.get("classe", "EBD")} - {row["professor"]}'
-        with st.expander(titulo):
-            c1, c2 = st.columns(2)
-            with c1:
-                mensagem = _mensagem_escala(slug, row, row["professor"], "Professor")
-                _botao_whatsapp("Avisar professor", row.get("telefone_professor", ""), mensagem, f"prof_{row['id_escala']}")
-                st.text_area("Mensagem ao professor", value=mensagem, height=180, key=f"msg_prof_{row['id_escala']}")
-            with c2:
-                superintendente = str(row.get("superintendente", "") or "").strip()
-                if superintendente:
-                    mensagem = _mensagem_escala(slug, row, superintendente, "Superintendente")
-                    _botao_whatsapp(
-                        "Avisar superintendente",
-                        row.get("telefone_superintendente", ""),
-                        mensagem,
-                        f"sup_{row['id_escala']}",
-                    )
-                    st.text_area("Mensagem ao superintendente", value=mensagem, height=180, key=f"msg_sup_{row['id_escala']}")
-                else:
-                    st.info("Nenhum superintendente informado para esta escala.")
-            c3, _ = st.columns(2)
-            with c3:
-                auxiliar = str(row.get("auxiliar", "") or "").strip()
-                if auxiliar:
-                    mensagem = _mensagem_escala(slug, row, auxiliar, "Auxiliar")
-                    _botao_whatsapp("Avisar auxiliar", row.get("telefone_auxiliar", ""), mensagem, f"aux_{row['id_escala']}")
-                    st.text_area("Mensagem ao auxiliar", value=mensagem, height=180, key=f"msg_aux_{row['id_escala']}")
-                else:
-                    st.info("Nenhum auxiliar informado para esta escala.")
+    st.caption("Use um unico botao para iniciar os avisos de professores, superintendentes e auxiliares da escala filtrada.")
+    _botao_envio_avisos_escala(slug, escala)
 
     st.download_button(
         "Baixar escala CSV",
