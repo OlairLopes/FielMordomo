@@ -725,10 +725,9 @@ def _render_relatorios(slug):
 
 
 
-def _superintendente_filhos_do_rei(slug):
-    inicio = (_hoje() - datetime.timedelta(days=365)).isoformat()
-    fim = (_hoje() + datetime.timedelta(days=365)).isoformat()
-    escala = listar_ebd_escala(slug, inicio, fim)
+def _superintendente_filhos_do_rei(slug, data_ref):
+    data_iso = data_ref.isoformat() if hasattr(data_ref, "isoformat") else str(data_ref)
+    escala = listar_ebd_escala(slug, data_iso, data_iso)
     if escala.empty:
         return "", ""
 
@@ -743,7 +742,10 @@ def _superintendente_filhos_do_rei(slug):
     if filhos_do_rei.empty:
         return "", ""
 
-    filhos_do_rei = filhos_do_rei.sort_values("data", ascending=False)
+    if "id_escala" in filhos_do_rei.columns:
+        filhos_do_rei = filhos_do_rei.sort_values("id_escala", ascending=False)
+    else:
+        filhos_do_rei = filhos_do_rei.sort_values("data", ascending=False)
     row = filhos_do_rei.iloc[0]
     return (
         str(row.get("superintendente", "") or ""),
@@ -827,16 +829,16 @@ def _render_escala(slug):
     if not df_classes.empty:
         op_classes.update(_classes_opcoes(df_classes))
 
-    superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug)
-
     with st.form("form_ebd_escala"):
         c1, c2 = st.columns(2)
         data = c1.date_input("Data", value=_hoje())
         classe_label = c2.selectbox("Classe", list(op_classes.keys()))
         classe_nome_selecionada = str(classe_label).split(" - ", 1)[-1].strip()
+        superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug, data)
+        eh_filhos_do_rei = classe_nome_selecionada.lower() == "filhos do rei"
         usar_superintendente_padrao = (
-            classe_nome_selecionada.lower() != "filhos do rei"
-            and bool(superintendente_padrao.strip())
+            not eh_filhos_do_rei
+            and classe_nome_selecionada.lower() != "sem classe definida"
         )
 
         st.markdown("#### Professor")
@@ -846,9 +848,14 @@ def _render_escala(slug):
 
         st.markdown("#### Superintendente")
         if usar_superintendente_padrao:
-            st.info(
-                "Superintendente preenchido automaticamente com o mesmo da classe Filhos do Rei."
-            )
+            if superintendente_padrao.strip():
+                st.info(
+                    "Superintendente preenchido automaticamente com o mesmo da classe Filhos do Rei nesta data."
+                )
+            else:
+                st.warning(
+                    "Cadastre primeiro a escala da classe Filhos do Rei nesta mesma data para definir o superintendente."
+                )
             c3, c4 = st.columns(2)
             superintendente = c3.text_input(
                 "Superintendente",
@@ -873,6 +880,11 @@ def _render_escala(slug):
         obs = st.text_area("Observacoes")
         classe_nome = "" if op_classes[classe_label] else classe_label
         if st.form_submit_button("Adicionar escala", type="primary"):
+            if usar_superintendente_padrao and not superintendente.strip():
+                st.error(
+                    "Cadastre primeiro a escala da classe Filhos do Rei nesta data para usar o mesmo superintendente nas demais classes."
+                )
+                return
             try:
                 salvar_ebd_escala(
                     slug,
@@ -950,9 +962,11 @@ def _render_escala(slug):
                 key=f"classe_escala_{id_escala}",
             )
             classe_nome_editada = str(classe_label_editada).split(" - ", 1)[-1].strip()
+            superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug, data_editada)
+            eh_filhos_do_rei_edicao = classe_nome_editada.lower() == "filhos do rei"
             usar_superintendente_padrao_edicao = (
-                classe_nome_editada.lower() != "filhos do rei"
-                and bool(superintendente_padrao.strip())
+                not eh_filhos_do_rei_edicao
+                and classe_nome_editada.lower() != "sem classe definida"
             )
 
             st.markdown("#### Professor")
@@ -964,9 +978,14 @@ def _render_escala(slug):
             st.markdown("#### Superintendente")
             c6, c7 = st.columns(2)
             if usar_superintendente_padrao_edicao:
-                st.info(
-                    "Ao alterar, esta classe tambem usara o superintendente da classe Filhos do Rei."
-                )
+                if superintendente_padrao.strip():
+                    st.info(
+                        "Ao alterar, esta classe tambem usara o superintendente da classe Filhos do Rei nesta data."
+                    )
+                else:
+                    st.warning(
+                        "Cadastre primeiro a escala da classe Filhos do Rei nesta mesma data para definir o superintendente."
+                    )
                 superintendente_editado = c6.text_input(
                     "Superintendente",
                     value=superintendente_padrao,
@@ -994,6 +1013,11 @@ def _render_escala(slug):
             classe_nome_salvar = "" if op_classes[classe_label_editada] else classe_label_editada
 
             if st.form_submit_button("Salvar alteracoes", type="primary"):
+                if usar_superintendente_padrao_edicao and not superintendente_editado.strip():
+                    st.error(
+                        "Cadastre primeiro a escala da classe Filhos do Rei nesta data para usar o mesmo superintendente nas demais classes."
+                    )
+                    return
                 try:
                     salvar_ebd_escala(
                         slug,
