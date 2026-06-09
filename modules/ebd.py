@@ -722,6 +722,32 @@ def _render_relatorios(slug):
             )
 
 
+
+def _superintendente_filhos_do_rei(slug):
+    inicio = (_hoje() - datetime.timedelta(days=365)).isoformat()
+    fim = (_hoje() + datetime.timedelta(days=365)).isoformat()
+    escala = listar_ebd_escala(slug, inicio, fim)
+    if escala.empty:
+        return "", ""
+
+    escala = escala.copy()
+    escala["classe_normalizada"] = (
+        escala["classe"].fillna("").astype(str).str.strip().str.lower()
+    )
+    filhos_do_rei = escala[
+        (escala["classe_normalizada"] == "filhos do rei")
+        & (escala["superintendente"].fillna("").astype(str).str.strip() != "")
+    ]
+    if filhos_do_rei.empty:
+        return "", ""
+
+    filhos_do_rei = filhos_do_rei.sort_values("data", ascending=False)
+    row = filhos_do_rei.iloc[0]
+    return (
+        str(row.get("superintendente", "") or ""),
+        str(row.get("telefone_superintendente", "") or ""),
+    )
+
 def _render_escala(slug):
     st.markdown("### Escala de professores")
     df_classes = listar_ebd_classes(slug)
@@ -729,18 +755,44 @@ def _render_escala(slug):
     if not df_classes.empty:
         op_classes.update(_classes_opcoes(df_classes))
 
+    superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug)
+
     with st.form("form_ebd_escala"):
         c1, c2 = st.columns(2)
         data = c1.date_input("Data", value=_hoje())
         classe_label = c2.selectbox("Classe", list(op_classes.keys()))
+        classe_nome_selecionada = str(classe_label).split(" - ", 1)[-1].strip()
+        usar_superintendente_padrao = (
+            classe_nome_selecionada.lower() != "filhos do rei"
+            and bool(superintendente_padrao.strip())
+        )
+
         st.markdown("#### Professor")
         professor, telefone_professor, funcao_professor = _selecionar_pessoa_escala(
             slug, "Professor", "escala_professor", obrigatorio=True
         )
+
         st.markdown("#### Superintendente")
-        superintendente, telefone_superintendente, _ = _selecionar_pessoa_escala(
-            slug, "Superintendente", "escala_superintendente"
-        )
+        if usar_superintendente_padrao:
+            st.info(
+                "Superintendente preenchido automaticamente com o mesmo da classe Filhos do Rei."
+            )
+            c3, c4 = st.columns(2)
+            superintendente = c3.text_input(
+                "Superintendente",
+                value=superintendente_padrao,
+                disabled=True,
+            )
+            telefone_superintendente = c4.text_input(
+                "WhatsApp do superintendente",
+                value=telefone_superintendente_padrao,
+                disabled=True,
+            )
+        else:
+            superintendente, telefone_superintendente, _ = _selecionar_pessoa_escala(
+                slug, "Superintendente", "escala_superintendente"
+            )
+
         st.markdown("#### Auxiliar")
         c5, c6 = st.columns(2)
         auxiliar = c5.text_input("Auxiliar")
@@ -777,6 +829,7 @@ def _render_escala(slug):
     if escala.empty:
         st.info("Nenhuma escala cadastrada para o periodo.")
         return
+
     exibir = escala.copy()
     exibir["data"] = exibir["data"].apply(_fmt_data)
     st.dataframe(
@@ -788,6 +841,109 @@ def _render_escala(slug):
         use_container_width=True,
         hide_index=True,
     )
+
+    st.markdown("#### Alterar item da escala")
+    op_edicao = {
+        f'{int(row["id_escala"])} - {_fmt_data(row["data"])} - {row["professor"]}': row
+        for _, row in escala.iterrows()
+    }
+    editar_label = st.selectbox(
+        "Selecione a escala para alterar",
+        ["Selecione"] + list(op_edicao.keys()),
+        key="editar_escala_professores",
+    )
+
+    if editar_label != "Selecione":
+        row = op_edicao[editar_label]
+        id_escala = int(row["id_escala"])
+
+        classe_atual = "Sem classe definida"
+        for label, valor in op_classes.items():
+            if valor and row.get("id_classe") and int(valor) == int(row["id_classe"]):
+                classe_atual = label
+                break
+
+        with st.form(f"form_alterar_ebd_escala_{id_escala}"):
+            c1, c2 = st.columns(2)
+            data_editada = c1.date_input(
+                "Data",
+                value=datetime.date.fromisoformat(str(row["data"])),
+                key=f"data_escala_{id_escala}",
+            )
+            classe_labels = list(op_classes.keys())
+            classe_label_editada = c2.selectbox(
+                "Classe",
+                classe_labels,
+                index=classe_labels.index(classe_atual) if classe_atual in classe_labels else 0,
+                key=f"classe_escala_{id_escala}",
+            )
+            classe_nome_editada = str(classe_label_editada).split(" - ", 1)[-1].strip()
+            usar_superintendente_padrao_edicao = (
+                classe_nome_editada.lower() != "filhos do rei"
+                and bool(superintendente_padrao.strip())
+            )
+
+            st.markdown("#### Professor")
+            c3, c4, c5 = st.columns(3)
+            professor_editado = c3.text_input("Professor", value=row.get("professor", ""))
+            telefone_professor_editado = c4.text_input("WhatsApp do professor", value=row.get("telefone_professor", ""))
+            funcao_professor_editada = c5.text_input("Funcao do professor", value=row.get("funcao_professor", ""))
+
+            st.markdown("#### Superintendente")
+            c6, c7 = st.columns(2)
+            if usar_superintendente_padrao_edicao:
+                st.info(
+                    "Ao alterar, esta classe tambem usara o superintendente da classe Filhos do Rei."
+                )
+                superintendente_editado = c6.text_input(
+                    "Superintendente",
+                    value=superintendente_padrao,
+                    disabled=True,
+                )
+                telefone_superintendente_editado = c7.text_input(
+                    "WhatsApp do superintendente",
+                    value=telefone_superintendente_padrao,
+                    disabled=True,
+                )
+            else:
+                superintendente_editado = c6.text_input("Superintendente", value=row.get("superintendente", ""))
+                telefone_superintendente_editado = c7.text_input(
+                    "WhatsApp do superintendente",
+                    value=row.get("telefone_superintendente", ""),
+                )
+
+            st.markdown("#### Auxiliar")
+            c8, c9 = st.columns(2)
+            auxiliar_editado = c8.text_input("Auxiliar", value=row.get("auxiliar", ""))
+            telefone_auxiliar_editado = c9.text_input("WhatsApp do auxiliar", value=row.get("telefone_auxiliar", ""))
+
+            tema_editado = st.text_input("Tema/assunto", value=row.get("tema", ""))
+            obs_editada = st.text_area("Observacoes", value=row.get("observacoes", ""))
+            classe_nome_salvar = "" if op_classes[classe_label_editada] else classe_label_editada
+
+            if st.form_submit_button("Salvar alteracoes", type="primary"):
+                try:
+                    salvar_ebd_escala(
+                        slug,
+                        data_editada.isoformat(),
+                        professor_editado,
+                        op_classes[classe_label_editada],
+                        classe_nome_salvar,
+                        auxiliar_editado,
+                        tema_editado,
+                        obs_editada,
+                        telefone_professor=telefone_professor_editado,
+                        funcao_professor=funcao_professor_editada,
+                        superintendente=superintendente_editado,
+                        telefone_superintendente=telefone_superintendente_editado,
+                        telefone_auxiliar=telefone_auxiliar_editado,
+                        id_escala=id_escala,
+                    )
+                    st.success("Escala alterada com sucesso.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
     st.markdown("#### Avisos por WhatsApp")
     st.caption("Clique para abrir o WhatsApp com a mensagem pronta para cada professor escalado.")
     for _, row in escala.iterrows():
@@ -820,6 +976,7 @@ def _render_escala(slug):
                     st.text_area("Mensagem ao auxiliar", value=mensagem, height=180, key=f"msg_aux_{row['id_escala']}")
                 else:
                     st.info("Nenhum auxiliar informado para esta escala.")
+
     st.download_button(
         "Baixar escala CSV",
         data=gerar_csv(escala),
