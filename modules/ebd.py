@@ -829,17 +829,18 @@ def _render_escala(slug):
     if not df_classes.empty:
         op_classes.update(_classes_opcoes(df_classes))
 
+    c1, c2 = st.columns(2)
+    data = c1.date_input("Data", value=_hoje(), key="nova_escala_data")
+    classe_label = c2.selectbox("Classe", list(op_classes.keys()), key="nova_escala_classe")
+    classe_nome_selecionada = str(classe_label).split(" - ", 1)[-1].strip()
+    superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug, data)
+    eh_filhos_do_rei = classe_nome_selecionada.lower() == "filhos do rei"
+    usar_superintendente_padrao = (
+        not eh_filhos_do_rei
+        and classe_nome_selecionada.lower() != "sem classe definida"
+    )
+
     with st.form("form_ebd_escala"):
-        c1, c2 = st.columns(2)
-        data = c1.date_input("Data", value=_hoje())
-        classe_label = c2.selectbox("Classe", list(op_classes.keys()))
-        classe_nome_selecionada = str(classe_label).split(" - ", 1)[-1].strip()
-        superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug, data)
-        eh_filhos_do_rei = classe_nome_selecionada.lower() == "filhos do rei"
-        usar_superintendente_padrao = (
-            not eh_filhos_do_rei
-            and classe_nome_selecionada.lower() != "sem classe definida"
-        )
 
         st.markdown("#### Professor")
         professor, telefone_professor, funcao_professor = _selecionar_pessoa_escala(
@@ -861,11 +862,13 @@ def _render_escala(slug):
                 "Superintendente",
                 value=superintendente_padrao,
                 disabled=True,
+                key=f"superintendente_padrao_{data.isoformat()}_{classe_label}",
             )
             telefone_superintendente = c4.text_input(
                 "WhatsApp do superintendente",
                 value=telefone_superintendente_padrao,
                 disabled=True,
+                key=f"telefone_superintendente_padrao_{data.isoformat()}_{classe_label}",
             )
         else:
             superintendente, telefone_superintendente, _ = _selecionar_pessoa_escala(
@@ -947,27 +950,28 @@ def _render_escala(slug):
                 classe_atual = label
                 break
 
+        c1, c2 = st.columns(2)
+        data_editada = c1.date_input(
+            "Data",
+            value=datetime.date.fromisoformat(str(row["data"])),
+            key=f"data_escala_{id_escala}",
+        )
+        classe_labels = list(op_classes.keys())
+        classe_label_editada = c2.selectbox(
+            "Classe",
+            classe_labels,
+            index=classe_labels.index(classe_atual) if classe_atual in classe_labels else 0,
+            key=f"classe_escala_{id_escala}",
+        )
+        classe_nome_editada = str(classe_label_editada).split(" - ", 1)[-1].strip()
+        superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug, data_editada)
+        eh_filhos_do_rei_edicao = classe_nome_editada.lower() == "filhos do rei"
+        usar_superintendente_padrao_edicao = (
+            not eh_filhos_do_rei_edicao
+            and classe_nome_editada.lower() != "sem classe definida"
+        )
+
         with st.form(f"form_alterar_ebd_escala_{id_escala}"):
-            c1, c2 = st.columns(2)
-            data_editada = c1.date_input(
-                "Data",
-                value=datetime.date.fromisoformat(str(row["data"])),
-                key=f"data_escala_{id_escala}",
-            )
-            classe_labels = list(op_classes.keys())
-            classe_label_editada = c2.selectbox(
-                "Classe",
-                classe_labels,
-                index=classe_labels.index(classe_atual) if classe_atual in classe_labels else 0,
-                key=f"classe_escala_{id_escala}",
-            )
-            classe_nome_editada = str(classe_label_editada).split(" - ", 1)[-1].strip()
-            superintendente_padrao, telefone_superintendente_padrao = _superintendente_filhos_do_rei(slug, data_editada)
-            eh_filhos_do_rei_edicao = classe_nome_editada.lower() == "filhos do rei"
-            usar_superintendente_padrao_edicao = (
-                not eh_filhos_do_rei_edicao
-                and classe_nome_editada.lower() != "sem classe definida"
-            )
 
             st.markdown("#### Professor")
             c3, c4, c5 = st.columns(3)
@@ -990,11 +994,13 @@ def _render_escala(slug):
                     "Superintendente",
                     value=superintendente_padrao,
                     disabled=True,
+                    key=f"superintendente_padrao_edicao_{id_escala}_{data_editada.isoformat()}_{classe_label_editada}",
                 )
                 telefone_superintendente_editado = c7.text_input(
                     "WhatsApp do superintendente",
                     value=telefone_superintendente_padrao,
                     disabled=True,
+                    key=f"telefone_superintendente_padrao_edicao_{id_escala}_{data_editada.isoformat()}_{classe_label_editada}",
                 )
             else:
                 superintendente_editado = c6.text_input("Superintendente", value=row.get("superintendente", ""))
