@@ -71,8 +71,8 @@ def _limpar_sessao():
 def _exibir_logo_sistema():
     resultado = obter_logo_sistema()
     if resultado:
-        dados, ext = resultado
-        st.image(dados, width=180)
+        dados, _ext = resultado
+        st.image(dados, width=150)
     else:
         st.markdown(
             """
@@ -85,6 +85,159 @@ def _exibir_logo_sistema():
             """,
             unsafe_allow_html=True,
         )
+
+
+LOGIN_OPCOES = [
+    ("Gestor/Pastor", "Acesso principal", "Gestao completa da igreja"),
+    ("Pastor Auxiliar", "Acesso pastoral", "Visitantes, pedidos e relatorios permitidos"),
+    ("Tesoureiro", "Financeiro", "Lancamentos, membros e relatorios"),
+    ("Recepcao", "Visitantes", "Registro de visitantes"),
+    ("Escola Biblica", "Secretaria", "Chamada e gestao da Escola Biblica"),
+    ("Circulo de Oracao", "Secretaria", "Chamada e relatorios do Circulo de Oracao"),
+    ("Administrador do sistema", "Admin", "Painel geral da plataforma"),
+]
+
+
+def _login_css():
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                padding-top: 2.2rem !important;
+                max-width: 1180px !important;
+            }
+            div[data-testid="stForm"] {
+                background: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 18px;
+                padding: 1.4rem 1.5rem 1.5rem;
+                box-shadow: 0 20px 45px rgba(6, 27, 68, .10);
+            }
+            .fm-login-side {
+                background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
+                border-radius: 24px;
+                padding: 24px 20px;
+                min-height: 680px;
+                box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
+            }
+            .fm-login-side * {
+                color: #FFFFFF;
+            }
+            .fm-login-title {
+                font-size: 1.25rem;
+                font-weight: 800;
+                margin-top: 12px;
+                text-align: center;
+            }
+            .fm-login-subtitle {
+                color: rgba(255,255,255,.72) !important;
+                font-size: .86rem;
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            .fm-login-card {
+                background: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 24px;
+                padding: 30px;
+                min-height: 680px;
+                box-shadow: 0 20px 45px rgba(6, 27, 68, .08);
+            }
+            .fm-login-heading {
+                color: #061B44;
+                font-size: 1.75rem;
+                font-weight: 850;
+                margin-bottom: 6px;
+            }
+            .fm-login-muted {
+                color: #64748B;
+                font-size: .95rem;
+                margin-bottom: 20px;
+            }
+            .fm-login-side div[data-testid="stImage"] {
+                display: flex;
+                justify-content: center;
+            }
+            .fm-login-side .stButton button {
+                width: 100%;
+                border: none !important;
+                border-radius: 13px !important;
+                padding: .78rem .9rem !important;
+                margin-bottom: .28rem !important;
+                text-align: left !important;
+                color: rgba(255,255,255,.92) !important;
+                background: rgba(255,255,255,.06) !important;
+                font-weight: 700 !important;
+            }
+            .fm-login-side .stButton button:hover {
+                background: rgba(212, 175, 55, .22) !important;
+                color: #D4AF37 !important;
+            }
+            .fm-login-side .stButton button[kind="primary"] {
+                background: rgba(212, 175, 55, .28) !important;
+                color: #D4AF37 !important;
+                border-left: 4px solid #D4AF37 !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _modo_login_atual():
+    modos = [item[0] for item in LOGIN_OPCOES]
+    modo = st.session_state.get("login_modo", modos[0])
+    if modo not in modos:
+        modo = modos[0]
+    st.session_state["login_modo"] = modo
+    return modo
+
+
+def _selecionar_modo_login(modo):
+    st.session_state["login_modo"] = modo
+    st.session_state["mostrar_recuperacao"] = False
+    st.rerun()
+
+
+def _sidebar_login(modo_atual):
+    st.markdown('<div class="fm-login-side">', unsafe_allow_html=True)
+    _exibir_logo_sistema()
+    st.markdown(
+        """
+        <div class="fm-login-title">FielMordomo</div>
+        <div class="fm-login-subtitle">Gestao Financeira para Igrejas</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    for modo, titulo, descricao in LOGIN_OPCOES:
+        label = f"{titulo} | {modo}"
+        ajuda = descricao
+        if st.button(
+            label,
+            key=f"login_modo_{modo}",
+            use_container_width=True,
+            type="primary" if modo == modo_atual else "secondary",
+            help=ajuda,
+        ):
+            _selecionar_modo_login(modo)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_login_por_modo(modo):
+    if modo == "Gestor/Pastor":
+        _login_igreja()
+    elif modo == "Pastor Auxiliar":
+        _login_pastor_auxiliar()
+    elif modo == "Tesoureiro":
+        _login_tesoureiro()
+    elif modo == "Recepcao":
+        _login_recepcao()
+    elif modo == "Escola Biblica":
+        _login_ebd()
+    elif modo == "Circulo de Oracao":
+        _login_orhafe()
+    else:
+        _login_admin()
 
 
 def _mostrar_recuperacao_senha():
@@ -153,51 +306,34 @@ def tela_login():
         return True
 
     inicializar_master()
+    _login_css()
+    modo = _modo_login_atual()
 
-    _, col, _ = st.columns([1, 2, 1])
-    with col:
-        _exibir_logo_sistema()
+    col_side, col_main = st.columns([0.95, 2.05], gap="large")
+    with col_side:
+        _sidebar_login(modo)
+
+    with col_main:
+        st.markdown('<div class="fm-login-card">', unsafe_allow_html=True)
         st.markdown(
-            "<p style='text-align:center;color:var(--color-text-secondary);"
-            "font-size:0.9rem;margin-bottom:1.5rem'>"
-            "Gestão Financeira para Igrejas</p>",
+            """
+            <div class="fm-login-heading">Acessar Sistema</div>
+            <div class="fm-login-muted">
+                Escolha o perfil de acesso na barra lateral e informe suas credenciais.
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-        # Modo recuperacao de senha
         if st.session_state.get("mostrar_recuperacao"):
             _mostrar_recuperacao_senha()
+            st.markdown("</div>", unsafe_allow_html=True)
             return False
 
-        modo = st.radio(
-            "Tipo de acesso",
-            [
-                "Gestor/Pastor", "Pastor Auxiliar", "Tesoureiro",
-                "Recepção", "Escola Bíblica", "Círculo de Oração",
-                "Administrador do sistema",
-            ],
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-        st.divider()
-
-        if modo == "Gestor/Pastor":
-            _login_igreja()
-        elif modo == "Pastor Auxiliar":
-            _login_pastor_auxiliar()
-        elif modo == "Tesoureiro":
-            _login_tesoureiro()
-        elif modo == "Recepção":
-            _login_recepcao()
-        elif modo == "Escola Bíblica":
-            _login_ebd()
-        elif modo == "Círculo de Oração":
-            _login_orhafe()
-        else:
-            _login_admin()
+        _render_login_por_modo(modo)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     return False
-
 
 def _login_igreja():
     with st.form("form_login_igreja"):
