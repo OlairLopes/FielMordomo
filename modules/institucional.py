@@ -1556,8 +1556,7 @@ def _render_agenda_publica():
         f'{row["nome"]} ({row["slug"]})': row["slug"]
         for _, row in igrejas.iterrows()
     }
-    col1, col2 = st.columns([2, 1])
-    escolha = col1.selectbox("Selecione a igreja", list(opcoes.keys()), key="agenda_publica_igreja")
+    escolha = st.selectbox("Selecione a igreja", list(opcoes.keys()), key="agenda_publica_igreja")
     slug = opcoes[escolha]
     hoje = datetime.date.today().isoformat()
 
@@ -1739,6 +1738,14 @@ def render_institucional():
                     max-width: 1040px;
                     margin-left: auto !important;
                     margin-right: auto !important;
+                }
+                div[data-testid="stSelectbox"] {
+                    padding-left: 18px !important;
+                    padding-right: 18px !important;
+                    box-sizing: border-box !important;
+                }
+                div[data-testid="stForm"] {
+                    box-sizing: border-box !important;
                 }
                 div[data-testid="stVerticalBlock"] {
                     gap: .75rem !important;
