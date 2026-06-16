@@ -79,6 +79,11 @@ PAGINAS_SECRETARIO_GERAL = {
 PAGINAS_EBD = {
     "ebd": ("Escola Bíblica", "modules.ebd"),
 }
+PAGINAS_LIBERAVEIS = {
+    chave: valor
+    for chave, valor in PAGINAS_IGREJA.items()
+    if chave not in {"home", "backup", "minha_conta", "tesoureiros"}
+}
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -318,6 +323,23 @@ def _render_logo_sidebar(slug=None):
     )
 
 
+def _paginas_com_permissoes(paginas_base, tipo_login, usuario):
+    paginas = dict(paginas_base)
+    try:
+        igreja = st.session_state.get("igreja", {})
+        slug = igreja.get("slug", "") if isinstance(igreja, dict) else ""
+        id_usuario = usuario.get("id") if isinstance(usuario, dict) else None
+        if not slug or not id_usuario:
+            return paginas
+        extras = _repository().obter_permissoes_usuario(slug, tipo_login, id_usuario)
+        for modulo in extras:
+            if modulo in PAGINAS_LIBERAVEIS:
+                paginas[modulo] = PAGINAS_LIBERAVEIS[modulo]
+    except Exception:
+        LOGGER.exception("Falha ao carregar permissoes extras do usuario.")
+    return paginas
+
+
 def _sidebar_igreja(pagina_atual, igreja):
     with st.sidebar:
         _render_logo_sidebar(igreja.get("slug", ""))
@@ -365,7 +387,8 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
             "</div>",
             unsafe_allow_html=True,
         )
-        for chave, (rotulo, _) in PAGINAS_TESOUREIRO.items():
+        paginas = _paginas_com_permissoes(PAGINAS_TESOUREIRO, "tesoureiro", tesoureiro)
+        for chave, (rotulo, _) in paginas.items():
             if st.button(
                 rotulo,
                 key=f"sb_tesoureiro_{chave}",
@@ -379,7 +402,7 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
             _auth().logout()
 
 
-def _sidebar_secretario_ebd(igreja, secretario):
+def _sidebar_secretario_ebd(pagina_atual, igreja, secretario):
     perfil = "Secretario geral" if secretario.get("perfil") == "geral" else "Secretario de classe"
     classe = secretario.get("classe") or "Escola Bíblica"
     with st.sidebar:
@@ -394,12 +417,24 @@ def _sidebar_secretario_ebd(igreja, secretario):
         if st.button("Escola Bíblica", key="sb_secretario_ebd", use_container_width=True, type="primary"):
             st.session_state["pagina"] = "ebd"
             st.rerun()
+        paginas_extras = _paginas_com_permissoes(PAGINAS_EBD, "secretario_ebd", secretario)
+        for chave, (rotulo, _) in paginas_extras.items():
+            if chave == "ebd":
+                continue
+            if st.button(
+                rotulo,
+                key=f"sb_secretario_ebd_{chave}",
+                use_container_width=True,
+                type="primary" if pagina_atual == chave else "secondary",
+            ):
+                st.session_state["pagina"] = chave
+                st.rerun()
         st.divider()
         if st.button("Sair", key="sb_sair_secretario_ebd", use_container_width=True):
             _auth().logout()
 
 
-def _sidebar_secretaria_orhafe(igreja, secretaria):
+def _sidebar_secretaria_orhafe(pagina_atual, igreja, secretaria):
     perfil = "Secretaria geral" if secretaria.get("perfil") == "geral" else "Secretaria de chamada"
     with st.sidebar:
         _render_logo_sidebar(igreja.get("slug", ""))
@@ -413,6 +448,18 @@ def _sidebar_secretaria_orhafe(igreja, secretaria):
         if st.button("Círculo de Oração", key="sb_secretaria_orhafe", use_container_width=True, type="primary"):
             st.session_state["pagina"] = "orhafe"
             st.rerun()
+        paginas_extras = _paginas_com_permissoes({"orhafe": PAGINAS_IGREJA["orhafe"]}, "secretaria_orhafe", secretaria)
+        for chave, (rotulo, _) in paginas_extras.items():
+            if chave == "orhafe":
+                continue
+            if st.button(
+                rotulo,
+                key=f"sb_secretaria_orhafe_{chave}",
+                use_container_width=True,
+                type="primary" if pagina_atual == chave else "secondary",
+            ):
+                st.session_state["pagina"] = chave
+                st.rerun()
         st.divider()
         if st.button("Sair", key="sb_sair_secretaria_orhafe", use_container_width=True):
             _auth().logout()
@@ -428,7 +475,8 @@ def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
             "</div>",
             unsafe_allow_html=True,
         )
-        for chave, (rotulo, _) in PAGINAS_PASTOR_AUXILIAR.items():
+        paginas = _paginas_com_permissoes(PAGINAS_PASTOR_AUXILIAR, "pastor_auxiliar", pastor)
+        for chave, (rotulo, _) in paginas.items():
             if st.button(
                 rotulo,
                 key=f"sb_pastor_auxiliar_{chave}",
@@ -442,7 +490,7 @@ def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
             _auth().logout()
 
 
-def _sidebar_recepcao(igreja, recepcao):
+def _sidebar_recepcao(pagina_atual, igreja, recepcao):
     with st.sidebar:
         _render_logo_sidebar(igreja.get("slug", ""))
         st.markdown(
@@ -452,9 +500,16 @@ def _sidebar_recepcao(igreja, recepcao):
             "</div>",
             unsafe_allow_html=True,
         )
-        if st.button("Visitantes", key="sb_recepcao_visitantes", use_container_width=True, type="primary"):
-            st.session_state["pagina"] = "visitantes"
-            st.rerun()
+        paginas = _paginas_com_permissoes(PAGINAS_RECEPCAO, "recepcao", recepcao)
+        for chave, (rotulo, _) in paginas.items():
+            if st.button(
+                rotulo,
+                key=f"sb_recepcao_{chave}",
+                use_container_width=True,
+                type="primary" if pagina_atual == chave else "secondary",
+            ):
+                st.session_state["pagina"] = chave
+                st.rerun()
         st.divider()
         if st.button("Sair", key="sb_sair_recepcao", use_container_width=True):
             _auth().logout()
@@ -470,7 +525,8 @@ def _sidebar_secretario_geral(pagina_atual, igreja, secretario):
             "</div>",
             unsafe_allow_html=True,
         )
-        for chave, (rotulo, _) in PAGINAS_SECRETARIO_GERAL.items():
+        paginas = _paginas_com_permissoes(PAGINAS_SECRETARIO_GERAL, "secretario_geral", secretario)
+        for chave, (rotulo, _) in paginas.items():
             if st.button(
                 rotulo,
                 key=f"sb_secretario_geral_{chave}",
@@ -524,12 +580,13 @@ def _renderizar_tesoureiro():
         if st.button("Voltar ao login"):
             _auth().logout()
         return
+    paginas = _paginas_com_permissoes(PAGINAS_TESOUREIRO, "tesoureiro", tesoureiro)
     pagina = st.session_state.get("pagina", "lancamentos")
-    if pagina not in PAGINAS_TESOUREIRO:
+    if pagina not in paginas:
         pagina = "lancamentos"
         st.session_state["pagina"] = pagina
     _sidebar_tesoureiro(pagina, igreja, tesoureiro)
-    _, caminho_modulo = PAGINAS_TESOUREIRO[pagina]
+    _, caminho_modulo = paginas[pagina]
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:
@@ -548,10 +605,15 @@ def _renderizar_secretario_ebd():
         if st.button("Voltar ao login"):
             _auth().logout()
         return
-    st.session_state["pagina"] = "ebd"
-    _sidebar_secretario_ebd(igreja, secretario)
+    paginas = _paginas_com_permissoes(PAGINAS_EBD, "secretario_ebd", secretario)
+    pagina = st.session_state.get("pagina", "ebd")
+    if pagina not in paginas:
+        pagina = "ebd"
+        st.session_state["pagina"] = pagina
+    _sidebar_secretario_ebd(pagina, igreja, secretario)
+    _, caminho_modulo = paginas[pagina]
     try:
-        _importar("modules.ebd").render()
+        _importar(caminho_modulo).render()
     except Exception as ex:
         LOGGER.exception("Falha ao carregar Escola Bíblica para secretario.")
         st.error(
@@ -568,10 +630,15 @@ def _renderizar_secretaria_orhafe():
         if st.button("Voltar ao login"):
             _auth().logout()
         return
-    st.session_state["pagina"] = "orhafe"
-    _sidebar_secretaria_orhafe(igreja, secretaria)
+    paginas = _paginas_com_permissoes({"orhafe": PAGINAS_IGREJA["orhafe"]}, "secretaria_orhafe", secretaria)
+    pagina = st.session_state.get("pagina", "orhafe")
+    if pagina not in paginas:
+        pagina = "orhafe"
+        st.session_state["pagina"] = pagina
+    _sidebar_secretaria_orhafe(pagina, igreja, secretaria)
+    _, caminho_modulo = paginas[pagina]
     try:
-        _importar("modules.orhafe").render()
+        _importar(caminho_modulo).render()
     except Exception as ex:
         LOGGER.exception("Falha ao carregar Círculo de Oração para secretaria.")
         st.error(
@@ -588,12 +655,13 @@ def _renderizar_pastor_auxiliar():
         if st.button("Voltar ao login"):
             _auth().logout()
         return
+    paginas = _paginas_com_permissoes(PAGINAS_PASTOR_AUXILIAR, "pastor_auxiliar", pastor)
     pagina = st.session_state.get("pagina", "visitantes")
-    if pagina not in PAGINAS_PASTOR_AUXILIAR:
+    if pagina not in paginas:
         pagina = "visitantes"
         st.session_state["pagina"] = pagina
     _sidebar_pastor_auxiliar(pagina, igreja, pastor)
-    _, caminho_modulo = PAGINAS_PASTOR_AUXILIAR[pagina]
+    _, caminho_modulo = paginas[pagina]
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:
@@ -612,10 +680,15 @@ def _renderizar_recepcao():
         if st.button("Voltar ao login"):
             _auth().logout()
         return
-    st.session_state["pagina"] = "visitantes"
-    _sidebar_recepcao(igreja, recepcao)
+    paginas = _paginas_com_permissoes(PAGINAS_RECEPCAO, "recepcao", recepcao)
+    pagina = st.session_state.get("pagina", "visitantes")
+    if pagina not in paginas:
+        pagina = "visitantes"
+        st.session_state["pagina"] = pagina
+    _sidebar_recepcao(pagina, igreja, recepcao)
     try:
-        _importar("modules.visitantes").render()
+        _, caminho_modulo = paginas[pagina]
+        _importar(caminho_modulo).render()
     except Exception as ex:
         LOGGER.exception("Falha ao carregar visitantes para recepcao.")
         st.error(
@@ -632,12 +705,13 @@ def _renderizar_secretario_geral():
         if st.button("Voltar ao login"):
             _auth().logout()
         return
+    paginas = _paginas_com_permissoes(PAGINAS_SECRETARIO_GERAL, "secretario_geral", secretario)
     pagina = st.session_state.get("pagina", "cadastros")
-    if pagina not in PAGINAS_SECRETARIO_GERAL:
+    if pagina not in paginas:
         pagina = "cadastros"
         st.session_state["pagina"] = pagina
     _sidebar_secretario_geral(pagina, igreja, secretario)
-    _, caminho_modulo = PAGINAS_SECRETARIO_GERAL[pagina]
+    _, caminho_modulo = paginas[pagina]
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:

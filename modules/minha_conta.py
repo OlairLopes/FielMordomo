@@ -9,15 +9,19 @@ from data.repository import (
     definir_senha_pastoral,
     excluir_subcategoria_despesa,
     igreja_alterar_senha,
+    atualizar_situacao_acesso_usuario,
     inativar_pastor_auxiliar,
     inativar_recepcao_usuario,
     inativar_secretario_geral,
+    listar_acessos_usuarios,
     listar_pastores_auxiliares,
     listar_recepcao_usuarios,
     listar_secretarios_gerais,
     listar_subcategorias_despesa,
     obter_config_igreja,
+    obter_permissoes_usuario,
     salvar_pastor_auxiliar,
+    salvar_permissoes_usuario,
     salvar_recepcao_usuario,
     salvar_secretario_geral,
     salvar_config_igreja,
@@ -30,6 +34,20 @@ from utils.planos import obter_plano
 
 LOGGER = logging.getLogger(__name__)
 OPCOES_DIAS = [30, 60, 90, 120]
+MODULOS_LIBERAVEIS = {
+    "cadastros": "Membros",
+    "lancamentos": "Lancamentos",
+    "relatorios": "Relatorios",
+    "dashboard": "Dashboard",
+    "ebd": "Escola Biblica",
+    "orhafe": "Circulo de Oracao",
+    "obreiros": "Reuniao de Obreiros",
+    "eventos": "Agenda",
+    "visitantes": "Visitantes",
+    "pedidos_oracao": "Pedidos de Oracao",
+    "aniversariantes": "Aniversarios",
+}
+SITUACOES_ACESSO = ["Ativo", "Inativo", "Bloqueado"]
 MENSAGEM_ESCALA_EBD_PADRAO = """Paz do Senhor, {nome}!
 
 Voce esta escalado(a) para servir na Escola Bíblica.
@@ -88,6 +106,63 @@ def _membros_opcoes(slug):
         for _, row in membros.iterrows()
     }
     return opcoes, membros
+
+
+def _render_controle_acessos(slug):
+    st.divider()
+    st.markdown("### Controle de acessos")
+    st.caption(
+        "Ative, inative ou bloqueie usuarios operacionais e libere modulos extras "
+        "sem conceder acesso a areas sensiveis como Backup, Tesoureiros e Minha Conta."
+    )
+    try:
+        acessos = listar_acessos_usuarios(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar controle de acessos.")
+        st.error("Nao foi possivel carregar o controle de acessos.")
+        return
+
+    if acessos.empty:
+        st.info("Nenhum usuario operacional cadastrado.")
+        return
+
+    st.dataframe(
+        acessos[["tipo", "nome", "usuario", "situacao"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    opcoes = {
+        f'{row["tipo"]} - {row["nome"]} ({row["usuario"]})': row
+        for _, row in acessos.iterrows()
+    }
+    selecionado = st.selectbox("Usuario para configurar", list(opcoes.keys()))
+    row = opcoes[selecionado]
+    tipo_login = row["tipo_login"]
+    id_usuario = int(row["id_usuario"])
+    permissoes_atuais = obter_permissoes_usuario(slug, tipo_login, id_usuario)
+
+    with st.form(f"form_controle_acesso_{tipo_login}_{id_usuario}"):
+        situacao_atual = row.get("situacao") if row.get("situacao") in SITUACOES_ACESSO else "Ativo"
+        situacao = st.selectbox(
+            "Situacao do acesso",
+            SITUACOES_ACESSO,
+            index=SITUACOES_ACESSO.index(situacao_atual),
+        )
+        modulos = st.multiselect(
+            "Modulos extras liberados",
+            list(MODULOS_LIBERAVEIS.keys()),
+            default=[m for m in permissoes_atuais if m in MODULOS_LIBERAVEIS],
+            format_func=lambda chave: MODULOS_LIBERAVEIS.get(chave, chave),
+            help="Permissoes padrao do perfil continuam ativas. Aqui voce adiciona apenas liberacoes extras.",
+        )
+        if st.form_submit_button("Salvar controle de acesso", type="primary"):
+            try:
+                atualizar_situacao_acesso_usuario(slug, tipo_login, id_usuario, situacao)
+                salvar_permissoes_usuario(slug, tipo_login, id_usuario, modulos)
+                st.success("Controle de acesso atualizado.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
 
 
 def render():
@@ -817,6 +892,8 @@ Pedido:
                 st.rerun()
     elif recepcao_usuarios is not None:
         st.info("Nenhum usuário da Recepção cadastrado.")
+
+    _render_controle_acessos(slug)
 
     st.divider()
     st.markdown("### Alterar senha principal")

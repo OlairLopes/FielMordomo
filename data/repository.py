@@ -427,6 +427,7 @@ def inicializar_tenant(slug):
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabelas_eventos(conn)
+        _garantir_tabela_permissoes_usuarios(conn)
         _garantir_tabela_pastores_auxiliares(conn)
         _garantir_tabela_secretarios_gerais(conn)
         _garantir_tabela_recepcao(conn)
@@ -850,6 +851,22 @@ def _garantir_tabelas_eventos(conn):
     ):
         if coluna not in cols:
             conn.execute(f"ALTER TABLE eventos_igreja ADD COLUMN {coluna} {tipo}")
+
+
+def _garantir_tabela_permissoes_usuarios(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS permissoes_usuarios (
+            id_permissao INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo_login   TEXT NOT NULL,
+            id_usuario   INTEGER NOT NULL,
+            modulo       TEXT NOT NULL,
+            permitido    INTEGER NOT NULL DEFAULT 1,
+            criado_em    TEXT DEFAULT (datetime('now')),
+            UNIQUE(tipo_login, id_usuario, modulo)
+        );
+        CREATE INDEX IF NOT EXISTS idx_permissoes_usuarios_lookup
+            ON permissoes_usuarios(tipo_login, id_usuario, permitido);
+    """)
 
 
 def _garantir_tabela_pastores_auxiliares(conn):
@@ -2567,6 +2584,120 @@ def excluir_evento_igreja(slug, id_evento):
 
 def validar_membro_eventos_por_cpf(slug, cpf):
     return localizar_membro_por_pin_cpf(slug, cpf)
+
+
+TABELAS_ACESSO_USUARIOS = {
+    "tesoureiro": ("tesoureiros", "id_tesoureiro", "Tesoureiro"),
+    "pastor_auxiliar": ("pastores_auxiliares", "id_pastor_auxiliar", "Pastor Auxiliar"),
+    "secretario_geral": ("secretarios_gerais", "id_secretario_geral", "Secretario Geral"),
+    "recepcao": ("recepcao_usuarios", "id_recepcao", "Recepcao"),
+    "secretario_ebd": ("ebd_secretarios", "id_secretario", "Secretaria Escola Biblica"),
+    "secretaria_orhafe": ("orhafe_secretarias", "id_secretaria", "Secretaria Circulo de Oracao"),
+}
+SITUACOES_ACESSO = {"Ativo", "Inativo", "Bloqueado"}
+
+
+def _garantir_tabelas_acesso_usuarios(conn):
+    _garantir_tabela_tesoureiros(conn)
+    _garantir_tabela_pastores_auxiliares(conn)
+    _garantir_tabela_secretarios_gerais(conn)
+    _garantir_tabela_recepcao(conn)
+    _garantir_tabelas_ebd(conn)
+    _garantir_tabelas_orhafe(conn)
+    _garantir_tabela_permissoes_usuarios(conn)
+
+
+def listar_acessos_usuarios(slug):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    linhas = []
+    with _conn(db) as conn:
+        _garantir_tabelas_acesso_usuarios(conn)
+        _sincronizar_recepcao_automatica_conn(conn)
+        for tipo_login, (tabela, id_col, rotulo) in TABELAS_ACESSO_USUARIOS.items():
+            rows = conn.execute(
+                f"""SELECT {id_col} AS id_usuario, nome, usuario, situacao
+                    FROM {tabela}
+                    ORDER BY situacao, nome"""
+            ).fetchall()
+            for row in rows:
+                linhas.append({
+                    "tipo_login": tipo_login,
+                    "tipo": rotulo,
+                    "id_usuario": row["id_usuario"],
+                    "nome": row["nome"],
+                    "usuario": row["usuario"],
+                    "situacao": row["situacao"],
+                })
+    return pd.DataFrame(
+        linhas,
+        columns=["tipo_login", "tipo", "id_usuario", "nome", "usuario", "situacao"],
+    )
+
+
+def atualizar_situacao_acesso_usuario(slug, tipo_login, id_usuario, situacao):
+    tipo_login = str(tipo_login or "").strip()
+    situacao = str(situacao or "").strip()
+    if tipo_login not in TABELAS_ACESSO_USUARIOS:
+        raise ValueError("Tipo de login invalido.")
+    if situacao not in SITUACOES_ACESSO:
+        raise ValueError("Situacao de acesso invalida.")
+    tabela, id_col, _ = TABELAS_ACESSO_USUARIOS[tipo_login]
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_acesso_usuarios(conn)
+        conn.execute(
+            f"""UPDATE {tabela}
+                SET situacao=?, atualizado_em=datetime('now')
+                WHERE {id_col}=?""",
+            (situacao, int(id_usuario)),
+        )
+
+
+def obter_permissoes_usuario(slug, tipo_login, id_usuario):
+    tipo_login = str(tipo_login or "").strip()
+    if tipo_login not in TABELAS_ACESSO_USUARIOS or not id_usuario:
+        return []
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_permissoes_usuarios(conn)
+        rows = conn.execute(
+            """SELECT modulo
+               FROM permissoes_usuarios
+               WHERE tipo_login=? AND id_usuario=? AND permitido=1
+               ORDER BY modulo""",
+            (tipo_login, int(id_usuario)),
+        ).fetchall()
+    return [row["modulo"] for row in rows]
+
+
+def salvar_permissoes_usuario(slug, tipo_login, id_usuario, modulos):
+    tipo_login = str(tipo_login or "").strip()
+    if tipo_login not in TABELAS_ACESSO_USUARIOS:
+        raise ValueError("Tipo de login invalido.")
+    id_usuario = int(id_usuario)
+    modulos = sorted({sanitizar(m) for m in (modulos or []) if str(m or "").strip()})
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_permissoes_usuarios(conn)
+        conn.execute(
+            "DELETE FROM permissoes_usuarios WHERE tipo_login=? AND id_usuario=?",
+            (tipo_login, id_usuario),
+        )
+        for modulo in modulos:
+            conn.execute(
+                """INSERT INTO permissoes_usuarios
+                   (tipo_login, id_usuario, modulo, permitido)
+                   VALUES (?, ?, ?, 1)""",
+                (tipo_login, id_usuario, modulo),
+            )
 
 
 def salvar_visitante_culto(
@@ -5198,6 +5329,7 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabelas_eventos(conn)
+        _garantir_tabela_permissoes_usuarios(conn)
         _garantir_tabela_pastores_auxiliares(conn)
         _garantir_tabela_secretarios_gerais(conn)
         _garantir_tabela_recepcao(conn)
