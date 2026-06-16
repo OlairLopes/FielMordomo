@@ -152,9 +152,11 @@ def render():
 
 Novo pedido recebido pelo FielMordomo.
 
+Congregacao: {congregacao}
 Membro: {nome}
 Tipo: {tipo}
-Confidencial: {confidencial}
+Motivo: {motivo}
+Privacidade: {privacidade}
 Solicitou visita: {visita}
 Horario da visita: {horario}
 
@@ -255,7 +257,8 @@ Pedido:
             max_chars=20,
         )
         st.caption(
-            "Use as variaveis {nome}, {tipo}, {confidencial}, {visita}, {horario} e {pedido}."
+            "Use as variaveis {congregacao}, {nome}, {tipo}, {motivo}, "
+            "{privacidade}, {confidencial}, {visita}, {horario} e {pedido}."
         )
         mensagem_oracao_nova = st.text_area(
             "Modelo da mensagem WhatsApp para pedidos de oracao",

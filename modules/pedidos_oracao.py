@@ -26,15 +26,24 @@ from utils.helpers import gerar_csv, slug_da_sessao
 LOGGER = logging.getLogger(__name__)
 PHONE_NUMBER_ID_RE = re.compile(r"^\d{5,30}$")
 API_VERSION_RE = re.compile(r"^v\d{1,2}\.\d{1,2}$")
-TIPOS_PEDIDO = ["Pedido de oracao", "Agradecimento", "Aconselhamento", "Visita pastoral"]
+TIPOS_PEDIDO = [
+    "Pedido de oracao",
+    "Agradecimento",
+    "Aconselhamento",
+    "Solicitacao de visita pastoral",
+    "Solicitacao de atendimento no gabinete",
+]
+PRIVACIDADE_OPCOES = ["Pastor", "Lideres", "Toda Igreja"]
 STATUS_PEDIDO = ["Novo", "Em acompanhamento", "Orado", "Visitado", "Arquivado"]
 MENSAGEM_ORACAO_PADRAO = """Paz do Senhor!
 
 Novo pedido recebido pelo FielMordomo.
 
+Congregacao: {congregacao}
 Membro: {nome}
 Tipo: {tipo}
-Confidencial: {confidencial}
+Motivo: {motivo}
+Privacidade: {privacidade}
 Solicitou visita: {visita}
 Horario da visita: {horario}
 
@@ -154,25 +163,52 @@ def _contatos_pastorais(slug):
     return contatos
 
 
-def _montar_mensagem(slug, membro, tipo_pedido, pedido, confidencial, deseja_visita, slot_texto):
+def _montar_mensagem(
+    slug,
+    membro,
+    tipo_pedido,
+    pedido,
+    privacidade,
+    deseja_visita,
+    slot_texto,
+    congregacao="",
+    motivo_oracao="",
+):
     modelo = obter_config_igreja(slug, "mensagem_whatsapp_pedido_oracao", MENSAGEM_ORACAO_PADRAO)
     return str(modelo or MENSAGEM_ORACAO_PADRAO).format(
         nome=membro.get("nome", ""),
+        congregacao=congregacao or membro.get("congregacao", "") or slug,
         tipo=tipo_pedido,
-        confidencial="Sim" if confidencial else "Nao",
+        motivo=motivo_oracao,
+        privacidade=privacidade,
+        confidencial="Sim" if privacidade == "Pastor" else "Nao",
         visita="Sim" if deseja_visita else "Nao",
         horario=slot_texto or "Nao agendada",
         pedido=pedido,
     )
 
 
-def _notificar_pastores(slug, id_pedido, membro, tipo_pedido, pedido, confidencial, deseja_visita, slot_texto):
+def _notificar_pastores(
+    slug,
+    id_pedido,
+    membro,
+    tipo_pedido,
+    pedido,
+    privacidade,
+    deseja_visita,
+    slot_texto,
+    congregacao="",
+    motivo_oracao="",
+):
     contatos = _contatos_pastorais(slug)
     if not contatos:
         atualizar_notificacao_pedido_oracao(slug, id_pedido, "Sem contatos pastorais configurados.")
         return "Pedido salvo. Configure o WhatsApp do pastor em Minha Conta para notificar automaticamente.", []
 
-    mensagem = _montar_mensagem(slug, membro, tipo_pedido, pedido, confidencial, deseja_visita, slot_texto)
+    mensagem = _montar_mensagem(
+        slug, membro, tipo_pedido, pedido, privacidade, deseja_visita,
+        slot_texto, congregacao=congregacao, motivo_oracao=motivo_oracao,
+    )
     links = []
     enviados = 0
     falhas = []
@@ -261,10 +297,32 @@ def render_publico():
             op_horarios[_slot_label(row)] = int(row["id_slot"])
 
     with st.form("form_pedido_oracao_publico"):
+        op_congregacoes = []
+        congregacao_membro = str(membro.get("congregacao") or "").strip()
+        for item in (congregacao_membro, slug):
+            if item and item not in op_congregacoes:
+                op_congregacoes.append(item)
+        if not op_congregacoes:
+            op_congregacoes = [slug]
+        congregacao = st.selectbox("Identificador da congregacao", op_congregacoes)
+
+        op_membros = {
+            f'Cadastro localizado: {membro.get("nome", "")}': int(membro["id_cadastro"]),
+            "Informar nome manualmente": None,
+        }
+        membro_label = st.selectbox("Nome do membro", list(op_membros.keys()))
+        nome_manual = ""
+        telefone_manual = ""
+        if op_membros[membro_label] is None:
+            c_nome, c_tel = st.columns(2)
+            nome_manual = c_nome.text_input("Nome do membro")
+            telefone_manual = c_tel.text_input("Telefone / WhatsApp", value=str(membro.get("telefone") or ""))
+
         tipo_pedido = st.selectbox("Tipo de pedido", TIPOS_PEDIDO)
+        motivo_oracao = st.text_input("Motivo da oracao", placeholder="Ex.: familia, saude, decisao, trabalho...")
+        privacidade = st.selectbox("Privacidade", PRIVACIDADE_OPCOES)
         pedido = st.text_area("Descreva seu pedido", height=180)
-        confidencial = st.checkbox("Pedido confidencial para a equipe pastoral", value=True)
-        deseja_visita = st.checkbox("Desejo solicitar visita pastoral")
+        deseja_visita = tipo_pedido == "Solicitacao de visita pastoral" or st.checkbox("Desejo solicitar visita pastoral")
         slot_label = "Sem agendamento agora"
         if deseja_visita:
             if len(op_horarios) == 1:
@@ -276,18 +334,30 @@ def render_publico():
     if enviar:
         try:
             id_slot = op_horarios.get(slot_label)
+            id_cadastro = op_membros[membro_label]
+            membro_notificacao = dict(membro)
+            if id_cadastro is None:
+                membro_notificacao["nome"] = nome_manual
+                membro_notificacao["telefone"] = telefone_manual
             id_pedido = registrar_pedido_oracao(
                 slug,
-                int(membro["id_cadastro"]),
+                id_cadastro,
                 pedido,
                 tipo_pedido=tipo_pedido,
-                confidencial=confidencial,
+                confidencial=privacidade == "Pastor",
                 deseja_visita=deseja_visita,
                 id_slot=id_slot,
+                congregacao=congregacao,
+                nome_manual=nome_manual,
+                telefone_manual=telefone_manual,
+                motivo_oracao=motivo_oracao,
+                privacidade=privacidade,
             )
             status, _links = _notificar_pastores(
-                slug, id_pedido, membro, tipo_pedido, pedido, confidencial,
+                slug, id_pedido, membro_notificacao, tipo_pedido, pedido, privacidade,
                 deseja_visita, slot_label if id_slot else "",
+                congregacao=congregacao,
+                motivo_oracao=motivo_oracao,
             )
         except Exception as ex:
             LOGGER.exception("Nao foi possivel registrar pedido de oracao.")
@@ -315,8 +385,9 @@ def _render_pedidos(slug):
     st.metric("Pedidos no periodo", len(df))
     st.dataframe(
         df[[
-            "id_pedido", "criado_em", "nome_membro", "tipo_pedido", "deseja_visita",
-            "data_visita", "hora_inicio", "status", "notificacao_status",
+            "id_pedido", "criado_em", "congregacao", "nome_membro", "tipo_pedido",
+            "motivo_oracao", "privacidade", "deseja_visita", "data_visita",
+            "hora_inicio", "status", "notificacao_status",
         ]],
         use_container_width=True,
         hide_index=True,
@@ -337,6 +408,11 @@ def _render_pedidos(slug):
         return
     row = opcoes[selecionado]
     st.markdown(f"#### Pedido de {row['nome_membro']}")
+    st.caption(
+        f"Congregacao: {row.get('congregacao') or '-'} | "
+        f"Motivo: {row.get('motivo_oracao') or '-'} | "
+        f"Privacidade: {row.get('privacidade') or 'Pastor'}"
+    )
     st.info(str(row["pedido"]))
     if int(row.get("deseja_visita", 0) or 0):
         st.caption(

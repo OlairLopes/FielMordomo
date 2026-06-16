@@ -724,10 +724,13 @@ def _garantir_tabelas_pedidos_oracao(conn):
         CREATE TABLE IF NOT EXISTS pedidos_oracao (
             id_pedido     INTEGER PRIMARY KEY AUTOINCREMENT,
             id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
+            congregacao   TEXT DEFAULT '',
             nome_membro   TEXT NOT NULL,
             telefone      TEXT DEFAULT '',
             tipo_pedido   TEXT NOT NULL DEFAULT 'Pedido de oracao',
+            motivo_oracao TEXT DEFAULT '',
             pedido        TEXT NOT NULL,
+            privacidade   TEXT NOT NULL DEFAULT 'Pastor',
             confidencial  INTEGER NOT NULL DEFAULT 1,
             deseja_visita INTEGER NOT NULL DEFAULT 0,
             id_slot       INTEGER REFERENCES agenda_pastoral(id_slot),
@@ -741,6 +744,17 @@ def _garantir_tabelas_pedidos_oracao(conn):
         CREATE INDEX IF NOT EXISTS idx_pedidos_oracao_status
             ON pedidos_oracao(status);
     """)
+    cols = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(pedidos_oracao)").fetchall()
+    ]
+    for coluna, tipo in (
+        ("congregacao", "TEXT DEFAULT ''"),
+        ("motivo_oracao", "TEXT DEFAULT ''"),
+        ("privacidade", "TEXT NOT NULL DEFAULT 'Pastor'"),
+    ):
+        if coluna not in cols:
+            conn.execute(f"ALTER TABLE pedidos_oracao ADD COLUMN {coluna} {tipo}")
 
 
 def _garantir_tabela_pastores_auxiliares(conn):
@@ -2269,19 +2283,38 @@ def excluir_horario_visita_pastoral(slug, id_slot):
 
 def registrar_pedido_oracao(
     slug,
-    id_cadastro,
-    pedido,
+    id_cadastro=None,
+    pedido="",
     tipo_pedido="Pedido de oracao",
     confidencial=True,
     deseja_visita=False,
     id_slot=None,
+    congregacao="",
+    nome_manual="",
+    telefone_manual="",
+    motivo_oracao="",
+    privacidade="Pastor",
 ):
     pedido = sanitizar(pedido)
     tipo_pedido = sanitizar(tipo_pedido or "Pedido de oracao")
+    congregacao = sanitizar(congregacao)
+    nome_manual = sanitizar(nome_manual)
+    telefone_manual = sanitizar(telefone_manual)
+    motivo_oracao = sanitizar(motivo_oracao)
+    privacidade = sanitizar(privacidade or "Pastor")
     if not pedido or len(pedido) < 10:
         raise ValueError("Descreva o pedido de oracao com um pouco mais de detalhe.")
-    if tipo_pedido not in {"Pedido de oracao", "Agradecimento", "Aconselhamento", "Visita pastoral"}:
+    if tipo_pedido not in {
+        "Pedido de oracao",
+        "Agradecimento",
+        "Aconselhamento",
+        "Visita pastoral",
+        "Solicitacao de visita pastoral",
+        "Solicitacao de atendimento no gabinete",
+    }:
         raise ValueError("Tipo de pedido invalido.")
+    if privacidade not in {"Pastor", "Lideres", "Toda Igreja"}:
+        raise ValueError("Privacidade invalida.")
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
@@ -2289,16 +2322,28 @@ def registrar_pedido_oracao(
         conn.execute("BEGIN IMMEDIATE")
         _garantir_colunas_cadastros(conn)
         _garantir_tabelas_pedidos_oracao(conn)
-        membro = conn.execute(
-            """SELECT id_cadastro, nome, telefone
-               FROM cadastros
-               WHERE id_cadastro=? AND UPPER(TRIM(tipo_cadastro))='MEMBRO'
-                     AND UPPER(TRIM(situacao))='ATIVO'
-               LIMIT 1""",
-            (int(id_cadastro),),
-        ).fetchone()
-        if not membro:
-            raise ValueError("Cadastro de membro ativo nao localizado.")
+        membro = None
+        id_cadastro_final = int(id_cadastro) if id_cadastro else None
+        if id_cadastro_final:
+            membro = conn.execute(
+                """SELECT id_cadastro, nome, telefone, congregacao
+                   FROM cadastros
+                   WHERE id_cadastro=? AND UPPER(TRIM(tipo_cadastro))='MEMBRO'
+                         AND UPPER(TRIM(situacao))='ATIVO'
+                   LIMIT 1""",
+                (id_cadastro_final,),
+            ).fetchone()
+            if not membro:
+                raise ValueError("Cadastro de membro ativo nao localizado.")
+            nome_final = sanitizar(membro["nome"])
+            telefone_final = sanitizar(membro["telefone"])
+            congregacao_final = congregacao or sanitizar(membro["congregacao"])
+        else:
+            if not nome_manual:
+                raise ValueError("Informe o nome do membro.")
+            nome_final = nome_manual
+            telefone_final = telefone_manual
+            congregacao_final = congregacao
 
         slot_id = int(id_slot) if id_slot else None
         if deseja_visita and slot_id:
@@ -2315,15 +2360,19 @@ def registrar_pedido_oracao(
 
         cur = conn.execute(
             """INSERT INTO pedidos_oracao
-               (id_cadastro, nome_membro, telefone, tipo_pedido, pedido,
-                confidencial, deseja_visita, id_slot, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Novo')""",
+               (id_cadastro, congregacao, nome_membro, telefone, tipo_pedido,
+                motivo_oracao, pedido, privacidade, confidencial, deseja_visita,
+                id_slot, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Novo')""",
             (
-                int(membro["id_cadastro"]),
-                sanitizar(membro["nome"]),
-                sanitizar(membro["telefone"]),
+                id_cadastro_final,
+                congregacao_final,
+                nome_final,
+                telefone_final,
                 tipo_pedido,
+                motivo_oracao,
                 pedido,
+                privacidade,
                 int(bool(confidencial)),
                 int(bool(deseja_visita)),
                 slot_id,
@@ -2359,8 +2408,9 @@ def listar_pedidos_oracao(slug, data_inicio=None, data_fim=None, status=""):
             params.append(str(status))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
         return pd.read_sql_query(
-            f"""SELECT p.id_pedido, p.id_cadastro, p.nome_membro, p.telefone,
-                       p.tipo_pedido, p.pedido, p.confidencial, p.deseja_visita,
+            f"""SELECT p.id_pedido, p.id_cadastro, p.congregacao, p.nome_membro,
+                       p.telefone, p.tipo_pedido, p.motivo_oracao, p.pedido,
+                       p.privacidade, p.confidencial, p.deseja_visita,
                        p.id_slot, p.status, p.notificacao_status, p.criado_em,
                        a.data AS data_visita, a.hora_inicio, a.hora_fim, a.local
                 FROM pedidos_oracao p
