@@ -509,13 +509,18 @@ def _login_admin():
 
 
 def _login_tesoureiro():
-    with st.form("form_login_tesoureiro"):
-        st.markdown("#### Acesso restrito do tesoureiro")
-        st.caption("Este acesso permite somente registrar e consultar lancamentos.")
-        slug = _selectbox_igreja_login("login_tesoureiro_igreja")
-        usuario = _selectbox_usuario_login(slug, "tesoureiro", "Usuario do tesoureiro", "login_tesoureiro_usuario")
-        senha = st.text_input("Senha", type="password")
+    st.markdown("#### Acesso restrito do tesoureiro")
+    st.caption("Este acesso permite somente registrar e consultar lancamentos.")
+    slug = _selectbox_igreja_login("login_tesoureiro_igreja")
+    usuario = _selectbox_usuario_login(
+        slug,
+        "tesoureiro",
+        "Usuario do tesoureiro",
+        f"login_tesoureiro_usuario_{slug or 'sem_igreja'}",
+    )
 
+    with st.form("form_login_tesoureiro"):
+        senha = st.text_input("Senha", type="password")
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -538,13 +543,18 @@ def _login_tesoureiro():
 
 
 def _login_pastor_auxiliar():
-    with st.form("form_login_pastor_auxiliar"):
-        st.markdown("#### Acesso do Pastor Auxiliar")
-        st.caption("Acesso restrito a visitantes, aniversarios, relatorios ministeriais e dashboard limitado.")
-        slug = _selectbox_igreja_login("login_pastor_auxiliar_igreja")
-        usuario = _selectbox_usuario_login(slug, "pastor_auxiliar", "Usuario do Pastor Auxiliar", "login_pastor_auxiliar_usuario")
-        senha = st.text_input("Senha", type="password")
+    st.markdown("#### Acesso do Pastor Auxiliar")
+    st.caption("Acesso restrito a visitantes, aniversarios, relatorios ministeriais e dashboard limitado.")
+    slug = _selectbox_igreja_login("login_pastor_auxiliar_igreja")
+    usuario = _selectbox_usuario_login(
+        slug,
+        "pastor_auxiliar",
+        "Usuario do Pastor Auxiliar",
+        f"login_pastor_auxiliar_usuario_{slug or 'sem_igreja'}",
+    )
 
+    with st.form("form_login_pastor_auxiliar"):
+        senha = st.text_input("Senha", type="password")
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -656,13 +666,18 @@ def _selectbox_usuario_login(slug, perfil, label, key):
 
 
 def _login_recepcao():
-    with st.form("form_login_recepcao"):
-        st.markdown("#### Acesso da Recepcao")
-        st.caption("Acesso restrito somente ao registro de visitantes.")
-        slug = _selectbox_igreja_login("login_recepcao_igreja")
-        usuario = _selectbox_usuario_login(slug, "recepcao", "Usuario da Recepcao", "login_recepcao_usuario")
-        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
+    st.markdown("#### Acesso da Recepcao")
+    st.caption("Acesso restrito somente ao registro de visitantes.")
+    slug = _selectbox_igreja_login("login_recepcao_igreja")
+    usuario = _selectbox_usuario_login(
+        slug,
+        "recepcao",
+        "Usuario da Recepcao",
+        f"login_recepcao_usuario_{slug or 'sem_igreja'}",
+    )
 
+    with st.form("form_login_recepcao"):
+        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -685,13 +700,18 @@ def _login_recepcao():
 
 
 def _login_secretario_geral():
-    with st.form("form_login_secretario_geral"):
-        st.markdown("#### Acesso do Secretario Geral")
-        st.caption("Acesso restrito a membros, aniversarios e chamada de obreiros.")
-        slug = _selectbox_igreja_login("login_secretario_geral_igreja")
-        usuario = _selectbox_usuario_login(slug, "secretario_geral", "Usuario do Secretario Geral", "login_secretario_geral_usuario")
-        senha = st.text_input("Senha", type="password")
+    st.markdown("#### Acesso do Secretario Geral")
+    st.caption("Acesso restrito a membros, aniversarios e chamada de obreiros.")
+    slug = _selectbox_igreja_login("login_secretario_geral_igreja")
+    usuario = _selectbox_usuario_login(
+        slug,
+        "secretario_geral",
+        "Usuario do Secretario Geral",
+        f"login_secretario_geral_usuario_{slug or 'sem_igreja'}",
+    )
 
+    with st.form("form_login_secretario_geral"):
+        senha = st.text_input("Senha", type="password")
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -714,13 +734,18 @@ def _login_secretario_geral():
 
 
 def _login_ebd():
-    with st.form("form_login_ebd"):
-        st.markdown("#### Acesso da Escola Biblica")
-        st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo Escola Biblica.")
-        slug = _selectbox_igreja_login("login_ebd_igreja")
-        usuario = _selectbox_usuario_login(slug, "ebd", "Usuario da Escola Biblica", "login_ebd_usuario")
-        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
+    st.markdown("#### Acesso da Escola Biblica")
+    st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo Escola Biblica.")
+    slug = _selectbox_igreja_login("login_ebd_igreja")
+    usuario = _selectbox_usuario_login(
+        slug,
+        "ebd",
+        "Usuario da Escola Biblica",
+        f"login_ebd_usuario_{slug or 'sem_igreja'}",
+    )
 
+    with st.form("form_login_ebd"):
+        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -743,13 +768,18 @@ def _login_ebd():
 
 
 def _login_orhafe():
-    with st.form("form_login_orhafe"):
-        st.markdown("#### Acesso do Circulo de Oracao")
-        st.caption("Secretaria de chamada acessa somente a chamada. Secretaria geral acessa todo o modulo Circulo de Oracao.")
-        slug = _selectbox_igreja_login("login_orhafe_igreja")
-        usuario = _selectbox_usuario_login(slug, "orhafe", "Usuario do Circulo de Oracao", "login_orhafe_usuario")
-        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
+    st.markdown("#### Acesso do Circulo de Oracao")
+    st.caption("Secretaria de chamada acessa somente a chamada. Secretaria geral acessa todo o modulo Circulo de Oracao.")
+    slug = _selectbox_igreja_login("login_orhafe_igreja")
+    usuario = _selectbox_usuario_login(
+        slug,
+        "orhafe",
+        "Usuario do Circulo de Oracao",
+        f"login_orhafe_usuario_{slug or 'sem_igreja'}",
+    )
 
+    with st.form("form_login_orhafe"):
+        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
