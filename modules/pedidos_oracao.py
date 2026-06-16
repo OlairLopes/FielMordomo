@@ -10,14 +10,14 @@ import streamlit as st
 from data.repository import (
     atualizar_notificacao_pedido_oracao,
     atualizar_status_pedido_oracao,
+    carregar_cadastros,
     listar_horarios_visita_pastoral,
     listar_pastores_auxiliares,
     listar_pedidos_oracao,
-    localizar_cadastro_publico,
+    localizar_membro_por_pin_cpf,
     obter_config_igreja,
     registrar_pedido_oracao,
     salvar_horario_visita_pastoral,
-    validar_codigo_atualizacao_cadastral,
     excluir_horario_visita_pastoral,
 )
 from utils.helpers import gerar_csv, slug_da_sessao
@@ -231,59 +231,76 @@ def _notificar_pastores(
     return status, links
 
 
-def _identificar_membro():
-    with st.form("form_identificar_membro_oracao"):
-        st.markdown("#### Identificacao do membro")
-        c1, c2 = st.columns(2)
-        slug = c1.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        codigo = c2.text_input("Codigo de acesso", type="password")
-        c3, c4 = st.columns(2)
-        cpf = c3.text_input("CPF", placeholder="Somente numeros")
-        nascimento = c4.text_input("Data de nascimento", placeholder="dd/mm/aaaa")
-        localizar = st.form_submit_button("Continuar", type="primary")
-    if not localizar:
-        return None, None
+def _selecionar_igreja_publica():
+    with st.form("form_identificar_igreja_oracao"):
+        st.markdown("#### Identificacao da igreja")
+        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        continuar = st.form_submit_button("Continuar", type="primary")
+    if not continuar:
+        return None
 
     slug = str(slug or "").strip().lower()
-    data_nascimento = str(nascimento or "").strip()
+    if not slug:
+        st.error("Informe o identificador da igreja.")
+        return None
     try:
-        if "/" in data_nascimento:
-            data_nascimento = dt.datetime.strptime(data_nascimento, "%d/%m/%Y").date().isoformat()
-        if not validar_codigo_atualizacao_cadastral(slug, codigo):
-            st.error("Codigo de acesso invalido para esta igreja.")
-            return None, None
-        membro = localizar_cadastro_publico(slug, cpf, data_nascimento)
+        carregar_cadastros(slug)
     except Exception:
-        LOGGER.exception("Falha ao identificar membro para pedido de oracao.")
-        st.error("Nao foi possivel validar seus dados. Confira as informacoes.")
-        return None, None
-
-    if not membro:
-        st.error("Cadastro de membro nao localizado.")
-        return None, None
+        LOGGER.exception("Falha ao carregar cadastros para pedido de oracao.")
+        st.error("Nao foi possivel localizar essa igreja. Confira o identificador.")
+        return None
     st.session_state["oracao_slug"] = slug
-    st.session_state["oracao_membro"] = membro
-    return slug, membro
+    return slug
+
+
+def _membros_e_congregacoes(slug):
+    try:
+        df = carregar_cadastros(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar membros para pedido de oracao.")
+        return pd.DataFrame(), [slug]
+    if df.empty:
+        return pd.DataFrame(), [slug]
+
+    membros = df[
+        (df["tipo_cadastro"].astype(str).str.upper() == "MEMBRO")
+        & (df["situacao"].astype(str).str.upper() == "ATIVO")
+    ].copy()
+    if not membros.empty:
+        membros = membros.sort_values("nome")
+    congregacoes = [
+        str(valor).strip()
+        for valor in membros.get("congregacao", pd.Series(dtype=str)).dropna().unique()
+        if str(valor).strip()
+    ]
+    if slug not in congregacoes:
+        congregacoes.append(slug)
+    return membros, congregacoes
+
+
+def _congregacoes_publicas(slug):
+    _membros, congregacoes = _membros_e_congregacoes(slug)
+    return congregacoes
 
 
 def render_publico():
     st.markdown("## Pedidos de Oracao e Visita Pastoral")
     st.caption(
-        "Este espaco e exclusivo para membros. Informe seus dados para registrar "
-        "um pedido de oracao ou solicitar uma visita pastoral."
+        "Registre pedidos de oracao, atendimento no gabinete ou visita pastoral. "
+        "Membros podem ser selecionados pelo cadastro; nao membros podem ser informados manualmente."
     )
 
     slug = st.session_state.get("oracao_slug")
-    membro = st.session_state.get("oracao_membro")
-    if not slug or not isinstance(membro, dict):
-        slug, membro = _identificar_membro()
-    if not slug or not isinstance(membro, dict):
+    if not slug:
+        slug = _selecionar_igreja_publica()
+    if not slug:
         return
 
-    st.success(f"Cadastro localizado: {membro.get('nome', '')}")
-    if st.button("Usar outro cadastro", key="limpar_membro_oracao"):
+    congregacoes = _congregacoes_publicas(slug)
+
+    st.success(f"Igreja selecionada: {slug}")
+    if st.button("Trocar igreja", key="limpar_igreja_oracao"):
         st.session_state.pop("oracao_slug", None)
-        st.session_state.pop("oracao_membro", None)
         st.rerun()
 
     hoje = _hoje()
@@ -297,26 +314,29 @@ def render_publico():
             op_horarios[_slot_label(row)] = int(row["id_slot"])
 
     with st.form("form_pedido_oracao_publico"):
-        op_congregacoes = []
-        congregacao_membro = str(membro.get("congregacao") or "").strip()
-        for item in (congregacao_membro, slug):
-            if item and item not in op_congregacoes:
-                op_congregacoes.append(item)
-        if not op_congregacoes:
-            op_congregacoes = [slug]
-        congregacao = st.selectbox("Identificador da congregacao", op_congregacoes)
+        congregacao = st.selectbox("Identificador da congregacao", congregacoes)
 
-        op_membros = {
-            f'Cadastro localizado: {membro.get("nome", "")}': int(membro["id_cadastro"]),
-            "Informar nome manualmente": None,
-        }
-        membro_label = st.selectbox("Nome do membro", list(op_membros.keys()))
+        tipo_solicitante = st.radio(
+            "Quem esta fazendo o pedido?",
+            ["Membro cadastrado", "Nao membro"],
+            horizontal=True,
+        )
+        pin_cpf = ""
         nome_manual = ""
         telefone_manual = ""
-        if op_membros[membro_label] is None:
+        if tipo_solicitante == "Membro cadastrado":
+            pin_cpf = st.text_input(
+                "Codigo de acesso do membro",
+                type="password",
+                max_chars=4,
+                placeholder="4 ultimos digitos do CPF",
+                help="Usado somente para localizar o cadastro sem expor a lista de membros.",
+            )
+            st.caption("O nome do membro sera preenchido automaticamente apos enviar.")
+        else:
             c_nome, c_tel = st.columns(2)
-            nome_manual = c_nome.text_input("Nome do membro")
-            telefone_manual = c_tel.text_input("Telefone / WhatsApp", value=str(membro.get("telefone") or ""))
+            nome_manual = c_nome.text_input("Nome de quem esta pedindo oracao")
+            telefone_manual = c_tel.text_input("Telefone / WhatsApp")
 
         tipo_pedido = st.selectbox("Tipo de pedido", TIPOS_PEDIDO)
         motivo_oracao = st.text_input("Motivo da oracao", placeholder="Ex.: familia, saude, decisao, trabalho...")
@@ -334,11 +354,26 @@ def render_publico():
     if enviar:
         try:
             id_slot = op_horarios.get(slot_label)
-            id_cadastro = op_membros[membro_label]
-            membro_notificacao = dict(membro)
-            if id_cadastro is None:
+            if tipo_solicitante == "Membro cadastrado":
+                membro_localizado = localizar_membro_por_pin_cpf(slug, pin_cpf)
+                if not membro_localizado:
+                    st.error("Nao localizamos membro ativo com esses 4 ultimos digitos do CPF.")
+                    return
+                id_cadastro = int(membro_localizado["id_cadastro"])
+                membro_notificacao = {
+                    "id_cadastro": id_cadastro,
+                    "nome": membro_localizado.get("nome", ""),
+                    "telefone": membro_localizado.get("telefone", ""),
+                    "congregacao": membro_localizado.get("congregacao", ""),
+                }
+                if not congregacao and membro_notificacao.get("congregacao"):
+                    congregacao = membro_notificacao["congregacao"]
+            else:
+                id_cadastro = None
+                membro_notificacao = {}
                 membro_notificacao["nome"] = nome_manual
                 membro_notificacao["telefone"] = telefone_manual
+                membro_notificacao["congregacao"] = congregacao
             id_pedido = registrar_pedido_oracao(
                 slug,
                 id_cadastro,

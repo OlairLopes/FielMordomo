@@ -3200,6 +3200,33 @@ def carregar_cadastros(slug):
     return df
 
 
+def localizar_membro_por_pin_cpf(slug, pin_cpf):
+    pin = "".join(c for c in str(pin_cpf or "") if c.isdigit())
+    if len(pin) != 4:
+        raise ValueError("Informe os 4 ultimos digitos do CPF.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_colunas_cadastros(conn)
+        rows = conn.execute(
+            """SELECT id_cadastro, nome, telefone, congregacao
+               FROM cadastros
+               WHERE UPPER(TRIM(tipo_cadastro))='MEMBRO'
+                     AND UPPER(TRIM(situacao))='ATIVO'
+                     AND substr(cpf, -4)=?
+               ORDER BY nome""",
+            (pin,),
+        ).fetchall()
+    if not rows:
+        return None
+    if len(rows) > 1:
+        raise ValueError(
+            "Ha mais de um membro com estes 4 digitos. Procure a secretaria para registrar o pedido."
+        )
+    return dict(rows[0])
+
+
 def cpf_existe(slug, cpf, id_excluir=None):
     if not cpf.strip():
         return False
