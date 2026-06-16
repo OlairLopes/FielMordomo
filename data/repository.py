@@ -423,6 +423,7 @@ def inicializar_tenant(slug):
         _garantir_tabelas_ebd(conn)
         _garantir_tabelas_orhafe(conn)
         _garantir_tabelas_visitantes(conn)
+        _garantir_tabela_pastores_auxiliares(conn)
 
 
 def _garantir_colunas_lancamentos(conn):
@@ -698,6 +699,34 @@ def _garantir_tabelas_visitantes(conn):
         CREATE INDEX IF NOT EXISTS idx_visitantes_cultos_departamento
             ON visitantes_cultos(departamento);
     """)
+
+
+def _garantir_tabela_pastores_auxiliares(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS pastores_auxiliares (
+            id_pastor_auxiliar INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro        INTEGER REFERENCES cadastros(id_cadastro),
+            nome               TEXT NOT NULL,
+            usuario            TEXT NOT NULL UNIQUE,
+            senha_hash         TEXT NOT NULL,
+            telefone           TEXT DEFAULT '',
+            email              TEXT DEFAULT '',
+            situacao           TEXT NOT NULL DEFAULT 'Ativo',
+            observacoes        TEXT DEFAULT '',
+            criado_em          TEXT DEFAULT (datetime('now')),
+            atualizado_em      TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_pastores_auxiliares_usuario
+            ON pastores_auxiliares(usuario);
+    """)
+    cols = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(pastores_auxiliares)").fetchall()
+    ]
+    if "id_cadastro" not in cols:
+        conn.execute(
+            "ALTER TABLE pastores_auxiliares ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
 
 
 def listar_ebd_classes(slug, incluir_inativas=False):
@@ -2058,6 +2087,179 @@ def excluir_visitante_culto(slug, id_visitante):
             (int(id_visitante),),
         )
         return True
+
+
+def _normalizar_usuario_pastor_auxiliar(usuario):
+    usuario = str(usuario or "").strip().lower()
+    if not USUARIO_TESOUREIRO_RE.fullmatch(usuario):
+        raise ValueError("Usuario deve ter 3 a 40 caracteres, usando letras, numeros, ponto, hifen ou underline.")
+    return usuario
+
+
+def _validar_senha_pastor_auxiliar(senha):
+    senha = str(senha or "")
+    if len(senha) < 8:
+        raise ValueError("A senha do Pastor Auxiliar deve possuir ao menos 8 caracteres.")
+    if len(senha) > SENHA_MAX_CARACTERES:
+        raise ValueError(f"A senha deve possuir no maximo {SENHA_MAX_CARACTERES} caracteres.")
+    return senha
+
+
+def listar_pastores_auxiliares(slug, incluir_inativos=True):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_pastores_auxiliares(conn)
+        where = "" if incluir_inativos else "WHERE situacao='Ativo'"
+        return pd.read_sql_query(
+            f"""SELECT id_pastor_auxiliar, id_cadastro, nome, usuario,
+                       telefone, email, situacao, observacoes, criado_em, atualizado_em
+                FROM pastores_auxiliares
+                {where}
+                ORDER BY situacao, nome""",
+            conn,
+        )
+
+
+def salvar_pastor_auxiliar(
+    slug,
+    nome,
+    usuario,
+    senha="",
+    id_cadastro=None,
+    telefone="",
+    email="",
+    situacao="Ativo",
+    observacoes="",
+    id_pastor_auxiliar=None,
+):
+    nome = sanitizar(nome)
+    usuario = _normalizar_usuario_pastor_auxiliar(usuario)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    situacao = str(situacao or "Ativo").strip()
+    if situacao not in {"Ativo", "Inativo"}:
+        raise ValueError("Situacao invalida.")
+    if not id_pastor_auxiliar:
+        senha = _validar_senha_pastor_auxiliar(senha)
+    elif senha:
+        senha = _validar_senha_pastor_auxiliar(senha)
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_pastores_auxiliares(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+        if not nome:
+            raise ValueError("Nome do Pastor Auxiliar e obrigatorio.")
+        duplicado = conn.execute(
+            """SELECT 1 FROM pastores_auxiliares
+               WHERE usuario=? AND (? IS NULL OR id_pastor_auxiliar!=?) LIMIT 1""",
+            (
+                usuario,
+                int(id_pastor_auxiliar) if id_pastor_auxiliar else None,
+                int(id_pastor_auxiliar) if id_pastor_auxiliar else None,
+            ),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe um Pastor Auxiliar com este usuario.")
+        dados = (
+            id_cadastro, nome, usuario, sanitizar(telefone),
+            sanitizar(email), situacao, sanitizar(observacoes),
+        )
+        if id_pastor_auxiliar:
+            if senha:
+                conn.execute(
+                    """UPDATE pastores_auxiliares
+                       SET id_cadastro=?, nome=?, usuario=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, senha_hash=?,
+                           atualizado_em=datetime('now')
+                       WHERE id_pastor_auxiliar=?""",
+                    dados + (hash_senha(senha), int(id_pastor_auxiliar)),
+                )
+            else:
+                conn.execute(
+                    """UPDATE pastores_auxiliares
+                       SET id_cadastro=?, nome=?, usuario=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, atualizado_em=datetime('now')
+                       WHERE id_pastor_auxiliar=?""",
+                    dados + (int(id_pastor_auxiliar),),
+                )
+            return int(id_pastor_auxiliar)
+        cur = conn.execute(
+            """INSERT INTO pastores_auxiliares
+               (id_cadastro, nome, usuario, senha_hash, telefone, email,
+                situacao, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                id_cadastro, nome, usuario, hash_senha(senha),
+                sanitizar(telefone), sanitizar(email), situacao,
+                sanitizar(observacoes),
+            ),
+        )
+        return cur.lastrowid
+
+
+def inativar_pastor_auxiliar(slug, id_pastor_auxiliar):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_pastores_auxiliares(conn)
+        conn.execute(
+            """UPDATE pastores_auxiliares
+               SET situacao='Inativo', atualizado_em=datetime('now')
+               WHERE id_pastor_auxiliar=?""",
+            (int(id_pastor_auxiliar),),
+        )
+
+
+def autenticar_pastor_auxiliar(slug, usuario, senha):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_pastor_auxiliar(usuario)
+    except ValueError:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    chave = f"pastor_auxiliar:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_pastores_auxiliares(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+        row = conn.execute(
+            """SELECT id_pastor_auxiliar, nome, usuario, senha_hash
+               FROM pastores_auxiliares
+               WHERE usuario=? AND situacao='Ativo'""",
+            (usuario,),
+        ).fetchone()
+        valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
+        _registrar_resultado_login(conn, chave, valido)
+        if valido and migrar:
+            conn.execute(
+                "UPDATE pastores_auxiliares SET senha_hash=? WHERE id_pastor_auxiliar=?",
+                (hash_senha(senha), row["id_pastor_auxiliar"]),
+            )
+    if not row or not valido:
+        return None
+    return {
+        "igreja": igreja,
+        "pastor_auxiliar": {
+            "id": row["id_pastor_auxiliar"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+        },
+    }
 
 
 def _dados_lancamento_validados(conn, l, lote_id=""):
@@ -3615,6 +3817,7 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_tabelas_ebd(conn)
         _garantir_tabelas_orhafe(conn)
         _garantir_tabelas_visitantes(conn)
+        _garantir_tabela_pastores_auxiliares(conn)
     return True
 
 

@@ -57,6 +57,13 @@ PAGINAS_TESOUREIRO = {
     "cadastros": ("Membros", "modules.cadastros"),
     "relatorios": ("Relatorios", "modules.relatorios"),
 }
+PAGINAS_PASTOR_AUXILIAR = {
+    "visitantes": ("Visitantes", "modules.visitantes"),
+    "dashboard": ("Dashboard", "modules.dashboard"),
+    "ebd": ("Relatórios Escola Bíblica", "modules.ebd"),
+    "orhafe": ("Relatórios Círculo de Oração", "modules.orhafe"),
+    "aniversariantes": ("Aniversários", "modules.aniversariantes"),
+}
 PAGINAS_EBD = {
     "ebd": ("Escola Bíblica", "modules.ebd"),
 }
@@ -399,6 +406,30 @@ def _sidebar_secretaria_orhafe(igreja, secretaria):
             _auth().logout()
 
 
+def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
+    with st.sidebar:
+        _render_logo_sidebar(igreja.get("slug", ""))
+        st.markdown(
+            '<div class="sidebar-info">'
+            f'<b>{_esc(pastor.get("nome", "Pastor Auxiliar"))}</b>'
+            '<div class="plano">Acesso restrito pastoral</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        for chave, (rotulo, _) in PAGINAS_PASTOR_AUXILIAR.items():
+            if st.button(
+                rotulo,
+                key=f"sb_pastor_auxiliar_{chave}",
+                use_container_width=True,
+                type="primary" if pagina_atual == chave else "secondary",
+            ):
+                st.session_state["pagina"] = chave
+                st.rerun()
+        st.divider()
+        if st.button("Sair", key="sb_sair_pastor_auxiliar", use_container_width=True):
+            _auth().logout()
+
+
 def _renderizar_admin():
     _sidebar_admin()
     try:
@@ -495,6 +526,30 @@ def _renderizar_secretaria_orhafe():
         )
 
 
+def _renderizar_pastor_auxiliar():
+    igreja = st.session_state.get("igreja", {})
+    pastor = st.session_state.get("pastor_auxiliar", {})
+    if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(pastor, dict):
+        st.error("Sessao invalida. Faca login novamente.")
+        if st.button("Voltar ao login"):
+            _auth().logout()
+        return
+    pagina = st.session_state.get("pagina", "visitantes")
+    if pagina not in PAGINAS_PASTOR_AUXILIAR:
+        pagina = "visitantes"
+        st.session_state["pagina"] = pagina
+    _sidebar_pastor_auxiliar(pagina, igreja, pastor)
+    _, caminho_modulo = PAGINAS_PASTOR_AUXILIAR[pagina]
+    try:
+        _importar(caminho_modulo).render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao carregar a pagina %s para pastor auxiliar.", pagina)
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
+
+
 def main():
     _bloquear_acesso_fora_do_dominio_oficial()
     _resolver_rota_publica()
@@ -514,6 +569,8 @@ def main():
         _renderizar_secretario_ebd()
     elif modo == "secretaria_orhafe":
         _renderizar_secretaria_orhafe()
+    elif modo == "pastor_auxiliar":
+        _renderizar_pastor_auxiliar()
     else:
         st.error("Modo de acesso invalido. Faca login novamente.")
         if st.button("Sair"):

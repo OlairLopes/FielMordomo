@@ -1069,6 +1069,10 @@ def render():
 
     secretaria = st.session_state.get("secretaria_orhafe", {})
     modo = st.session_state.get("modo", "")
+    if modo == "pastor_auxiliar":
+        st.info("Acesso de Pastor Auxiliar: somente relatórios do Círculo de Oração.")
+        _render_relatorios(slug)
+        return
     if modo == "secretaria_orhafe" and isinstance(secretaria, dict):
         perfil = secretaria.get("perfil", "chamada")
         if perfil == "chamada":

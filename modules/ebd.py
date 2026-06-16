@@ -976,6 +976,10 @@ def render():
 
     secretario = st.session_state.get("secretario_ebd", {})
     modo = st.session_state.get("modo", "")
+    if modo == "pastor_auxiliar":
+        st.info("Acesso de Pastor Auxiliar: somente relatórios da Escola Bíblica.")
+        _render_relatorios(slug)
+        return
     if modo == "secretario_ebd" and isinstance(secretario, dict):
         perfil = secretario.get("perfil", "classe")
         if perfil == "classe":

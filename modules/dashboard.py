@@ -748,6 +748,12 @@ def render():
 
     st.markdown("## Dashboard Financeiro")
     st.caption("Visao executiva para decisao, conferencia e acompanhamento de tendencias.")
+    dashboard_restrito = st.session_state.get("modo") == "pastor_auxiliar"
+    if dashboard_restrito:
+        st.info(
+            "Acesso de Pastor Auxiliar: as areas Saude Financeira, Qualidade "
+            "e Acompanhamento Pastoral nao estao disponiveis neste perfil."
+        )
     _legenda_cores()
     c1, c2, c3, c4 = st.columns(4)
     with c1: _card("Entradas", formatar_moeda(ent), f"{_variacao(ent, ent_ant)} vs mes anterior")
@@ -834,7 +840,10 @@ def render():
             )
 
     with tab_saude:
-        _render_saude_financeira(df, mes_ref, slug)
+        if dashboard_restrito:
+            st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
+        else:
+            _render_saude_financeira(df, mes_ref, slug)
 
     with tab_despesas:
         saidas = ref[ref["tipo_norm"] == "SAIDA"].copy()
@@ -892,6 +901,9 @@ def render():
             st.dataframe(_tabela_monetaria(resumo), use_container_width=True, hide_index=True)
 
     with tab_qualidade:
+        if dashboard_restrito:
+            st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
+            return
         _secao_dashboard(
             "Qualidade dos dados",
             "Pendencias que precisam ser corrigidas para manter os indicadores confiaveis.",
@@ -956,6 +968,9 @@ def render():
         st.caption("Registros invalidos sao excluidos dos KPIs ate serem corrigidos.")
 
     with tab_pastoral:
+        if dashboard_restrito:
+            st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
+            return
         st.warning(
             "Area restrita. Exibe dados individuais de contribuicao. "
             "Acesse somente quando necessario e nao compartilhe exportacoes sem autorizacao."

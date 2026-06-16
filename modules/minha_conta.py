@@ -5,11 +5,15 @@ import streamlit as st
 from data.repository import (
     DIAS_DIZIMISTA_ATIVO_DEFAULT,
     adicionar_subcategoria_despesa,
+    carregar_cadastros,
     definir_senha_pastoral,
     excluir_subcategoria_despesa,
     igreja_alterar_senha,
+    inativar_pastor_auxiliar,
+    listar_pastores_auxiliares,
     listar_subcategorias_despesa,
     obter_config_igreja,
+    salvar_pastor_auxiliar,
     salvar_config_igreja,
     senha_pastoral_configurada,
     validar_nova_senha,
@@ -32,7 +36,10 @@ Contamos com sua presenca e dedicacao. Deus abencoe!"""
 
 
 def _encerrar_sessao():
-    for key in ("autenticado", "modo", "igreja", "pagina", "mostrar_recuperacao"):
+    for key in (
+        "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
+        "secretaria_orhafe", "pastor_auxiliar", "pagina", "mostrar_recuperacao",
+    ):
         st.session_state.pop(key, None)
     for key in list(st.session_state.keys()):
         if key.startswith(("df_", "lote_", "nl_counter_", "dashboard_", "_auth_", "_edit_", "_del_")):
@@ -59,6 +66,22 @@ def _numero_config(valor, padrao=0.0):
     except (TypeError, ValueError):
         return float(padrao)
     return numero if numero >= 0 else float(padrao)
+
+
+def _membros_opcoes(slug):
+    df = carregar_cadastros(slug)
+    if df.empty:
+        return {}, df
+    membros = df[
+        (df["tipo_cadastro"].astype(str).str.upper() == "MEMBRO")
+        & (df["situacao"].astype(str).str.upper() == "ATIVO")
+    ].copy()
+    membros = membros.sort_values("nome")
+    opcoes = {
+        f'{int(row["id_cadastro"])} - {row["nome"]}': int(row["id_cadastro"])
+        for _, row in membros.iterrows()
+    }
+    return opcoes, membros
 
 
 def render():
@@ -356,6 +379,128 @@ def render():
                         st.rerun()
                     else:
                         st.error("Senha principal incorreta.")
+
+    st.divider()
+    st.markdown("### Pastores auxiliares")
+    st.caption(
+        "Cadastre acessos restritos para pastor auxiliar. A senha deve possuir "
+        "ao menos 8 caracteres."
+    )
+    try:
+        op_membros, df_membros = _membros_opcoes(slug)
+        pastores_aux = listar_pastores_auxiliares(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar pastores auxiliares.")
+        op_membros, df_membros, pastores_aux = {}, None, None
+        st.error("Nao foi possivel carregar os pastores auxiliares.")
+
+    with st.expander("Cadastrar pastor auxiliar", expanded=False):
+        with st.form("form_pastor_auxiliar"):
+            id_cadastro = None
+            nome = ""
+            telefone = ""
+            if not op_membros:
+                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+            else:
+                membro_label = st.selectbox(
+                    "Pastor auxiliar",
+                    list(op_membros.keys()),
+                    help="A lista traz somente membros ativos cadastrados.",
+                )
+                id_cadastro = op_membros[membro_label]
+                row_membro = df_membros[
+                    df_membros["id_cadastro"].astype(int) == int(id_cadastro)
+                ].iloc[0]
+                c1, c2 = st.columns(2)
+                c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
+                c2.text_input("Telefone", value=row_membro.get("telefone", ""), disabled=True)
+                nome = row_membro.get("nome", "")
+                telefone = row_membro.get("telefone", "")
+            c3, c4 = st.columns(2)
+            usuario = c3.text_input("Usuario")
+            senha = c4.text_input("Senha forte", type="password", help="Minimo de 8 caracteres.")
+            email = st.text_input("E-mail", help="Opcional.")
+            observacoes = st.text_area("Observacoes", key="obs_pastor_auxiliar")
+            if st.form_submit_button("Salvar pastor auxiliar", type="primary"):
+                try:
+                    if not id_cadastro:
+                        st.error("Selecione um membro para criar o acesso.")
+                    else:
+                        salvar_pastor_auxiliar(
+                            slug,
+                            nome,
+                            usuario,
+                            senha,
+                            id_cadastro=id_cadastro,
+                            telefone=telefone,
+                            email=email,
+                            situacao="Ativo",
+                            observacoes=observacoes,
+                        )
+                        st.success("Pastor Auxiliar cadastrado.")
+                        st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    if pastores_aux is not None and not pastores_aux.empty:
+        st.dataframe(
+            pastores_aux[["id_cadastro", "nome", "usuario", "telefone", "email", "situacao"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+        op_pastores = {
+            f'{int(row["id_pastor_auxiliar"])} - {row["nome"]} - {row["usuario"]}': row
+            for _, row in pastores_aux.iterrows()
+        }
+        selecionado = st.selectbox(
+            "Editar pastor auxiliar",
+            ["Selecione"] + list(op_pastores.keys()),
+        )
+        if selecionado != "Selecione":
+            row = op_pastores[selecionado]
+            id_pastor = int(row["id_pastor_auxiliar"])
+            with st.form(f"form_editar_pastor_auxiliar_{id_pastor}"):
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome", value=row["nome"])
+                usuario = c2.text_input("Usuario", value=row["usuario"])
+                c3, c4 = st.columns(2)
+                nova_senha = c3.text_input(
+                    "Nova senha",
+                    type="password",
+                    help="Deixe em branco para manter a senha atual.",
+                )
+                situacao = c4.selectbox(
+                    "Situacao",
+                    ["Ativo", "Inativo"],
+                    index=0 if row.get("situacao") == "Ativo" else 1,
+                )
+                telefone = st.text_input("Telefone", value=row.get("telefone", ""))
+                email = st.text_input("E-mail", value=row.get("email", ""))
+                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                if st.form_submit_button("Atualizar pastor auxiliar", type="primary"):
+                    try:
+                        salvar_pastor_auxiliar(
+                            slug,
+                            nome,
+                            usuario,
+                            nova_senha,
+                            id_cadastro=row.get("id_cadastro"),
+                            telefone=telefone,
+                            email=email,
+                            situacao=situacao,
+                            observacoes=observacoes,
+                            id_pastor_auxiliar=id_pastor,
+                        )
+                        st.success("Pastor Auxiliar atualizado.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+            if st.button("Inativar pastor auxiliar selecionado", key=f"inativar_pastor_auxiliar_{id_pastor}"):
+                inativar_pastor_auxiliar(slug, id_pastor)
+                st.success("Pastor Auxiliar inativado.")
+                st.rerun()
+    elif pastores_aux is not None:
+        st.info("Nenhum Pastor Auxiliar cadastrado.")
 
     st.divider()
     st.markdown("### Alterar senha principal")
