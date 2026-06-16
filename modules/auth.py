@@ -164,7 +164,7 @@ def tela_login():
 
         modo = st.radio(
             "Tipo de acesso",
-            ["Igreja", "Tesoureiro", "EBD", "ORHAFE", "Administrador do sistema"],
+            ["Igreja", "Tesoureiro", "EBD", "Círculo de Oração", "Administrador do sistema"],
             horizontal=True,
             label_visibility="collapsed",
         )
@@ -176,7 +176,7 @@ def tela_login():
             _login_tesoureiro()
         elif modo == "EBD":
             _login_ebd()
-        elif modo == "ORHAFE":
+        elif modo == "Círculo de Oração":
             _login_orhafe()
         else:
             _login_admin()
@@ -288,10 +288,10 @@ def _login_ebd():
 
 def _login_orhafe():
     with st.form("form_login_orhafe"):
-        st.markdown("#### Acesso do ORHAFE")
-        st.caption("Secretaria de chamada acessa somente a chamada. Secretaria geral acessa todo o modulo ORHAFE.")
+        st.markdown("#### Acesso do Círculo de Oração")
+        st.caption("Secretaria de chamada acessa somente a chamada. Secretaria geral acessa todo o módulo Círculo de Oração.")
         slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuario do ORHAFE")
+        usuario = st.text_input("Usuário do Círculo de Oração")
         senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):

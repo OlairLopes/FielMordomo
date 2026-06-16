@@ -633,6 +633,7 @@ def _garantir_tabelas_orhafe(conn):
             ON orhafe_presencas(id_reuniao);
         CREATE TABLE IF NOT EXISTS orhafe_secretarias (
             id_secretaria INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
             nome          TEXT NOT NULL,
             usuario       TEXT NOT NULL UNIQUE,
             senha_hash    TEXT NOT NULL,
@@ -662,6 +663,14 @@ def _garantir_tabelas_orhafe(conn):
     if "id_cadastro" not in cols_lideres:
         conn.execute(
             "ALTER TABLE orhafe_lideres ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
+    cols_secretarias = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(orhafe_secretarias)").fetchall()
+    ]
+    if "id_cadastro" not in cols_secretarias:
+        conn.execute(
+            "ALTER TABLE orhafe_secretarias ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
         )
 
 
@@ -1740,7 +1749,7 @@ def _normalizar_usuario_orhafe(usuario):
 def _validar_pin_orhafe(pin):
     pin = str(pin or "").strip()
     if not re.fullmatch(r"\d{4}", pin):
-        raise ValueError("O PIN da secretaria do ORHAFE deve possuir exatamente 4 digitos.")
+        raise ValueError("O PIN da secretária do Círculo de Oração deve possuir exatamente 4 dígitos.")
     return pin
 
 
@@ -1752,7 +1761,7 @@ def listar_orhafe_secretarias(slug, incluir_inativas=True):
         _garantir_tabelas_orhafe(conn)
         where = "" if incluir_inativas else "WHERE situacao='Ativo'"
         return pd.read_sql_query(
-            f"""SELECT id_secretaria, nome, usuario, perfil, telefone, email,
+            f"""SELECT id_secretaria, id_cadastro, nome, usuario, perfil, telefone, email,
                        situacao, observacoes, criado_em, atualizado_em
                 FROM orhafe_secretarias
                 {where}
@@ -1766,6 +1775,7 @@ def salvar_orhafe_secretaria(
     nome,
     usuario,
     senha="",
+    id_cadastro=None,
     perfil="chamada",
     telefone="",
     email="",
@@ -1775,10 +1785,9 @@ def salvar_orhafe_secretaria(
 ):
     nome = sanitizar(nome)
     usuario = _normalizar_usuario_orhafe(usuario)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
     perfil = str(perfil or "").strip().lower()
     situacao = str(situacao or "Ativo").strip()
-    if not nome:
-        raise ValueError("Nome da secretaria e obrigatorio.")
     if perfil not in {"chamada", "geral"}:
         raise ValueError("Perfil de secretaria invalido.")
     if situacao not in {"Ativo", "Inativo"}:
@@ -1793,6 +1802,16 @@ def salvar_orhafe_secretaria(
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+        if not nome:
+            raise ValueError("Nome da secretaria e obrigatorio.")
         duplicado = conn.execute(
             """SELECT 1 FROM orhafe_secretarias
                WHERE usuario=? AND (? IS NULL OR id_secretaria!=?) LIMIT 1""",
@@ -1803,16 +1822,16 @@ def salvar_orhafe_secretaria(
             ),
         ).fetchone()
         if duplicado:
-            raise ValueError("Ja existe uma secretaria do ORHAFE com este usuario.")
+            raise ValueError("Já existe uma secretária do Círculo de Oração com este usuário.")
         dados = (
-            nome, usuario, perfil, sanitizar(telefone), sanitizar(email),
+            id_cadastro, nome, usuario, perfil, sanitizar(telefone), sanitizar(email),
             situacao, sanitizar(observacoes),
         )
         if id_secretaria:
             if senha:
                 conn.execute(
                     """UPDATE orhafe_secretarias
-                       SET nome=?, usuario=?, perfil=?, telefone=?, email=?,
+                       SET id_cadastro=?, nome=?, usuario=?, perfil=?, telefone=?, email=?,
                            situacao=?, observacoes=?, senha_hash=?,
                            atualizado_em=datetime('now')
                        WHERE id_secretaria=?""",
@@ -1821,7 +1840,7 @@ def salvar_orhafe_secretaria(
             else:
                 conn.execute(
                     """UPDATE orhafe_secretarias
-                       SET nome=?, usuario=?, perfil=?, telefone=?, email=?,
+                       SET id_cadastro=?, nome=?, usuario=?, perfil=?, telefone=?, email=?,
                            situacao=?, observacoes=?, atualizado_em=datetime('now')
                        WHERE id_secretaria=?""",
                     dados + (int(id_secretaria),),
@@ -1829,11 +1848,11 @@ def salvar_orhafe_secretaria(
             return int(id_secretaria)
         cur = conn.execute(
             """INSERT INTO orhafe_secretarias
-               (nome, usuario, senha_hash, perfil, telefone, email,
+               (id_cadastro, nome, usuario, senha_hash, perfil, telefone, email,
                 situacao, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                nome, usuario, hash_senha(senha), perfil, sanitizar(telefone),
+                id_cadastro, nome, usuario, hash_senha(senha), perfil, sanitizar(telefone),
                 sanitizar(email), situacao, sanitizar(observacoes),
             ),
         )

@@ -417,7 +417,7 @@ def _render_matriculas(slug):
 
 
 def _render_chamada(slug):
-    st.markdown("### Chamada ORHAFE")
+    st.markdown("### Chamada do Círculo de Oração")
     lideres = listar_orhafe_lideres(slug)
     if lideres.empty:
         st.warning("Cadastre ate 5 lideres na aba Configuracoes antes de registrar chamada.")
@@ -557,7 +557,7 @@ def _render_chamada(slug):
 
 
 def _render_relatorios(slug):
-    st.markdown("### Relatorios ORHAFE")
+    st.markdown("### Relatórios do Círculo de Oração")
     c1, c2 = st.columns(2)
     inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="orhafe_rel_ini")
     fim = c2.date_input("Data final", value=_hoje(), key="orhafe_rel_fim")
@@ -594,8 +594,8 @@ def _render_relatorios(slug):
             _totais_reunioes(reunioes_lider),
         )
 
-        st.markdown("#### Grafico geral do ORHAFE")
-        _grafico_totais_orhafe("Resumo geral do ORHAFE", totais)
+        st.markdown("#### Gráfico geral do Círculo de Oração")
+        _grafico_totais_orhafe("Resumo geral do Círculo de Oração", totais)
 
         st.markdown("#### Evolucao das reunioes")
         _grafico_reunioes(reunioes)
@@ -714,7 +714,7 @@ def _render_configuracoes(slug):
             observacoes = st.text_area("Observacoes", key="obs_coord_orhafe")
             if st.form_submit_button("Salvar coordenadora", type="primary"):
                 if len(coordenadoras[coordenadoras["ativa"] == 1]) >= 4:
-                    st.error("O ORHAFE deve manter no maximo 4 coordenadoras ativas.")
+                    st.error("O Círculo de Oração deve manter no máximo 4 coordenadoras ativas.")
                 elif modo_coord == "Cadastro de membros" and not id_cadastro_coord:
                     st.error("Selecione uma coordenadora no cadastro de membros.")
                 else:
@@ -838,7 +838,7 @@ def _render_configuracoes(slug):
             observacoes = st.text_area("Observacoes", key="obs_lider_orhafe")
             if st.form_submit_button("Salvar lider", type="primary"):
                 if len(lideres[lideres["ativo"] == 1]) >= 5:
-                    st.error("O ORHAFE deve manter no maximo 5 lideres ativos.")
+                    st.error("O Círculo de Oração deve manter no máximo 5 líderes ativas.")
                 elif modo_lider == "Cadastro de membros" and not id_cadastro_lider:
                     st.error("Selecione uma lider no cadastro de membros.")
                 else:
@@ -917,16 +917,40 @@ def _render_configuracoes(slug):
 
 
 def _render_secretarias(slug):
-    st.markdown("### Secretarias do ORHAFE")
+    st.markdown("### Secretárias do Círculo de Oração")
     st.caption(
         "Secretaria de chamada acessa somente a chamada. "
-        "Secretaria geral acessa todo o modulo ORHAFE."
+        "Secretaria geral acessa todo o módulo Círculo de Oração."
     )
+    op_membros, df_membros = _membros_opcoes(slug)
     with st.expander("Cadastrar secretaria", expanded=False):
         with st.form("form_orhafe_secretaria"):
-            c1, c2 = st.columns(2)
-            nome = c1.text_input("Nome")
-            usuario = c2.text_input("Usuario")
+            id_cadastro_secretaria = None
+            nome = ""
+            telefone = ""
+            if not op_membros:
+                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+            else:
+                membro_label = st.selectbox(
+                    "Secretaria",
+                    list(op_membros.keys()),
+                    help="A lista traz somente membros ativos cadastrados.",
+                    key="secretaria_membro_orhafe",
+                )
+                id_cadastro_secretaria = op_membros[membro_label]
+                row_membro = df_membros[
+                    df_membros["id_cadastro"].astype(int) == int(id_cadastro_secretaria)
+                ].iloc[0]
+                c1, c2 = st.columns(2)
+                c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
+                c2.text_input(
+                    "Telefone / WhatsApp",
+                    value=row_membro.get("telefone", ""),
+                    disabled=True,
+                )
+                nome = row_membro.get("nome", "")
+                telefone = row_membro.get("telefone", "")
+            usuario = st.text_input("Usuario")
             c3, c4 = st.columns(2)
             senha = c3.text_input("PIN de 4 digitos", type="password", max_chars=4)
             perfil_rotulo = c4.selectbox(
@@ -934,15 +958,24 @@ def _render_secretarias(slug):
                 ["Secretaria de chamada", "Secretaria geral"],
             )
             perfil = "geral" if perfil_rotulo == "Secretaria geral" else "chamada"
-            c5, c6 = st.columns(2)
-            telefone = c5.text_input("Telefone / WhatsApp")
-            email = c6.text_input("E-mail")
+            email = st.text_input("E-mail", help="Opcional. O cadastro de membros atual nao possui e-mail.")
             observacoes = st.text_area("Observacoes")
             if st.form_submit_button("Salvar secretaria", type="primary"):
                 try:
+                    if not id_cadastro_secretaria:
+                        st.error("Selecione uma secretaria no cadastro de membros.")
+                        return
                     salvar_orhafe_secretaria(
-                        slug, nome, usuario, senha, perfil, telefone,
-                        email, "Ativo", observacoes,
+                        slug,
+                        nome,
+                        usuario,
+                        senha,
+                        id_cadastro=id_cadastro_secretaria,
+                        perfil=perfil,
+                        telefone=telefone,
+                        email=email,
+                        situacao="Ativo",
+                        observacoes=observacoes,
                     )
                     st.success("Secretaria cadastrada.")
                     st.rerun()
@@ -951,7 +984,7 @@ def _render_secretarias(slug):
 
     df = listar_orhafe_secretarias(slug)
     if df.empty:
-        st.info("Nenhuma secretaria do ORHAFE cadastrada.")
+        st.info("Nenhuma secretária do Círculo de Oração cadastrada.")
         return
 
     exibir = df.copy()
@@ -960,7 +993,7 @@ def _render_secretarias(slug):
         "geral": "Secretaria geral",
     }).fillna(exibir["perfil"])
     st.dataframe(
-        exibir[["nome", "usuario", "perfil", "telefone", "email", "situacao"]],
+        exibir[["id_cadastro", "nome", "usuario", "perfil", "telefone", "email", "situacao"]],
         use_container_width=True,
         hide_index=True,
     )
@@ -998,8 +1031,17 @@ def _render_secretarias(slug):
         if st.form_submit_button("Atualizar secretaria", type="primary"):
             try:
                 salvar_orhafe_secretaria(
-                    slug, nome, usuario, senha, perfil, telefone,
-                    email, situacao, observacoes, id_secretaria,
+                    slug,
+                    nome,
+                    usuario,
+                    senha,
+                    id_cadastro=row.get("id_cadastro"),
+                    perfil=perfil,
+                    telefone=telefone,
+                    email=email,
+                    situacao=situacao,
+                    observacoes=observacoes,
+                    id_secretaria=id_secretaria,
                 )
                 st.success("Secretaria atualizada.")
                 st.rerun()
@@ -1016,8 +1058,8 @@ def _render_secretarias(slug):
 
 
 def render():
-    st.subheader("ORHAFE - Oracao Heroinas da Fe")
-    st.caption("Gestao de matriculas, chamadas, visitantes, lideres e relatorios do ministerio de oracao.")
+    st.subheader("Círculo de Oração")
+    st.caption("Gestão de matrículas, chamadas, visitantes, líderes e relatórios do ministério de oração.")
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessao invalida. Faca login novamente.")
@@ -1030,10 +1072,10 @@ def render():
     if modo == "secretaria_orhafe" and isinstance(secretaria, dict):
         perfil = secretaria.get("perfil", "chamada")
         if perfil == "chamada":
-            st.info("Acesso de secretaria de chamada do ORHAFE.")
+            st.info("Acesso de secretária de chamada do Círculo de Oração.")
             _render_chamada(slug)
             return
-        st.info("Acesso de secretaria geral do ORHAFE.")
+        st.info("Acesso de secretária geral do Círculo de Oração.")
 
     abas = [
         "Chamada",

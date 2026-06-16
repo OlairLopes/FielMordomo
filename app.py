@@ -45,7 +45,7 @@ PAGINAS_IGREJA = {
     "relatorios": ("Relatorios", "modules.relatorios"),
     "dashboard": ("Dashboard", "modules.dashboard"),
     "ebd": ("EBD", "modules.ebd"),
-    "orhafe": ("ORHAFE", "modules.orhafe"),
+    "orhafe": ("Círculo de Oração", "modules.orhafe"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),
     "aniversariantes": ("Aniversarios", "modules.aniversariantes"),
     "backup": ("Backup", "modules.backup"),
@@ -385,12 +385,12 @@ def _sidebar_secretaria_orhafe(igreja, secretaria):
         _render_logo_sidebar(igreja.get("slug", ""))
         st.markdown(
             '<div class="sidebar-info">'
-            f'<b>{_esc(secretaria.get("nome", "Secretaria ORHAFE"))}</b>'
-            f'<div class="plano">{_esc(perfil)} - ORHAFE</div>'
+            f'<b>{_esc(secretaria.get("nome", "Secretaria Círculo de Oração"))}</b>'
+            f'<div class="plano">{_esc(perfil)} - Círculo de Oração</div>'
             "</div>",
             unsafe_allow_html=True,
         )
-        if st.button("ORHAFE", key="sb_secretaria_orhafe", use_container_width=True, type="primary"):
+        if st.button("Círculo de Oração", key="sb_secretaria_orhafe", use_container_width=True, type="primary"):
             st.session_state["pagina"] = "orhafe"
             st.rerun()
         st.divider()
@@ -487,7 +487,7 @@ def _renderizar_secretaria_orhafe():
     try:
         _importar("modules.orhafe").render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar ORHAFE para secretaria.")
+        LOGGER.exception("Falha ao carregar Círculo de Oração para secretaria.")
         st.error(
             "Nao foi possivel carregar esta pagina. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
