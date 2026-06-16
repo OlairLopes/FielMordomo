@@ -10,7 +10,7 @@ import streamlit as st
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
     autenticar_ebd_secretario, autenticar_orhafe_secretaria,
-    autenticar_pastor_auxiliar,
+    autenticar_pastor_auxiliar, autenticar_recepcao,
     inicializar_master, obter_logo_sistema, obter_config,
 )
 
@@ -37,6 +37,7 @@ def _iniciar_sessao(
     secretario_ebd=None,
     secretaria_orhafe=None,
     pastor_auxiliar=None,
+    recepcao=None,
 ):
     _limpar_sessao()
     st.session_state["autenticado"] = True
@@ -51,12 +52,14 @@ def _iniciar_sessao(
         st.session_state["secretaria_orhafe"] = secretaria_orhafe
     if pastor_auxiliar is not None:
         st.session_state["pastor_auxiliar"] = pastor_auxiliar
+    if recepcao is not None:
+        st.session_state["recepcao"] = recepcao
 
 
 def _limpar_sessao():
     for key in (
         "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
-        "secretaria_orhafe", "pastor_auxiliar",
+        "secretaria_orhafe", "pastor_auxiliar", "recepcao",
         "pagina", "mostrar_recuperacao",
     ):
         st.session_state.pop(key, None)
@@ -170,7 +173,8 @@ def tela_login():
             "Tipo de acesso",
             [
                 "Gestor/Pastor", "Pastor Auxiliar", "Tesoureiro",
-                "Escola Bíblica", "Círculo de Oração", "Administrador do sistema",
+                "Recepção", "Escola Bíblica", "Círculo de Oração",
+                "Administrador do sistema",
             ],
             horizontal=True,
             label_visibility="collapsed",
@@ -183,6 +187,8 @@ def tela_login():
             _login_pastor_auxiliar()
         elif modo == "Tesoureiro":
             _login_tesoureiro()
+        elif modo == "Recepção":
+            _login_recepcao()
         elif modo == "Escola Bíblica":
             _login_ebd()
         elif modo == "Círculo de Oração":
@@ -293,6 +299,33 @@ def _login_pastor_auxiliar():
                 st.rerun()
             else:
                 st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")
+
+
+def _login_recepcao():
+    with st.form("form_login_recepcao"):
+        st.markdown("#### Acesso da Recepção")
+        st.caption("Acesso restrito somente ao registro de visitantes.")
+        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        usuario = st.text_input("Usuario da Recepção")
+        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
+
+        if st.form_submit_button("Entrar", type="primary", use_container_width=True):
+            slug = slug.strip().lower()
+            usuario = usuario.strip().lower()
+            if not slug or not usuario or not senha:
+                st.error("Preencha todos os campos.")
+                return
+            acesso = autenticar_recepcao(slug, usuario, senha)
+            if acesso:
+                _iniciar_sessao(
+                    "recepcao",
+                    igreja=acesso["igreja"],
+                    recepcao=acesso["recepcao"],
+                )
+                st.toast(f"Bem-vindo, {acesso['recepcao']['nome']}!")
+                st.rerun()
+            else:
+                st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
 
 
 def _login_ebd():

@@ -10,10 +10,13 @@ from data.repository import (
     excluir_subcategoria_despesa,
     igreja_alterar_senha,
     inativar_pastor_auxiliar,
+    inativar_recepcao_usuario,
     listar_pastores_auxiliares,
+    listar_recepcao_usuarios,
     listar_subcategorias_despesa,
     obter_config_igreja,
     salvar_pastor_auxiliar,
+    salvar_recepcao_usuario,
     salvar_config_igreja,
     senha_pastoral_configurada,
     validar_nova_senha,
@@ -38,7 +41,7 @@ Contamos com sua presenca e dedicacao. Deus abencoe!"""
 def _encerrar_sessao():
     for key in (
         "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
-        "secretaria_orhafe", "pastor_auxiliar", "pagina", "mostrar_recuperacao",
+        "secretaria_orhafe", "pastor_auxiliar", "recepcao", "pagina", "mostrar_recuperacao",
     ):
         st.session_state.pop(key, None)
     for key in list(st.session_state.keys()):
@@ -501,6 +504,131 @@ def render():
                 st.rerun()
     elif pastores_aux is not None:
         st.info("Nenhum Pastor Auxiliar cadastrado.")
+
+    st.divider()
+    st.markdown("### Recepção")
+    st.caption(
+        "Diáconos, diaconisas, auxiliares e cooperadoras ativos são incluídos "
+        "automaticamente. Usuário automático: nome completo sem acentos, em minúsculas "
+        "e com espaços convertidos em ponto. Exemplo: joao.da.silva. "
+        "PIN inicial: últimos 4 dígitos do CPF. Esse perfil acessa somente visitantes."
+    )
+    try:
+        recepcao_usuarios = listar_recepcao_usuarios(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar usuarios da recepcao.")
+        recepcao_usuarios = None
+        st.error("Nao foi possivel carregar os usuarios da recepcao.")
+
+    with st.expander("Cadastrar usuario da recepção", expanded=False):
+        with st.form("form_recepcao_usuario"):
+            id_cadastro = None
+            nome = ""
+            telefone = ""
+            if not op_membros:
+                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+            else:
+                membro_label = st.selectbox(
+                    "Recepcionista",
+                    list(op_membros.keys()),
+                    help="A lista traz somente membros ativos cadastrados.",
+                    key="recepcao_membro",
+                )
+                id_cadastro = op_membros[membro_label]
+                row_membro = df_membros[
+                    df_membros["id_cadastro"].astype(int) == int(id_cadastro)
+                ].iloc[0]
+                c1, c2 = st.columns(2)
+                c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
+                c2.text_input("Telefone", value=row_membro.get("telefone", ""), disabled=True)
+                nome = row_membro.get("nome", "")
+                telefone = row_membro.get("telefone", "")
+            c3, c4 = st.columns(2)
+            usuario = c3.text_input("Usuario", key="usuario_recepcao")
+            senha = c4.text_input("PIN de 4 digitos", type="password", max_chars=4, key="senha_recepcao")
+            email = st.text_input("E-mail", help="Opcional.", key="email_recepcao")
+            observacoes = st.text_area("Observacoes", key="obs_recepcao")
+            if st.form_submit_button("Salvar recepção", type="primary"):
+                try:
+                    if not id_cadastro:
+                        st.error("Selecione um membro para criar o acesso.")
+                    else:
+                        salvar_recepcao_usuario(
+                            slug,
+                            nome,
+                            usuario,
+                            senha,
+                            id_cadastro=id_cadastro,
+                            telefone=telefone,
+                            email=email,
+                            situacao="Ativo",
+                            observacoes=observacoes,
+                        )
+                        st.success("Usuário da Recepção cadastrado.")
+                        st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    if recepcao_usuarios is not None and not recepcao_usuarios.empty:
+        st.dataframe(
+            recepcao_usuarios[["id_cadastro", "nome", "usuario", "telefone", "email", "situacao", "automatico"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+        op_recepcao = {
+            f'{int(row["id_recepcao"])} - {row["nome"]} - {row["usuario"]}': row
+            for _, row in recepcao_usuarios.iterrows()
+        }
+        selecionado = st.selectbox(
+            "Editar usuario da recepção",
+            ["Selecione"] + list(op_recepcao.keys()),
+        )
+        if selecionado != "Selecione":
+            row = op_recepcao[selecionado]
+            id_recepcao = int(row["id_recepcao"])
+            with st.form(f"form_editar_recepcao_{id_recepcao}"):
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome", value=row["nome"])
+                usuario = c2.text_input("Usuario", value=row["usuario"])
+                c3, c4 = st.columns(2)
+                nova_senha = c3.text_input(
+                    "Novo PIN de 4 digitos",
+                    type="password",
+                    max_chars=4,
+                    help="Deixe em branco para manter a senha atual.",
+                )
+                situacao = c4.selectbox(
+                    "Situacao",
+                    ["Ativo", "Inativo"],
+                    index=0 if row.get("situacao") == "Ativo" else 1,
+                )
+                telefone = st.text_input("Telefone", value=row.get("telefone", ""))
+                email = st.text_input("E-mail", value=row.get("email", ""))
+                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                if st.form_submit_button("Atualizar recepção", type="primary"):
+                    try:
+                        salvar_recepcao_usuario(
+                            slug,
+                            nome,
+                            usuario,
+                            nova_senha,
+                            id_cadastro=row.get("id_cadastro"),
+                            telefone=telefone,
+                            email=email,
+                            situacao=situacao,
+                            observacoes=observacoes,
+                            id_recepcao=id_recepcao,
+                        )
+                        st.success("Usuário da Recepção atualizado.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+            if st.button("Inativar usuario da recepção", key=f"inativar_recepcao_{id_recepcao}"):
+                inativar_recepcao_usuario(slug, id_recepcao)
+                st.success("Usuário da Recepção inativado.")
+                st.rerun()
+    elif recepcao_usuarios is not None:
+        st.info("Nenhum usuário da Recepção cadastrado.")
 
     st.divider()
     st.markdown("### Alterar senha principal")

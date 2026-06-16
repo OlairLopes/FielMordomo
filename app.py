@@ -64,6 +64,9 @@ PAGINAS_PASTOR_AUXILIAR = {
     "orhafe": ("Relatórios Círculo de Oração", "modules.orhafe"),
     "aniversariantes": ("Aniversários", "modules.aniversariantes"),
 }
+PAGINAS_RECEPCAO = {
+    "visitantes": ("Visitantes", "modules.visitantes"),
+}
 PAGINAS_EBD = {
     "ebd": ("Escola Bíblica", "modules.ebd"),
 }
@@ -430,6 +433,24 @@ def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
             _auth().logout()
 
 
+def _sidebar_recepcao(igreja, recepcao):
+    with st.sidebar:
+        _render_logo_sidebar(igreja.get("slug", ""))
+        st.markdown(
+            '<div class="sidebar-info">'
+            f'<b>{_esc(recepcao.get("nome", "Recepção"))}</b>'
+            '<div class="plano">Acesso restrito a visitantes</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("Visitantes", key="sb_recepcao_visitantes", use_container_width=True, type="primary"):
+            st.session_state["pagina"] = "visitantes"
+            st.rerun()
+        st.divider()
+        if st.button("Sair", key="sb_sair_recepcao", use_container_width=True):
+            _auth().logout()
+
+
 def _renderizar_admin():
     _sidebar_admin()
     try:
@@ -550,6 +571,26 @@ def _renderizar_pastor_auxiliar():
         )
 
 
+def _renderizar_recepcao():
+    igreja = st.session_state.get("igreja", {})
+    recepcao = st.session_state.get("recepcao", {})
+    if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(recepcao, dict):
+        st.error("Sessao invalida. Faca login novamente.")
+        if st.button("Voltar ao login"):
+            _auth().logout()
+        return
+    st.session_state["pagina"] = "visitantes"
+    _sidebar_recepcao(igreja, recepcao)
+    try:
+        _importar("modules.visitantes").render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao carregar visitantes para recepcao.")
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
+
+
 def main():
     _bloquear_acesso_fora_do_dominio_oficial()
     _resolver_rota_publica()
@@ -571,6 +612,8 @@ def main():
         _renderizar_secretaria_orhafe()
     elif modo == "pastor_auxiliar":
         _renderizar_pastor_auxiliar()
+    elif modo == "recepcao":
+        _renderizar_recepcao()
     else:
         st.error("Modo de acesso invalido. Faca login novamente.")
         if st.button("Sair"):

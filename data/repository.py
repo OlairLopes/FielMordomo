@@ -13,6 +13,7 @@ import secrets
 import shutil
 import datetime
 import tempfile
+import unicodedata
 from contextlib import closing, contextmanager
 from pathlib import Path
 
@@ -424,6 +425,7 @@ def inicializar_tenant(slug):
         _garantir_tabelas_orhafe(conn)
         _garantir_tabelas_visitantes(conn)
         _garantir_tabela_pastores_auxiliares(conn)
+        _garantir_tabela_recepcao(conn)
 
 
 def _garantir_colunas_lancamentos(conn):
@@ -726,6 +728,39 @@ def _garantir_tabela_pastores_auxiliares(conn):
     if "id_cadastro" not in cols:
         conn.execute(
             "ALTER TABLE pastores_auxiliares ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
+
+
+def _garantir_tabela_recepcao(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS recepcao_usuarios (
+            id_recepcao INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro INTEGER REFERENCES cadastros(id_cadastro),
+            nome        TEXT NOT NULL,
+            usuario     TEXT NOT NULL UNIQUE,
+            senha_hash  TEXT NOT NULL,
+            telefone    TEXT DEFAULT '',
+            email       TEXT DEFAULT '',
+            situacao    TEXT NOT NULL DEFAULT 'Ativo',
+            automatico  INTEGER NOT NULL DEFAULT 0,
+            observacoes TEXT DEFAULT '',
+            criado_em   TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_recepcao_usuarios_usuario
+            ON recepcao_usuarios(usuario);
+    """)
+    cols = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(recepcao_usuarios)").fetchall()
+    ]
+    if "id_cadastro" not in cols:
+        conn.execute(
+            "ALTER TABLE recepcao_usuarios ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
+    if "automatico" not in cols:
+        conn.execute(
+            "ALTER TABLE recepcao_usuarios ADD COLUMN automatico INTEGER NOT NULL DEFAULT 0"
         )
 
 
@@ -2262,6 +2297,301 @@ def autenticar_pastor_auxiliar(slug, usuario, senha):
     }
 
 
+def _normalizar_usuario_recepcao(usuario):
+    usuario = str(usuario or "").strip().lower()
+    if not USUARIO_TESOUREIRO_RE.fullmatch(usuario):
+        raise ValueError("Usuario deve ter 3 a 40 caracteres, usando letras, numeros, ponto, hifen ou underline.")
+    return usuario
+
+
+FUNCOES_RECEPCAO_AUTO = {"DIACONO", "DIACONISA", "AUXILIAR", "COOPERADORA"}
+
+
+def _normalizar_texto_sem_acento(valor):
+    texto = unicodedata.normalize("NFKD", str(valor or ""))
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", texto).strip().upper()
+
+
+def _funcao_recepcao_elegivel(funcao):
+    return _normalizar_texto_sem_acento(funcao) in FUNCOES_RECEPCAO_AUTO
+
+
+def _validar_pin_recepcao(pin):
+    pin = str(pin or "").strip()
+    if not re.fullmatch(r"\d{4}", pin):
+        raise ValueError("O PIN da Recepcao deve possuir exatamente 4 digitos.")
+    return pin
+
+
+def _pin_recepcao_por_cpf(cpf):
+    cpf_limpo = "".join(c for c in str(cpf or "") if c.isdigit())
+    if len(cpf_limpo) < 4:
+        raise ValueError("CPF invalido para gerar PIN da Recepcao.")
+    return cpf_limpo[-4:]
+
+
+def _usuario_login_por_nome(nome, id_cadastro):
+    texto = unicodedata.normalize("NFKD", str(nome or "").lower())
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = re.sub(r"[^a-z0-9]+", ".", texto).strip(".")
+    texto = re.sub(r"\.+", ".", texto)
+    if len(texto) < 3:
+        texto = f"recepcao{int(id_cadastro)}"
+    if len(texto) > 40:
+        texto = texto[:40].strip(".")
+    if len(texto) < 3:
+        texto = f"recepcao{int(id_cadastro)}"
+    return texto
+
+
+def _usuario_recepcao_auto(conn, nome, id_cadastro):
+    usuario = _usuario_login_por_nome(nome, id_cadastro)
+    existente = conn.execute(
+        """SELECT id_cadastro FROM recepcao_usuarios
+           WHERE usuario=? AND COALESCE(id_cadastro, 0)!=?
+           LIMIT 1""",
+        (usuario, int(id_cadastro)),
+    ).fetchone()
+    if not existente:
+        return usuario
+
+    sufixo = f".{int(id_cadastro)}"
+    base = usuario[: 40 - len(sufixo)].strip(".")
+    usuario = f"{base}{sufixo}"
+    return usuario[:40]
+
+
+def _sincronizar_recepcao_cadastro_conn(conn, id_cadastro):
+    _garantir_tabela_recepcao(conn)
+    row = conn.execute(
+        """SELECT id_cadastro, tipo_cadastro, nome, funcao, cpf, telefone, situacao
+           FROM cadastros
+           WHERE id_cadastro=?""",
+        (int(id_cadastro),),
+    ).fetchone()
+    if not row:
+        return
+    elegivel = (
+        _normalizar_texto_sem_acento(row["tipo_cadastro"]) == "MEMBRO"
+        and _normalizar_texto_sem_acento(row["situacao"]) == "ATIVO"
+        and _funcao_recepcao_elegivel(row["funcao"])
+    )
+    existente = conn.execute(
+        """SELECT id_recepcao FROM recepcao_usuarios
+           WHERE id_cadastro=? AND automatico=1
+           LIMIT 1""",
+        (int(id_cadastro),),
+    ).fetchone()
+    if not elegivel:
+        if existente:
+            conn.execute(
+                """UPDATE recepcao_usuarios
+                   SET situacao='Inativo', atualizado_em=datetime('now')
+                   WHERE id_recepcao=?""",
+                (existente["id_recepcao"],),
+            )
+        return
+
+    pin = _pin_recepcao_por_cpf(row["cpf"])
+    dados = (
+        int(row["id_cadastro"]),
+        sanitizar(row["nome"]),
+        _usuario_recepcao_auto(conn, row["nome"], row["id_cadastro"]),
+        hash_senha(pin),
+        sanitizar(row["telefone"]),
+        "Ativo",
+        1,
+        "Usuario automatico por funcao ministerial.",
+    )
+    if existente:
+        conn.execute(
+            """UPDATE recepcao_usuarios
+               SET id_cadastro=?, nome=?, usuario=?, senha_hash=?, telefone=?,
+                   situacao=?, automatico=?, observacoes=?,
+                   atualizado_em=datetime('now')
+               WHERE id_recepcao=?""",
+            dados + (existente["id_recepcao"],),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO recepcao_usuarios
+               (id_cadastro, nome, usuario, senha_hash, telefone, situacao,
+                automatico, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+
+
+def _sincronizar_recepcao_automatica_conn(conn):
+    _garantir_tabela_recepcao(conn)
+    rows = conn.execute(
+        """SELECT id_cadastro FROM cadastros
+           WHERE UPPER(TRIM(tipo_cadastro))='MEMBRO'"""
+    ).fetchall()
+    for row in rows:
+        _sincronizar_recepcao_cadastro_conn(conn, row["id_cadastro"])
+
+
+def listar_recepcao_usuarios(slug, incluir_inativos=True):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_recepcao(conn)
+        _sincronizar_recepcao_automatica_conn(conn)
+        where = "" if incluir_inativos else "WHERE situacao='Ativo'"
+        return pd.read_sql_query(
+            f"""SELECT id_recepcao, id_cadastro, nome, usuario, telefone,
+                       email, situacao, automatico, observacoes, criado_em, atualizado_em
+                FROM recepcao_usuarios
+                {where}
+                ORDER BY situacao, nome""",
+            conn,
+        )
+
+
+def salvar_recepcao_usuario(
+    slug,
+    nome,
+    usuario,
+    senha="",
+    id_cadastro=None,
+    telefone="",
+    email="",
+    situacao="Ativo",
+    observacoes="",
+    id_recepcao=None,
+):
+    nome = sanitizar(nome)
+    usuario = _normalizar_usuario_recepcao(usuario)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    situacao = str(situacao or "Ativo").strip()
+    if situacao not in {"Ativo", "Inativo"}:
+        raise ValueError("Situacao invalida.")
+    if not id_recepcao:
+        senha = _validar_pin_recepcao(senha)
+    elif senha:
+        senha = _validar_pin_recepcao(senha)
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_recepcao(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+        if not nome:
+            raise ValueError("Nome da Recepcao e obrigatorio.")
+        duplicado = conn.execute(
+            """SELECT 1 FROM recepcao_usuarios
+               WHERE usuario=? AND (? IS NULL OR id_recepcao!=?) LIMIT 1""",
+            (
+                usuario,
+                int(id_recepcao) if id_recepcao else None,
+                int(id_recepcao) if id_recepcao else None,
+            ),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe um usuario da Recepcao com este usuario.")
+        dados = (
+            id_cadastro, nome, usuario, sanitizar(telefone),
+            sanitizar(email), situacao, 0, sanitizar(observacoes),
+        )
+        if id_recepcao:
+            if senha:
+                conn.execute(
+                    """UPDATE recepcao_usuarios
+                       SET id_cadastro=?, nome=?, usuario=?, telefone=?, email=?,
+                           situacao=?, automatico=?, observacoes=?, senha_hash=?,
+                           atualizado_em=datetime('now')
+                       WHERE id_recepcao=?""",
+                    dados + (hash_senha(senha), int(id_recepcao)),
+                )
+            else:
+                conn.execute(
+                    """UPDATE recepcao_usuarios
+                       SET id_cadastro=?, nome=?, usuario=?, telefone=?, email=?,
+                           situacao=?, automatico=?, observacoes=?, atualizado_em=datetime('now')
+                       WHERE id_recepcao=?""",
+                    dados + (int(id_recepcao),),
+                )
+            return int(id_recepcao)
+        cur = conn.execute(
+            """INSERT INTO recepcao_usuarios
+               (id_cadastro, nome, usuario, senha_hash, telefone, email,
+                situacao, automatico, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                id_cadastro, nome, usuario, hash_senha(senha),
+                sanitizar(telefone), sanitizar(email), situacao,
+                0,
+                sanitizar(observacoes),
+            ),
+        )
+        return cur.lastrowid
+
+
+def inativar_recepcao_usuario(slug, id_recepcao):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_recepcao(conn)
+        conn.execute(
+            """UPDATE recepcao_usuarios
+               SET situacao='Inativo', atualizado_em=datetime('now')
+               WHERE id_recepcao=?""",
+            (int(id_recepcao),),
+        )
+
+
+def autenticar_recepcao(slug, usuario, senha):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_recepcao(usuario)
+    except ValueError:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    chave = f"recepcao:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_recepcao(conn)
+        _sincronizar_recepcao_automatica_conn(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+        row = conn.execute(
+            """SELECT id_recepcao, nome, usuario, senha_hash
+               FROM recepcao_usuarios
+               WHERE usuario=? AND situacao='Ativo'""",
+            (usuario,),
+        ).fetchone()
+        valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
+        _registrar_resultado_login(conn, chave, valido)
+        if valido and migrar:
+            conn.execute(
+                "UPDATE recepcao_usuarios SET senha_hash=? WHERE id_recepcao=?",
+                (hash_senha(senha), row["id_recepcao"]),
+            )
+    if not row or not valido:
+        return None
+    return {
+        "igreja": igreja,
+        "recepcao": {
+            "id": row["id_recepcao"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+        },
+    }
+
+
 def _dados_lancamento_validados(conn, l, lote_id=""):
     tipo = str(l.tipo or "").strip()
     categoria = str(l.categoria or "").strip()
@@ -2675,7 +3005,10 @@ def inserir_cadastro(slug, c):
              sanitizar(c.numero), sanitizar(c.bairro),
              sanitizar(c.cidade), cep_limpo, c.situacao),
         )
-        return cur.lastrowid
+        id_cadastro = cur.lastrowid
+        if c.tipo_cadastro == "Membro":
+            _sincronizar_recepcao_cadastro_conn(conn, id_cadastro)
+        return id_cadastro
 
 
 def atualizar_cadastro(slug, c):
@@ -2702,6 +3035,7 @@ def atualizar_cadastro(slug, c):
              sanitizar(c.cidade), cep_limpo,
              c.situacao, c.id_cadastro),
         )
+        _sincronizar_recepcao_cadastro_conn(conn, c.id_cadastro)
 
 
 def localizar_cadastro_publico(slug, cpf, data_nascimento):
@@ -2785,6 +3119,7 @@ def atualizar_cadastro_publico(slug, id_cadastro, cpf, data_nascimento, dados):
                 int(id_cadastro),
             ),
         )
+        _sincronizar_recepcao_cadastro_conn(conn, int(id_cadastro))
 
 
 def validar_codigo_atualizacao_cadastral(slug, codigo):
@@ -2918,7 +3253,7 @@ def aprovar_pre_cadastro_membro(slug, id_pre_cadastro):
             )
             raise ValueError("CPF ja cadastrado. Pre-cadastro marcado como duplicado.")
         _garantir_limite_membros(conn, slug)
-        conn.execute(
+        cur = conn.execute(
             """INSERT INTO cadastros
                (tipo_cadastro, nome, funcao, congregacao, cpf, data_nascimento,
                 sexo, estado_civil, tipo_membro, data_batismo_aguas,
@@ -2945,6 +3280,7 @@ def aprovar_pre_cadastro_membro(slug, id_pre_cadastro):
                 row["cep"],
             ),
         )
+        _sincronizar_recepcao_cadastro_conn(conn, cur.lastrowid)
         conn.execute(
             """UPDATE pre_cadastros_membros
                SET status='Aprovado', atualizado_em=datetime('now')
@@ -2957,6 +3293,13 @@ def excluir_cadastro(slug, id_cadastro):
     _fazer_backup(_tenant_db(slug))
     db = _tenant_db(slug)
     with _conn(db) as conn:
+        _garantir_tabela_recepcao(conn)
+        conn.execute(
+            """UPDATE recepcao_usuarios
+               SET situacao='Inativo', atualizado_em=datetime('now')
+               WHERE id_cadastro=? AND automatico=1""",
+            (int(id_cadastro),),
+        )
         conn.execute("DELETE FROM cadastros WHERE id_cadastro=?", (id_cadastro,))
 
 
@@ -3818,6 +4161,7 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_tabelas_orhafe(conn)
         _garantir_tabelas_visitantes(conn)
         _garantir_tabela_pastores_auxiliares(conn)
+        _garantir_tabela_recepcao(conn)
     return True
 
 
