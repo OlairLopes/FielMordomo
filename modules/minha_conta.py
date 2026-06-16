@@ -22,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 OPCOES_DIAS = [30, 60, 90, 120]
 MENSAGEM_ESCALA_EBD_PADRAO = """Paz do Senhor, {nome}!
 
-Voce esta escalado(a) para servir na EBD.
+Voce esta escalado(a) para servir na Escola Bíblica.
 Data: {data}
 Classe: {classe}
 Funcao: {funcao}
@@ -165,13 +165,13 @@ def render():
             format_func=lambda meses: f"{meses} mes(es)",
         )
 
-        st.markdown("**Mensagem da escala da EBD**")
+        st.markdown("**Mensagem da escala da Escola Bíblica**")
         st.caption(
             "Use as variaveis {nome}, {data}, {classe}, {funcao} e {tema}. "
             "Elas serao preenchidas automaticamente ao gerar o aviso pelo WhatsApp."
         )
         mensagem_ebd_nova = st.text_area(
-            "Modelo da mensagem WhatsApp para professores da EBD",
+            "Modelo da mensagem WhatsApp para professores da Escola Bíblica",
             value=str(mensagem_ebd_atual or MENSAGEM_ESCALA_EBD_PADRAO),
             height=180,
         )

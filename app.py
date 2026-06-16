@@ -44,7 +44,7 @@ PAGINAS_IGREJA = {
     "lancamentos": ("Lancamentos", "modules.lancamentos"),
     "relatorios": ("Relatorios", "modules.relatorios"),
     "dashboard": ("Dashboard", "modules.dashboard"),
-    "ebd": ("EBD", "modules.ebd"),
+    "ebd": ("Escola Bíblica", "modules.ebd"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),
     "aniversariantes": ("Aniversarios", "modules.aniversariantes"),
@@ -57,7 +57,7 @@ PAGINAS_TESOUREIRO = {
     "relatorios": ("Relatorios", "modules.relatorios"),
 }
 PAGINAS_EBD = {
-    "ebd": ("EBD", "modules.ebd"),
+    "ebd": ("Escola Bíblica", "modules.ebd"),
 }
 
 
@@ -361,17 +361,17 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
 
 def _sidebar_secretario_ebd(igreja, secretario):
     perfil = "Secretario geral" if secretario.get("perfil") == "geral" else "Secretario de classe"
-    classe = secretario.get("classe") or "EBD"
+    classe = secretario.get("classe") or "Escola Bíblica"
     with st.sidebar:
         _render_logo_sidebar(igreja.get("slug", ""))
         st.markdown(
             '<div class="sidebar-info">'
-            f'<b>{_esc(secretario.get("nome", "Secretario EBD"))}</b>'
+            f'<b>{_esc(secretario.get("nome", "Secretario Escola Bíblica"))}</b>'
             f'<div class="plano">{_esc(perfil)} - {_esc(classe)}</div>'
             "</div>",
             unsafe_allow_html=True,
         )
-        if st.button("EBD", key="sb_secretario_ebd", use_container_width=True, type="primary"):
+        if st.button("Escola Bíblica", key="sb_secretario_ebd", use_container_width=True, type="primary"):
             st.session_state["pagina"] = "ebd"
             st.rerun()
         st.divider()
@@ -467,7 +467,7 @@ def _renderizar_secretario_ebd():
     try:
         _importar("modules.ebd").render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar EBD para secretario.")
+        LOGGER.exception("Falha ao carregar Escola Bíblica para secretario.")
         st.error(
             "Nao foi possivel carregar esta pagina. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."

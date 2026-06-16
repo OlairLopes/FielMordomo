@@ -164,7 +164,7 @@ def tela_login():
 
         modo = st.radio(
             "Tipo de acesso",
-            ["Igreja", "Tesoureiro", "EBD", "Círculo de Oração", "Administrador do sistema"],
+            ["Igreja", "Tesoureiro", "Escola Bíblica", "Círculo de Oração", "Administrador do sistema"],
             horizontal=True,
             label_visibility="collapsed",
         )
@@ -174,7 +174,7 @@ def tela_login():
             _login_igreja()
         elif modo == "Tesoureiro":
             _login_tesoureiro()
-        elif modo == "EBD":
+        elif modo == "Escola Bíblica":
             _login_ebd()
         elif modo == "Círculo de Oração":
             _login_orhafe()
@@ -261,10 +261,10 @@ def _login_tesoureiro():
 
 def _login_ebd():
     with st.form("form_login_ebd"):
-        st.markdown("#### Acesso da EBD")
-        st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo EBD.")
+        st.markdown("#### Acesso da Escola Bíblica")
+        st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo Escola Bíblica.")
         slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuario da EBD")
+        usuario = st.text_input("Usuario da Escola Bíblica")
         senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):

@@ -903,7 +903,7 @@ def salvar_ebd_chamada(
         qtd_harpas = max(int(qtd_harpas or 0), 0)
         ofertas = max(float(ofertas or 0), 0.0)
     except (TypeError, ValueError) as ex:
-        raise ValueError("Informe valores validos para a chamada da EBD.") from ex
+        raise ValueError("Informe valores validos para a chamada da Escola Bíblica.") from ex
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         cur = conn.execute(
@@ -1126,7 +1126,7 @@ def _normalizar_usuario_ebd(usuario):
 def _validar_pin_ebd(pin):
     pin = str(pin or "").strip()
     if not re.fullmatch(r"\d{4}", pin):
-        raise ValueError("O PIN do secretario da EBD deve possuir exatamente 4 digitos.")
+        raise ValueError("O PIN do secretario da Escola Bíblica deve possuir exatamente 4 digitos.")
     return pin
 
 
@@ -1191,7 +1191,7 @@ def salvar_ebd_secretario(
             (usuario, int(id_secretario) if id_secretario else None, int(id_secretario) if id_secretario else None),
         ).fetchone()
         if duplicado:
-            raise ValueError("Ja existe um secretario da EBD com este usuario.")
+            raise ValueError("Ja existe um secretario da Escola Bíblica com este usuario.")
         dados = (
             nome, usuario, perfil, id_classe, sanitizar(telefone),
             sanitizar(email), situacao, sanitizar(observacoes),
