@@ -64,7 +64,7 @@ def _limpar_sessao():
     for key in (
         "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
         "secretaria_orhafe", "pastor_auxiliar", "recepcao", "secretario_geral",
-        "pagina", "mostrar_recuperacao", "_login_acesso_url_aplicado",
+        "pagina", "mostrar_recuperacao", "recuperacao_modo", "_login_acesso_url_aplicado",
     ):
         st.session_state.pop(key, None)
     for key in list(st.session_state.keys()):
@@ -354,6 +354,7 @@ def _seletor_login(modo_atual):
 
 def _mostrar_recuperacao_senha():
     """Tela com contato do admin para recuperacao de senha."""
+    modo_recuperacao = st.session_state.get("recuperacao_modo") or st.session_state.get("login_modo", "acesso")
     email_admin  = _normalizar_email(obter_config("contato_email", "admin@fielmordomo.com"))
     wpp_admin    = _normalizar_whatsapp(obter_config("contato_whatsapp", ""))
     mensagem     = obter_config(
@@ -361,7 +362,8 @@ def _mostrar_recuperacao_senha():
         "Entre em contato com o administrador do sistema para redefinir sua senha."
     )
 
-    st.markdown("### 🔐 Recuperar senha")
+    st.markdown("### Recuperar senha")
+    st.caption(f"Perfil selecionado: **{modo_recuperacao}**")
     st.info(mensagem)
 
     st.markdown("**Canais de contato:**")
@@ -370,9 +372,11 @@ def _mostrar_recuperacao_senha():
         assunto = urllib.parse.quote("Solicitacao de redefinicao de senha - FielMordomo")
         corpo = urllib.parse.quote(
             "Ola,\n\n"
-            "Solicito a redefinicao de senha da minha igreja no sistema FielMordomo.\n\n"
+            "Solicito a redefinicao de senha/acesso no sistema FielMordomo.\n\n"
+            f"Tipo de acesso: {modo_recuperacao}\n"
             "Identificador da igreja (slug): \n"
-            "Nome da igreja: \n"
+            "Nome da igreja/congregacao: \n"
+            "Usuario, quando houver: \n"
             "Motivo: \n\n"
             "Obrigado!"
         )
@@ -392,7 +396,7 @@ def _mostrar_recuperacao_senha():
 
     if wpp_admin:
         msg_wpp = urllib.parse.quote(
-            "Ola! Preciso de ajuda para redefinir a senha da minha igreja no FielMordomo. "
+            f"Ola! Preciso de ajuda para redefinir meu acesso no FielMordomo. Tipo de acesso: {modo_recuperacao}. "
             "Pode me ajudar?"
         )
         wpp_link = html.escape(f"https://wa.me/{wpp_admin}?text={msg_wpp}", quote=True)
@@ -408,9 +412,21 @@ def _mostrar_recuperacao_senha():
 
     st.divider()
 
-    if st.button("← Voltar para o login", use_container_width=True):
+    if st.button("Voltar para o login", use_container_width=True):
         st.session_state["mostrar_recuperacao"] = False
+        st.session_state.pop("recuperacao_modo", None)
         st.rerun()
+
+
+def _botao_recuperar_senha(modo, key):
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Esqueci minha senha", use_container_width=True, key=key):
+            st.session_state["recuperacao_modo"] = modo
+            st.session_state["mostrar_recuperacao"] = True
+            st.rerun()
+    with col2:
+        st.caption("Nao tem acesso? Entre em contato com o administrador.")
 
 
 def tela_login():
@@ -464,14 +480,7 @@ def _login_igreja():
             else:
                 st.error("Identificador ou senha incorretos, ou igreja inativa.")
 
-    # Botao "Esqueci minha senha"
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔐 Esqueci minha senha", use_container_width=True, key="btn_esqueci"):
-            st.session_state["mostrar_recuperacao"] = True
-            st.rerun()
-    with col2:
-        st.caption("Nao tem acesso? Entre em contato com o administrador.")
+    _botao_recuperar_senha("Gestor/Pastor", "btn_esqueci_igreja")
 
 
 def _login_admin():
@@ -491,6 +500,9 @@ def _login_admin():
                 st.rerun()
             else:
                 st.error("Credenciais invalidas.")
+
+    _botao_recuperar_senha("Administrador do sistema", "btn_esqueci_admin")
+
 
 
 def _login_tesoureiro():
@@ -519,6 +531,9 @@ def _login_tesoureiro():
             else:
                 st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")
 
+    _botao_recuperar_senha("Tesoureiro", "btn_esqueci_tesoureiro")
+
+
 
 def _login_pastor_auxiliar():
     with st.form("form_login_pastor_auxiliar"):
@@ -545,6 +560,9 @@ def _login_pastor_auxiliar():
                 st.rerun()
             else:
                 st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")
+
+    _botao_recuperar_senha("Pastor Auxiliar", "btn_esqueci_pastor_auxiliar")
+
 
 
 def _login_recepcao():
@@ -573,6 +591,9 @@ def _login_recepcao():
             else:
                 st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
 
+    _botao_recuperar_senha("Recepcao", "btn_esqueci_recepcao")
+
+
 
 def _login_secretario_geral():
     with st.form("form_login_secretario_geral"):
@@ -599,6 +620,9 @@ def _login_secretario_geral():
                 st.rerun()
             else:
                 st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")
+
+    _botao_recuperar_senha("Secretario Geral", "btn_esqueci_secretario_geral")
+
 
 
 def _login_ebd():
@@ -627,6 +651,9 @@ def _login_ebd():
             else:
                 st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
 
+    _botao_recuperar_senha("Escola Biblica", "btn_esqueci_ebd")
+
+
 
 def _login_orhafe():
     with st.form("form_login_orhafe"):
@@ -653,6 +680,9 @@ def _login_orhafe():
                 st.rerun()
             else:
                 st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
+
+    _botao_recuperar_senha("Circulo de Oracao", "btn_esqueci_orhafe")
+
 
 
 def logout():
