@@ -46,6 +46,7 @@ PAGINAS_IGREJA = {
     "dashboard": ("Dashboard", "modules.dashboard"),
     "ebd": ("Escola Bíblica", "modules.ebd"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
+    "obreiros": ("Obreiros", "modules.obreiros"),
     "visitantes": ("Visitantes", "modules.visitantes"),
     "pedidos_oracao": ("Pedidos de Oracao", "modules.pedidos_oracao"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),

@@ -423,6 +423,7 @@ def inicializar_tenant(slug):
         """)
         _garantir_tabelas_ebd(conn)
         _garantir_tabelas_orhafe(conn)
+        _garantir_tabelas_obreiros(conn)
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabela_pastores_auxiliares(conn)
@@ -701,6 +702,39 @@ def _garantir_tabelas_visitantes(conn):
             ON visitantes_cultos(data);
         CREATE INDEX IF NOT EXISTS idx_visitantes_cultos_departamento
             ON visitantes_cultos(departamento);
+    """)
+
+
+def _garantir_tabelas_obreiros(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS obreiros_reunioes (
+            id_reuniao      INTEGER PRIMARY KEY AUTOINCREMENT,
+            data            TEXT NOT NULL UNIQUE,
+            tema            TEXT DEFAULT '',
+            funcoes         TEXT DEFAULT '',
+            qtd_matriculados INTEGER NOT NULL DEFAULT 0,
+            qtd_presentes   INTEGER NOT NULL DEFAULT 0,
+            qtd_ausentes    INTEGER NOT NULL DEFAULT 0,
+            qtd_visitantes  INTEGER NOT NULL DEFAULT 0,
+            ofertas         REAL NOT NULL DEFAULT 0,
+            observacoes     TEXT DEFAULT '',
+            criado_em       TEXT DEFAULT (datetime('now')),
+            atualizado_em   TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS obreiros_presencas (
+            id_presenca INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_reuniao  INTEGER NOT NULL REFERENCES obreiros_reunioes(id_reuniao) ON DELETE CASCADE,
+            id_cadastro INTEGER REFERENCES cadastros(id_cadastro),
+            nome        TEXT NOT NULL,
+            funcao      TEXT DEFAULT '',
+            presente    INTEGER NOT NULL DEFAULT 0,
+            observacao  TEXT DEFAULT '',
+            UNIQUE(id_reuniao, id_cadastro, nome)
+        );
+        CREATE INDEX IF NOT EXISTS idx_obreiros_reunioes_data
+            ON obreiros_reunioes(data);
+        CREATE INDEX IF NOT EXISTS idx_obreiros_presencas_reuniao
+            ON obreiros_presencas(id_reuniao);
     """)
 
 
@@ -2056,6 +2090,213 @@ def autenticar_orhafe_secretaria(slug, usuario, senha):
             "perfil": row["perfil"],
         },
     }
+
+
+def listar_funcoes_obreiros(slug):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_colunas_cadastros(conn)
+        rows = conn.execute(
+            """SELECT DISTINCT TRIM(funcao) AS funcao
+               FROM cadastros
+               WHERE UPPER(TRIM(tipo_cadastro))='MEMBRO'
+                     AND UPPER(TRIM(situacao))='ATIVO'
+                     AND TRIM(COALESCE(funcao, ''))!=''
+               ORDER BY funcao"""
+        ).fetchall()
+    return [row["funcao"] for row in rows if str(row["funcao"] or "").strip()]
+
+
+def listar_obreiros_por_funcoes(slug, funcoes):
+    funcoes = [sanitizar(f) for f in (funcoes or []) if str(f or "").strip()]
+    if not funcoes:
+        return pd.DataFrame(columns=["id_cadastro", "nome", "funcao", "telefone", "congregacao"])
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_colunas_cadastros(conn)
+        placeholders = ",".join("?" for _ in funcoes)
+        return pd.read_sql_query(
+            f"""SELECT id_cadastro, nome, funcao, telefone, congregacao
+                FROM cadastros
+                WHERE UPPER(TRIM(tipo_cadastro))='MEMBRO'
+                      AND UPPER(TRIM(situacao))='ATIVO'
+                      AND TRIM(funcao) IN ({placeholders})
+                ORDER BY funcao, nome""",
+            conn,
+            params=funcoes,
+        )
+
+
+def listar_obreiros_reunioes(slug, data_inicio=None, data_fim=None):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_obreiros(conn)
+        where = []
+        params = []
+        if data_inicio:
+            where.append("data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("data<=?")
+            params.append(str(data_fim))
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return pd.read_sql_query(
+            f"""SELECT id_reuniao, data, tema, funcoes,
+                       qtd_matriculados AS matriculados,
+                       qtd_presentes AS presentes,
+                       qtd_ausentes AS ausentes,
+                       qtd_visitantes AS visitantes,
+                       ofertas, observacoes, criado_em, atualizado_em
+                FROM obreiros_reunioes
+                {filtro}
+                ORDER BY data DESC""",
+            conn,
+            params=params,
+        )
+
+
+def carregar_obreiros_presencas(slug, id_reuniao):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_obreiros(conn)
+        return pd.read_sql_query(
+            """SELECT id_presenca, id_reuniao, id_cadastro, nome, funcao,
+                      presente, observacao
+               FROM obreiros_presencas
+               WHERE id_reuniao=?
+               ORDER BY funcao, nome""",
+            conn,
+            params=[int(id_reuniao)],
+        )
+
+
+def salvar_obreiros_chamada(
+    slug,
+    data,
+    tema="",
+    funcoes=None,
+    presencas=None,
+    visitantes=0,
+    ofertas=0.0,
+    observacoes="",
+):
+    funcoes = [sanitizar(f) for f in (funcoes or []) if str(f or "").strip()]
+    presencas = presencas or {}
+    data = str(data or "").strip()
+    if not data:
+        raise ValueError("Informe a data da reuniao.")
+    if not funcoes:
+        raise ValueError("Selecione ao menos uma funcao para gerar a chamada.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _garantir_colunas_cadastros(conn)
+        _garantir_tabelas_obreiros(conn)
+        placeholders = ",".join("?" for _ in funcoes)
+        membros = conn.execute(
+            f"""SELECT id_cadastro, nome, funcao
+                FROM cadastros
+                WHERE UPPER(TRIM(tipo_cadastro))='MEMBRO'
+                      AND UPPER(TRIM(situacao))='ATIVO'
+                      AND TRIM(funcao) IN ({placeholders})
+                ORDER BY funcao, nome""",
+            funcoes,
+        ).fetchall()
+        if not membros:
+            raise ValueError("Nenhum membro ativo encontrado para as funcoes selecionadas.")
+
+        total = len(membros)
+        presentes = sum(1 for row in membros if bool(presencas.get(int(row["id_cadastro"]))))
+        ausentes = total - presentes
+        visitantes = max(int(visitantes or 0), 0)
+        ofertas = max(float(ofertas or 0), 0.0)
+        funcoes_txt = "; ".join(funcoes)
+        conn.execute(
+            """INSERT INTO obreiros_reunioes
+               (data, tema, funcoes, qtd_matriculados, qtd_presentes,
+                qtd_ausentes, qtd_visitantes, ofertas, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(data) DO UPDATE SET
+                   tema=excluded.tema,
+                   funcoes=excluded.funcoes,
+                   qtd_matriculados=excluded.qtd_matriculados,
+                   qtd_presentes=excluded.qtd_presentes,
+                   qtd_ausentes=excluded.qtd_ausentes,
+                   qtd_visitantes=excluded.qtd_visitantes,
+                   ofertas=excluded.ofertas,
+                   observacoes=excluded.observacoes,
+                   atualizado_em=datetime('now')""",
+            (
+                data, sanitizar(tema), funcoes_txt, total, presentes,
+                ausentes, visitantes, ofertas, sanitizar(observacoes),
+            ),
+        )
+        id_reuniao = conn.execute(
+            "SELECT id_reuniao FROM obreiros_reunioes WHERE data=?", (data,)
+        ).fetchone()["id_reuniao"]
+        conn.execute("DELETE FROM obreiros_presencas WHERE id_reuniao=?", (id_reuniao,))
+        for row in membros:
+            conn.execute(
+                """INSERT INTO obreiros_presencas
+                   (id_reuniao, id_cadastro, nome, funcao, presente)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    id_reuniao,
+                    int(row["id_cadastro"]),
+                    sanitizar(row["nome"]),
+                    sanitizar(row["funcao"]),
+                    int(bool(presencas.get(int(row["id_cadastro"])))),
+                ),
+            )
+        return id_reuniao
+
+
+def relatorio_obreiros_frequencia(slug, data_inicio=None, data_fim=None, funcao=""):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_obreiros(conn)
+        where = []
+        params = []
+        if data_inicio:
+            where.append("r.data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("r.data<=?")
+            params.append(str(data_fim))
+        if str(funcao or "").strip():
+            where.append("p.funcao=?")
+            params.append(str(funcao).strip())
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        df = pd.read_sql_query(
+            f"""SELECT p.id_cadastro, p.nome, p.funcao,
+                       SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presencas,
+                       SUM(CASE WHEN p.presente=0 THEN 1 ELSE 0 END) AS ausencias,
+                       COUNT(*) AS reunioes
+                FROM obreiros_presencas p
+                JOIN obreiros_reunioes r ON r.id_reuniao=p.id_reuniao
+                {filtro}
+                GROUP BY p.id_cadastro, p.nome, p.funcao
+                ORDER BY p.funcao, p.nome""",
+            conn,
+            params=params,
+        )
+    if df.empty:
+        return df
+    total = df["presencas"] + df["ausencias"]
+    df["frequencia_pct"] = (df["presencas"] / total.where(total > 0, 1) * 100).round(1)
+    return df
 
 
 def salvar_visitante_culto(
@@ -4511,6 +4752,7 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_tabela_tesoureiros(conn)
         _garantir_tabelas_ebd(conn)
         _garantir_tabelas_orhafe(conn)
+        _garantir_tabelas_obreiros(conn)
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabela_pastores_auxiliares(conn)
