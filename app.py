@@ -379,6 +379,25 @@ def _sidebar_secretario_ebd(igreja, secretario):
             _auth().logout()
 
 
+def _sidebar_secretaria_orhafe(igreja, secretaria):
+    perfil = "Secretaria geral" if secretaria.get("perfil") == "geral" else "Secretaria de chamada"
+    with st.sidebar:
+        _render_logo_sidebar(igreja.get("slug", ""))
+        st.markdown(
+            '<div class="sidebar-info">'
+            f'<b>{_esc(secretaria.get("nome", "Secretaria ORHAFE"))}</b>'
+            f'<div class="plano">{_esc(perfil)} - ORHAFE</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("ORHAFE", key="sb_secretaria_orhafe", use_container_width=True, type="primary"):
+            st.session_state["pagina"] = "orhafe"
+            st.rerun()
+        st.divider()
+        if st.button("Sair", key="sb_sair_secretaria_orhafe", use_container_width=True):
+            _auth().logout()
+
+
 def _renderizar_admin():
     _sidebar_admin()
     try:
@@ -455,6 +474,26 @@ def _renderizar_secretario_ebd():
         )
 
 
+def _renderizar_secretaria_orhafe():
+    igreja = st.session_state.get("igreja", {})
+    secretaria = st.session_state.get("secretaria_orhafe", {})
+    if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(secretaria, dict):
+        st.error("Sessao invalida. Faca login novamente.")
+        if st.button("Voltar ao login"):
+            _auth().logout()
+        return
+    st.session_state["pagina"] = "orhafe"
+    _sidebar_secretaria_orhafe(igreja, secretaria)
+    try:
+        _importar("modules.orhafe").render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao carregar ORHAFE para secretaria.")
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
+
+
 def main():
     _bloquear_acesso_fora_do_dominio_oficial()
     _resolver_rota_publica()
@@ -472,6 +511,8 @@ def main():
         _renderizar_tesoureiro()
     elif modo == "secretario_ebd":
         _renderizar_secretario_ebd()
+    elif modo == "secretaria_orhafe":
+        _renderizar_secretaria_orhafe()
     else:
         st.error("Modo de acesso invalido. Faca login novamente.")
         if st.button("Sair"):

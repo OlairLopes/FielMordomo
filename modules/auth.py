@@ -9,7 +9,7 @@ import streamlit as st
 
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
-    autenticar_ebd_secretario,
+    autenticar_ebd_secretario, autenticar_orhafe_secretaria,
     inicializar_master, obter_logo_sistema, obter_config,
 )
 
@@ -29,7 +29,13 @@ def _normalizar_whatsapp(numero: str) -> str:
     return numero
 
 
-def _iniciar_sessao(modo: str, igreja=None, tesoureiro=None, secretario_ebd=None):
+def _iniciar_sessao(
+    modo: str,
+    igreja=None,
+    tesoureiro=None,
+    secretario_ebd=None,
+    secretaria_orhafe=None,
+):
     _limpar_sessao()
     st.session_state["autenticado"] = True
     st.session_state["modo"] = modo
@@ -39,11 +45,14 @@ def _iniciar_sessao(modo: str, igreja=None, tesoureiro=None, secretario_ebd=None
         st.session_state["tesoureiro"] = tesoureiro
     if secretario_ebd is not None:
         st.session_state["secretario_ebd"] = secretario_ebd
+    if secretaria_orhafe is not None:
+        st.session_state["secretaria_orhafe"] = secretaria_orhafe
 
 
 def _limpar_sessao():
     for key in (
         "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
+        "secretaria_orhafe",
         "pagina", "mostrar_recuperacao",
     ):
         st.session_state.pop(key, None)
@@ -155,7 +164,7 @@ def tela_login():
 
         modo = st.radio(
             "Tipo de acesso",
-            ["Igreja", "Tesoureiro", "EBD", "Administrador do sistema"],
+            ["Igreja", "Tesoureiro", "EBD", "ORHAFE", "Administrador do sistema"],
             horizontal=True,
             label_visibility="collapsed",
         )
@@ -167,6 +176,8 @@ def tela_login():
             _login_tesoureiro()
         elif modo == "EBD":
             _login_ebd()
+        elif modo == "ORHAFE":
+            _login_orhafe()
         else:
             _login_admin()
 
@@ -270,6 +281,33 @@ def _login_ebd():
                     secretario_ebd=acesso["secretario_ebd"],
                 )
                 st.toast(f"Bem-vindo, {acesso['secretario_ebd']['nome']}!")
+                st.rerun()
+            else:
+                st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
+
+
+def _login_orhafe():
+    with st.form("form_login_orhafe"):
+        st.markdown("#### Acesso do ORHAFE")
+        st.caption("Secretaria de chamada acessa somente a chamada. Secretaria geral acessa todo o modulo ORHAFE.")
+        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        usuario = st.text_input("Usuario do ORHAFE")
+        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
+
+        if st.form_submit_button("Entrar", type="primary", use_container_width=True):
+            slug = slug.strip().lower()
+            usuario = usuario.strip().lower()
+            if not slug or not usuario or not senha:
+                st.error("Preencha todos os campos.")
+                return
+            acesso = autenticar_orhafe_secretaria(slug, usuario, senha)
+            if acesso:
+                _iniciar_sessao(
+                    "secretaria_orhafe",
+                    igreja=acesso["igreja"],
+                    secretaria_orhafe=acesso["secretaria_orhafe"],
+                )
+                st.toast(f"Bem-vinda, {acesso['secretaria_orhafe']['nome']}!")
                 st.rerun()
             else:
                 st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")

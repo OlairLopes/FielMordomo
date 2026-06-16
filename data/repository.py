@@ -631,6 +631,21 @@ def _garantir_tabelas_orhafe(conn):
             ON orhafe_reunioes(data);
         CREATE INDEX IF NOT EXISTS idx_orhafe_presencas_reuniao
             ON orhafe_presencas(id_reuniao);
+        CREATE TABLE IF NOT EXISTS orhafe_secretarias (
+            id_secretaria INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome          TEXT NOT NULL,
+            usuario       TEXT NOT NULL UNIQUE,
+            senha_hash    TEXT NOT NULL,
+            perfil        TEXT NOT NULL DEFAULT 'chamada',
+            telefone      TEXT DEFAULT '',
+            email         TEXT DEFAULT '',
+            situacao      TEXT NOT NULL DEFAULT 'Ativo',
+            observacoes   TEXT DEFAULT '',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_orhafe_secretarias_usuario
+            ON orhafe_secretarias(usuario);
     """)
     cols_coordenadoras = [
         row[1]
@@ -1330,6 +1345,17 @@ def salvar_orhafe_coordenadora(
         return cur.lastrowid
 
 
+def excluir_orhafe_coordenadora(slug, id_coordenadora):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        conn.execute(
+            "DELETE FROM orhafe_coordenadoras WHERE id_coordenadora=?",
+            (int(id_coordenadora),),
+        )
+        return True
+
+
 def listar_orhafe_lideres(slug, incluir_inativos=False):
     db = _tenant_db(slug)
     if not db.exists():
@@ -1396,6 +1422,26 @@ def salvar_orhafe_lider(
             dados,
         )
         return cur.lastrowid
+
+
+def excluir_orhafe_lider(slug, id_lider):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        usos = conn.execute(
+            "SELECT COUNT(*) AS total FROM orhafe_reunioes WHERE id_lider=?",
+            (int(id_lider),),
+        ).fetchone()["total"]
+        if usos:
+            conn.execute(
+                """UPDATE orhafe_lideres
+                   SET ativo=0, atualizado_em=datetime('now')
+                   WHERE id_lider=?""",
+                (int(id_lider),),
+            )
+            return False
+        conn.execute("DELETE FROM orhafe_lideres WHERE id_lider=?", (int(id_lider),))
+        return True
 
 
 def listar_orhafe_matriculas(slug, incluir_inativas=False):
@@ -1489,6 +1535,29 @@ def encerrar_orhafe_matricula(slug, id_matricula, data_fim=""):
                WHERE id_matricula=?""",
             (str(data_fim or ""), int(id_matricula)),
         )
+
+
+def excluir_orhafe_matricula(slug, id_matricula, data_fim=""):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        usos = conn.execute(
+            "SELECT COUNT(*) AS total FROM orhafe_presencas WHERE id_matricula=?",
+            (int(id_matricula),),
+        ).fetchone()["total"]
+        if usos:
+            conn.execute(
+                """UPDATE orhafe_matriculas
+                   SET ativa=0, data_fim=?, atualizado_em=datetime('now')
+                   WHERE id_matricula=?""",
+                (str(data_fim or ""), int(id_matricula)),
+            )
+            return False
+        conn.execute(
+            "DELETE FROM orhafe_matriculas WHERE id_matricula=?",
+            (int(id_matricula),),
+        )
+        return True
 
 
 def listar_orhafe_reunioes(slug, data_inicio=None, data_fim=None):
@@ -1659,6 +1728,171 @@ def relatorio_orhafe_frequencia(slug, data_inicio=None, data_fim=None):
             conn,
             params=params,
         )
+
+
+def _normalizar_usuario_orhafe(usuario):
+    usuario = str(usuario or "").strip().lower()
+    if not USUARIO_EBD_RE.fullmatch(usuario):
+        raise ValueError("Usuario deve ter 3 a 40 caracteres, usando letras, numeros, ponto, hifen ou underline.")
+    return usuario
+
+
+def _validar_pin_orhafe(pin):
+    pin = str(pin or "").strip()
+    if not re.fullmatch(r"\d{4}", pin):
+        raise ValueError("O PIN da secretaria do ORHAFE deve possuir exatamente 4 digitos.")
+    return pin
+
+
+def listar_orhafe_secretarias(slug, incluir_inativas=True):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        where = "" if incluir_inativas else "WHERE situacao='Ativo'"
+        return pd.read_sql_query(
+            f"""SELECT id_secretaria, nome, usuario, perfil, telefone, email,
+                       situacao, observacoes, criado_em, atualizado_em
+                FROM orhafe_secretarias
+                {where}
+                ORDER BY situacao, nome""",
+            conn,
+        )
+
+
+def salvar_orhafe_secretaria(
+    slug,
+    nome,
+    usuario,
+    senha="",
+    perfil="chamada",
+    telefone="",
+    email="",
+    situacao="Ativo",
+    observacoes="",
+    id_secretaria=None,
+):
+    nome = sanitizar(nome)
+    usuario = _normalizar_usuario_orhafe(usuario)
+    perfil = str(perfil or "").strip().lower()
+    situacao = str(situacao or "Ativo").strip()
+    if not nome:
+        raise ValueError("Nome da secretaria e obrigatorio.")
+    if perfil not in {"chamada", "geral"}:
+        raise ValueError("Perfil de secretaria invalido.")
+    if situacao not in {"Ativo", "Inativo"}:
+        raise ValueError("Situacao invalida.")
+    if not id_secretaria:
+        senha = _validar_pin_orhafe(senha)
+    elif senha:
+        senha = _validar_pin_orhafe(senha)
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        duplicado = conn.execute(
+            """SELECT 1 FROM orhafe_secretarias
+               WHERE usuario=? AND (? IS NULL OR id_secretaria!=?) LIMIT 1""",
+            (
+                usuario,
+                int(id_secretaria) if id_secretaria else None,
+                int(id_secretaria) if id_secretaria else None,
+            ),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe uma secretaria do ORHAFE com este usuario.")
+        dados = (
+            nome, usuario, perfil, sanitizar(telefone), sanitizar(email),
+            situacao, sanitizar(observacoes),
+        )
+        if id_secretaria:
+            if senha:
+                conn.execute(
+                    """UPDATE orhafe_secretarias
+                       SET nome=?, usuario=?, perfil=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, senha_hash=?,
+                           atualizado_em=datetime('now')
+                       WHERE id_secretaria=?""",
+                    dados + (hash_senha(senha), int(id_secretaria)),
+                )
+            else:
+                conn.execute(
+                    """UPDATE orhafe_secretarias
+                       SET nome=?, usuario=?, perfil=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, atualizado_em=datetime('now')
+                       WHERE id_secretaria=?""",
+                    dados + (int(id_secretaria),),
+                )
+            return int(id_secretaria)
+        cur = conn.execute(
+            """INSERT INTO orhafe_secretarias
+               (nome, usuario, senha_hash, perfil, telefone, email,
+                situacao, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                nome, usuario, hash_senha(senha), perfil, sanitizar(telefone),
+                sanitizar(email), situacao, sanitizar(observacoes),
+            ),
+        )
+        return cur.lastrowid
+
+
+def inativar_orhafe_secretaria(slug, id_secretaria):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        conn.execute(
+            """UPDATE orhafe_secretarias
+               SET situacao='Inativo', atualizado_em=datetime('now')
+               WHERE id_secretaria=?""",
+            (int(id_secretaria),),
+        )
+
+
+def autenticar_orhafe_secretaria(slug, usuario, senha):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_orhafe(usuario)
+    except ValueError:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    chave = f"orhafe:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+        row = conn.execute(
+            """SELECT id_secretaria, nome, usuario, senha_hash, perfil
+               FROM orhafe_secretarias
+               WHERE usuario=? AND situacao='Ativo'""",
+            (usuario,),
+        ).fetchone()
+        valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
+        _registrar_resultado_login(conn, chave, valido)
+        if valido and migrar:
+            conn.execute(
+                "UPDATE orhafe_secretarias SET senha_hash=? WHERE id_secretaria=?",
+                (hash_senha(senha), row["id_secretaria"]),
+            )
+    if not row or not valido:
+        return None
+    return {
+        "igreja": igreja,
+        "secretaria_orhafe": {
+            "id": row["id_secretaria"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+            "perfil": row["perfil"],
+        },
+    }
 
 
 def _dados_lancamento_validados(conn, l, lote_id=""):

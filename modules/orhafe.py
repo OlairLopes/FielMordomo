@@ -8,15 +8,21 @@ from data.repository import (
     carregar_cadastros,
     carregar_orhafe_presencas,
     encerrar_orhafe_matricula,
+    excluir_orhafe_coordenadora,
+    excluir_orhafe_lider,
+    excluir_orhafe_matricula,
+    inativar_orhafe_secretaria,
     listar_orhafe_coordenadoras,
     listar_orhafe_lideres,
     listar_orhafe_matriculas,
     listar_orhafe_reunioes,
+    listar_orhafe_secretarias,
     relatorio_orhafe_frequencia,
     salvar_orhafe_chamada,
     salvar_orhafe_coordenadora,
     salvar_orhafe_lider,
     salvar_orhafe_matricula,
+    salvar_orhafe_secretaria,
 )
 from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
 
@@ -356,20 +362,57 @@ def _render_matriculas(slug):
         use_container_width=True,
         hide_index=True,
     )
+    op_matriculas = {
+        f'{int(row["id_matricula"])} - {row["nome"]}': row
+        for _, row in matriculas.iterrows()
+    }
+    with st.expander("Editar matricula", expanded=False):
+        selecionada = st.selectbox(
+            "Matricula para editar",
+            ["Selecione"] + list(op_matriculas.keys()),
+            key="editar_matricula_orhafe",
+        )
+        if selecionada != "Selecione":
+            row = op_matriculas[selecionada]
+            with st.form(f"form_editar_matricula_orhafe_{int(row['id_matricula'])}"):
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome", value=row.get("nome", ""))
+                telefone = c2.text_input("Telefone / WhatsApp", value=row.get("telefone", ""))
+                data_inicio = st.text_input("Data de inicio", value=str(row.get("data_inicio", "") or ""))
+                ativa = st.selectbox(
+                    "Situacao",
+                    ["Ativa", "Encerrada"],
+                    index=0 if int(row.get("ativa", 1) or 0) == 1 else 1,
+                )
+                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                if st.form_submit_button("Atualizar matricula", type="primary"):
+                    salvar_orhafe_matricula(
+                        slug,
+                        nome,
+                        id_cadastro=row.get("id_cadastro"),
+                        telefone=telefone,
+                        data_inicio=data_inicio,
+                        observacoes=observacoes,
+                        id_matricula=int(row["id_matricula"]),
+                        ativa=ativa == "Ativa",
+                    )
+                    st.success("Matricula atualizada.")
+                    st.rerun()
+
     ativas = matriculas[matriculas["ativa"] == 1]
     if not ativas.empty:
         encerrar = st.selectbox(
-            "Encerrar matricula",
+            "Excluir/encerrar matricula",
             ["Selecione"] + [
                 f'{int(row["id_matricula"])} - {row["nome"]}'
                 for _, row in ativas.iterrows()
             ],
         )
         if encerrar != "Selecione" and confirmar_exclusao(
-            f"encerrar_orhafe_{encerrar}", "Encerrar matricula selecionada"
+            f"encerrar_orhafe_{encerrar}", "Excluir ou encerrar matricula selecionada"
         ):
-            encerrar_orhafe_matricula(slug, int(encerrar.split(" - ")[0]), _hoje().isoformat())
-            st.success("Matricula encerrada.")
+            removida = excluir_orhafe_matricula(slug, int(encerrar.split(" - ")[0]), _hoje().isoformat())
+            st.success("Matricula excluida." if removida else "Matricula encerrada porque possui historico.")
             st.rerun()
 
 
@@ -695,6 +738,58 @@ def _render_configuracoes(slug):
             use_container_width=True,
             hide_index=True,
         )
+        with st.expander("Editar ou excluir coordenadora", expanded=False):
+            op_coord = {
+                f'{int(row["id_coordenadora"])} - {row["nome"]}': row
+                for _, row in coordenadoras.iterrows()
+            }
+            selecionada = st.selectbox(
+                "Coordenadora",
+                ["Selecione"] + list(op_coord.keys()),
+                key="editar_coord_orhafe",
+            )
+            if selecionada != "Selecione":
+                row = op_coord[selecionada]
+                with st.form(f"form_editar_coord_orhafe_{int(row['id_coordenadora'])}"):
+                    c1, c2 = st.columns(2)
+                    nome = c1.text_input("Nome", value=row.get("nome", ""))
+                    telefone = c2.text_input("Telefone / WhatsApp", value=row.get("telefone", ""))
+                    c3, c4 = st.columns(2)
+                    funcao = c3.text_input("Funcao", value=row.get("funcao", "Coordenadora"))
+                    ordem = c4.number_input(
+                        "Ordem",
+                        min_value=1,
+                        max_value=4,
+                        value=max(1, min(int(row.get("ordem", 1) or 1), 4)),
+                        step=1,
+                    )
+                    ativa = st.selectbox(
+                        "Situacao",
+                        ["Ativa", "Inativa"],
+                        index=0 if int(row.get("ativa", 1) or 0) == 1 else 1,
+                    )
+                    observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                    if st.form_submit_button("Atualizar coordenadora", type="primary"):
+                        salvar_orhafe_coordenadora(
+                            slug,
+                            nome,
+                            id_cadastro=row.get("id_cadastro"),
+                            telefone=telefone,
+                            funcao=funcao,
+                            ordem=ordem,
+                            ativa=ativa == "Ativa",
+                            observacoes=observacoes,
+                            id_coordenadora=int(row["id_coordenadora"]),
+                        )
+                        st.success("Coordenadora atualizada.")
+                        st.rerun()
+                if confirmar_exclusao(
+                    f"excluir_coord_orhafe_{int(row['id_coordenadora'])}",
+                    "Excluir coordenadora selecionada",
+                ):
+                    excluir_orhafe_coordenadora(slug, int(row["id_coordenadora"]))
+                    st.success("Coordenadora excluida.")
+                    st.rerun()
 
     with st.expander("Cadastrar lider", expanded=lideres.empty):
         if len(lideres[lideres["ativo"] == 1]) >= 5:
@@ -767,6 +862,157 @@ def _render_configuracoes(slug):
             use_container_width=True,
             hide_index=True,
         )
+        with st.expander("Editar ou excluir lider", expanded=False):
+            op_lider = {
+                f'{int(row["id_lider"])} - {row["nome"]}': row
+                for _, row in lideres.iterrows()
+            }
+            selecionada = st.selectbox(
+                "Lider",
+                ["Selecione"] + list(op_lider.keys()),
+                key="editar_lider_orhafe",
+            )
+            if selecionada != "Selecione":
+                row = op_lider[selecionada]
+                with st.form(f"form_editar_lider_orhafe_{int(row['id_lider'])}"):
+                    c1, c2 = st.columns(2)
+                    nome = c1.text_input("Nome", value=row.get("nome", ""))
+                    telefone = c2.text_input("Telefone / WhatsApp", value=row.get("telefone", ""))
+                    c3, c4 = st.columns(2)
+                    funcao = c3.text_input("Funcao", value=row.get("funcao", "Lider"))
+                    ordem = c4.number_input(
+                        "Ordem",
+                        min_value=1,
+                        max_value=5,
+                        value=max(1, min(int(row.get("ordem", 1) or 1), 5)),
+                        step=1,
+                    )
+                    ativo = st.selectbox(
+                        "Situacao",
+                        ["Ativa", "Inativa"],
+                        index=0 if int(row.get("ativo", 1) or 0) == 1 else 1,
+                    )
+                    observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                    if st.form_submit_button("Atualizar lider", type="primary"):
+                        salvar_orhafe_lider(
+                            slug,
+                            nome,
+                            id_cadastro=row.get("id_cadastro"),
+                            telefone=telefone,
+                            funcao=funcao,
+                            ordem=ordem,
+                            ativo=ativo == "Ativa",
+                            observacoes=observacoes,
+                            id_lider=int(row["id_lider"]),
+                        )
+                        st.success("Lider atualizada.")
+                        st.rerun()
+                if confirmar_exclusao(
+                    f"excluir_lider_orhafe_{int(row['id_lider'])}",
+                    "Excluir ou inativar lider selecionada",
+                ):
+                    removida = excluir_orhafe_lider(slug, int(row["id_lider"]))
+                    st.success("Lider excluida." if removida else "Lider inativada porque possui historico.")
+                    st.rerun()
+
+
+def _render_secretarias(slug):
+    st.markdown("### Secretarias do ORHAFE")
+    st.caption(
+        "Secretaria de chamada acessa somente a chamada. "
+        "Secretaria geral acessa todo o modulo ORHAFE."
+    )
+    with st.expander("Cadastrar secretaria", expanded=False):
+        with st.form("form_orhafe_secretaria"):
+            c1, c2 = st.columns(2)
+            nome = c1.text_input("Nome")
+            usuario = c2.text_input("Usuario")
+            c3, c4 = st.columns(2)
+            senha = c3.text_input("PIN de 4 digitos", type="password", max_chars=4)
+            perfil_rotulo = c4.selectbox(
+                "Perfil",
+                ["Secretaria de chamada", "Secretaria geral"],
+            )
+            perfil = "geral" if perfil_rotulo == "Secretaria geral" else "chamada"
+            c5, c6 = st.columns(2)
+            telefone = c5.text_input("Telefone / WhatsApp")
+            email = c6.text_input("E-mail")
+            observacoes = st.text_area("Observacoes")
+            if st.form_submit_button("Salvar secretaria", type="primary"):
+                try:
+                    salvar_orhafe_secretaria(
+                        slug, nome, usuario, senha, perfil, telefone,
+                        email, "Ativo", observacoes,
+                    )
+                    st.success("Secretaria cadastrada.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    df = listar_orhafe_secretarias(slug)
+    if df.empty:
+        st.info("Nenhuma secretaria do ORHAFE cadastrada.")
+        return
+
+    exibir = df.copy()
+    exibir["perfil"] = exibir["perfil"].map({
+        "chamada": "Secretaria de chamada",
+        "geral": "Secretaria geral",
+    }).fillna(exibir["perfil"])
+    st.dataframe(
+        exibir[["nome", "usuario", "perfil", "telefone", "email", "situacao"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    opcoes = {
+        f'{int(row["id_secretaria"])} - {row["nome"]} - {row["usuario"]}': row
+        for _, row in df.iterrows()
+    }
+    selecionada = st.selectbox("Editar secretaria", ["Selecione"] + list(opcoes.keys()))
+    if selecionada == "Selecione":
+        return
+    row = opcoes[selecionada]
+    id_secretaria = int(row["id_secretaria"])
+    with st.form(f"form_editar_secretaria_orhafe_{id_secretaria}"):
+        c1, c2 = st.columns(2)
+        nome = c1.text_input("Nome", value=row["nome"])
+        usuario = c2.text_input("Usuario", value=row["usuario"])
+        c3, c4 = st.columns(2)
+        senha = c3.text_input("Novo PIN de 4 digitos", type="password", max_chars=4)
+        perfil_rotulo = c4.selectbox(
+            "Perfil",
+            ["Secretaria de chamada", "Secretaria geral"],
+            index=1 if row["perfil"] == "geral" else 0,
+        )
+        perfil = "geral" if perfil_rotulo == "Secretaria geral" else "chamada"
+        c5, c6 = st.columns(2)
+        telefone = c5.text_input("Telefone / WhatsApp", value=row.get("telefone", ""))
+        email = c6.text_input("E-mail", value=row.get("email", ""))
+        situacao = st.selectbox(
+            "Situacao",
+            ["Ativo", "Inativo"],
+            index=0 if row.get("situacao") == "Ativo" else 1,
+        )
+        observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+        if st.form_submit_button("Atualizar secretaria", type="primary"):
+            try:
+                salvar_orhafe_secretaria(
+                    slug, nome, usuario, senha, perfil, telefone,
+                    email, situacao, observacoes, id_secretaria,
+                )
+                st.success("Secretaria atualizada.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    if confirmar_exclusao(
+        f"inativar_secretaria_orhafe_{id_secretaria}",
+        "Inativar secretaria selecionada",
+    ):
+        inativar_orhafe_secretaria(slug, id_secretaria)
+        st.success("Secretaria inativada.")
+        st.rerun()
 
 
 def render():
@@ -779,12 +1025,27 @@ def render():
 
     _render_coordenadoras(slug)
 
-    tab_chamada, tab_matriculas, tab_relatorios, tab_config = st.tabs([
+    secretaria = st.session_state.get("secretaria_orhafe", {})
+    modo = st.session_state.get("modo", "")
+    if modo == "secretaria_orhafe" and isinstance(secretaria, dict):
+        perfil = secretaria.get("perfil", "chamada")
+        if perfil == "chamada":
+            st.info("Acesso de secretaria de chamada do ORHAFE.")
+            _render_chamada(slug)
+            return
+        st.info("Acesso de secretaria geral do ORHAFE.")
+
+    abas = [
         "Chamada",
         "Matriculas",
         "Relatorios",
         "Coordenadoras e lideres",
-    ])
+    ]
+    if modo != "secretaria_orhafe" or secretaria.get("perfil") == "geral":
+        abas.append("Secretarias")
+
+    tabs = st.tabs(abas)
+    tab_chamada, tab_matriculas, tab_relatorios, tab_config = tabs[:4]
     with tab_chamada:
         _render_chamada(slug)
     with tab_matriculas:
@@ -793,3 +1054,6 @@ def render():
         _render_relatorios(slug)
     with tab_config:
         _render_configuracoes(slug)
+    if len(tabs) > 4:
+        with tabs[4]:
+            _render_secretarias(slug)
