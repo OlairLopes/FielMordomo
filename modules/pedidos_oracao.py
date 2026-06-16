@@ -12,6 +12,7 @@ from data.repository import (
     atualizar_status_pedido_oracao,
     carregar_cadastros,
     listar_horarios_visita_pastoral,
+    listar_igrejas,
     listar_pastores_auxiliares,
     listar_pedidos_oracao,
     localizar_membro_por_pin_cpf,
@@ -232,16 +233,36 @@ def _notificar_pastores(
 
 
 def _selecionar_igreja_publica():
+    try:
+        igrejas = listar_igrejas()
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar a lista de igrejas.")
+        igrejas = pd.DataFrame()
+
+    if igrejas.empty:
+        st.error("Nenhuma igreja cadastrada para receber pedidos de oracao.")
+        return None
+
+    igrejas = igrejas[igrejas["ativa"].astype(int) == 1].copy()
+    if igrejas.empty:
+        st.error("Nenhuma igreja ativa encontrada para receber pedidos de oracao.")
+        return None
+
+    opcoes = {
+        f'{row["nome"]} ({row["slug"]})': str(row["slug"])
+        for _, row in igrejas.sort_values("nome").iterrows()
+    }
+
     with st.form("form_identificar_igreja_oracao"):
         st.markdown("#### Identificacao da igreja")
-        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        selecionada = st.selectbox("Igreja / congregacao", list(opcoes.keys()))
         continuar = st.form_submit_button("Continuar", type="primary")
     if not continuar:
         return None
 
-    slug = str(slug or "").strip().lower()
+    slug = opcoes.get(selecionada, "").strip().lower()
     if not slug:
-        st.error("Informe o identificador da igreja.")
+        st.error("Selecione uma igreja.")
         return None
     try:
         carregar_cadastros(slug)
