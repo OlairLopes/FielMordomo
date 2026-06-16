@@ -740,6 +740,7 @@ def _navbar():
                 <a href="?pagina=inicio#sobre" target="_top">Sobre</a>
                 <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
+                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
                 <a class="fm-btn-login" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
@@ -757,6 +758,7 @@ def _footer():
             <div>
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
+                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
                 <a href="?pagina=termos" target="_top">Termos de Uso</a>
             </div>
@@ -1441,6 +1443,47 @@ def render_institucional():
             unsafe_allow_html=True,
         )
         _render_atualizar_cadastro_publico()
+        st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
+        return
+
+    if _pagina_atual() == "pedidos-oracao":
+        st.markdown(
+            """
+            <style>
+                .stApp {
+                    background: #F5F7FA !important;
+                }
+                .block-container {
+                    padding: 0 0 1rem 0 !important;
+                    margin: 0 !important;
+                    max-width: 100% !important;
+                }
+                div[data-testid="stForm"],
+                div[data-testid="stAlert"],
+                div[data-testid="stMarkdownContainer"],
+                div[data-testid="stSuccess"] {
+                    max-width: 920px;
+                    margin-left: auto !important;
+                    margin-right: auto !important;
+                }
+                div[data-testid="stVerticalBlock"] {
+                    gap: .75rem !important;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            _html_sem_indentacao(
+                _css_base()
+                + '<div class="fm-page fm-page-update notranslate" translate="no" lang="pt-BR">'
+                + _navbar()
+            ),
+            unsafe_allow_html=True,
+        )
+        from modules.pedidos_oracao import render_publico
+
+        render_publico()
         st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
         return
 

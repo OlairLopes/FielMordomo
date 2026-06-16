@@ -139,6 +139,29 @@ def render():
         codigo_cadastro_atual = obter_config_igreja(
             slug, "codigo_atualizacao_cadastral", ""
         )
+        nome_pastor_oracao_atual = obter_config_igreja(
+            slug, "nome_pastor_oracao", "Pastor"
+        )
+        whatsapp_pastor_oracao_atual = obter_config_igreja(
+            slug, "whatsapp_pastor_oracao", ""
+        )
+        mensagem_oracao_atual = obter_config_igreja(
+            slug,
+            "mensagem_whatsapp_pedido_oracao",
+            """Paz do Senhor!
+
+Novo pedido recebido pelo FielMordomo.
+
+Membro: {nome}
+Tipo: {tipo}
+Confidencial: {confidencial}
+Solicitou visita: {visita}
+Horario da visita: {horario}
+
+Pedido:
+{pedido}
+""",
+        )
     except Exception:
         LOGGER.exception("Nao foi possivel carregar as configuracoes da igreja.")
         st.error("Nao foi possivel carregar as configuracoes. Tente novamente.")
@@ -214,6 +237,32 @@ def render():
             help="Exemplo: AD2026 ou MEMBROS2026.",
         )
 
+        st.markdown("**Pedidos de oracao e visita pastoral**")
+        st.caption(
+            "Configure o contato pastoral que recebera notificacoes. "
+            "Pastores auxiliares ativos com telefone cadastrado tambem serao notificados."
+        )
+        p1, p2 = st.columns(2)
+        nome_pastor_oracao_novo = p1.text_input(
+            "Nome do pastor responsavel",
+            value=str(nome_pastor_oracao_atual or "Pastor"),
+            max_chars=100,
+        )
+        whatsapp_pastor_oracao_novo = p2.text_input(
+            "WhatsApp do pastor para pedidos de oracao",
+            value=str(whatsapp_pastor_oracao_atual or ""),
+            placeholder="Ex.: 62999999999",
+            max_chars=20,
+        )
+        st.caption(
+            "Use as variaveis {nome}, {tipo}, {confidencial}, {visita}, {horario} e {pedido}."
+        )
+        mensagem_oracao_nova = st.text_area(
+            "Modelo da mensagem WhatsApp para pedidos de oracao",
+            value=str(mensagem_oracao_atual or ""),
+            height=180,
+        )
+
         if st.form_submit_button("Salvar configuracoes", type="primary"):
             assinatura_nova = assinatura_nova.strip()
             reserva_numero = _numero_config(reserva_nova, -1)
@@ -238,6 +287,15 @@ def render():
                     )
                     salvar_config_igreja(
                         slug, "codigo_atualizacao_cadastral", codigo_cadastro_novo.strip()
+                    )
+                    salvar_config_igreja(
+                        slug, "nome_pastor_oracao", nome_pastor_oracao_novo.strip()
+                    )
+                    salvar_config_igreja(
+                        slug, "whatsapp_pastor_oracao", whatsapp_pastor_oracao_novo.strip()
+                    )
+                    salvar_config_igreja(
+                        slug, "mensagem_whatsapp_pedido_oracao", mensagem_oracao_nova.strip()
                     )
                 except Exception:
                     LOGGER.exception("Nao foi possivel salvar as configuracoes da igreja.")

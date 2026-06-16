@@ -28,7 +28,7 @@ DOMINIOS_PERMITIDOS_PADRAO = {
 }
 PAGINAS_INSTITUCIONAIS = {
     "", "inicio", "sobre", "recursos", "contato", "privacidade", "termos",
-    "atualizar-cadastro",
+    "atualizar-cadastro", "pedidos-oracao",
 }
 ROTA_LOGIN = "login"
 TAMANHO_MAXIMO_LOGO = 5 * 1024 * 1024
@@ -47,6 +47,7 @@ PAGINAS_IGREJA = {
     "ebd": ("Escola Bíblica", "modules.ebd"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
     "visitantes": ("Visitantes", "modules.visitantes"),
+    "pedidos_oracao": ("Pedidos de Oracao", "modules.pedidos_oracao"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),
     "aniversariantes": ("Aniversarios", "modules.aniversariantes"),
     "backup": ("Backup", "modules.backup"),
@@ -59,6 +60,7 @@ PAGINAS_TESOUREIRO = {
 }
 PAGINAS_PASTOR_AUXILIAR = {
     "visitantes": ("Visitantes", "modules.visitantes"),
+    "pedidos_oracao": ("Pedidos de Oracao", "modules.pedidos_oracao"),
     "dashboard": ("Dashboard", "modules.dashboard"),
     "ebd": ("Relatórios Escola Bíblica", "modules.ebd"),
     "orhafe": ("Relatórios Círculo de Oração", "modules.orhafe"),

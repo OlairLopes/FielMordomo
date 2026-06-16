@@ -424,6 +424,7 @@ def inicializar_tenant(slug):
         _garantir_tabelas_ebd(conn)
         _garantir_tabelas_orhafe(conn)
         _garantir_tabelas_visitantes(conn)
+        _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabela_pastores_auxiliares(conn)
         _garantir_tabela_recepcao(conn)
 
@@ -700,6 +701,45 @@ def _garantir_tabelas_visitantes(conn):
             ON visitantes_cultos(data);
         CREATE INDEX IF NOT EXISTS idx_visitantes_cultos_departamento
             ON visitantes_cultos(departamento);
+    """)
+
+
+def _garantir_tabelas_pedidos_oracao(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS agenda_pastoral (
+            id_slot      INTEGER PRIMARY KEY AUTOINCREMENT,
+            data         TEXT NOT NULL,
+            hora_inicio  TEXT NOT NULL,
+            hora_fim     TEXT NOT NULL,
+            local        TEXT DEFAULT '',
+            observacoes  TEXT DEFAULT '',
+            disponivel   INTEGER NOT NULL DEFAULT 1,
+            id_pedido    INTEGER,
+            criado_em    TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_agenda_pastoral_data
+            ON agenda_pastoral(data, hora_inicio);
+
+        CREATE TABLE IF NOT EXISTS pedidos_oracao (
+            id_pedido     INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
+            nome_membro   TEXT NOT NULL,
+            telefone      TEXT DEFAULT '',
+            tipo_pedido   TEXT NOT NULL DEFAULT 'Pedido de oracao',
+            pedido        TEXT NOT NULL,
+            confidencial  INTEGER NOT NULL DEFAULT 1,
+            deseja_visita INTEGER NOT NULL DEFAULT 0,
+            id_slot       INTEGER REFERENCES agenda_pastoral(id_slot),
+            status        TEXT NOT NULL DEFAULT 'Novo',
+            notificacao_status TEXT DEFAULT '',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_pedidos_oracao_criado
+            ON pedidos_oracao(criado_em);
+        CREATE INDEX IF NOT EXISTS idx_pedidos_oracao_status
+            ON pedidos_oracao(status);
     """)
 
 
@@ -2122,6 +2162,241 @@ def excluir_visitante_culto(slug, id_visitante):
             (int(id_visitante),),
         )
         return True
+
+
+def salvar_horario_visita_pastoral(
+    slug,
+    data,
+    hora_inicio,
+    hora_fim,
+    local="",
+    observacoes="",
+    disponivel=True,
+    id_slot=None,
+):
+    data = str(data or "").strip()
+    hora_inicio = str(hora_inicio or "").strip()
+    hora_fim = str(hora_fim or "").strip()
+    if not data:
+        raise ValueError("Informe a data do horario pastoral.")
+    if not hora_inicio or not hora_fim:
+        raise ValueError("Informe o horario inicial e final.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_pedidos_oracao(conn)
+        dados = (
+            data,
+            hora_inicio,
+            hora_fim,
+            sanitizar(local),
+            sanitizar(observacoes),
+            int(bool(disponivel)),
+        )
+        if id_slot:
+            conn.execute(
+                """UPDATE agenda_pastoral
+                   SET data=?, hora_inicio=?, hora_fim=?, local=?, observacoes=?,
+                       disponivel=?, atualizado_em=datetime('now')
+                   WHERE id_slot=?""",
+                dados + (int(id_slot),),
+            )
+            return int(id_slot)
+        cur = conn.execute(
+            """INSERT INTO agenda_pastoral
+               (data, hora_inicio, hora_fim, local, observacoes, disponivel)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return cur.lastrowid
+
+
+def listar_horarios_visita_pastoral(
+    slug,
+    data_inicio=None,
+    data_fim=None,
+    somente_disponiveis=False,
+):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_pedidos_oracao(conn)
+        where = []
+        params = []
+        if data_inicio:
+            where.append("a.data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("a.data<=?")
+            params.append(str(data_fim))
+        if somente_disponiveis:
+            where.append("a.disponivel=1 AND a.id_pedido IS NULL")
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return pd.read_sql_query(
+            f"""SELECT a.id_slot, a.data, a.hora_inicio, a.hora_fim, a.local,
+                       a.observacoes, a.disponivel, a.id_pedido,
+                       p.nome_membro AS membro_agendado, p.status AS status_pedido
+                FROM agenda_pastoral a
+                LEFT JOIN pedidos_oracao p ON p.id_pedido=a.id_pedido
+                {filtro}
+                ORDER BY a.data, a.hora_inicio""",
+            conn,
+            params=params,
+        )
+
+
+def excluir_horario_visita_pastoral(slug, id_slot):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_pedidos_oracao(conn)
+        em_uso = conn.execute(
+            "SELECT id_pedido FROM agenda_pastoral WHERE id_slot=? AND id_pedido IS NOT NULL",
+            (int(id_slot),),
+        ).fetchone()
+        if em_uso:
+            conn.execute(
+                """UPDATE agenda_pastoral
+                   SET disponivel=0, atualizado_em=datetime('now')
+                   WHERE id_slot=?""",
+                (int(id_slot),),
+            )
+            return False
+        conn.execute("DELETE FROM agenda_pastoral WHERE id_slot=?", (int(id_slot),))
+        return True
+
+
+def registrar_pedido_oracao(
+    slug,
+    id_cadastro,
+    pedido,
+    tipo_pedido="Pedido de oracao",
+    confidencial=True,
+    deseja_visita=False,
+    id_slot=None,
+):
+    pedido = sanitizar(pedido)
+    tipo_pedido = sanitizar(tipo_pedido or "Pedido de oracao")
+    if not pedido or len(pedido) < 10:
+        raise ValueError("Descreva o pedido de oracao com um pouco mais de detalhe.")
+    if tipo_pedido not in {"Pedido de oracao", "Agradecimento", "Aconselhamento", "Visita pastoral"}:
+        raise ValueError("Tipo de pedido invalido.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _garantir_colunas_cadastros(conn)
+        _garantir_tabelas_pedidos_oracao(conn)
+        membro = conn.execute(
+            """SELECT id_cadastro, nome, telefone
+               FROM cadastros
+               WHERE id_cadastro=? AND UPPER(TRIM(tipo_cadastro))='MEMBRO'
+                     AND UPPER(TRIM(situacao))='ATIVO'
+               LIMIT 1""",
+            (int(id_cadastro),),
+        ).fetchone()
+        if not membro:
+            raise ValueError("Cadastro de membro ativo nao localizado.")
+
+        slot_id = int(id_slot) if id_slot else None
+        if deseja_visita and slot_id:
+            slot = conn.execute(
+                """SELECT id_slot FROM agenda_pastoral
+                   WHERE id_slot=? AND disponivel=1 AND id_pedido IS NULL
+                   LIMIT 1""",
+                (slot_id,),
+            ).fetchone()
+            if not slot:
+                raise ValueError("Horario pastoral indisponivel. Escolha outro horario.")
+        elif deseja_visita:
+            slot_id = None
+
+        cur = conn.execute(
+            """INSERT INTO pedidos_oracao
+               (id_cadastro, nome_membro, telefone, tipo_pedido, pedido,
+                confidencial, deseja_visita, id_slot, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Novo')""",
+            (
+                int(membro["id_cadastro"]),
+                sanitizar(membro["nome"]),
+                sanitizar(membro["telefone"]),
+                tipo_pedido,
+                pedido,
+                int(bool(confidencial)),
+                int(bool(deseja_visita)),
+                slot_id,
+            ),
+        )
+        id_pedido = cur.lastrowid
+        if slot_id:
+            conn.execute(
+                """UPDATE agenda_pastoral
+                   SET id_pedido=?, disponivel=0, atualizado_em=datetime('now')
+                   WHERE id_slot=?""",
+                (id_pedido, slot_id),
+            )
+        return id_pedido
+
+
+def listar_pedidos_oracao(slug, data_inicio=None, data_fim=None, status=""):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_pedidos_oracao(conn)
+        where = []
+        params = []
+        if data_inicio:
+            where.append("date(p.criado_em)>=date(?)")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("date(p.criado_em)<=date(?)")
+            params.append(str(data_fim))
+        if status:
+            where.append("p.status=?")
+            params.append(str(status))
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return pd.read_sql_query(
+            f"""SELECT p.id_pedido, p.id_cadastro, p.nome_membro, p.telefone,
+                       p.tipo_pedido, p.pedido, p.confidencial, p.deseja_visita,
+                       p.id_slot, p.status, p.notificacao_status, p.criado_em,
+                       a.data AS data_visita, a.hora_inicio, a.hora_fim, a.local
+                FROM pedidos_oracao p
+                LEFT JOIN agenda_pastoral a ON a.id_slot=p.id_slot
+                {filtro}
+                ORDER BY p.criado_em DESC""",
+            conn,
+            params=params,
+        )
+
+
+def atualizar_status_pedido_oracao(slug, id_pedido, status):
+    status = str(status or "").strip()
+    if status not in {"Novo", "Em acompanhamento", "Orado", "Visitado", "Arquivado"}:
+        raise ValueError("Status de pedido invalido.")
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_pedidos_oracao(conn)
+        conn.execute(
+            """UPDATE pedidos_oracao
+               SET status=?, atualizado_em=datetime('now')
+               WHERE id_pedido=?""",
+            (status, int(id_pedido)),
+        )
+
+
+def atualizar_notificacao_pedido_oracao(slug, id_pedido, notificacao_status):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_pedidos_oracao(conn)
+        conn.execute(
+            """UPDATE pedidos_oracao
+               SET notificacao_status=?, atualizado_em=datetime('now')
+               WHERE id_pedido=?""",
+            (sanitizar(notificacao_status), int(id_pedido)),
+        )
 
 
 def _normalizar_usuario_pastor_auxiliar(usuario):
@@ -4160,6 +4435,7 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_tabelas_ebd(conn)
         _garantir_tabelas_orhafe(conn)
         _garantir_tabelas_visitantes(conn)
+        _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabela_pastores_auxiliares(conn)
         _garantir_tabela_recepcao(conn)
     return True
