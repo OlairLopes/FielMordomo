@@ -113,15 +113,18 @@ def _login_css():
                 padding: 1.4rem 1.5rem 1.5rem;
                 box-shadow: 0 20px 45px rgba(6, 27, 68, .10);
             }
-            .fm-login-side {
+            div[data-testid="column"]:has(.fm-login-side-anchor) {
                 background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
                 border-radius: 24px;
                 padding: 26px 20px 22px;
-                min-height: 680px;
+                min-height: 700px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
             }
-            .fm-login-side * {
+            div[data-testid="column"]:has(.fm-login-side-anchor) * {
                 color: #FFFFFF;
+            }
+            .fm-login-side-anchor {
+                display: none;
             }
             .fm-login-side-label {
                 color: rgba(255,255,255,.72) !important;
@@ -129,40 +132,32 @@ def _login_css():
                 font-weight: 800;
                 text-transform: uppercase;
                 letter-spacing: .08em;
-                margin: 26px 4px 10px;
-            }
-            .fm-login-card {
-                background: #FFFFFF;
-                border: 1px solid #E5E7EB;
-                border-radius: 24px;
-                padding: 30px;
-                min-height: 680px;
-                box-shadow: 0 20px 45px rgba(6, 27, 68, .08);
+                margin: 18px 4px 10px;
             }
             .fm-login-heading {
                 color: #061B44;
                 font-size: 1.75rem;
                 font-weight: 850;
-                margin-bottom: 6px;
+                margin: 18px 0 6px;
             }
             .fm-login-muted {
                 color: #64748B;
                 font-size: .95rem;
                 margin-bottom: 20px;
             }
-            .fm-login-side div[data-testid="stImage"] {
+            div[data-testid="column"]:has(.fm-login-side-anchor) div[data-testid="stImage"] {
                 display: flex;
                 justify-content: center;
                 margin: 0 auto 18px;
                 padding: 8px 0 14px;
                 border-bottom: 1px solid rgba(255,255,255,.14);
             }
-            .fm-login-side img {
+            div[data-testid="column"]:has(.fm-login-side-anchor) img {
                 max-width: 145px;
                 height: auto;
                 object-fit: contain;
             }
-            .fm-login-side .stButton button {
+            div[data-testid="column"]:has(.fm-login-side-anchor) .stButton button {
                 width: 100%;
                 border: none !important;
                 border-radius: 13px !important;
@@ -173,17 +168,19 @@ def _login_css():
                 background: rgba(255,255,255,.06) !important;
                 font-weight: 700 !important;
             }
-            .fm-login-side .stButton button:hover {
+            div[data-testid="column"]:has(.fm-login-side-anchor) .stButton button:hover {
                 background: rgba(212, 175, 55, .22) !important;
                 color: #D4AF37 !important;
             }
-            .fm-login-side .stButton button[kind="primary"] {
+            div[data-testid="column"]:has(.fm-login-side-anchor) .stButton button[kind="primary"] {
                 background: rgba(212, 175, 55, .28) !important;
                 color: #D4AF37 !important;
                 border-left: 4px solid #D4AF37 !important;
             }
-            .fm-login-mobile {
+            .fm-login-select-anchor {
                 display: none;
+            }
+            div[data-testid="column"]:has(.fm-login-select-anchor) div[data-testid="stSelectbox"] {
                 background: #FFFFFF;
                 border: 1px solid #E5E7EB;
                 border-radius: 18px;
@@ -195,16 +192,8 @@ def _login_css():
                 .block-container {
                     padding: .8rem .7rem 1.2rem !important;
                 }
-                .fm-login-desktop-side {
+                div[data-testid="column"]:has(.fm-login-side-anchor) {
                     display: none !important;
-                }
-                .fm-login-mobile {
-                    display: block !important;
-                }
-                .fm-login-card {
-                    min-height: auto;
-                    padding: 18px;
-                    border-radius: 18px;
                 }
                 div[data-testid="column"] {
                     width: 100% !important;
@@ -220,9 +209,6 @@ def _login_css():
                     padding: 1rem !important;
                     border-radius: 14px;
                 }
-                .fm-login-mobile div[data-testid="stSelectbox"] {
-                    margin-bottom: 0 !important;
-                }
             }
         </style>
         """,
@@ -232,21 +218,24 @@ def _login_css():
 
 def _modo_login_atual():
     modos = [item[0] for item in LOGIN_OPCOES]
-    modo = st.session_state.get("login_modo", modos[0])
+    modo_select = st.session_state.get("login_modo_select")
+    modo = modo_select if modo_select in modos else st.session_state.get("login_modo", modos[0])
     if modo not in modos:
         modo = modos[0]
     st.session_state["login_modo"] = modo
+    st.session_state["login_modo_select"] = modo
     return modo
 
 
 def _selecionar_modo_login(modo):
     st.session_state["login_modo"] = modo
+    st.session_state["login_modo_select"] = modo
     st.session_state["mostrar_recuperacao"] = False
     st.rerun()
 
 
 def _sidebar_login(modo_atual):
-    st.markdown('<div class="fm-login-side">', unsafe_allow_html=True)
+    st.markdown('<span class="fm-login-side-anchor"></span>', unsafe_allow_html=True)
     _exibir_logo_sistema()
     st.markdown(
         '<div class="fm-login-side-label">Tipo de acesso</div>',
@@ -263,7 +252,6 @@ def _sidebar_login(modo_atual):
             help=ajuda,
         ):
             _selecionar_modo_login(modo)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_login_por_modo(modo):
@@ -283,17 +271,18 @@ def _render_login_por_modo(modo):
         _login_admin()
 
 
-def _seletor_mobile_login(modo_atual):
+def _seletor_login(modo_atual):
     opcoes = [item[0] for item in LOGIN_OPCOES]
     indice = opcoes.index(modo_atual) if modo_atual in opcoes else 0
-    st.markdown('<div class="fm-login-mobile">', unsafe_allow_html=True)
+    if st.session_state.get("login_modo_select") not in opcoes:
+        st.session_state["login_modo_select"] = modo_atual
+    st.markdown('<span class="fm-login-select-anchor"></span>', unsafe_allow_html=True)
     novo_modo = st.selectbox(
         "Tipo de acesso",
         opcoes,
         index=indice,
-        key="login_modo_mobile_select",
+        key="login_modo_select",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
     if novo_modo != modo_atual:
         _selecionar_modo_login(novo_modo)
 
@@ -369,13 +358,10 @@ def tela_login():
 
     col_side, col_main = st.columns([0.95, 2.05], gap="large")
     with col_side:
-        st.markdown('<div class="fm-login-desktop-side">', unsafe_allow_html=True)
         _sidebar_login(modo)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with col_main:
-        _seletor_mobile_login(modo)
-        st.markdown('<div class="fm-login-card">', unsafe_allow_html=True)
+        _seletor_login(modo)
         st.markdown(
             """
             <div class="fm-login-heading">Acessar Sistema</div>
@@ -388,11 +374,9 @@ def tela_login():
 
         if st.session_state.get("mostrar_recuperacao"):
             _mostrar_recuperacao_senha()
-            st.markdown("</div>", unsafe_allow_html=True)
             return False
 
         _render_login_por_modo(modo)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     return False
 
