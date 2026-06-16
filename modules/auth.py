@@ -590,7 +590,7 @@ def _opcoes_igrejas_ativas():
     if igrejas.empty:
         return {}, "Nenhuma igreja ativa encontrada."
     opcoes = {
-        f'{row["nome"]} ({row["slug"]})': str(row["slug"])
+        str(row["slug"]): str(row["nome"])
         for _, row in igrejas.sort_values("nome").iterrows()
     }
     return opcoes, ""
@@ -647,12 +647,12 @@ def _selectbox_igreja_login(key):
     if erro_igrejas:
         st.warning(erro_igrejas)
         return ""
-    igreja_label = st.selectbox(
+    return st.selectbox(
         "Identificador da igreja",
         list(op_igrejas.keys()),
         key=key,
+        help="Selecione o identificador da igreja, por exemplo: adserrinha.",
     )
-    return op_igrejas[igreja_label]
 
 
 def _selectbox_usuario_login(slug, perfil, label, key):
@@ -660,8 +660,14 @@ def _selectbox_usuario_login(slug, perfil, label, key):
     if erro_usuarios:
         st.warning(erro_usuarios)
         return ""
-    usuario_label = st.selectbox(label, list(op_usuarios.keys()), key=key)
-    return op_usuarios[usuario_label]
+    usuarios = list(op_usuarios.values())
+    rotulos = {usuario: rotulo for rotulo, usuario in op_usuarios.items()}
+    return st.selectbox(
+        label,
+        usuarios,
+        key=key,
+        format_func=lambda usuario: rotulos.get(usuario, usuario),
+    )
 
 
 
