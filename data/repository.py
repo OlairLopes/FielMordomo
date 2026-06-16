@@ -421,6 +421,7 @@ def inicializar_tenant(slug):
                 WHERE principal=1 AND situacao='Ativo';
         """)
         _garantir_tabelas_ebd(conn)
+        _garantir_tabelas_orhafe(conn)
 
 
 def _garantir_colunas_lancamentos(conn):
@@ -558,6 +559,77 @@ def _garantir_tabelas_ebd(conn):
     ):
         if coluna not in cols_aulas:
             conn.execute(f"ALTER TABLE ebd_aulas ADD COLUMN {coluna} {tipo}")
+
+
+def _garantir_tabelas_orhafe(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS orhafe_coordenadoras (
+            id_coordenadora INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome            TEXT NOT NULL,
+            telefone        TEXT DEFAULT '',
+            funcao          TEXT DEFAULT 'Coordenadora',
+            ordem           INTEGER NOT NULL DEFAULT 0,
+            ativa           INTEGER NOT NULL DEFAULT 1,
+            observacoes     TEXT DEFAULT '',
+            criado_em       TEXT DEFAULT (datetime('now')),
+            atualizado_em   TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS orhafe_lideres (
+            id_lider    INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome        TEXT NOT NULL,
+            telefone    TEXT DEFAULT '',
+            funcao      TEXT DEFAULT 'Lider',
+            ordem       INTEGER NOT NULL DEFAULT 0,
+            ativo       INTEGER NOT NULL DEFAULT 1,
+            observacoes TEXT DEFAULT '',
+            criado_em   TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS orhafe_matriculas (
+            id_matricula INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro  INTEGER REFERENCES cadastros(id_cadastro),
+            nome         TEXT NOT NULL,
+            telefone     TEXT DEFAULT '',
+            ativa        INTEGER NOT NULL DEFAULT 1,
+            data_inicio  TEXT DEFAULT '',
+            data_fim     TEXT DEFAULT '',
+            observacoes  TEXT DEFAULT '',
+            criado_em    TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now')),
+            UNIQUE(id_cadastro)
+        );
+        CREATE TABLE IF NOT EXISTS orhafe_reunioes (
+            id_reuniao       INTEGER PRIMARY KEY AUTOINCREMENT,
+            data             TEXT NOT NULL UNIQUE,
+            tema             TEXT DEFAULT '',
+            id_lider         INTEGER REFERENCES orhafe_lideres(id_lider),
+            lider_nome       TEXT DEFAULT '',
+            qtd_matriculadas INTEGER NOT NULL DEFAULT 0,
+            qtd_presentes    INTEGER NOT NULL DEFAULT 0,
+            qtd_ausentes     INTEGER NOT NULL DEFAULT 0,
+            qtd_visitantes   INTEGER NOT NULL DEFAULT 0,
+            ofertas          REAL NOT NULL DEFAULT 0,
+            observacoes      TEXT DEFAULT '',
+            criado_em        TEXT DEFAULT (datetime('now')),
+            atualizado_em    TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS orhafe_presencas (
+            id_presenca  INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_reuniao   INTEGER NOT NULL REFERENCES orhafe_reunioes(id_reuniao) ON DELETE CASCADE,
+            id_matricula INTEGER REFERENCES orhafe_matriculas(id_matricula) ON DELETE CASCADE,
+            nome         TEXT NOT NULL,
+            presente     INTEGER NOT NULL DEFAULT 0,
+            visitante    INTEGER NOT NULL DEFAULT 0,
+            observacao   TEXT DEFAULT '',
+            UNIQUE(id_reuniao, id_matricula, nome)
+        );
+        CREATE INDEX IF NOT EXISTS idx_orhafe_matriculas_ativa
+            ON orhafe_matriculas(ativa);
+        CREATE INDEX IF NOT EXISTS idx_orhafe_reunioes_data
+            ON orhafe_reunioes(data);
+        CREATE INDEX IF NOT EXISTS idx_orhafe_presencas_reuniao
+            ON orhafe_presencas(id_reuniao);
+    """)
 
 
 def listar_ebd_classes(slug, incluir_inativas=False):
@@ -1170,6 +1242,383 @@ def autenticar_ebd_secretario(slug, usuario, senha):
             "classe": row["classe"] or "",
         },
     }
+
+
+def listar_orhafe_coordenadoras(slug, incluir_inativas=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        where = "" if incluir_inativas else "WHERE ativa=1"
+        return pd.read_sql_query(
+            f"""SELECT id_coordenadora, nome, telefone, funcao, ordem,
+                       ativa, observacoes, criado_em, atualizado_em
+                FROM orhafe_coordenadoras
+                {where}
+                ORDER BY ordem, nome""",
+            conn,
+        )
+
+
+def salvar_orhafe_coordenadora(
+    slug,
+    nome,
+    telefone="",
+    funcao="Coordenadora",
+    ordem=0,
+    ativa=True,
+    observacoes="",
+    id_coordenadora=None,
+):
+    nome = sanitizar(nome)
+    if not nome:
+        raise ValueError("Nome da coordenadora e obrigatorio.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        dados = (
+            nome, sanitizar(telefone), sanitizar(funcao or "Coordenadora"),
+            int(ordem or 0), int(bool(ativa)), sanitizar(observacoes),
+        )
+        if id_coordenadora:
+            conn.execute(
+                """UPDATE orhafe_coordenadoras
+                   SET nome=?, telefone=?, funcao=?, ordem=?, ativa=?,
+                       observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_coordenadora=?""",
+                dados + (int(id_coordenadora),),
+            )
+            return int(id_coordenadora)
+        cur = conn.execute(
+            """INSERT INTO orhafe_coordenadoras
+               (nome, telefone, funcao, ordem, ativa, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return cur.lastrowid
+
+
+def listar_orhafe_lideres(slug, incluir_inativos=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        where = "" if incluir_inativos else "WHERE ativo=1"
+        return pd.read_sql_query(
+            f"""SELECT id_lider, nome, telefone, funcao, ordem, ativo,
+                       observacoes, criado_em, atualizado_em
+                FROM orhafe_lideres
+                {where}
+                ORDER BY ordem, nome""",
+            conn,
+        )
+
+
+def salvar_orhafe_lider(
+    slug,
+    nome,
+    telefone="",
+    funcao="Lider",
+    ordem=0,
+    ativo=True,
+    observacoes="",
+    id_lider=None,
+):
+    nome = sanitizar(nome)
+    if not nome:
+        raise ValueError("Nome da lider e obrigatorio.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        dados = (
+            nome, sanitizar(telefone), sanitizar(funcao or "Lider"),
+            int(ordem or 0), int(bool(ativo)), sanitizar(observacoes),
+        )
+        if id_lider:
+            conn.execute(
+                """UPDATE orhafe_lideres
+                   SET nome=?, telefone=?, funcao=?, ordem=?, ativo=?,
+                       observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_lider=?""",
+                dados + (int(id_lider),),
+            )
+            return int(id_lider)
+        cur = conn.execute(
+            """INSERT INTO orhafe_lideres
+               (nome, telefone, funcao, ordem, ativo, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return cur.lastrowid
+
+
+def listar_orhafe_matriculas(slug, incluir_inativas=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        where = "" if incluir_inativas else "WHERE m.ativa=1"
+        return pd.read_sql_query(
+            f"""SELECT m.id_matricula, m.id_cadastro, m.nome, m.telefone,
+                       m.ativa, m.data_inicio, m.data_fim, m.observacoes,
+                       c.funcao, c.congregacao, c.situacao
+                FROM orhafe_matriculas m
+                LEFT JOIN cadastros c ON c.id_cadastro=m.id_cadastro
+                {where}
+                ORDER BY m.ativa DESC, m.nome""",
+            conn,
+        )
+
+
+def salvar_orhafe_matricula(
+    slug,
+    nome,
+    id_cadastro=None,
+    telefone="",
+    data_inicio="",
+    observacoes="",
+    id_matricula=None,
+    ativa=True,
+):
+    nome = sanitizar(nome)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+        if not nome:
+            raise ValueError("Nome da matriculada e obrigatorio.")
+        dados = (
+            id_cadastro, nome, sanitizar(telefone), int(bool(ativa)),
+            str(data_inicio or ""), sanitizar(observacoes),
+        )
+        if id_matricula:
+            conn.execute(
+                """UPDATE orhafe_matriculas
+                   SET id_cadastro=?, nome=?, telefone=?, ativa=?,
+                       data_inicio=?, observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_matricula=?""",
+                dados + (int(id_matricula),),
+            )
+            return int(id_matricula)
+        cur = conn.execute(
+            """INSERT INTO orhafe_matriculas
+               (id_cadastro, nome, telefone, ativa, data_inicio, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id_cadastro) DO UPDATE SET
+                   nome=excluded.nome,
+                   telefone=excluded.telefone,
+                   ativa=1,
+                   data_fim='',
+                   observacoes=excluded.observacoes,
+                   atualizado_em=datetime('now')""",
+            dados,
+        )
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT id_matricula FROM orhafe_matriculas WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            return int(row["id_matricula"])
+        return cur.lastrowid
+
+
+def encerrar_orhafe_matricula(slug, id_matricula, data_fim=""):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        conn.execute(
+            """UPDATE orhafe_matriculas
+               SET ativa=0, data_fim=?, atualizado_em=datetime('now')
+               WHERE id_matricula=?""",
+            (str(data_fim or ""), int(id_matricula)),
+        )
+
+
+def listar_orhafe_reunioes(slug, data_inicio=None, data_fim=None):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        where = []
+        params = []
+        if data_inicio:
+            where.append("r.data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("r.data<=?")
+            params.append(str(data_fim))
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return pd.read_sql_query(
+            f"""SELECT r.id_reuniao, r.data, r.tema, r.id_lider,
+                       COALESCE(l.nome, r.lider_nome) AS lider,
+                       r.qtd_matriculadas AS matriculadas,
+                       r.qtd_presentes AS presentes,
+                       r.qtd_ausentes AS ausentes,
+                       r.qtd_visitantes AS visitantes,
+                       r.ofertas, r.observacoes, r.criado_em, r.atualizado_em
+                FROM orhafe_reunioes r
+                LEFT JOIN orhafe_lideres l ON l.id_lider=r.id_lider
+                {filtro}
+                ORDER BY r.data DESC""",
+            conn,
+            params=params,
+        )
+
+
+def carregar_orhafe_presencas(slug, id_reuniao):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        return pd.read_sql_query(
+            """SELECT id_presenca, id_reuniao, id_matricula, nome,
+                      presente, visitante, observacao
+               FROM orhafe_presencas
+               WHERE id_reuniao=?
+               ORDER BY visitante, nome""",
+            conn,
+            params=(int(id_reuniao),),
+        )
+
+
+def salvar_orhafe_chamada(
+    slug,
+    data,
+    id_lider=None,
+    lider_nome="",
+    tema="",
+    observacoes="",
+    presencas=None,
+    visitantes=None,
+    ofertas=0,
+):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    presencas = presencas or {}
+    visitantes = visitantes or []
+    try:
+        ofertas = max(float(ofertas or 0), 0.0)
+    except (TypeError, ValueError) as ex:
+        raise ValueError("Informe um valor valido para ofertas.") from ex
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        id_lider = int(id_lider) if id_lider else None
+        if id_lider:
+            row_lider = conn.execute(
+                "SELECT nome FROM orhafe_lideres WHERE id_lider=?",
+                (id_lider,),
+            ).fetchone()
+            if row_lider:
+                lider_nome = row_lider["nome"]
+        dados_presenca = []
+        for id_matricula, marcado in presencas.items():
+            row = conn.execute(
+                "SELECT nome FROM orhafe_matriculas WHERE id_matricula=?",
+                (int(id_matricula),),
+            ).fetchone()
+            if row:
+                dados_presenca.append((int(id_matricula), row["nome"], bool(marcado), False))
+        nomes_visitantes = [
+            sanitizar(nome)
+            for nome in visitantes
+            if str(nome or "").strip()
+        ]
+        qtd_matriculadas = len(dados_presenca)
+        qtd_presentes = sum(1 for _, _, marcado, _ in dados_presenca if marcado)
+        qtd_ausentes = max(qtd_matriculadas - qtd_presentes, 0)
+        qtd_visitantes = len(nomes_visitantes)
+
+        conn.execute(
+            """INSERT INTO orhafe_reunioes
+               (data, tema, id_lider, lider_nome, qtd_matriculadas,
+                qtd_presentes, qtd_ausentes, qtd_visitantes, ofertas, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(data) DO UPDATE SET
+                   tema=excluded.tema,
+                   id_lider=excluded.id_lider,
+                   lider_nome=excluded.lider_nome,
+                   qtd_matriculadas=excluded.qtd_matriculadas,
+                   qtd_presentes=excluded.qtd_presentes,
+                   qtd_ausentes=excluded.qtd_ausentes,
+                   qtd_visitantes=excluded.qtd_visitantes,
+                   ofertas=excluded.ofertas,
+                   observacoes=excluded.observacoes,
+                   atualizado_em=datetime('now')""",
+            (
+                str(data), sanitizar(tema), id_lider, sanitizar(lider_nome),
+                qtd_matriculadas, qtd_presentes, qtd_ausentes, qtd_visitantes,
+                ofertas, sanitizar(observacoes),
+            ),
+        )
+        row_reuniao = conn.execute(
+            "SELECT id_reuniao FROM orhafe_reunioes WHERE data=?",
+            (str(data),),
+        ).fetchone()
+        id_reuniao = int(row_reuniao["id_reuniao"])
+        conn.execute("DELETE FROM orhafe_presencas WHERE id_reuniao=?", (id_reuniao,))
+        for id_matricula, nome, presente, visitante in dados_presenca:
+            conn.execute(
+                """INSERT INTO orhafe_presencas
+                   (id_reuniao, id_matricula, nome, presente, visitante)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (id_reuniao, id_matricula, sanitizar(nome), int(presente), int(visitante)),
+            )
+        for nome in nomes_visitantes:
+            conn.execute(
+                """INSERT INTO orhafe_presencas
+                   (id_reuniao, id_matricula, nome, presente, visitante)
+                   VALUES (?, NULL, ?, 1, 1)""",
+                (id_reuniao, nome),
+            )
+        return id_reuniao
+
+
+def relatorio_orhafe_frequencia(slug, data_inicio=None, data_fim=None):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        where = ["p.visitante=0"]
+        params = []
+        if data_inicio:
+            where.append("r.data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("r.data<=?")
+            params.append(str(data_fim))
+        filtro = f"WHERE {' AND '.join(where)}"
+        return pd.read_sql_query(
+            f"""SELECT p.nome,
+                       COUNT(p.id_presenca) AS reunioes,
+                       SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presencas,
+                       SUM(CASE WHEN p.presente=0 THEN 1 ELSE 0 END) AS ausencias
+                FROM orhafe_presencas p
+                JOIN orhafe_reunioes r ON r.id_reuniao=p.id_reuniao
+                {filtro}
+                GROUP BY p.nome
+                ORDER BY p.nome""",
+            conn,
+            params=params,
+        )
 
 
 def _dados_lancamento_validados(conn, l, lote_id=""):
@@ -2724,6 +3173,8 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_colunas_cadastros(conn)
         _garantir_colunas_lancamentos(conn)
         _garantir_tabela_tesoureiros(conn)
+        _garantir_tabelas_ebd(conn)
+        _garantir_tabelas_orhafe(conn)
     return True
 
 
