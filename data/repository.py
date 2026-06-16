@@ -565,6 +565,7 @@ def _garantir_tabelas_orhafe(conn):
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS orhafe_coordenadoras (
             id_coordenadora INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro     INTEGER REFERENCES cadastros(id_cadastro),
             nome            TEXT NOT NULL,
             telefone        TEXT DEFAULT '',
             funcao          TEXT DEFAULT 'Coordenadora',
@@ -630,6 +631,14 @@ def _garantir_tabelas_orhafe(conn):
         CREATE INDEX IF NOT EXISTS idx_orhafe_presencas_reuniao
             ON orhafe_presencas(id_reuniao);
     """)
+    cols_coordenadoras = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(orhafe_coordenadoras)").fetchall()
+    ]
+    if "id_cadastro" not in cols_coordenadoras:
+        conn.execute(
+            "ALTER TABLE orhafe_coordenadoras ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
 
 
 def listar_ebd_classes(slug, incluir_inativas=False):
@@ -1252,7 +1261,7 @@ def listar_orhafe_coordenadoras(slug, incluir_inativas=False):
         _garantir_tabelas_orhafe(conn)
         where = "" if incluir_inativas else "WHERE ativa=1"
         return pd.read_sql_query(
-            f"""SELECT id_coordenadora, nome, telefone, funcao, ordem,
+            f"""SELECT id_coordenadora, id_cadastro, nome, telefone, funcao, ordem,
                        ativa, observacoes, criado_em, atualizado_em
                 FROM orhafe_coordenadoras
                 {where}
@@ -1264,6 +1273,7 @@ def listar_orhafe_coordenadoras(slug, incluir_inativas=False):
 def salvar_orhafe_coordenadora(
     slug,
     nome,
+    id_cadastro=None,
     telefone="",
     funcao="Coordenadora",
     ordem=0,
@@ -1272,21 +1282,31 @@ def salvar_orhafe_coordenadora(
     id_coordenadora=None,
 ):
     nome = sanitizar(nome)
-    if not nome:
-        raise ValueError("Nome da coordenadora e obrigatorio.")
+    id_cadastro = int(id_cadastro) if id_cadastro else None
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone, funcao FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+                funcao = sanitizar(funcao or row["funcao"] or "Coordenadora")
+        if not nome:
+            raise ValueError("Nome da coordenadora e obrigatorio.")
         dados = (
-            nome, sanitizar(telefone), sanitizar(funcao or "Coordenadora"),
+            id_cadastro, nome, sanitizar(telefone), sanitizar(funcao or "Coordenadora"),
             int(ordem or 0), int(bool(ativa)), sanitizar(observacoes),
         )
         if id_coordenadora:
             conn.execute(
                 """UPDATE orhafe_coordenadoras
-                   SET nome=?, telefone=?, funcao=?, ordem=?, ativa=?,
+                   SET id_cadastro=?, nome=?, telefone=?, funcao=?, ordem=?, ativa=?,
                        observacoes=?, atualizado_em=datetime('now')
                    WHERE id_coordenadora=?""",
                 dados + (int(id_coordenadora),),
@@ -1294,8 +1314,8 @@ def salvar_orhafe_coordenadora(
             return int(id_coordenadora)
         cur = conn.execute(
             """INSERT INTO orhafe_coordenadoras
-               (nome, telefone, funcao, ordem, ativa, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (id_cadastro, nome, telefone, funcao, ordem, ativa, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             dados,
         )
         return cur.lastrowid

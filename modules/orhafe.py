@@ -453,30 +453,70 @@ def _render_configuracoes(slug):
     st.markdown("### Coordenadoras e lideres")
     coordenadoras = listar_orhafe_coordenadoras(slug, incluir_inativas=True)
     lideres = listar_orhafe_lideres(slug, incluir_inativos=True)
+    op_membros, df_membros = _membros_opcoes(slug)
 
     with st.expander("Cadastrar coordenadora fixa", expanded=coordenadoras.empty):
         if len(coordenadoras[coordenadoras["ativa"] == 1]) >= 4:
             st.info("Ja existem 4 coordenadoras ativas. Inative ou edite uma antes de cadastrar outra.")
         with st.form("form_orhafe_coordenadora"):
-            c1, c2 = st.columns(2)
-            nome = c1.text_input("Nome da coordenadora")
-            telefone = c2.text_input("Telefone / WhatsApp")
-            c3, c4 = st.columns(2)
-            funcao = c3.text_input("Funcao", value="Coordenadora")
-            ordem = c4.number_input("Ordem", min_value=1, max_value=4, value=1, step=1)
+            modo_coord = st.radio(
+                "Origem da coordenadora",
+                ["Cadastro de membros", "Inserir manualmente"],
+                horizontal=True,
+                key="modo_coord_orhafe",
+            )
+            id_cadastro_coord = None
+            nome = ""
+            telefone = ""
+            funcao = "Coordenadora"
+            if modo_coord == "Cadastro de membros":
+                if not op_membros:
+                    st.warning("Nao ha membros ativos disponiveis no cadastro.")
+                else:
+                    membro_label = st.selectbox(
+                        "Coordenadora",
+                        list(op_membros.keys()),
+                        help="A lista traz somente membros ativos cadastrados.",
+                    )
+                    id_cadastro_coord = op_membros[membro_label]
+                    row_membro = df_membros[
+                        df_membros["id_cadastro"].astype(int) == int(id_cadastro_coord)
+                    ].iloc[0]
+                    c1, c2 = st.columns(2)
+                    c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
+                    c2.text_input("Telefone / WhatsApp", value=row_membro.get("telefone", ""), disabled=True)
+                    funcao = row_membro.get("funcao", "") or "Coordenadora"
+                    st.text_input("Funcao no cadastro", value=funcao, disabled=True)
+            else:
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome da coordenadora")
+                telefone = c2.text_input("Telefone / WhatsApp")
+                funcao = st.text_input("Funcao", value="Coordenadora")
+            ordem = st.number_input("Ordem", min_value=1, max_value=4, value=1, step=1)
             observacoes = st.text_area("Observacoes", key="obs_coord_orhafe")
             if st.form_submit_button("Salvar coordenadora", type="primary"):
                 if len(coordenadoras[coordenadoras["ativa"] == 1]) >= 4:
                     st.error("O ORHAFE deve manter no maximo 4 coordenadoras ativas.")
+                elif modo_coord == "Cadastro de membros" and not id_cadastro_coord:
+                    st.error("Selecione uma coordenadora no cadastro de membros.")
                 else:
-                    salvar_orhafe_coordenadora(slug, nome, telefone, funcao, ordem, True, observacoes)
+                    salvar_orhafe_coordenadora(
+                        slug,
+                        nome,
+                        id_cadastro=id_cadastro_coord,
+                        telefone=telefone,
+                        funcao=funcao,
+                        ordem=ordem,
+                        ativa=True,
+                        observacoes=observacoes,
+                    )
                     st.success("Coordenadora salva.")
                     st.rerun()
 
     if not coordenadoras.empty:
         st.markdown("#### Coordenadoras cadastradas")
         st.dataframe(
-            coordenadoras[["nome", "telefone", "funcao", "ordem", "ativa", "observacoes"]],
+            coordenadoras[["id_cadastro", "nome", "telefone", "funcao", "ordem", "ativa", "observacoes"]],
             use_container_width=True,
             hide_index=True,
         )
