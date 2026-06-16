@@ -8,6 +8,7 @@ from data.repository import (
     listar_funcoes_obreiros,
     listar_obreiros_por_funcoes,
     listar_obreiros_reunioes,
+    obter_obreiros_ata,
     relatorio_obreiros_frequencia,
     salvar_obreiros_chamada,
 )
@@ -202,6 +203,12 @@ def _render_chamada(slug):
     visitantes = c1.number_input("Visitantes", min_value=0, step=1, value=0)
     ofertas = c2.number_input("Ofertas", min_value=0.0, step=1.0, value=0.0)
     observacoes = st.text_area("Observacoes")
+    arquivo_ata = st.file_uploader(
+        "Ata da reunião",
+        type=["pdf", "doc", "docx", "png", "jpg", "jpeg"],
+        help="Anexe a ata em PDF, Word ou imagem. Se a chamada ja tiver uma ata salva, ela sera mantida quando nenhum novo arquivo for enviado.",
+        key=f"obreiros_ata_{data}",
+    )
 
     presentes = sum(1 for v in presencas.values() if v)
     ausentes = len(presencas) - presentes
@@ -221,6 +228,9 @@ def _render_chamada(slug):
                 visitantes=visitantes,
                 ofertas=ofertas,
                 observacoes=observacoes,
+                ata_nome=arquivo_ata.name if arquivo_ata else "",
+                ata_mime=arquivo_ata.type if arquivo_ata else "",
+                ata_bytes=arquivo_ata.getvalue() if arquivo_ata else None,
             )
         except Exception as ex:
             st.error(str(ex))
@@ -264,6 +274,27 @@ def _render_relatorios(slug):
             file_name="reunioes_obreiros.csv",
             mime="text/csv",
         )
+        if not reunioes.empty and "tem_ata" in reunioes.columns:
+            reunioes_com_ata = reunioes[reunioes["tem_ata"].fillna(0).astype(int) == 1].copy()
+            if not reunioes_com_ata.empty:
+                opcoes_ata = {
+                    f'{_fmt_data(row["data"])} - {row["ata_nome"] or "Ata anexada"}': int(row["id_reuniao"])
+                    for _, row in reunioes_com_ata.iterrows()
+                }
+                escolha_ata = st.selectbox(
+                    "Ata anexada para download",
+                    list(opcoes_ata.keys()),
+                    key="obreiros_ata_download",
+                )
+                ata = obter_obreiros_ata(slug, opcoes_ata[escolha_ata])
+                if ata:
+                    st.download_button(
+                        "Baixar ata da reunião",
+                        data=ata["bytes"],
+                        file_name=ata["nome"],
+                        mime=ata["mime"],
+                        use_container_width=True,
+                    )
     with st.expander("Frequencia individual", expanded=False):
         st.dataframe(freq, use_container_width=True, hide_index=True)
         st.download_button(
@@ -275,7 +306,7 @@ def _render_relatorios(slug):
 
 
 def render():
-    st.subheader("Reunioes de Obreiros")
+    st.subheader("Reunião de Obreiros")
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessao invalida. Faca login novamente.")

@@ -719,6 +719,10 @@ def _garantir_tabelas_obreiros(conn):
             qtd_visitantes  INTEGER NOT NULL DEFAULT 0,
             ofertas         REAL NOT NULL DEFAULT 0,
             observacoes     TEXT DEFAULT '',
+            ata_nome        TEXT DEFAULT '',
+            ata_mime        TEXT DEFAULT '',
+            ata_bytes       BLOB,
+            ata_enviada_em  TEXT DEFAULT '',
             criado_em       TEXT DEFAULT (datetime('now')),
             atualizado_em   TEXT DEFAULT (datetime('now'))
         );
@@ -737,6 +741,18 @@ def _garantir_tabelas_obreiros(conn):
         CREATE INDEX IF NOT EXISTS idx_obreiros_presencas_reuniao
             ON obreiros_presencas(id_reuniao);
     """)
+    cols = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(obreiros_reunioes)").fetchall()
+    ]
+    for coluna, tipo in (
+        ("ata_nome", "TEXT DEFAULT ''"),
+        ("ata_mime", "TEXT DEFAULT ''"),
+        ("ata_bytes", "BLOB"),
+        ("ata_enviada_em", "TEXT DEFAULT ''"),
+    ):
+        if coluna not in cols:
+            conn.execute(f"ALTER TABLE obreiros_reunioes ADD COLUMN {coluna} {tipo}")
 
 
 def _garantir_tabelas_pedidos_oracao(conn):
@@ -2173,7 +2189,9 @@ def listar_obreiros_reunioes(slug, data_inicio=None, data_fim=None):
                        qtd_presentes AS presentes,
                        qtd_ausentes AS ausentes,
                        qtd_visitantes AS visitantes,
-                       ofertas, observacoes, criado_em, atualizado_em
+                       ofertas, observacoes, ata_nome,
+                       CASE WHEN ata_bytes IS NULL THEN 0 ELSE 1 END AS tem_ata,
+                       ata_enviada_em, criado_em, atualizado_em
                 FROM obreiros_reunioes
                 {filtro}
                 ORDER BY data DESC""",
@@ -2199,6 +2217,29 @@ def carregar_obreiros_presencas(slug, id_reuniao):
         )
 
 
+def obter_obreiros_ata(slug, id_reuniao):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_obreiros(conn)
+        row = conn.execute(
+            """SELECT id_reuniao, data, ata_nome, ata_mime, ata_bytes
+               FROM obreiros_reunioes
+               WHERE id_reuniao=?""",
+            (int(id_reuniao),),
+        ).fetchone()
+        if not row or row["ata_bytes"] is None:
+            return None
+        return {
+            "id_reuniao": row["id_reuniao"],
+            "data": row["data"],
+            "nome": row["ata_nome"] or f"ata-reuniao-obreiros-{row['data']}.pdf",
+            "mime": row["ata_mime"] or "application/octet-stream",
+            "bytes": row["ata_bytes"],
+        }
+
+
 def salvar_obreiros_chamada(
     slug,
     data,
@@ -2208,6 +2249,9 @@ def salvar_obreiros_chamada(
     visitantes=0,
     ofertas=0.0,
     observacoes="",
+    ata_nome="",
+    ata_mime="",
+    ata_bytes=None,
 ):
     funcoes = [sanitizar(f) for f in (funcoes or []) if str(f or "").strip()]
     presencas = presencas or {}
@@ -2242,11 +2286,13 @@ def salvar_obreiros_chamada(
         visitantes = max(int(visitantes or 0), 0)
         ofertas = max(float(ofertas or 0), 0.0)
         funcoes_txt = "; ".join(funcoes)
+        tem_ata = ata_bytes is not None
         conn.execute(
             """INSERT INTO obreiros_reunioes
                (data, tema, funcoes, qtd_matriculados, qtd_presentes,
-                qtd_ausentes, qtd_visitantes, ofertas, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                qtd_ausentes, qtd_visitantes, ofertas, observacoes,
+                ata_nome, ata_mime, ata_bytes, ata_enviada_em)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE '' END)
                ON CONFLICT(data) DO UPDATE SET
                    tema=excluded.tema,
                    funcoes=excluded.funcoes,
@@ -2256,10 +2302,15 @@ def salvar_obreiros_chamada(
                    qtd_visitantes=excluded.qtd_visitantes,
                    ofertas=excluded.ofertas,
                    observacoes=excluded.observacoes,
+                   ata_nome=CASE WHEN excluded.ata_bytes IS NULL THEN ata_nome ELSE excluded.ata_nome END,
+                   ata_mime=CASE WHEN excluded.ata_bytes IS NULL THEN ata_mime ELSE excluded.ata_mime END,
+                   ata_bytes=CASE WHEN excluded.ata_bytes IS NULL THEN ata_bytes ELSE excluded.ata_bytes END,
+                   ata_enviada_em=CASE WHEN excluded.ata_bytes IS NULL THEN ata_enviada_em ELSE datetime('now') END,
                    atualizado_em=datetime('now')""",
             (
                 data, sanitizar(tema), funcoes_txt, total, presentes,
                 ausentes, visitantes, ofertas, sanitizar(observacoes),
+                sanitizar(ata_nome), sanitizar(ata_mime), ata_bytes, int(tem_ata),
             ),
         )
         id_reuniao = conn.execute(
