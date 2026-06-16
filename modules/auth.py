@@ -164,13 +164,13 @@ def tela_login():
 
         modo = st.radio(
             "Tipo de acesso",
-            ["Igreja", "Tesoureiro", "Escola Bíblica", "Círculo de Oração", "Administrador do sistema"],
+            ["Gestor/Pastor", "Tesoureiro", "Escola Bíblica", "Círculo de Oração", "Administrador do sistema"],
             horizontal=True,
             label_visibility="collapsed",
         )
         st.divider()
 
-        if modo == "Igreja":
+        if modo == "Gestor/Pastor":
             _login_igreja()
         elif modo == "Tesoureiro":
             _login_tesoureiro()
@@ -186,7 +186,7 @@ def tela_login():
 
 def _login_igreja():
     with st.form("form_login_igreja"):
-        st.markdown("#### Acesso da igreja")
+        st.markdown("#### Acesso do Gestor/Pastor")
         slug  = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
         senha = st.text_input("Senha", type="password")
 
