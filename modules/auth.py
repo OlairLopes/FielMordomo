@@ -113,14 +113,14 @@ def _login_css():
                 padding: 1.4rem 1.5rem 1.5rem;
                 box-shadow: 0 20px 45px rgba(6, 27, 68, .10);
             }
-            div[data-testid="column"]:has(.fm-login-side-anchor) {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child {
                 background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
                 border-radius: 24px;
                 padding: 26px 20px 22px;
                 min-height: 700px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
             }
-            div[data-testid="column"]:has(.fm-login-side-anchor) * {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child * {
                 color: #FFFFFF;
             }
             .fm-login-side-anchor {
@@ -145,19 +145,19 @@ def _login_css():
                 font-size: .95rem;
                 margin-bottom: 20px;
             }
-            div[data-testid="column"]:has(.fm-login-side-anchor) div[data-testid="stImage"] {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child div[data-testid="stImage"] {
                 display: flex;
                 justify-content: center;
                 margin: 0 auto 18px;
                 padding: 8px 0 14px;
                 border-bottom: 1px solid rgba(255,255,255,.14);
             }
-            div[data-testid="column"]:has(.fm-login-side-anchor) img {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child img {
                 max-width: 145px;
                 height: auto;
                 object-fit: contain;
             }
-            div[data-testid="column"]:has(.fm-login-side-anchor) .stButton button {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child .stButton button {
                 width: 100%;
                 border: none !important;
                 border-radius: 13px !important;
@@ -168,11 +168,11 @@ def _login_css():
                 background: rgba(255,255,255,.06) !important;
                 font-weight: 700 !important;
             }
-            div[data-testid="column"]:has(.fm-login-side-anchor) .stButton button:hover {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child .stButton button:hover {
                 background: rgba(212, 175, 55, .22) !important;
                 color: #D4AF37 !important;
             }
-            div[data-testid="column"]:has(.fm-login-side-anchor) .stButton button[kind="primary"] {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child .stButton button[kind="primary"] {
                 background: rgba(212, 175, 55, .28) !important;
                 color: #D4AF37 !important;
                 border-left: 4px solid #D4AF37 !important;
@@ -180,7 +180,7 @@ def _login_css():
             .fm-login-select-anchor {
                 display: none;
             }
-            div[data-testid="column"]:has(.fm-login-select-anchor) div[data-testid="stSelectbox"] {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) div[data-testid="stSelectbox"] {
                 background: #FFFFFF;
                 border: 1px solid #E5E7EB;
                 border-radius: 18px;
@@ -192,7 +192,7 @@ def _login_css():
                 .block-container {
                     padding: .8rem .7rem 1.2rem !important;
                 }
-                div[data-testid="column"]:has(.fm-login-side-anchor) {
+                div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child {
                     display: none !important;
                 }
                 div[data-testid="column"] {
