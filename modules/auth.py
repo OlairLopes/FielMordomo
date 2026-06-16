@@ -178,6 +178,45 @@ def _login_css():
                 color: #D4AF37 !important;
                 border-left: 4px solid #D4AF37 !important;
             }
+            .fm-login-mobile {
+                display: none;
+                background: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 18px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                box-shadow: 0 12px 30px rgba(6, 27, 68, .08);
+            }
+            @media (max-width: 760px) {
+                .block-container {
+                    padding: .8rem .7rem 1.2rem !important;
+                }
+                .fm-login-desktop-side {
+                    display: none !important;
+                }
+                .fm-login-mobile {
+                    display: block !important;
+                }
+                .fm-login-card {
+                    min-height: auto;
+                    padding: 18px;
+                    border-radius: 18px;
+                }
+                div[data-testid="column"] {
+                    width: 100% !important;
+                    flex: 1 1 100% !important;
+                }
+                div[data-testid="stHorizontalBlock"] {
+                    gap: .75rem !important;
+                }
+                .fm-login-heading {
+                    font-size: 1.45rem;
+                }
+                div[data-testid="stForm"] {
+                    padding: 1rem !important;
+                    border-radius: 14px;
+                }
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -238,6 +277,21 @@ def _render_login_por_modo(modo):
         _login_orhafe()
     else:
         _login_admin()
+
+
+def _seletor_mobile_login(modo_atual):
+    opcoes = [item[0] for item in LOGIN_OPCOES]
+    indice = opcoes.index(modo_atual) if modo_atual in opcoes else 0
+    st.markdown('<div class="fm-login-mobile">', unsafe_allow_html=True)
+    novo_modo = st.selectbox(
+        "Tipo de acesso",
+        opcoes,
+        index=indice,
+        key="login_modo_mobile_select",
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+    if novo_modo != modo_atual:
+        _selecionar_modo_login(novo_modo)
 
 
 def _mostrar_recuperacao_senha():
@@ -311,9 +365,12 @@ def tela_login():
 
     col_side, col_main = st.columns([0.95, 2.05], gap="large")
     with col_side:
+        st.markdown('<div class="fm-login-desktop-side">', unsafe_allow_html=True)
         _sidebar_login(modo)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col_main:
+        _seletor_mobile_login(modo)
         st.markdown('<div class="fm-login-card">', unsafe_allow_html=True)
         st.markdown(
             """
