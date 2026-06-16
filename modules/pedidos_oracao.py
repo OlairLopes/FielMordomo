@@ -328,9 +328,9 @@ def render_publico():
             pin_cpf = st.text_input(
                 "Codigo de acesso do membro",
                 type="password",
-                max_chars=4,
-                placeholder="4 ultimos digitos do CPF",
-                help="Usado somente para localizar o cadastro sem expor a lista de membros.",
+                max_chars=11,
+                placeholder="CPF com 11 digitos",
+                help="Digite somente numeros, sem pontos e sem hifen.",
             )
             st.caption("O nome do membro sera preenchido automaticamente apos enviar.")
         else:
@@ -357,7 +357,7 @@ def render_publico():
             if tipo_solicitante == "Membro cadastrado":
                 membro_localizado = localizar_membro_por_pin_cpf(slug, pin_cpf)
                 if not membro_localizado:
-                    st.error("Nao localizamos membro ativo com esses 4 ultimos digitos do CPF.")
+                    st.error("Nao localizamos membro ativo com este CPF.")
                     return
                 id_cadastro = int(membro_localizado["id_cadastro"])
                 membro_notificacao = {

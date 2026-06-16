@@ -3201,9 +3201,9 @@ def carregar_cadastros(slug):
 
 
 def localizar_membro_por_pin_cpf(slug, pin_cpf):
-    pin = "".join(c for c in str(pin_cpf or "") if c.isdigit())
-    if len(pin) != 4:
-        raise ValueError("Informe os 4 ultimos digitos do CPF.")
+    cpf = "".join(c for c in str(pin_cpf or "") if c.isdigit())
+    if len(cpf) != 11:
+        raise ValueError("Informe o CPF completo com 11 digitos, sem pontos e sem hifen.")
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
@@ -3214,15 +3214,15 @@ def localizar_membro_por_pin_cpf(slug, pin_cpf):
                FROM cadastros
                WHERE UPPER(TRIM(tipo_cadastro))='MEMBRO'
                      AND UPPER(TRIM(situacao))='ATIVO'
-                     AND substr(cpf, -4)=?
+                     AND cpf=?
                ORDER BY nome""",
-            (pin,),
+            (cpf,),
         ).fetchall()
     if not rows:
         return None
     if len(rows) > 1:
         raise ValueError(
-            "Ha mais de um membro com estes 4 digitos. Procure a secretaria para registrar o pedido."
+            "Ha mais de um membro com este CPF. Procure a secretaria para registrar o pedido."
         )
     return dict(rows[0])
 
