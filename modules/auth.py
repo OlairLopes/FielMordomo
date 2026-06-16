@@ -64,7 +64,7 @@ def _limpar_sessao():
     for key in (
         "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
         "secretaria_orhafe", "pastor_auxiliar", "recepcao", "secretario_geral",
-        "pagina", "mostrar_recuperacao",
+        "pagina", "mostrar_recuperacao", "_login_acesso_url_aplicado",
     ):
         st.session_state.pop(key, None)
     for key in list(st.session_state.keys()):
@@ -263,9 +263,12 @@ def _modo_login_atual():
         acesso_url = acesso_url[0] if acesso_url else ""
     acesso_url = urllib.parse.unquote(str(acesso_url or ""))
     modo_select = st.session_state.get("login_modo_select")
-    modo = acesso_url if acesso_url in modos else (
-        modo_select if modo_select in modos else st.session_state.get("login_modo", modos[0])
-    )
+    acesso_url_aplicado = st.session_state.get("_login_acesso_url_aplicado", "")
+    if acesso_url in modos and acesso_url != acesso_url_aplicado:
+        modo = acesso_url
+        st.session_state["_login_acesso_url_aplicado"] = acesso_url
+    else:
+        modo = modo_select if modo_select in modos else st.session_state.get("login_modo", modos[0])
     if modo not in modos:
         modo = modos[0]
     st.session_state["login_modo"] = modo
@@ -280,6 +283,7 @@ def _selecionar_modo_login(modo):
     try:
         st.query_params["pagina"] = "login"
         st.query_params["acesso"] = modo
+        st.session_state["_login_acesso_url_aplicado"] = modo
     except Exception:
         pass
     st.rerun()
