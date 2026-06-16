@@ -426,6 +426,7 @@ def inicializar_tenant(slug):
         _garantir_tabelas_obreiros(conn)
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
+        _garantir_tabelas_eventos(conn)
         _garantir_tabela_pastores_auxiliares(conn)
         _garantir_tabela_secretarios_gerais(conn)
         _garantir_tabela_recepcao(conn)
@@ -806,6 +807,49 @@ def _garantir_tabelas_pedidos_oracao(conn):
     ):
         if coluna not in cols:
             conn.execute(f"ALTER TABLE pedidos_oracao ADD COLUMN {coluna} {tipo}")
+
+
+def _garantir_tabelas_eventos(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS eventos_igreja (
+            id_evento     INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo        TEXT NOT NULL,
+            data          TEXT NOT NULL,
+            hora_inicio   TEXT DEFAULT '',
+            hora_fim      TEXT DEFAULT '',
+            local         TEXT DEFAULT '',
+            departamento  TEXT DEFAULT '',
+            descricao     TEXT DEFAULT '',
+            responsavel   TEXT DEFAULT '',
+            contato       TEXT DEFAULT '',
+            visibilidade  TEXT NOT NULL DEFAULT 'Publico',
+            situacao      TEXT NOT NULL DEFAULT 'Programado',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_eventos_igreja_data
+            ON eventos_igreja(data);
+        CREATE INDEX IF NOT EXISTS idx_eventos_igreja_visibilidade
+            ON eventos_igreja(visibilidade, situacao);
+    """)
+    cols = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(eventos_igreja)").fetchall()
+    ]
+    for coluna, tipo in (
+        ("hora_inicio", "TEXT DEFAULT ''"),
+        ("hora_fim", "TEXT DEFAULT ''"),
+        ("local", "TEXT DEFAULT ''"),
+        ("departamento", "TEXT DEFAULT ''"),
+        ("descricao", "TEXT DEFAULT ''"),
+        ("responsavel", "TEXT DEFAULT ''"),
+        ("contato", "TEXT DEFAULT ''"),
+        ("visibilidade", "TEXT NOT NULL DEFAULT 'Publico'"),
+        ("situacao", "TEXT NOT NULL DEFAULT 'Programado'"),
+        ("atualizado_em", "TEXT DEFAULT ''"),
+    ):
+        if coluna not in cols:
+            conn.execute(f"ALTER TABLE eventos_igreja ADD COLUMN {coluna} {tipo}")
 
 
 def _garantir_tabela_pastores_auxiliares(conn):
@@ -2369,6 +2413,160 @@ def relatorio_obreiros_frequencia(slug, data_inicio=None, data_fim=None, funcao=
     total = df["presencas"] + df["ausencias"]
     df["frequencia_pct"] = (df["presencas"] / total.where(total > 0, 1) * 100).round(1)
     return df
+
+
+VISIBILIDADES_EVENTO = {"Publico", "Membros", "Restrito"}
+SITUACOES_EVENTO = {"Programado", "Realizado", "Cancelado"}
+
+
+def listar_eventos_igreja(
+    slug,
+    data_inicio=None,
+    data_fim=None,
+    visibilidade="",
+    situacao="",
+    somente_publicavel=False,
+):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_eventos(conn)
+        where = []
+        params = []
+        if data_inicio:
+            where.append("data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("data<=?")
+            params.append(str(data_fim))
+        if visibilidade:
+            where.append("visibilidade=?")
+            params.append(str(visibilidade))
+        if situacao:
+            where.append("situacao=?")
+            params.append(str(situacao))
+        if somente_publicavel:
+            where.append("visibilidade IN ('Publico', 'Membros')")
+            where.append("situacao='Programado'")
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return pd.read_sql_query(
+            f"""SELECT id_evento, titulo, data, hora_inicio, hora_fim, local,
+                       departamento, descricao, responsavel, contato,
+                       visibilidade, situacao, criado_em, atualizado_em
+                FROM eventos_igreja
+                {filtro}
+                ORDER BY data ASC, hora_inicio ASC, titulo ASC""",
+            conn,
+            params=params,
+        )
+
+
+def listar_eventos_publicos(slug, incluir_membros=False, data_inicio=None, data_fim=None):
+    data_inicio = data_inicio or datetime.date.today().isoformat()
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    visibilidades = ["Publico", "Membros"] if incluir_membros else ["Publico"]
+    placeholders = ",".join("?" for _ in visibilidades)
+    params = list(visibilidades) + [str(data_inicio)]
+    filtro_fim = ""
+    if data_fim:
+        filtro_fim = "AND data<=?"
+        params.append(str(data_fim))
+    with _conn(db) as conn:
+        _garantir_tabelas_eventos(conn)
+        return pd.read_sql_query(
+            f"""SELECT id_evento, titulo, data, hora_inicio, hora_fim, local,
+                       departamento, descricao, responsavel, contato,
+                       visibilidade, situacao
+                FROM eventos_igreja
+                WHERE visibilidade IN ({placeholders})
+                      AND situacao='Programado'
+                      AND data>=?
+                      {filtro_fim}
+                ORDER BY data ASC, hora_inicio ASC, titulo ASC""",
+            conn,
+            params=params,
+        )
+
+
+def salvar_evento_igreja(
+    slug,
+    titulo,
+    data,
+    hora_inicio="",
+    hora_fim="",
+    local="",
+    departamento="",
+    descricao="",
+    responsavel="",
+    contato="",
+    visibilidade="Publico",
+    situacao="Programado",
+    id_evento=None,
+):
+    titulo = sanitizar(titulo)
+    data = str(data or "").strip()
+    visibilidade = sanitizar(visibilidade or "Publico")
+    situacao = sanitizar(situacao or "Programado")
+    if not titulo:
+        raise ValueError("Informe o titulo do evento.")
+    if not data:
+        raise ValueError("Informe a data do evento.")
+    if visibilidade not in VISIBILIDADES_EVENTO:
+        raise ValueError("Visibilidade invalida.")
+    if situacao not in SITUACOES_EVENTO:
+        raise ValueError("Situacao invalida.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    dados = (
+        titulo,
+        data,
+        sanitizar(hora_inicio),
+        sanitizar(hora_fim),
+        sanitizar(local),
+        sanitizar(departamento),
+        sanitizar(descricao),
+        sanitizar(responsavel),
+        sanitizar(contato),
+        visibilidade,
+        situacao,
+    )
+    with _conn(db) as conn:
+        _garantir_tabelas_eventos(conn)
+        if id_evento:
+            conn.execute(
+                """UPDATE eventos_igreja
+                   SET titulo=?, data=?, hora_inicio=?, hora_fim=?, local=?,
+                       departamento=?, descricao=?, responsavel=?, contato=?,
+                       visibilidade=?, situacao=?, atualizado_em=datetime('now')
+                   WHERE id_evento=?""",
+                dados + (int(id_evento),),
+            )
+            return int(id_evento)
+        cur = conn.execute(
+            """INSERT INTO eventos_igreja
+               (titulo, data, hora_inicio, hora_fim, local, departamento,
+                descricao, responsavel, contato, visibilidade, situacao)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return int(cur.lastrowid)
+
+
+def excluir_evento_igreja(slug, id_evento):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_eventos(conn)
+        conn.execute("DELETE FROM eventos_igreja WHERE id_evento=?", (int(id_evento),))
+
+
+def validar_membro_eventos_por_cpf(slug, cpf):
+    return localizar_membro_por_pin_cpf(slug, cpf)
 
 
 def salvar_visitante_culto(
@@ -4999,6 +5197,7 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_tabelas_obreiros(conn)
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
+        _garantir_tabelas_eventos(conn)
         _garantir_tabela_pastores_auxiliares(conn)
         _garantir_tabela_secretarios_gerais(conn)
         _garantir_tabela_recepcao(conn)

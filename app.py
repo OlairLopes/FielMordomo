@@ -28,7 +28,7 @@ DOMINIOS_PERMITIDOS_PADRAO = {
 }
 PAGINAS_INSTITUCIONAIS = {
     "", "inicio", "sobre", "recursos", "contato", "privacidade", "termos",
-    "atualizar-cadastro", "pedidos-oracao",
+    "atualizar-cadastro", "pedidos-oracao", "agenda",
 }
 ROTA_LOGIN = "login"
 TAMANHO_MAXIMO_LOGO = 5 * 1024 * 1024
@@ -47,6 +47,7 @@ PAGINAS_IGREJA = {
     "ebd": ("Escola Bíblica", "modules.ebd"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
     "obreiros": ("Reunião de Obreiros", "modules.obreiros"),
+    "eventos": ("Agenda", "modules.eventos"),
     "visitantes": ("Visitantes", "modules.visitantes"),
     "pedidos_oracao": ("Pedidos de Oracao", "modules.pedidos_oracao"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),

@@ -1,5 +1,6 @@
 import base64
 import datetime
+import html
 import logging
 from pathlib import Path
 
@@ -739,6 +740,7 @@ def _navbar():
             <div class="fm-menu">
                 <a href="?pagina=inicio#sobre" target="_top">Sobre</a>
                 <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
+                <a href="?pagina=agenda" target="_top">Agenda</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
                 <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
                 <a href="?pagina=contato" target="_top">Contato</a>
@@ -757,6 +759,7 @@ def _footer():
             <div>FielMordomo © 2026 — Sistema de Gestão Financeira para Igrejas.</div>
             <div>
                 <a href="?pagina=contato" target="_top">Contato</a>
+                <a href="?pagina=agenda" target="_top">Agenda</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
                 <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
@@ -1365,6 +1368,236 @@ def _html_sem_indentacao(html_final: str) -> str:
     return "\n".join(linha.strip() for linha in str(html_final).splitlines() if linha.strip())
 
 
+def _fmt_data_evento(valor):
+    try:
+        return datetime.date.fromisoformat(str(valor)).strftime("%d/%m/%Y")
+    except Exception:
+        return str(valor or "")
+
+
+def _render_cards_eventos(df, titulo):
+    st.markdown(f"### {titulo}")
+    if df.empty:
+        st.info("Nenhum evento encontrado.")
+        return
+    for _, row in df.iterrows():
+        data = html.escape(_fmt_data_evento(row.get("data", "")))
+        hora_inicio = html.escape(str(row.get("hora_inicio", "") or ""))
+        hora_fim = html.escape(str(row.get("hora_fim", "") or ""))
+        horario = hora_inicio if not hora_fim else f"{hora_inicio} as {hora_fim}"
+        horario = html.escape(horario)
+        titulo_evento = html.escape(str(row.get("titulo", "") or "Evento"))
+        local = html.escape(str(row.get("local", "") or "Local a confirmar"))
+        departamento = html.escape(str(row.get("departamento", "") or ""))
+        descricao = html.escape(str(row.get("descricao", "") or ""))
+        visibilidade = html.escape(str(row.get("visibilidade", "") or "Publico"))
+        responsavel = html.escape(str(row.get("responsavel", "") or ""))
+        contato = html.escape(str(row.get("contato", "") or ""))
+        meta_extra = ""
+        if departamento:
+            meta_extra += f"<span>{departamento}</span>"
+        if responsavel:
+            meta_extra += f"<span>Responsavel: {responsavel}</span>"
+        if contato:
+            meta_extra += f"<span>Contato: {contato}</span>"
+        st.markdown(
+            f"""
+            <div class="fm-event-card">
+                <div class="fm-event-date">
+                    <strong>{data}</strong>
+                    <small>{horario or "Horario a confirmar"}</small>
+                </div>
+                <div class="fm-event-body">
+                    <div class="fm-event-top">
+                        <h3>{titulo_evento}</h3>
+                        <span>{visibilidade}</span>
+                    </div>
+                    <p class="fm-event-local">{local}</p>
+                    <p>{descricao}</p>
+                    <div class="fm-event-meta">{meta_extra}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def _render_agenda_publica():
+    from data.repository import (
+        listar_eventos_publicos,
+        listar_igrejas,
+        validar_membro_eventos_por_cpf,
+    )
+
+    st.markdown(
+        """
+        <style>
+            .fm-public-shell {
+                max-width: 1040px;
+                margin: 24px auto 28px;
+                padding: 0 18px;
+            }
+            .fm-public-hero {
+                background: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 22px;
+                padding: 28px 30px;
+                box-shadow: 0 18px 45px rgba(6, 27, 68, .08);
+                margin-bottom: 18px;
+            }
+            .fm-public-hero h1 {
+                color: #061B44;
+                margin: 0 0 8px;
+                font-size: 2rem;
+            }
+            .fm-public-hero p {
+                color: #475569;
+                margin: 0;
+                line-height: 1.55;
+            }
+            .fm-event-card {
+                display: grid;
+                grid-template-columns: 150px 1fr;
+                gap: 18px;
+                background: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 18px;
+                padding: 18px;
+                margin: 12px 0;
+                box-shadow: 0 14px 32px rgba(6, 27, 68, .07);
+            }
+            .fm-event-date {
+                background: #061B44;
+                color: #FFFFFF;
+                border-radius: 15px;
+                padding: 16px;
+                text-align: center;
+                align-self: start;
+            }
+            .fm-event-date strong {
+                display: block;
+                font-size: 1.1rem;
+            }
+            .fm-event-date small {
+                color: rgba(255,255,255,.78);
+            }
+            .fm-event-top {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            .fm-event-top h3 {
+                margin: 0 0 4px;
+                color: #061B44;
+            }
+            .fm-event-top span {
+                background: #EAF2FB;
+                color: #0B3A66;
+                border-radius: 999px;
+                padding: 5px 10px;
+                font-size: .78rem;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+            .fm-event-body p {
+                color: #475569;
+                margin: 6px 0;
+                line-height: 1.5;
+            }
+            .fm-event-local {
+                font-weight: 700;
+                color: #1F2933 !important;
+            }
+            .fm-event-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 10px;
+            }
+            .fm-event-meta span {
+                background: #F8FAFC;
+                border: 1px solid #E2E8F0;
+                color: #475569;
+                border-radius: 999px;
+                padding: 5px 10px;
+                font-size: .82rem;
+            }
+            @media (max-width: 720px) {
+                .fm-event-card {
+                    grid-template-columns: 1fr;
+                }
+                .fm-event-date {
+                    text-align: left;
+                }
+            }
+        </style>
+        <div class="fm-public-shell">
+            <div class="fm-public-hero">
+                <h1>Agenda da Igreja</h1>
+                <p>
+                    Consulte os próximos eventos públicos. Membros podem informar o CPF
+                    para visualizar também os eventos internos liberados para a membresia.
+                    Eventos restritos não são exibidos nesta página.
+                </p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    igrejas = listar_igrejas()
+    igrejas = igrejas[igrejas["ativa"].fillna(0).astype(int) == 1] if not igrejas.empty else igrejas
+    if igrejas.empty:
+        st.info("Nenhuma igreja ativa encontrada para exibir agenda.")
+        return
+
+    opcoes = {
+        f'{row["nome"]} ({row["slug"]})': row["slug"]
+        for _, row in igrejas.iterrows()
+    }
+    col1, col2 = st.columns([2, 1])
+    escolha = col1.selectbox("Selecione a igreja", list(opcoes.keys()), key="agenda_publica_igreja")
+    slug = opcoes[escolha]
+    hoje = datetime.date.today().isoformat()
+
+    chave_validado = f"agenda_membro_validado_{slug}"
+    chave_nome = f"agenda_membro_nome_{slug}"
+    incluir_membros = bool(st.session_state.get(chave_validado))
+
+    with st.form("form_agenda_membro"):
+        cpf = st.text_input(
+            "CPF do membro para acessar eventos internos",
+            placeholder="Digite apenas numeros",
+            type="password",
+        )
+        enviado = st.form_submit_button("Validar CPF", type="primary")
+        if enviado:
+            try:
+                membro = validar_membro_eventos_por_cpf(slug, cpf)
+                if membro:
+                    st.session_state[chave_validado] = True
+                    st.session_state[chave_nome] = membro.get("nome", "")
+                    st.success("CPF validado. Eventos para membros foram liberados.")
+                    st.rerun()
+                else:
+                    st.error("CPF nao localizado no cadastro de membros ativos desta igreja.")
+            except Exception as exc:
+                st.error(str(exc))
+
+    if incluir_membros:
+        nome = st.session_state.get(chave_nome, "membro")
+        st.info(f"Acesso de membro validado para {nome}. Eventos restritos continuam ocultos.")
+        if st.button("Encerrar acesso de membro", key=f"agenda_limpar_{slug}"):
+            st.session_state.pop(chave_validado, None)
+            st.session_state.pop(chave_nome, None)
+            st.rerun()
+
+    eventos = listar_eventos_publicos(slug, incluir_membros=incluir_membros, data_inicio=hoje)
+    titulo = "Eventos publicos e eventos para membros" if incluir_membros else "Eventos publicos"
+    _render_cards_eventos(eventos, titulo)
+
+
 def render_institucional():
     st.markdown(
         """
@@ -1484,6 +1717,45 @@ def render_institucional():
         from modules.pedidos_oracao import render_publico
 
         render_publico()
+        st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
+        return
+
+    if _pagina_atual() == "agenda":
+        st.markdown(
+            """
+            <style>
+                .stApp {
+                    background: #F5F7FA !important;
+                }
+                .block-container {
+                    padding: 0 0 1rem 0 !important;
+                    margin: 0 !important;
+                    max-width: 100% !important;
+                }
+                div[data-testid="stForm"],
+                div[data-testid="stAlert"],
+                div[data-testid="stMarkdownContainer"],
+                div[data-testid="stSelectbox"] {
+                    max-width: 1040px;
+                    margin-left: auto !important;
+                    margin-right: auto !important;
+                }
+                div[data-testid="stVerticalBlock"] {
+                    gap: .75rem !important;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            _html_sem_indentacao(
+                _css_base()
+                + '<div class="fm-page fm-page-update notranslate" translate="no" lang="pt-BR">'
+                + _navbar()
+            ),
+            unsafe_allow_html=True,
+        )
+        _render_agenda_publica()
         st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
         return
 
