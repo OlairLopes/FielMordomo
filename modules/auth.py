@@ -126,7 +126,7 @@ def _login_css():
         """
         <style>
             .block-container {
-                padding-top: 1.6rem !important;
+                padding-top: 2.8rem !important;
                 max-width: 1260px !important;
             }
             div[data-testid="stForm"] {
@@ -139,9 +139,10 @@ def _login_css():
             .fm-login-side {
                 background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
                 border-radius: 24px;
-                padding: 30px 22px 24px;
-                min-height: 700px;
-                margin-top: 4px;
+                padding: 36px 22px 24px;
+                min-height: 660px;
+                margin-top: 18px;
+                margin-bottom: 18px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
                 overflow: visible;
                 box-sizing: border-box;
@@ -230,6 +231,10 @@ def _login_css():
                 padding: 1rem;
                 margin-bottom: 1rem;
                 box-shadow: 0 12px 30px rgba(6, 27, 68, .08);
+            }
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child {
+                padding-top: 4px !important;
+                overflow: visible !important;
             }
             @media (max-width: 760px) {
                 .block-container {
