@@ -116,24 +116,20 @@ def _login_css():
             .fm-login-side {
                 background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
                 border-radius: 24px;
-                padding: 24px 20px;
+                padding: 26px 20px 22px;
                 min-height: 680px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
             }
             .fm-login-side * {
                 color: #FFFFFF;
             }
-            .fm-login-title {
-                font-size: 1.25rem;
-                font-weight: 800;
-                margin-top: 12px;
-                text-align: center;
-            }
-            .fm-login-subtitle {
+            .fm-login-side-label {
                 color: rgba(255,255,255,.72) !important;
-                font-size: .86rem;
-                text-align: center;
-                margin-bottom: 20px;
+                font-size: .78rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+                margin: 26px 4px 10px;
             }
             .fm-login-card {
                 background: #FFFFFF;
@@ -157,6 +153,14 @@ def _login_css():
             .fm-login-side div[data-testid="stImage"] {
                 display: flex;
                 justify-content: center;
+                margin: 0 auto 18px;
+                padding: 8px 0 14px;
+                border-bottom: 1px solid rgba(255,255,255,.14);
+            }
+            .fm-login-side img {
+                max-width: 145px;
+                height: auto;
+                object-fit: contain;
             }
             .fm-login-side .stButton button {
                 width: 100%;
@@ -216,6 +220,9 @@ def _login_css():
                     padding: 1rem !important;
                     border-radius: 14px;
                 }
+                .fm-login-mobile div[data-testid="stSelectbox"] {
+                    margin-bottom: 0 !important;
+                }
             }
         </style>
         """,
@@ -242,10 +249,7 @@ def _sidebar_login(modo_atual):
     st.markdown('<div class="fm-login-side">', unsafe_allow_html=True)
     _exibir_logo_sistema()
     st.markdown(
-        """
-        <div class="fm-login-title">FielMordomo</div>
-        <div class="fm-login-subtitle">Gestao Financeira para Igrejas</div>
-        """,
+        '<div class="fm-login-side-label">Tipo de acesso</div>',
         unsafe_allow_html=True,
     )
     for modo, titulo, descricao in LOGIN_OPCOES:
