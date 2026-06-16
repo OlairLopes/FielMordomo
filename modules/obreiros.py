@@ -280,6 +280,9 @@ def render():
     if not slug:
         st.error("Sessao invalida. Faca login novamente.")
         return
+    if st.session_state.get("modo") == "secretario_geral":
+        _render_chamada(slug)
+        return
     tab_chamada, tab_relatorios = st.tabs(["Chamada", "Relatorios"])
     with tab_chamada:
         _render_chamada(slug)

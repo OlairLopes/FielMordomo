@@ -11,12 +11,15 @@ from data.repository import (
     igreja_alterar_senha,
     inativar_pastor_auxiliar,
     inativar_recepcao_usuario,
+    inativar_secretario_geral,
     listar_pastores_auxiliares,
     listar_recepcao_usuarios,
+    listar_secretarios_gerais,
     listar_subcategorias_despesa,
     obter_config_igreja,
     salvar_pastor_auxiliar,
     salvar_recepcao_usuario,
+    salvar_secretario_geral,
     salvar_config_igreja,
     senha_pastoral_configurada,
     validar_nova_senha,
@@ -565,6 +568,130 @@ Pedido:
                 st.rerun()
     elif pastores_aux is not None:
         st.info("Nenhum Pastor Auxiliar cadastrado.")
+
+
+    st.divider()
+    st.markdown("### Secretarios gerais")
+    st.caption(
+        "Cadastre acessos restritos para Secretaria Geral. Este perfil acessa "
+        "membros, aniversarios e somente a chamada das reunioes de obreiros."
+    )
+    try:
+        secretarios_gerais = listar_secretarios_gerais(slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar secretarios gerais.")
+        secretarios_gerais = None
+        st.error("Nao foi possivel carregar os secretarios gerais.")
+
+    with st.expander("Cadastrar Secretario Geral", expanded=False):
+        with st.form("form_secretario_geral"):
+            id_cadastro = None
+            nome = ""
+            telefone = ""
+            if not op_membros:
+                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+            else:
+                membro_label = st.selectbox(
+                    "Secretario Geral",
+                    list(op_membros.keys()),
+                    help="A lista traz somente membros ativos cadastrados.",
+                    key="secretario_geral_membro",
+                )
+                id_cadastro = op_membros[membro_label]
+                row_membro = df_membros[
+                    df_membros["id_cadastro"].astype(int) == int(id_cadastro)
+                ].iloc[0]
+                c1, c2 = st.columns(2)
+                c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
+                c2.text_input("Telefone", value=row_membro.get("telefone", ""), disabled=True)
+                nome = row_membro.get("nome", "")
+                telefone = row_membro.get("telefone", "")
+            c3, c4 = st.columns(2)
+            usuario = c3.text_input("Usuario", key="usuario_secretario_geral")
+            senha = c4.text_input("Senha forte", type="password", help="Minimo de 8 caracteres.", key="senha_secretario_geral")
+            email = st.text_input("E-mail", help="Opcional.", key="email_secretario_geral")
+            observacoes = st.text_area("Observacoes", key="obs_secretario_geral")
+            if st.form_submit_button("Salvar Secretario Geral", type="primary"):
+                try:
+                    if not id_cadastro:
+                        st.error("Selecione um membro para criar o acesso.")
+                    else:
+                        salvar_secretario_geral(
+                            slug,
+                            nome,
+                            usuario,
+                            senha,
+                            id_cadastro=id_cadastro,
+                            telefone=telefone,
+                            email=email,
+                            situacao="Ativo",
+                            observacoes=observacoes,
+                        )
+                        st.success("Secretario Geral cadastrado.")
+                        st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    if secretarios_gerais is not None and not secretarios_gerais.empty:
+        st.dataframe(
+            secretarios_gerais[["id_cadastro", "nome", "usuario", "telefone", "email", "situacao"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+        op_secretarios = {
+            f'{int(row["id_secretario_geral"])} - {row["nome"]} - {row["usuario"]}': row
+            for _, row in secretarios_gerais.iterrows()
+        }
+        selecionado = st.selectbox(
+            "Editar Secretario Geral",
+            ["Selecione"] + list(op_secretarios.keys()),
+        )
+        if selecionado != "Selecione":
+            row = op_secretarios[selecionado]
+            id_secretario = int(row["id_secretario_geral"])
+            with st.form(f"form_editar_secretario_geral_{id_secretario}"):
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome", value=row["nome"])
+                usuario = c2.text_input("Usuario", value=row["usuario"])
+                c3, c4 = st.columns(2)
+                nova_senha = c3.text_input(
+                    "Nova senha",
+                    type="password",
+                    help="Deixe em branco para manter a senha atual.",
+                )
+                situacao = c4.selectbox(
+                    "Situacao",
+                    ["Ativo", "Inativo"],
+                    index=0 if row.get("situacao") == "Ativo" else 1,
+                    key=f"situacao_secretario_geral_{id_secretario}",
+                )
+                telefone = st.text_input("Telefone", value=row.get("telefone", ""))
+                email = st.text_input("E-mail", value=row.get("email", ""))
+                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                if st.form_submit_button("Atualizar Secretario Geral", type="primary"):
+                    try:
+                        salvar_secretario_geral(
+                            slug,
+                            nome,
+                            usuario,
+                            nova_senha,
+                            id_cadastro=row.get("id_cadastro"),
+                            telefone=telefone,
+                            email=email,
+                            situacao=situacao,
+                            observacoes=observacoes,
+                            id_secretario_geral=id_secretario,
+                        )
+                        st.success("Secretario Geral atualizado.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+            if st.button("Inativar Secretario Geral selecionado", key=f"inativar_secretario_geral_{id_secretario}"):
+                inativar_secretario_geral(slug, id_secretario)
+                st.success("Secretario Geral inativado.")
+                st.rerun()
+    elif secretarios_gerais is not None:
+        st.info("Nenhum Secretario Geral cadastrado.")
 
     st.divider()
     st.markdown("### Recepção")

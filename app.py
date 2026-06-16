@@ -70,6 +70,11 @@ PAGINAS_PASTOR_AUXILIAR = {
 PAGINAS_RECEPCAO = {
     "visitantes": ("Visitantes", "modules.visitantes"),
 }
+PAGINAS_SECRETARIO_GERAL = {
+    "cadastros": ("Membros", "modules.cadastros"),
+    "obreiros": ("Chamada de Obreiros", "modules.obreiros"),
+    "aniversariantes": ("Aniversarios", "modules.aniversariantes"),
+}
 PAGINAS_EBD = {
     "ebd": ("Escola Bíblica", "modules.ebd"),
 }
@@ -454,6 +459,30 @@ def _sidebar_recepcao(igreja, recepcao):
             _auth().logout()
 
 
+def _sidebar_secretario_geral(pagina_atual, igreja, secretario):
+    with st.sidebar:
+        _render_logo_sidebar(igreja.get("slug", ""))
+        st.markdown(
+            '<div class="sidebar-info">'
+            f'<b>{_esc(secretario.get("nome", "Secretario Geral"))}</b>'
+            '<div class="plano">Acesso restrito de secretaria</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        for chave, (rotulo, _) in PAGINAS_SECRETARIO_GERAL.items():
+            if st.button(
+                rotulo,
+                key=f"sb_secretario_geral_{chave}",
+                use_container_width=True,
+                type="primary" if pagina_atual == chave else "secondary",
+            ):
+                st.session_state["pagina"] = chave
+                st.rerun()
+        st.divider()
+        if st.button("Sair", key="sb_sair_secretario_geral", use_container_width=True):
+            _auth().logout()
+
+
 def _renderizar_admin():
     _sidebar_admin()
     try:
@@ -594,6 +623,30 @@ def _renderizar_recepcao():
         )
 
 
+def _renderizar_secretario_geral():
+    igreja = st.session_state.get("igreja", {})
+    secretario = st.session_state.get("secretario_geral", {})
+    if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(secretario, dict):
+        st.error("Sessao invalida. Faca login novamente.")
+        if st.button("Voltar ao login"):
+            _auth().logout()
+        return
+    pagina = st.session_state.get("pagina", "cadastros")
+    if pagina not in PAGINAS_SECRETARIO_GERAL:
+        pagina = "cadastros"
+        st.session_state["pagina"] = pagina
+    _sidebar_secretario_geral(pagina, igreja, secretario)
+    _, caminho_modulo = PAGINAS_SECRETARIO_GERAL[pagina]
+    try:
+        _importar(caminho_modulo).render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao carregar a pagina %s para secretario geral.", pagina)
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
+
+
 def main():
     _bloquear_acesso_fora_do_dominio_oficial()
     _resolver_rota_publica()
@@ -617,6 +670,8 @@ def main():
         _renderizar_pastor_auxiliar()
     elif modo == "recepcao":
         _renderizar_recepcao()
+    elif modo == "secretario_geral":
+        _renderizar_secretario_geral()
     else:
         st.error("Modo de acesso invalido. Faca login novamente.")
         if st.button("Sair"):

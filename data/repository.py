@@ -427,6 +427,7 @@ def inicializar_tenant(slug):
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabela_pastores_auxiliares(conn)
+        _garantir_tabela_secretarios_gerais(conn)
         _garantir_tabela_recepcao(conn)
 
 
@@ -850,6 +851,26 @@ def _garantir_tabela_recepcao(conn):
         conn.execute(
             "ALTER TABLE recepcao_usuarios ADD COLUMN automatico INTEGER NOT NULL DEFAULT 0"
         )
+
+
+def _garantir_tabela_secretarios_gerais(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS secretarios_gerais (
+            id_secretario_geral INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro         INTEGER REFERENCES cadastros(id_cadastro),
+            nome                TEXT NOT NULL,
+            usuario             TEXT NOT NULL UNIQUE,
+            senha_hash          TEXT NOT NULL,
+            telefone            TEXT DEFAULT '',
+            email               TEXT DEFAULT '',
+            situacao            TEXT NOT NULL DEFAULT 'Ativo',
+            observacoes         TEXT DEFAULT '',
+            criado_em           TEXT DEFAULT (datetime('now')),
+            atualizado_em       TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_secretarios_gerais_usuario
+            ON secretarios_gerais(usuario);
+    """)
 
 
 def listar_ebd_classes(slug, incluir_inativas=False):
@@ -2863,6 +2884,178 @@ def autenticar_pastor_auxiliar(slug, usuario, senha):
     }
 
 
+def _normalizar_usuario_secretario_geral(usuario):
+    usuario = str(usuario or "").strip().lower()
+    if not USUARIO_TESOUREIRO_RE.fullmatch(usuario):
+        raise ValueError("Usuario deve ter 3 a 40 caracteres, usando letras, numeros, ponto, hifen ou underline.")
+    return usuario
+
+
+def _validar_senha_secretario_geral(senha):
+    senha = str(senha or "")
+    if len(senha) < 8:
+        raise ValueError("A senha do Secretario Geral deve possuir ao menos 8 caracteres.")
+    if len(senha) > SENHA_MAX_CARACTERES:
+        raise ValueError(f"A senha deve possuir no maximo {SENHA_MAX_CARACTERES} caracteres.")
+    return senha
+
+
+def listar_secretarios_gerais(slug, incluir_inativos=True):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_secretarios_gerais(conn)
+        where = "" if incluir_inativos else "WHERE situacao='Ativo'"
+        return pd.read_sql_query(
+            f"""SELECT id_secretario_geral, id_cadastro, nome, usuario,
+                       telefone, email, situacao, observacoes, criado_em, atualizado_em
+                FROM secretarios_gerais
+                {where}
+                ORDER BY situacao, nome""",
+            conn,
+        )
+
+
+def salvar_secretario_geral(
+    slug,
+    nome,
+    usuario,
+    senha="",
+    id_cadastro=None,
+    telefone="",
+    email="",
+    situacao="Ativo",
+    observacoes="",
+    id_secretario_geral=None,
+):
+    nome = sanitizar(nome)
+    usuario = _normalizar_usuario_secretario_geral(usuario)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    situacao = str(situacao or "Ativo").strip()
+    if situacao not in {"Ativo", "Inativo"}:
+        raise ValueError("Situacao invalida.")
+    if not id_secretario_geral:
+        senha = _validar_senha_secretario_geral(senha)
+    elif senha:
+        senha = _validar_senha_secretario_geral(senha)
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_secretarios_gerais(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+        if not nome:
+            raise ValueError("Nome do Secretario Geral e obrigatorio.")
+        duplicado = conn.execute(
+            """SELECT 1 FROM secretarios_gerais
+               WHERE usuario=? AND (? IS NULL OR id_secretario_geral!=?) LIMIT 1""",
+            (
+                usuario,
+                int(id_secretario_geral) if id_secretario_geral else None,
+                int(id_secretario_geral) if id_secretario_geral else None,
+            ),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe um Secretario Geral com este usuario.")
+        dados = (
+            id_cadastro, nome, usuario, sanitizar(telefone),
+            sanitizar(email), situacao, sanitizar(observacoes),
+        )
+        if id_secretario_geral:
+            if senha:
+                conn.execute(
+                    """UPDATE secretarios_gerais
+                       SET id_cadastro=?, nome=?, usuario=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, senha_hash=?,
+                           atualizado_em=datetime('now')
+                       WHERE id_secretario_geral=?""",
+                    dados + (hash_senha(senha), int(id_secretario_geral)),
+                )
+            else:
+                conn.execute(
+                    """UPDATE secretarios_gerais
+                       SET id_cadastro=?, nome=?, usuario=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, atualizado_em=datetime('now')
+                       WHERE id_secretario_geral=?""",
+                    dados + (int(id_secretario_geral),),
+                )
+            return int(id_secretario_geral)
+        cur = conn.execute(
+            """INSERT INTO secretarios_gerais
+               (id_cadastro, nome, usuario, senha_hash, telefone, email,
+                situacao, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                id_cadastro, nome, usuario, hash_senha(senha),
+                sanitizar(telefone), sanitizar(email), situacao,
+                sanitizar(observacoes),
+            ),
+        )
+        return cur.lastrowid
+
+
+def inativar_secretario_geral(slug, id_secretario_geral):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_secretarios_gerais(conn)
+        conn.execute(
+            """UPDATE secretarios_gerais
+               SET situacao='Inativo', atualizado_em=datetime('now')
+               WHERE id_secretario_geral=?""",
+            (int(id_secretario_geral),),
+        )
+
+
+def autenticar_secretario_geral(slug, usuario, senha):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_secretario_geral(usuario)
+    except ValueError:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    chave = f"secretario_geral:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_secretarios_gerais(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+        row = conn.execute(
+            """SELECT id_secretario_geral, nome, usuario, senha_hash
+               FROM secretarios_gerais
+               WHERE usuario=? AND situacao='Ativo'""",
+            (usuario,),
+        ).fetchone()
+        valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
+        _registrar_resultado_login(conn, chave, valido)
+        if valido and migrar:
+            conn.execute(
+                "UPDATE secretarios_gerais SET senha_hash=? WHERE id_secretario_geral=?",
+                (hash_senha(senha), row["id_secretario_geral"]),
+            )
+    if not row or not valido:
+        return None
+    return {
+        "igreja": igreja,
+        "secretario_geral": {
+            "id": row["id_secretario_geral"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+        },
+    }
+
+
 def _normalizar_usuario_recepcao(usuario):
     usuario = str(usuario or "").strip().lower()
     if not USUARIO_TESOUREIRO_RE.fullmatch(usuario):
@@ -4756,6 +4949,7 @@ def restaurar_backup_igreja(slug, dados, nome_arquivo):
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
         _garantir_tabela_pastores_auxiliares(conn)
+        _garantir_tabela_secretarios_gerais(conn)
         _garantir_tabela_recepcao(conn)
     return True
 

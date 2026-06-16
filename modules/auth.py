@@ -11,7 +11,7 @@ import streamlit as st
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
     autenticar_ebd_secretario, autenticar_orhafe_secretaria,
-    autenticar_pastor_auxiliar, autenticar_recepcao,
+    autenticar_pastor_auxiliar, autenticar_recepcao, autenticar_secretario_geral,
     inicializar_master, obter_logo_sistema, obter_config,
 )
 
@@ -39,6 +39,7 @@ def _iniciar_sessao(
     secretaria_orhafe=None,
     pastor_auxiliar=None,
     recepcao=None,
+    secretario_geral=None,
 ):
     _limpar_sessao()
     st.session_state["autenticado"] = True
@@ -55,12 +56,14 @@ def _iniciar_sessao(
         st.session_state["pastor_auxiliar"] = pastor_auxiliar
     if recepcao is not None:
         st.session_state["recepcao"] = recepcao
+    if secretario_geral is not None:
+        st.session_state["secretario_geral"] = secretario_geral
 
 
 def _limpar_sessao():
     for key in (
         "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
-        "secretaria_orhafe", "pastor_auxiliar", "recepcao",
+        "secretaria_orhafe", "pastor_auxiliar", "recepcao", "secretario_geral",
         "pagina", "mostrar_recuperacao",
     ):
         st.session_state.pop(key, None)
@@ -108,6 +111,7 @@ LOGIN_OPCOES = [
     ("Pastor Auxiliar", "Acesso pastoral", "Visitantes, pedidos e relatorios permitidos"),
     ("Tesoureiro", "Financeiro", "Lancamentos, membros e relatorios"),
     ("Recepcao", "Visitantes", "Registro de visitantes"),
+    ("Secretario Geral", "Secretaria geral", "Membros, obreiros e aniversarios"),
     ("Escola Biblica", "Secretaria", "Chamada e gestao da Escola Biblica"),
     ("Circulo de Oracao", "Secretaria", "Chamada e relatorios do Circulo de Oracao"),
     ("Administrador do sistema", "Admin", "Painel geral da plataforma"),
@@ -312,6 +316,8 @@ def _render_login_por_modo(modo):
         _login_tesoureiro()
     elif modo == "Recepcao":
         _login_recepcao()
+    elif modo == "Secretario Geral":
+        _login_secretario_geral()
     elif modo == "Escola Biblica":
         _login_ebd()
     elif modo == "Circulo de Oracao":
@@ -556,6 +562,33 @@ def _login_recepcao():
                 st.rerun()
             else:
                 st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
+
+
+def _login_secretario_geral():
+    with st.form("form_login_secretario_geral"):
+        st.markdown("#### Acesso do Secretario Geral")
+        st.caption("Acesso restrito a membros, aniversarios e chamada de obreiros.")
+        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        usuario = st.text_input("Usuario do Secretario Geral")
+        senha = st.text_input("Senha", type="password")
+
+        if st.form_submit_button("Entrar", type="primary", use_container_width=True):
+            slug = slug.strip().lower()
+            usuario = usuario.strip().lower()
+            if not slug or not usuario or not senha:
+                st.error("Preencha todos os campos.")
+                return
+            acesso = autenticar_secretario_geral(slug, usuario, senha)
+            if acesso:
+                _iniciar_sessao(
+                    "secretario_geral",
+                    igreja=acesso["igreja"],
+                    secretario_geral=acesso["secretario_geral"],
+                )
+                st.toast(f"Bem-vindo, {acesso['secretario_geral']['nome']}!")
+                st.rerun()
+            else:
+                st.error("Identificador, usuario ou senha incorretos, ou acesso inativo.")
 
 
 def _login_ebd():
