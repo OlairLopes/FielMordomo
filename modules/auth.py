@@ -12,7 +12,8 @@ from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
     autenticar_ebd_secretario, autenticar_orhafe_secretaria,
     autenticar_pastor_auxiliar, autenticar_recepcao, autenticar_secretario_geral,
-    inicializar_master, obter_logo_sistema, obter_config,
+    inicializar_master, listar_igrejas, listar_recepcao_usuarios,
+    obter_logo_sistema, obter_config,
 )
 
 
@@ -564,18 +565,77 @@ def _login_pastor_auxiliar():
     _botao_recuperar_senha("Pastor Auxiliar", "btn_esqueci_pastor_auxiliar")
 
 
+def _opcoes_igrejas_ativas():
+    try:
+        igrejas = listar_igrejas()
+    except Exception:
+        return {}, "Nao foi possivel carregar as igrejas."
+    if igrejas is None or igrejas.empty:
+        return {}, "Nenhuma igreja cadastrada."
+    try:
+        igrejas = igrejas[igrejas["ativa"].fillna(0).astype(int) == 1].copy()
+    except Exception:
+        igrejas = igrejas.copy()
+    if igrejas.empty:
+        return {}, "Nenhuma igreja ativa encontrada."
+    opcoes = {
+        f'{row["nome"]} ({row["slug"]})': str(row["slug"])
+        for _, row in igrejas.sort_values("nome").iterrows()
+    }
+    return opcoes, ""
+
+
+def _opcoes_recepcao(slug):
+    if not slug:
+        return {}, "Selecione uma igreja."
+    try:
+        usuarios = listar_recepcao_usuarios(slug, incluir_inativos=False)
+    except Exception:
+        return {}, "Nao foi possivel carregar os usuarios da recepcao."
+    if usuarios is None or usuarios.empty:
+        return {}, "Nenhum usuario ativo da recepcao encontrado para esta igreja."
+    opcoes = {
+        f'{row["nome"]} ({row["usuario"]})': str(row["usuario"])
+        for _, row in usuarios.sort_values("nome").iterrows()
+    }
+    return opcoes, ""
+
+
 
 def _login_recepcao():
     with st.form("form_login_recepcao"):
-        st.markdown("#### Acesso da Recepção")
+        st.markdown("#### Acesso da Recepcao")
         st.caption("Acesso restrito somente ao registro de visitantes.")
-        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuario da Recepção")
+
+        op_igrejas, erro_igrejas = _opcoes_igrejas_ativas()
+        if erro_igrejas:
+            st.warning(erro_igrejas)
+            slug = ""
+        else:
+            igreja_label = st.selectbox(
+                "Identificador da igreja",
+                list(op_igrejas.keys()),
+                key="login_recepcao_igreja",
+            )
+            slug = op_igrejas[igreja_label]
+
+        op_usuarios, erro_usuarios = _opcoes_recepcao(slug)
+        if erro_usuarios:
+            st.warning(erro_usuarios)
+            usuario = ""
+        else:
+            usuario_label = st.selectbox(
+                "Usuario da Recepcao",
+                list(op_usuarios.keys()),
+                key="login_recepcao_usuario",
+            )
+            usuario = op_usuarios[usuario_label]
+
         senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
-            slug = slug.strip().lower()
-            usuario = usuario.strip().lower()
+            slug = str(slug or "").strip().lower()
+            usuario = str(usuario or "").strip().lower()
             if not slug or not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
@@ -592,7 +652,6 @@ def _login_recepcao():
                 st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Recepcao", "btn_esqueci_recepcao")
-
 
 
 def _login_secretario_geral():
