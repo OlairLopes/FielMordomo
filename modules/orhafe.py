@@ -525,25 +525,70 @@ def _render_configuracoes(slug):
         if len(lideres[lideres["ativo"] == 1]) >= 5:
             st.info("Ja existem 5 lideres ativos. Inative ou edite uma antes de cadastrar outro.")
         with st.form("form_orhafe_lider"):
-            c1, c2 = st.columns(2)
-            nome = c1.text_input("Nome da lider")
-            telefone = c2.text_input("Telefone / WhatsApp")
-            c3, c4 = st.columns(2)
-            funcao = c3.text_input("Funcao", value="Lider")
-            ordem = c4.number_input("Ordem", min_value=1, max_value=5, value=1, step=1)
+            modo_lider = st.radio(
+                "Origem da lider",
+                ["Cadastro de membros", "Inserir manualmente"],
+                horizontal=True,
+                key="modo_lider_orhafe",
+            )
+            id_cadastro_lider = None
+            nome = ""
+            telefone = ""
+            funcao = "Lider"
+            if modo_lider == "Cadastro de membros":
+                if not op_membros:
+                    st.warning("Nao ha membros ativos disponiveis no cadastro.")
+                else:
+                    membro_label = st.selectbox(
+                        "Lider",
+                        list(op_membros.keys()),
+                        help="A lista traz somente membros ativos cadastrados.",
+                        key="lider_membro_orhafe",
+                    )
+                    id_cadastro_lider = op_membros[membro_label]
+                    row_membro = df_membros[
+                        df_membros["id_cadastro"].astype(int) == int(id_cadastro_lider)
+                    ].iloc[0]
+                    c1, c2 = st.columns(2)
+                    c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True, key="lider_nome_auto")
+                    c2.text_input(
+                        "Telefone / WhatsApp",
+                        value=row_membro.get("telefone", ""),
+                        disabled=True,
+                        key="lider_tel_auto",
+                    )
+                    funcao = row_membro.get("funcao", "") or "Lider"
+                    st.text_input("Funcao no cadastro", value=funcao, disabled=True, key="lider_funcao_auto")
+            else:
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome da lider")
+                telefone = c2.text_input("Telefone / WhatsApp")
+                funcao = st.text_input("Funcao", value="Lider")
+            ordem = st.number_input("Ordem", min_value=1, max_value=5, value=1, step=1)
             observacoes = st.text_area("Observacoes", key="obs_lider_orhafe")
             if st.form_submit_button("Salvar lider", type="primary"):
                 if len(lideres[lideres["ativo"] == 1]) >= 5:
                     st.error("O ORHAFE deve manter no maximo 5 lideres ativos.")
+                elif modo_lider == "Cadastro de membros" and not id_cadastro_lider:
+                    st.error("Selecione uma lider no cadastro de membros.")
                 else:
-                    salvar_orhafe_lider(slug, nome, telefone, funcao, ordem, True, observacoes)
+                    salvar_orhafe_lider(
+                        slug,
+                        nome,
+                        id_cadastro=id_cadastro_lider,
+                        telefone=telefone,
+                        funcao=funcao,
+                        ordem=ordem,
+                        ativo=True,
+                        observacoes=observacoes,
+                    )
                     st.success("Lider salva.")
                     st.rerun()
 
     if not lideres.empty:
         st.markdown("#### Lideres cadastradas")
         st.dataframe(
-            lideres[["nome", "telefone", "funcao", "ordem", "ativo", "observacoes"]],
+            lideres[["id_cadastro", "nome", "telefone", "funcao", "ordem", "ativo", "observacoes"]],
             use_container_width=True,
             hide_index=True,
         )

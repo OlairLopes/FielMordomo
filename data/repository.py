@@ -577,6 +577,7 @@ def _garantir_tabelas_orhafe(conn):
         );
         CREATE TABLE IF NOT EXISTS orhafe_lideres (
             id_lider    INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro INTEGER REFERENCES cadastros(id_cadastro),
             nome        TEXT NOT NULL,
             telefone    TEXT DEFAULT '',
             funcao      TEXT DEFAULT 'Lider',
@@ -638,6 +639,14 @@ def _garantir_tabelas_orhafe(conn):
     if "id_cadastro" not in cols_coordenadoras:
         conn.execute(
             "ALTER TABLE orhafe_coordenadoras ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
+    cols_lideres = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(orhafe_lideres)").fetchall()
+    ]
+    if "id_cadastro" not in cols_lideres:
+        conn.execute(
+            "ALTER TABLE orhafe_lideres ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
         )
 
 
@@ -1329,7 +1338,7 @@ def listar_orhafe_lideres(slug, incluir_inativos=False):
         _garantir_tabelas_orhafe(conn)
         where = "" if incluir_inativos else "WHERE ativo=1"
         return pd.read_sql_query(
-            f"""SELECT id_lider, nome, telefone, funcao, ordem, ativo,
+            f"""SELECT id_lider, id_cadastro, nome, telefone, funcao, ordem, ativo,
                        observacoes, criado_em, atualizado_em
                 FROM orhafe_lideres
                 {where}
@@ -1341,6 +1350,7 @@ def listar_orhafe_lideres(slug, incluir_inativos=False):
 def salvar_orhafe_lider(
     slug,
     nome,
+    id_cadastro=None,
     telefone="",
     funcao="Lider",
     ordem=0,
@@ -1349,21 +1359,31 @@ def salvar_orhafe_lider(
     id_lider=None,
 ):
     nome = sanitizar(nome)
-    if not nome:
-        raise ValueError("Nome da lider e obrigatorio.")
+    id_cadastro = int(id_cadastro) if id_cadastro else None
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone, funcao FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+                funcao = sanitizar(funcao or row["funcao"] or "Lider")
+        if not nome:
+            raise ValueError("Nome da lider e obrigatorio.")
         dados = (
-            nome, sanitizar(telefone), sanitizar(funcao or "Lider"),
+            id_cadastro, nome, sanitizar(telefone), sanitizar(funcao or "Lider"),
             int(ordem or 0), int(bool(ativo)), sanitizar(observacoes),
         )
         if id_lider:
             conn.execute(
                 """UPDATE orhafe_lideres
-                   SET nome=?, telefone=?, funcao=?, ordem=?, ativo=?,
+                   SET id_cadastro=?, nome=?, telefone=?, funcao=?, ordem=?, ativo=?,
                        observacoes=?, atualizado_em=datetime('now')
                    WHERE id_lider=?""",
                 dados + (int(id_lider),),
@@ -1371,8 +1391,8 @@ def salvar_orhafe_lider(
             return int(id_lider)
         cur = conn.execute(
             """INSERT INTO orhafe_lideres
-               (nome, telefone, funcao, ordem, ativo, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (id_cadastro, nome, telefone, funcao, ordem, ativo, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             dados,
         )
         return cur.lastrowid
