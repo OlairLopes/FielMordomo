@@ -12,7 +12,9 @@ from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
     autenticar_ebd_secretario, autenticar_orhafe_secretaria,
     autenticar_pastor_auxiliar, autenticar_recepcao, autenticar_secretario_geral,
-    inicializar_master, listar_igrejas, listar_recepcao_usuarios,
+    carregar_tesoureiros, inicializar_master, listar_ebd_secretarios,
+    listar_igrejas, listar_orhafe_secretarias, listar_pastores_auxiliares,
+    listar_recepcao_usuarios, listar_secretarios_gerais,
     obter_logo_sistema, obter_config,
 )
 
@@ -465,11 +467,11 @@ def tela_login():
 def _login_igreja():
     with st.form("form_login_igreja"):
         st.markdown("#### Acesso do Gestor/Pastor")
-        slug  = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
+        slug = _selectbox_igreja_login("login_igreja_slug")
         senha = st.text_input("Senha", type="password")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
-            slug = slug.strip().lower()
+            slug = str(slug or "").strip().lower()
             if not slug or not senha:
                 st.error("Preencha todos os campos.")
                 return
@@ -510,13 +512,13 @@ def _login_tesoureiro():
     with st.form("form_login_tesoureiro"):
         st.markdown("#### Acesso restrito do tesoureiro")
         st.caption("Este acesso permite somente registrar e consultar lancamentos.")
-        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuario do tesoureiro")
+        slug = _selectbox_igreja_login("login_tesoureiro_igreja")
+        usuario = _selectbox_usuario_login(slug, "tesoureiro", "Usuario do tesoureiro", "login_tesoureiro_usuario")
         senha = st.text_input("Senha", type="password")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
-            slug = slug.strip().lower()
-            usuario = usuario.strip().lower()
+            slug = str(slug or "").strip().lower()
+            usuario = str(usuario or "").strip().lower()
             if not slug or not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
@@ -535,18 +537,17 @@ def _login_tesoureiro():
     _botao_recuperar_senha("Tesoureiro", "btn_esqueci_tesoureiro")
 
 
-
 def _login_pastor_auxiliar():
     with st.form("form_login_pastor_auxiliar"):
         st.markdown("#### Acesso do Pastor Auxiliar")
-        st.caption("Acesso restrito a visitantes, aniversários, relatórios ministeriais e dashboard limitado.")
-        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuario do Pastor Auxiliar")
+        st.caption("Acesso restrito a visitantes, aniversarios, relatorios ministeriais e dashboard limitado.")
+        slug = _selectbox_igreja_login("login_pastor_auxiliar_igreja")
+        usuario = _selectbox_usuario_login(slug, "pastor_auxiliar", "Usuario do Pastor Auxiliar", "login_pastor_auxiliar_usuario")
         senha = st.text_input("Senha", type="password")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
-            slug = slug.strip().lower()
-            usuario = usuario.strip().lower()
+            slug = str(slug or "").strip().lower()
+            usuario = str(usuario or "").strip().lower()
             if not slug or not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
@@ -586,19 +587,71 @@ def _opcoes_igrejas_ativas():
 
 
 def _opcoes_recepcao(slug):
+    return _opcoes_usuarios_por_perfil(slug, "recepcao")
+
+
+def _opcoes_usuarios_por_perfil(slug, perfil):
     if not slug:
         return {}, "Selecione uma igreja."
     try:
-        usuarios = listar_recepcao_usuarios(slug, incluir_inativos=False)
+        if perfil == "tesoureiro":
+            usuarios = carregar_tesoureiros(slug)
+            id_col = "id_tesoureiro"
+        elif perfil == "pastor_auxiliar":
+            usuarios = listar_pastores_auxiliares(slug, incluir_inativos=False)
+            id_col = "id_pastor_auxiliar"
+        elif perfil == "recepcao":
+            usuarios = listar_recepcao_usuarios(slug, incluir_inativos=False)
+            id_col = "id_recepcao"
+        elif perfil == "secretario_geral":
+            usuarios = listar_secretarios_gerais(slug, incluir_inativos=False)
+            id_col = "id_secretario_geral"
+        elif perfil == "ebd":
+            usuarios = listar_ebd_secretarios(slug, incluir_inativos=False)
+            id_col = "id_secretario"
+        elif perfil == "orhafe":
+            usuarios = listar_orhafe_secretarias(slug, incluir_inativas=False)
+            id_col = "id_secretaria"
+        else:
+            return {}, "Perfil de acesso invalido."
     except Exception:
-        return {}, "Nao foi possivel carregar os usuarios da recepcao."
+        return {}, "Nao foi possivel carregar os usuarios deste perfil."
     if usuarios is None or usuarios.empty:
-        return {}, "Nenhum usuario ativo da recepcao encontrado para esta igreja."
+        return {}, "Nenhum usuario ativo encontrado para esta igreja."
+    if "situacao" in usuarios.columns:
+        usuarios = usuarios[usuarios["situacao"].astype(str).str.upper() == "ATIVO"].copy()
+    if usuarios.empty:
+        return {}, "Nenhum usuario ativo encontrado para esta igreja."
     opcoes = {
         f'{row["nome"]} ({row["usuario"]})': str(row["usuario"])
         for _, row in usuarios.sort_values("nome").iterrows()
+        if str(row.get("usuario", "") or "").strip()
     }
+    if not opcoes:
+        return {}, "Nenhum usuario ativo encontrado para esta igreja."
     return opcoes, ""
+
+
+def _selectbox_igreja_login(key):
+    op_igrejas, erro_igrejas = _opcoes_igrejas_ativas()
+    if erro_igrejas:
+        st.warning(erro_igrejas)
+        return ""
+    igreja_label = st.selectbox(
+        "Identificador da igreja",
+        list(op_igrejas.keys()),
+        key=key,
+    )
+    return op_igrejas[igreja_label]
+
+
+def _selectbox_usuario_login(slug, perfil, label, key):
+    op_usuarios, erro_usuarios = _opcoes_usuarios_por_perfil(slug, perfil)
+    if erro_usuarios:
+        st.warning(erro_usuarios)
+        return ""
+    usuario_label = st.selectbox(label, list(op_usuarios.keys()), key=key)
+    return op_usuarios[usuario_label]
 
 
 
@@ -606,31 +659,8 @@ def _login_recepcao():
     with st.form("form_login_recepcao"):
         st.markdown("#### Acesso da Recepcao")
         st.caption("Acesso restrito somente ao registro de visitantes.")
-
-        op_igrejas, erro_igrejas = _opcoes_igrejas_ativas()
-        if erro_igrejas:
-            st.warning(erro_igrejas)
-            slug = ""
-        else:
-            igreja_label = st.selectbox(
-                "Identificador da igreja",
-                list(op_igrejas.keys()),
-                key="login_recepcao_igreja",
-            )
-            slug = op_igrejas[igreja_label]
-
-        op_usuarios, erro_usuarios = _opcoes_recepcao(slug)
-        if erro_usuarios:
-            st.warning(erro_usuarios)
-            usuario = ""
-        else:
-            usuario_label = st.selectbox(
-                "Usuario da Recepcao",
-                list(op_usuarios.keys()),
-                key="login_recepcao_usuario",
-            )
-            usuario = op_usuarios[usuario_label]
-
+        slug = _selectbox_igreja_login("login_recepcao_igreja")
+        usuario = _selectbox_usuario_login(slug, "recepcao", "Usuario da Recepcao", "login_recepcao_usuario")
         senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
@@ -658,13 +688,13 @@ def _login_secretario_geral():
     with st.form("form_login_secretario_geral"):
         st.markdown("#### Acesso do Secretario Geral")
         st.caption("Acesso restrito a membros, aniversarios e chamada de obreiros.")
-        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuario do Secretario Geral")
+        slug = _selectbox_igreja_login("login_secretario_geral_igreja")
+        usuario = _selectbox_usuario_login(slug, "secretario_geral", "Usuario do Secretario Geral", "login_secretario_geral_usuario")
         senha = st.text_input("Senha", type="password")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
-            slug = slug.strip().lower()
-            usuario = usuario.strip().lower()
+            slug = str(slug or "").strip().lower()
+            usuario = str(usuario or "").strip().lower()
             if not slug or not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
@@ -683,18 +713,17 @@ def _login_secretario_geral():
     _botao_recuperar_senha("Secretario Geral", "btn_esqueci_secretario_geral")
 
 
-
 def _login_ebd():
     with st.form("form_login_ebd"):
-        st.markdown("#### Acesso da Escola Bíblica")
-        st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo Escola Bíblica.")
-        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuario da Escola Bíblica")
+        st.markdown("#### Acesso da Escola Biblica")
+        st.caption("Secretario de classe acessa somente chamada. Secretario geral acessa todo o modulo Escola Biblica.")
+        slug = _selectbox_igreja_login("login_ebd_igreja")
+        usuario = _selectbox_usuario_login(slug, "ebd", "Usuario da Escola Biblica", "login_ebd_usuario")
         senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
-            slug = slug.strip().lower()
-            usuario = usuario.strip().lower()
+            slug = str(slug or "").strip().lower()
+            usuario = str(usuario or "").strip().lower()
             if not slug or not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
@@ -713,18 +742,17 @@ def _login_ebd():
     _botao_recuperar_senha("Escola Biblica", "btn_esqueci_ebd")
 
 
-
 def _login_orhafe():
     with st.form("form_login_orhafe"):
-        st.markdown("#### Acesso do Círculo de Oração")
-        st.caption("Secretaria de chamada acessa somente a chamada. Secretaria geral acessa todo o módulo Círculo de Oração.")
-        slug = st.text_input("Identificador da igreja", placeholder="ex: ad-serrinha")
-        usuario = st.text_input("Usuário do Círculo de Oração")
+        st.markdown("#### Acesso do Circulo de Oracao")
+        st.caption("Secretaria de chamada acessa somente a chamada. Secretaria geral acessa todo o modulo Circulo de Oracao.")
+        slug = _selectbox_igreja_login("login_orhafe_igreja")
+        usuario = _selectbox_usuario_login(slug, "orhafe", "Usuario do Circulo de Oracao", "login_orhafe_usuario")
         senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
-            slug = slug.strip().lower()
-            usuario = usuario.strip().lower()
+            slug = str(slug or "").strip().lower()
+            usuario = str(usuario or "").strip().lower()
             if not slug or not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
@@ -741,7 +769,6 @@ def _login_orhafe():
                 st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Circulo de Oracao", "btn_esqueci_orhafe")
-
 
 
 def logout():
