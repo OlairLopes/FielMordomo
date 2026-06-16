@@ -167,6 +167,125 @@ def _grafico_frequencia(freq):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
 
+def _totais_reunioes(reunioes):
+    if reunioes.empty:
+        return {
+            "Matriculadas": 0,
+            "Presentes": 0,
+            "Ausentes": 0,
+            "Visitantes": 0,
+            "Ofertas": 0.0,
+            "Reunioes": 0,
+        }
+    return {
+        "Matriculadas": int(reunioes["matriculadas"].fillna(0).sum()),
+        "Presentes": int(reunioes["presentes"].fillna(0).sum()),
+        "Ausentes": int(reunioes["ausentes"].fillna(0).sum()),
+        "Visitantes": int(reunioes["visitantes"].fillna(0).sum()),
+        "Ofertas": float(reunioes["ofertas"].fillna(0).sum()),
+        "Reunioes": int(reunioes["id_reuniao"].nunique()),
+    }
+
+
+def _resumo_lideres(reunioes):
+    if reunioes.empty:
+        return pd.DataFrame(
+            columns=[
+                "lider", "reunioes", "matriculadas", "presentes",
+                "ausentes", "visitantes", "ofertas", "frequencia_pct",
+            ]
+        )
+    resumo = reunioes.copy()
+    resumo["lider"] = resumo["lider"].fillna("").replace("", "Sem lider")
+    resumo = resumo.groupby("lider", as_index=False).agg(
+        reunioes=("id_reuniao", "nunique"),
+        matriculadas=("matriculadas", "sum"),
+        presentes=("presentes", "sum"),
+        ausentes=("ausentes", "sum"),
+        visitantes=("visitantes", "sum"),
+        ofertas=("ofertas", "sum"),
+    )
+    total = resumo["presentes"] + resumo["ausentes"]
+    resumo["frequencia_pct"] = (
+        resumo["presentes"] / total.where(total > 0, 1) * 100
+    ).round(1)
+    return resumo.sort_values("lider")
+
+
+def _grafico_totais_orhafe(titulo, dados):
+    if not dados:
+        st.info("Sem dados para gerar o grafico.")
+        return
+    df = pd.DataFrame(
+        [{"Indicador": chave, "Total": valor} for chave, valor in dados.items()]
+    )
+    fig = go.Figure(go.Bar(
+        name="Total",
+        x=df["Indicador"],
+        y=df["Total"],
+        marker_color=[
+            CORES["azul"], CORES["verde"], CORES["vermelho"],
+            CORES["laranja"], CORES["roxo"], CORES["cinza"],
+        ][:len(df)],
+        text=[
+            _moeda(v) if str(k) == "Ofertas" else str(int(v))
+            for k, v in dados.items()
+        ],
+        textposition="outside",
+        hovertemplate="<b>%{x}</b><br>Total: %{text}<extra></extra>",
+    ))
+    fig.update_layout(
+        title=titulo,
+        height=430,
+        margin=dict(t=60, b=80, l=25, r=25),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(fixedrange=True),
+        yaxis=dict(fixedrange=True, gridcolor="#E2E8F0"),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+
+
+def _grafico_resumo_lideres(resumo):
+    if resumo.empty:
+        st.info("Sem dados por lider para o periodo selecionado.")
+        return
+    dados = resumo.sort_values("presentes", ascending=True)
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Presentes",
+        x=dados["presentes"],
+        y=dados["lider"],
+        orientation="h",
+        marker_color=CORES["verde"],
+        text=dados["presentes"],
+        textposition="outside",
+    ))
+    fig.add_trace(go.Bar(
+        name="Visitantes",
+        x=dados["visitantes"],
+        y=dados["lider"],
+        orientation="h",
+        marker_color=CORES["laranja"],
+        text=dados["visitantes"],
+        textposition="outside",
+    ))
+    fig.update_layout(
+        title="Resumo por lider",
+        barmode="group",
+        height=max(360, 70 * len(dados)),
+        margin=dict(t=60, b=40, l=20, r=35),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis=dict(title="", fixedrange=True),
+        showlegend=True,
+        legend=dict(orientation="h", y=1.12, x=0),
+    )
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+
+
 def _render_coordenadoras(slug):
     coordenadoras = listar_orhafe_coordenadoras(slug)
     st.markdown(
@@ -405,8 +524,54 @@ def _render_relatorios(slug):
 
     reunioes = listar_orhafe_reunioes(slug, inicio.isoformat(), fim.isoformat())
     freq = relatorio_orhafe_frequencia(slug, inicio.isoformat(), fim.isoformat())
-    _metricas_chamadas(reunioes)
-    _grafico_reunioes(reunioes)
+    resumo_lideres = _resumo_lideres(reunioes)
+
+    st.markdown("#### Relatorio geral")
+    if reunioes.empty:
+        st.info("Nenhuma reuniao registrada no periodo selecionado.")
+    else:
+        totais = _totais_reunioes(reunioes)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total de reunioes", totais["Reunioes"])
+        c2.metric("Total de presentes", totais["Presentes"])
+        c3.metric("Total de ausentes", totais["Ausentes"])
+        c4.metric("Total de visitantes", totais["Visitantes"])
+        c5, c6 = st.columns(2)
+        c5.metric("Total de matriculadas nas chamadas", totais["Matriculadas"])
+        c6.metric("Total de ofertas", _moeda(totais["Ofertas"]))
+
+        st.markdown("#### Grafico por lider")
+        lideres = sorted(reunioes["lider"].fillna("Sem lider").astype(str).unique().tolist())
+        lider_escolhida = st.selectbox("Escolha a lider", lideres, key="grafico_orhafe_lider")
+        reunioes_lider = reunioes[
+            reunioes["lider"].fillna("Sem lider").astype(str) == lider_escolhida
+        ]
+        _grafico_totais_orhafe(
+            f"Resumo da lider {lider_escolhida}",
+            _totais_reunioes(reunioes_lider),
+        )
+
+        st.markdown("#### Grafico geral do ORHAFE")
+        _grafico_totais_orhafe("Resumo geral do ORHAFE", totais)
+
+        st.markdown("#### Evolucao das reunioes")
+        _grafico_reunioes(reunioes)
+
+    st.markdown("#### Resumo por lider")
+    _grafico_resumo_lideres(resumo_lideres)
+    if not resumo_lideres.empty:
+        tabela_lideres = resumo_lideres.copy()
+        tabela_lideres["frequencia_pct"] = tabela_lideres["frequencia_pct"].apply(_pct)
+        tabela_lideres["ofertas"] = tabela_lideres["ofertas"].apply(_moeda)
+        st.dataframe(tabela_lideres, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Baixar relatorio de lideres CSV",
+            data=gerar_csv(resumo_lideres),
+            file_name="relatorio_orhafe_lideres.csv",
+            mime="text/csv",
+        )
+
+    st.markdown("#### Frequencia das matriculadas")
     _grafico_frequencia(freq)
 
     with st.expander("Reunioes registradas", expanded=False):
@@ -416,10 +581,16 @@ def _render_relatorios(slug):
             exibir = reunioes.copy()
             exibir["data"] = exibir["data"].apply(_fmt_data)
             exibir["ofertas"] = exibir["ofertas"].apply(_moeda)
+            exibir["frequencia"] = (
+                exibir["presentes"].fillna(0)
+                / exibir["matriculadas"].replace(0, 1).fillna(1)
+                * 100
+            ).round(1).apply(_pct)
             st.dataframe(
                 exibir[[
                     "data", "lider", "tema", "matriculadas", "presentes",
-                    "ausentes", "visitantes", "ofertas", "observacoes",
+                    "ausentes", "visitantes", "frequencia", "ofertas",
+                    "observacoes",
                 ]],
                 use_container_width=True,
                 hide_index=True,
@@ -431,18 +602,22 @@ def _render_relatorios(slug):
                 mime="text/csv",
             )
 
-    with st.expander("Frequencia individual", expanded=False):
+    with st.expander("Relatorio individual por matriculada", expanded=False):
         if freq.empty:
             st.info("Sem dados individuais no periodo.")
         else:
             exibir = freq.copy()
             total = exibir["presencas"] + exibir["ausencias"]
-            exibir["frequencia_pct"] = (
+            freq_numerica = (
                 exibir["presencas"] / total.where(total > 0, 1) * 100
-            ).round(1).apply(_pct)
+            ).round(1)
+            exibir["frequencia_pct"] = freq_numerica.apply(_pct)
+            exibir["acompanhamento"] = freq_numerica.apply(
+                lambda v: "Acompanhar em oracao/visita" if v < 60 else "Regular"
+            )
             st.dataframe(exibir, use_container_width=True, hide_index=True)
             st.download_button(
-                "Baixar frequencia CSV",
+                "Baixar relatorio individual CSV",
                 data=gerar_csv(freq),
                 file_name="orhafe_frequencia.csv",
                 mime="text/csv",
