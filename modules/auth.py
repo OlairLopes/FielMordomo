@@ -123,8 +123,8 @@ def _login_css():
         """
         <style>
             .block-container {
-                padding-top: 2.2rem !important;
-                max-width: 1180px !important;
+                padding-top: 1.6rem !important;
+                max-width: 1260px !important;
             }
             div[data-testid="stForm"] {
                 background: #FFFFFF;
@@ -136,9 +136,12 @@ def _login_css():
             .fm-login-side {
                 background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
                 border-radius: 24px;
-                padding: 26px 20px 22px;
+                padding: 30px 22px 24px;
                 min-height: 700px;
+                margin-top: 4px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
+                overflow: visible;
+                box-sizing: border-box;
             }
             .fm-login-side * {
                 color: #FFFFFF;
@@ -181,12 +184,15 @@ def _login_css():
                 display: block;
                 width: 100%;
                 border-radius: 13px;
-                padding: .78rem .9rem;
+                padding: .78rem .82rem;
                 margin-bottom: .52rem;
                 text-align: left;
                 color: rgba(255,255,255,.92) !important;
                 background: rgba(255,255,255,.06);
                 font-weight: 700;
+                font-size: .86rem;
+                line-height: 1.25;
+                white-space: nowrap;
                 text-decoration: none !important;
                 transition: .18s ease;
                 box-sizing: border-box;
@@ -411,7 +417,7 @@ def tela_login():
     _login_css()
     modo = _modo_login_atual()
 
-    col_side, col_main = st.columns([0.95, 2.05], gap="large")
+    col_side, col_main = st.columns([1.18, 2.05], gap="large")
     with col_side:
         _sidebar_login(modo)
 
