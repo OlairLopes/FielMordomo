@@ -13,6 +13,23 @@ from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
 
 VISIBILIDADES = ["Publico", "Membros", "Restrito"]
 SITUACOES = ["Programado", "Realizado", "Cancelado"]
+TIPOS_EVENTO = [
+    "Conscientização Missionária",
+    "Consagração",
+    "Culto de Ensino",
+    "Culto Ministério de Homens",
+    "Culto Ministério Família",
+    "Culto Ministério Infantil",
+    "Culto Ministério Jovens",
+    "Culto Ministério Missões",
+    "Culto Ministério Mulheres",
+    "Dia com Deus",
+    "Encontro Unificado",
+    "Escola Bíblica",
+    "Fraternal",
+    "Outros",
+    "Vigília",
+]
 
 
 def _hoje():
@@ -60,7 +77,7 @@ def _render_form(slug):
 
         c4, c5 = st.columns(2)
         local = c4.text_input("Local", placeholder="Templo sede, congregacao, salao...")
-        departamento = c5.text_input("Departamento", placeholder="Jovens, Senhoras, EBD...")
+        departamento = c5.selectbox("Departamento / tipo de evento", TIPOS_EVENTO)
 
         descricao = st.text_area("Descricao")
         c6, c7 = st.columns(2)
@@ -158,7 +175,13 @@ def _render_lista(slug):
 
             c4, c5 = st.columns(2)
             local = c4.text_input("Local", value=row["local"] or "")
-            departamento = c5.text_input("Departamento", value=row["departamento"] or "")
+            departamento_atual = row["departamento"] if row["departamento"] in TIPOS_EVENTO else "Outros"
+            departamento = c5.selectbox(
+                "Departamento / tipo de evento",
+                TIPOS_EVENTO,
+                index=_idx(TIPOS_EVENTO, departamento_atual),
+                key=f"evento_departamento_{id_evento}",
+            )
 
             descricao = st.text_area("Descricao", value=row["descricao"] or "")
             c6, c7 = st.columns(2)

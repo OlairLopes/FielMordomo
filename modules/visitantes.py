@@ -17,6 +17,24 @@ ESTADOS_BR = [
     "RR", "SC", "SP", "SE", "TO",
 ]
 
+DEPARTAMENTOS_CULTO = [
+    "Conscientização Missionária",
+    "Consagração",
+    "Culto de Ensino",
+    "Culto Ministério de Homens",
+    "Culto Ministério Família",
+    "Culto Ministério Infantil",
+    "Culto Ministério Jovens",
+    "Culto Ministério Missões",
+    "Culto Ministério Mulheres",
+    "Dia com Deus",
+    "Encontro Unificado",
+    "Escola Bíblica",
+    "Fraternal",
+    "Outros",
+    "Vigília",
+]
+
 
 def _hoje():
     return datetime.date.today()
@@ -65,10 +83,17 @@ def _render_formulario(slug):
         c1.text_input("Identificador da igreja", value=slug, disabled=True)
         data = c2.date_input("Data", value=_hoje())
 
-        departamento = st.text_input(
-            "Departamento",
-            placeholder="Ex.: Culto publico, Jovens, Senhoras, Escola Bíblica...",
+        departamento_opcao = st.selectbox(
+            "Departamento na direcao do culto",
+            DEPARTAMENTOS_CULTO,
+            index=0,
         )
+        departamento = departamento_opcao
+        if departamento_opcao == "Outros":
+            departamento = st.text_input(
+                "Informe o departamento",
+                placeholder="Ex.: Ministerio de louvor, familia, adolescentes...",
+            )
         nome_visitante = st.text_input("Nome do visitante")
 
         crente = st.radio(
