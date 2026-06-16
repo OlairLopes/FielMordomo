@@ -2,6 +2,7 @@
 Autenticacao do FielMordomo.
 """
 
+import base64
 import html
 import re
 import urllib.parse
@@ -87,6 +88,21 @@ def _exibir_logo_sistema():
         )
 
 
+def _logo_login_src():
+    resultado = obter_logo_sistema()
+    if not resultado:
+        return ""
+    dados, ext = resultado
+    mime = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "webp": "image/webp",
+        "gif": "image/gif",
+    }.get(str(ext or "png").lower().replace(".", ""), "image/png")
+    return f"data:{mime};base64,{base64.b64encode(dados).decode('utf-8')}"
+
+
 LOGIN_OPCOES = [
     ("Gestor/Pastor", "Acesso principal", "Gestao completa da igreja"),
     ("Pastor Auxiliar", "Acesso pastoral", "Visitantes, pedidos e relatorios permitidos"),
@@ -113,18 +129,41 @@ def _login_css():
                 padding: 1.4rem 1.5rem 1.5rem;
                 box-shadow: 0 20px 45px rgba(6, 27, 68, .10);
             }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child {
+            .fm-login-side {
                 background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
                 border-radius: 24px;
                 padding: 26px 20px 22px;
                 min-height: 700px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
             }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child * {
+            .fm-login-side * {
                 color: #FFFFFF;
             }
-            .fm-login-side-anchor {
-                display: none;
+            .fm-login-logo {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 8px 0 18px;
+                margin-bottom: 18px;
+                border-bottom: 1px solid rgba(255,255,255,.14);
+            }
+            .fm-login-logo img {
+                width: 150px;
+                max-width: 78%;
+                height: auto;
+                object-fit: contain;
+            }
+            .fm-login-logo-fallback {
+                width: 82px;
+                height: 82px;
+                border-radius: 22px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 1px solid rgba(212,175,55,.55);
+                color: #D4AF37 !important;
+                font-size: 1.6rem;
+                font-weight: 850;
             }
             .fm-login-side-label {
                 color: rgba(255,255,255,.72) !important;
@@ -133,6 +172,29 @@ def _login_css():
                 text-transform: uppercase;
                 letter-spacing: .08em;
                 margin: 18px 4px 10px;
+            }
+            .fm-login-link {
+                display: block;
+                width: 100%;
+                border-radius: 13px;
+                padding: .78rem .9rem;
+                margin-bottom: .52rem;
+                text-align: left;
+                color: rgba(255,255,255,.92) !important;
+                background: rgba(255,255,255,.06);
+                font-weight: 700;
+                text-decoration: none !important;
+                transition: .18s ease;
+                box-sizing: border-box;
+            }
+            .fm-login-link:hover {
+                background: rgba(212, 175, 55, .22);
+                color: #D4AF37 !important;
+            }
+            .fm-login-link.active {
+                background: rgba(212, 175, 55, .28);
+                color: #D4AF37 !important;
+                border-left: 4px solid #D4AF37;
             }
             .fm-login-heading {
                 color: #061B44;
@@ -144,38 +206,6 @@ def _login_css():
                 color: #64748B;
                 font-size: .95rem;
                 margin-bottom: 20px;
-            }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child div[data-testid="stImage"] {
-                display: flex;
-                justify-content: center;
-                margin: 0 auto 18px;
-                padding: 8px 0 14px;
-                border-bottom: 1px solid rgba(255,255,255,.14);
-            }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child img {
-                max-width: 145px;
-                height: auto;
-                object-fit: contain;
-            }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child .stButton button {
-                width: 100%;
-                border: none !important;
-                border-radius: 13px !important;
-                padding: .78rem .9rem !important;
-                margin-bottom: .28rem !important;
-                text-align: left !important;
-                color: rgba(255,255,255,.92) !important;
-                background: rgba(255,255,255,.06) !important;
-                font-weight: 700 !important;
-            }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child .stButton button:hover {
-                background: rgba(212, 175, 55, .22) !important;
-                color: #D4AF37 !important;
-            }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child .stButton button[kind="primary"] {
-                background: rgba(212, 175, 55, .28) !important;
-                color: #D4AF37 !important;
-                border-left: 4px solid #D4AF37 !important;
             }
             .fm-login-select-anchor {
                 display: none;
@@ -218,8 +248,14 @@ def _login_css():
 
 def _modo_login_atual():
     modos = [item[0] for item in LOGIN_OPCOES]
+    acesso_url = st.query_params.get("acesso", "")
+    if isinstance(acesso_url, list):
+        acesso_url = acesso_url[0] if acesso_url else ""
+    acesso_url = urllib.parse.unquote(str(acesso_url or ""))
     modo_select = st.session_state.get("login_modo_select")
-    modo = modo_select if modo_select in modos else st.session_state.get("login_modo", modos[0])
+    modo = acesso_url if acesso_url in modos else (
+        modo_select if modo_select in modos else st.session_state.get("login_modo", modos[0])
+    )
     if modo not in modos:
         modo = modos[0]
     st.session_state["login_modo"] = modo
@@ -231,27 +267,40 @@ def _selecionar_modo_login(modo):
     st.session_state["login_modo"] = modo
     st.session_state["login_modo_select"] = modo
     st.session_state["mostrar_recuperacao"] = False
+    try:
+        st.query_params["pagina"] = "login"
+        st.query_params["acesso"] = modo
+    except Exception:
+        pass
     st.rerun()
 
 
 def _sidebar_login(modo_atual):
-    st.markdown('<span class="fm-login-side-anchor"></span>', unsafe_allow_html=True)
-    _exibir_logo_sistema()
-    st.markdown(
-        '<div class="fm-login-side-label">Tipo de acesso</div>',
-        unsafe_allow_html=True,
-    )
+    logo_src = _logo_login_src()
+    if logo_src:
+        logo_html = f'<img src="{html.escape(logo_src, quote=True)}" alt="Logo">'
+    else:
+        logo_html = '<div class="fm-login-logo-fallback">FM</div>'
+    links = []
     for modo, titulo, descricao in LOGIN_OPCOES:
         label = f"{titulo} | {modo}"
-        ajuda = descricao
-        if st.button(
-            label,
-            key=f"login_modo_{modo}",
-            use_container_width=True,
-            type="primary" if modo == modo_atual else "secondary",
-            help=ajuda,
-        ):
-            _selecionar_modo_login(modo)
+        classe = "fm-login-link active" if modo == modo_atual else "fm-login-link"
+        href = f"?pagina=login&acesso={urllib.parse.quote(modo)}"
+        links.append(
+            f'<a class="{classe}" href="{html.escape(href, quote=True)}" '
+            f'target="_top" title="{html.escape(descricao, quote=True)}">'
+            f'{html.escape(label)}</a>'
+        )
+    st.markdown(
+        f"""
+        <div class="fm-login-side">
+            <div class="fm-login-logo">{logo_html}</div>
+            <div class="fm-login-side-label">Tipo de acesso</div>
+            {''.join(links)}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_login_por_modo(modo):
