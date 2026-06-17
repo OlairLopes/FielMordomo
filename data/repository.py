@@ -3737,6 +3737,75 @@ def autenticar_recepcao(slug, usuario, senha):
     }
 
 
+def autenticar_recepcao_por_cpf4(slug, cpf4):
+    try:
+        slug = _validar_slug(slug)
+    except ValueError:
+        return None
+
+    cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
+    if len(cpf4) != 4:
+        return None
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        return None
+
+    with _conn(db) as conn:
+        try:
+            rows = conn.execute(
+                """SELECT r.id_recepcao, r.nome, r.usuario
+                     FROM recepcao_usuarios r
+                     JOIN cadastros c ON c.id_cadastro = r.id_cadastro
+                    WHERE r.situacao='Ativo'
+                      AND UPPER(TRIM(c.tipo_cadastro))='MEMBRO'
+                      AND UPPER(TRIM(c.situacao))='ATIVO'
+                      AND substr(
+                            replace(replace(replace(COALESCE(c.cpf, ''), '.', ''), '-', ''), ' ', ''),
+                            -4
+                          ) = ?
+                    ORDER BY r.nome
+                    LIMIT 2""",
+                (cpf4,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            _garantir_tabela_recepcao(conn)
+            _garantir_colunas_cadastros(conn)
+            rows = conn.execute(
+                """SELECT r.id_recepcao, r.nome, r.usuario
+                     FROM recepcao_usuarios r
+                     JOIN cadastros c ON c.id_cadastro = r.id_cadastro
+                    WHERE r.situacao='Ativo'
+                      AND UPPER(TRIM(c.tipo_cadastro))='MEMBRO'
+                      AND UPPER(TRIM(c.situacao))='ATIVO'
+                      AND substr(
+                            replace(replace(replace(COALESCE(c.cpf, ''), '.', ''), '-', ''), ' ', ''),
+                            -4
+                          ) = ?
+                    ORDER BY r.nome
+                    LIMIT 2""",
+                (cpf4,),
+            ).fetchall()
+
+        row = rows[0] if len(rows) == 1 else None
+
+    if not row:
+        return None
+
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+
+    return {
+        "igreja": igreja,
+        "recepcao": {
+            "id": row["id_recepcao"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+        },
+    }
+
+
 def _dados_lancamento_validados(conn, l, lote_id=""):
     tipo = str(l.tipo or "").strip()
     categoria = str(l.categoria or "").strip()

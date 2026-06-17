@@ -11,7 +11,8 @@ import streamlit as st
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
     autenticar_ebd_secretario, autenticar_orhafe_secretaria,
-    autenticar_pastor_auxiliar, autenticar_recepcao, autenticar_secretario_geral,
+    autenticar_pastor_auxiliar, autenticar_recepcao,
+    autenticar_recepcao_por_cpf4, autenticar_secretario_geral,
     carregar_tesoureiros, inicializar_master, listar_ebd_secretarios,
     listar_igrejas, listar_orhafe_secretarias, listar_pastores_auxiliares,
     listar_recepcao_usuarios, listar_secretarios_gerais,
@@ -640,8 +641,8 @@ def _opcoes_usuarios_por_perfil(slug, perfil):
     if usuarios.empty:
         return {}, "Nenhum usuario ativo encontrado para esta igreja."
     opcoes = {
-        f'{row["nome"]} ({row["usuario"]})': str(row["usuario"])
-        for _, row in usuarios.sort_values("nome").iterrows()
+        str(row["usuario"]).strip(): str(row["usuario"]).strip()
+        for _, row in usuarios.sort_values("usuario").iterrows()
         if str(row.get("usuario", "") or "").strip()
     }
     if not opcoes:
@@ -650,30 +651,18 @@ def _opcoes_usuarios_por_perfil(slug, perfil):
 
 
 def _selectbox_igreja_login(key):
-    op_igrejas, erro_igrejas = _opcoes_igrejas_ativas()
-    if erro_igrejas:
-        st.warning(erro_igrejas)
-        return ""
-    return st.selectbox(
+    return st.text_input(
         "Identificador da igreja",
-        list(op_igrejas.keys()),
         key=key,
-        help="Selecione o identificador da igreja, por exemplo: adserrinha.",
+        help="Digite o identificador da igreja, por exemplo: adserrinha.",
     )
 
 
 def _selectbox_usuario_login(slug, perfil, label, key):
-    op_usuarios, erro_usuarios = _opcoes_usuarios_por_perfil(slug, perfil)
-    if erro_usuarios:
-        st.warning(erro_usuarios)
-        return ""
-    usuarios = list(op_usuarios.values())
-    rotulos = {usuario: rotulo for rotulo, usuario in op_usuarios.items()}
-    return st.selectbox(
+    return st.text_input(
         label,
-        usuarios,
         key=key,
-        format_func=lambda usuario: rotulos.get(usuario, usuario),
+        help="Digite o usuario cadastrado para este perfil.",
     )
 
 
@@ -681,23 +670,30 @@ def _selectbox_usuario_login(slug, perfil, label, key):
 def _login_recepcao():
     st.markdown("#### Acesso da Recepcao")
     st.caption("Acesso restrito somente ao registro de visitantes.")
-    slug = _selectbox_igreja_login("login_recepcao_igreja")
-    usuario = _selectbox_usuario_login(
-        slug,
-        "recepcao",
-        "Usuario da Recepcao",
-        f"login_recepcao_usuario_{slug or 'sem_igreja'}",
+
+    slug = st.text_input(
+        "Identificador da igreja",
+        key="login_recepcao_igreja",
+        help="Digite o identificador da igreja, por exemplo: adserrinha.",
     )
 
     with st.form("form_login_recepcao"):
-        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
+        cpf4 = st.text_input(
+            "Ultimos 4 digitos do CPF",
+            type="password",
+            max_chars=4,
+            help="Informe somente os 4 ultimos numeros do CPF cadastrado.",
+        )
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
-            usuario = str(usuario or "").strip().lower()
-            if not slug or not usuario or not senha:
+            cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
+            if not slug or not cpf4:
                 st.error("Preencha todos os campos.")
                 return
-            acesso = autenticar_recepcao(slug, usuario, senha)
+            if len(cpf4) != 4:
+                st.error("Informe exatamente os 4 ultimos digitos do CPF.")
+                return
+            acesso = autenticar_recepcao_por_cpf4(slug, cpf4)
             if acesso:
                 _iniciar_sessao(
                     "recepcao",
@@ -707,7 +703,7 @@ def _login_recepcao():
                 st.toast(f"Bem-vindo, {acesso['recepcao']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
+                st.error("Identificador ou ultimos 4 digitos do CPF incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Recepcao", "btn_esqueci_recepcao")
 
