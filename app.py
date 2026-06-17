@@ -1,7 +1,7 @@
 """
-FielMordomo - ponto de entrada da aplicacao Streamlit.
+FielMordomo - ponto de entrada da aplicação Streamlit.
 
-Mantem as rotas publicas separadas da area autenticada e carrega os modulos
+Mantém as rotas públicas separadas da área autenticada e carrega os módulos
 internos sob demanda para isolar falhas de telas secundarias.
 """
 
@@ -40,30 +40,30 @@ MIMES_LOGO = {
     "webp": "image/webp",
 }
 PAGINAS_IGREJA = {
-    "home": ("Inicio", "modules.home"),
+    "home": ("Início", "modules.home"),
     "cadastros": ("Membros", "modules.cadastros"),
-    "lancamentos": ("Lancamentos", "modules.lancamentos"),
-    "relatorios": ("Relatorios", "modules.relatorios"),
+    "lancamentos": ("Lançamentos", "modules.lancamentos"),
+    "relatorios": ("Relatórios", "modules.relatorios"),
     "dashboard": ("Dashboard", "modules.dashboard"),
     "ebd": ("Escola Bíblica", "modules.ebd"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
     "obreiros": ("Reunião de Obreiros", "modules.obreiros"),
     "eventos": ("Agenda", "modules.eventos"),
     "visitantes": ("Visitantes", "modules.visitantes"),
-    "pedidos_oracao": ("Pedidos de Oracao", "modules.pedidos_oracao"),
+    "pedidos_oracao": ("Pedidos de Oração", "modules.pedidos_oracao"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),
-    "aniversariantes": ("Aniversarios", "modules.aniversariantes"),
+    "aniversariantes": ("Aniversários", "modules.aniversariantes"),
     "backup": ("Backup", "modules.backup"),
     "minha_conta": ("Minha conta", "modules.minha_conta"),
 }
 PAGINAS_TESOUREIRO = {
-    "lancamentos": ("Lancamentos", "modules.lancamentos"),
+    "lancamentos": ("Lançamentos", "modules.lancamentos"),
     "cadastros": ("Membros", "modules.cadastros"),
-    "relatorios": ("Relatorios", "modules.relatorios"),
+    "relatorios": ("Relatórios", "modules.relatorios"),
 }
 PAGINAS_PASTOR_AUXILIAR = {
     "visitantes": ("Visitantes", "modules.visitantes"),
-    "pedidos_oracao": ("Pedidos de Oracao", "modules.pedidos_oracao"),
+    "pedidos_oracao": ("Pedidos de Oração", "modules.pedidos_oracao"),
     "dashboard": ("Dashboard", "modules.dashboard"),
     "ebd": ("Relatórios Escola Bíblica", "modules.ebd"),
     "orhafe": ("Relatórios Círculo de Oração", "modules.orhafe"),
@@ -75,7 +75,7 @@ PAGINAS_RECEPCAO = {
 PAGINAS_SECRETARIO_GERAL = {
     "cadastros": ("Membros", "modules.cadastros"),
     "obreiros": ("Chamada de Obreiros", "modules.obreiros"),
-    "aniversariantes": ("Aniversarios", "modules.aniversariantes"),
+    "aniversariantes": ("Aniversários", "modules.aniversariantes"),
 }
 PAGINAS_EBD = {
     "ebd": ("Escola Bíblica", "modules.ebd"),
@@ -206,8 +206,8 @@ def _resolver_rota_publica():
         st.stop()
     if pagina == ROTA_LOGIN:
         return
-    st.error("Pagina nao encontrada.")
-    st.markdown('[Voltar para o inicio](?pagina=inicio)')
+    st.error("Página não encontrada.")
+    st.markdown('[Voltar para o início](?pagina=inicio)')
     st.stop()
 
 
@@ -224,6 +224,17 @@ def _chave_ordenacao_menu(item):
 
 def _paginas_ordenadas(paginas):
     return sorted(paginas.items(), key=_chave_ordenacao_menu)
+
+
+def _botao_inicio_sidebar(key, pagina_destino):
+    if st.button(
+        "Início",
+        key=key,
+        use_container_width=True,
+        type="primary" if st.session_state.get("pagina") == pagina_destino else "secondary",
+    ):
+        st.session_state["pagina"] = pagina_destino
+        st.rerun()
 
 
 def _injetar_css():
@@ -294,12 +305,12 @@ def _img_b64(dados, extensao):
     extensao = str(extensao or "").strip().lower().replace(".", "")
     mime = MIMES_LOGO.get(extensao)
     if not mime:
-        raise ValueError("Formato de logo nao permitido.")
+        raise ValueError("Formato de logo não permitido.")
     if not isinstance(dados, (bytes, bytearray, memoryview)):
-        raise TypeError("Logo invalido.")
+        raise TypeError("Logo inválido.")
     dados = bytes(dados)
     if not dados or len(dados) > TAMANHO_MAXIMO_LOGO:
-        raise ValueError("Logo invalido ou maior que 5 MB.")
+        raise ValueError("Logo inválido ou maior que 5 MB.")
     return f"data:{mime};base64,{base64.b64encode(dados).decode('ascii')}"
 
 
@@ -327,7 +338,7 @@ def _render_logo_sidebar(slug=None):
             )
             return
     except Exception:
-        LOGGER.exception("Nao foi possivel renderizar o logo da sidebar.")
+        LOGGER.exception("Não foi possível renderizar o logo da sidebar.")
     st.markdown(
         '<div class="sidebar-logo" style="font-size:1.4rem;font-weight:700;color:white">'
         "FielMordomo</div>",
@@ -348,7 +359,7 @@ def _paginas_com_permissoes(paginas_base, tipo_login, usuario):
             if modulo in PAGINAS_LIBERAVEIS:
                 paginas[modulo] = PAGINAS_LIBERAVEIS[modulo]
     except Exception:
-        LOGGER.exception("Falha ao carregar permissoes extras do usuario.")
+        LOGGER.exception("Falha ao carregar permissões extras do usuário.")
     return paginas
 
 
@@ -362,7 +373,10 @@ def _sidebar_igreja(pagina_atual, igreja):
             "</div>",
             unsafe_allow_html=True,
         )
-        for chave, (rotulo, _) in _paginas_ordenadas(PAGINAS_IGREJA):
+        _botao_inicio_sidebar("sb_inicio_igreja", "home")
+        for chave, (rotulo, _) in _paginas_ordenadas({
+            k: v for k, v in PAGINAS_IGREJA.items() if k != "home"
+        }):
             if st.button(
                 rotulo,
                 key=f"sb_{chave}",
@@ -384,6 +398,7 @@ def _sidebar_admin():
             '<div class="plano">Painel do sistema</div></div>',
             unsafe_allow_html=True,
         )
+        st.button("Início", key="sb_inicio_admin", use_container_width=True, type="primary")
         st.divider()
         if st.button("Sair", key="sb_sair_admin", use_container_width=True):
             _auth().logout()
@@ -400,7 +415,10 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_TESOUREIRO, "tesoureiro", tesoureiro)
+        _botao_inicio_sidebar("sb_inicio_tesoureiro", "lancamentos")
         for chave, (rotulo, _) in _paginas_ordenadas(paginas):
+            if chave == "lancamentos":
+                continue
             if st.button(
                 rotulo,
                 key=f"sb_tesoureiro_{chave}",
@@ -415,19 +433,22 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
 
 
 def _sidebar_secretario_ebd(pagina_atual, igreja, secretario):
-    perfil = "Secretario geral" if secretario.get("perfil") == "geral" else "Secretario de classe"
+    perfil = "Secretário geral" if secretario.get("perfil") == "geral" else "Secretário de classe"
     classe = secretario.get("classe") or "Escola Bíblica"
     with st.sidebar:
         _render_logo_sidebar(igreja.get("slug", ""))
         st.markdown(
             '<div class="sidebar-info">'
-            f'<b>{_esc(secretario.get("nome", "Secretario Escola Bíblica"))}</b>'
+            f'<b>{_esc(secretario.get("nome", "Secretário Escola Bíblica"))}</b>'
             f'<div class="plano">{_esc(perfil)} - {_esc(classe)}</div>'
             "</div>",
             unsafe_allow_html=True,
         )
         paginas_extras = _paginas_com_permissoes(PAGINAS_EBD, "secretario_ebd", secretario)
+        _botao_inicio_sidebar("sb_inicio_secretario_ebd", "ebd")
         for chave, (rotulo, _) in _paginas_ordenadas(paginas_extras):
+            if chave == "ebd":
+                continue
             if st.button(
                 rotulo,
                 key=f"sb_secretario_ebd_{chave}",
@@ -453,7 +474,10 @@ def _sidebar_secretaria_orhafe(pagina_atual, igreja, secretaria):
             unsafe_allow_html=True,
         )
         paginas_extras = _paginas_com_permissoes({"orhafe": PAGINAS_IGREJA["orhafe"]}, "secretaria_orhafe", secretaria)
+        _botao_inicio_sidebar("sb_inicio_secretaria_orhafe", "orhafe")
         for chave, (rotulo, _) in _paginas_ordenadas(paginas_extras):
+            if chave == "orhafe":
+                continue
             if st.button(
                 rotulo,
                 key=f"sb_secretaria_orhafe_{chave}",
@@ -478,7 +502,10 @@ def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_PASTOR_AUXILIAR, "pastor_auxiliar", pastor)
+        _botao_inicio_sidebar("sb_inicio_pastor_auxiliar", "visitantes")
         for chave, (rotulo, _) in _paginas_ordenadas(paginas):
+            if chave == "visitantes":
+                continue
             if st.button(
                 rotulo,
                 key=f"sb_pastor_auxiliar_{chave}",
@@ -503,7 +530,10 @@ def _sidebar_recepcao(pagina_atual, igreja, recepcao):
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_RECEPCAO, "recepcao", recepcao)
+        _botao_inicio_sidebar("sb_inicio_recepcao", "visitantes")
         for chave, (rotulo, _) in _paginas_ordenadas(paginas):
+            if chave == "visitantes":
+                continue
             if st.button(
                 rotulo,
                 key=f"sb_recepcao_{chave}",
@@ -522,13 +552,16 @@ def _sidebar_secretario_geral(pagina_atual, igreja, secretario):
         _render_logo_sidebar(igreja.get("slug", ""))
         st.markdown(
             '<div class="sidebar-info">'
-            f'<b>{_esc(secretario.get("nome", "Secretario Geral"))}</b>'
+            f'<b>{_esc(secretario.get("nome", "Secretário Geral"))}</b>'
             '<div class="plano">Acesso restrito de secretaria</div>'
             "</div>",
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_SECRETARIO_GERAL, "secretario_geral", secretario)
+        _botao_inicio_sidebar("sb_inicio_secretario_geral", "cadastros")
         for chave, (rotulo, _) in _paginas_ordenadas(paginas):
+            if chave == "cadastros":
+                continue
             if st.button(
                 rotulo,
                 key=f"sb_secretario_geral_{chave}",
@@ -548,13 +581,13 @@ def _renderizar_admin():
         _importar("admin.painel").render()
     except Exception:
         LOGGER.exception("Falha ao carregar o painel administrativo.")
-        st.error("Nao foi possivel carregar o painel administrativo. Consulte o log do sistema.")
+        st.error("Não foi possível carregar o painel administrativo. Consulte o log do sistema.")
 
 
 def _renderizar_igreja():
     igreja = st.session_state.get("igreja", {})
     if not isinstance(igreja, dict) or not igreja.get("slug"):
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         if st.button("Voltar ao login"):
             _auth().logout()
         return
@@ -567,9 +600,9 @@ def _renderizar_igreja():
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar a pagina %s.", pagina)
+        LOGGER.exception("Falha ao carregar a página %s.", pagina)
         st.error(
-            "Nao foi possivel carregar esta pagina. "
+            "Não foi possível carregar esta página. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
         )
 
@@ -578,7 +611,7 @@ def _renderizar_tesoureiro():
     igreja = st.session_state.get("igreja", {})
     tesoureiro = st.session_state.get("tesoureiro", {})
     if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(tesoureiro, dict):
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         if st.button("Voltar ao login"):
             _auth().logout()
         return
@@ -592,9 +625,9 @@ def _renderizar_tesoureiro():
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar a pagina %s para o tesoureiro.", pagina)
+        LOGGER.exception("Falha ao carregar a página %s para o tesoureiro.", pagina)
         st.error(
-            "Nao foi possivel carregar esta pagina. "
+            "Não foi possível carregar esta página. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
         )
 
@@ -603,7 +636,7 @@ def _renderizar_secretario_ebd():
     igreja = st.session_state.get("igreja", {})
     secretario = st.session_state.get("secretario_ebd", {})
     if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(secretario, dict):
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         if st.button("Voltar ao login"):
             _auth().logout()
         return
@@ -619,7 +652,7 @@ def _renderizar_secretario_ebd():
     except Exception as ex:
         LOGGER.exception("Falha ao carregar Escola Bíblica para secretario.")
         st.error(
-            "Nao foi possivel carregar esta pagina. "
+            "Não foi possível carregar esta página. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
         )
 
@@ -628,7 +661,7 @@ def _renderizar_secretaria_orhafe():
     igreja = st.session_state.get("igreja", {})
     secretaria = st.session_state.get("secretaria_orhafe", {})
     if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(secretaria, dict):
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         if st.button("Voltar ao login"):
             _auth().logout()
         return
@@ -644,7 +677,7 @@ def _renderizar_secretaria_orhafe():
     except Exception as ex:
         LOGGER.exception("Falha ao carregar Círculo de Oração para secretaria.")
         st.error(
-            "Nao foi possivel carregar esta pagina. "
+            "Não foi possível carregar esta página. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
         )
 
@@ -653,7 +686,7 @@ def _renderizar_pastor_auxiliar():
     igreja = st.session_state.get("igreja", {})
     pastor = st.session_state.get("pastor_auxiliar", {})
     if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(pastor, dict):
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         if st.button("Voltar ao login"):
             _auth().logout()
         return
@@ -667,9 +700,9 @@ def _renderizar_pastor_auxiliar():
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar a pagina %s para pastor auxiliar.", pagina)
+        LOGGER.exception("Falha ao carregar a página %s para pastor auxiliar.", pagina)
         st.error(
-            "Nao foi possivel carregar esta pagina. "
+            "Não foi possível carregar esta página. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
         )
 
@@ -678,7 +711,7 @@ def _renderizar_recepcao():
     igreja = st.session_state.get("igreja", {})
     recepcao = st.session_state.get("recepcao", {})
     if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(recepcao, dict):
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         if st.button("Voltar ao login"):
             _auth().logout()
         return
@@ -692,9 +725,9 @@ def _renderizar_recepcao():
         _, caminho_modulo = paginas[pagina]
         _importar(caminho_modulo).render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar visitantes para recepcao.")
+        LOGGER.exception("Falha ao carregar visitantes para recepção.")
         st.error(
-            "Nao foi possivel carregar esta pagina. "
+            "Não foi possível carregar esta página. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
         )
 
@@ -703,7 +736,7 @@ def _renderizar_secretario_geral():
     igreja = st.session_state.get("igreja", {})
     secretario = st.session_state.get("secretario_geral", {})
     if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(secretario, dict):
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         if st.button("Voltar ao login"):
             _auth().logout()
         return
@@ -717,9 +750,9 @@ def _renderizar_secretario_geral():
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar a pagina %s para secretario geral.", pagina)
+        LOGGER.exception("Falha ao carregar a página %s para secretário geral.", pagina)
         st.error(
-            "Nao foi possivel carregar esta pagina. "
+            "Não foi possível carregar esta página. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
         )
 
@@ -750,7 +783,7 @@ def main():
     elif modo == "secretario_geral":
         _renderizar_secretario_geral()
     else:
-        st.error("Modo de acesso invalido. Faca login novamente.")
+        st.error("Modo de acesso inválido. Faça login novamente.")
         if st.button("Sair"):
             auth.logout()
 
