@@ -186,14 +186,13 @@ def _montar_mensagem_aniversario(nome, idade, nome_igreja, sexo=""):
     identificador = slug_da_sessao()
 
     return (
-        f"A paz do Senhor, {tratamento} {nome}! 🙏\n\n"
+        f"A paz do Senhor, {tratamento} {nome}! \n\n"
         f"Neste dia especial, a família {identificador} se alegra por sua vida "
         f"e deseja a você um feliz aniversário.\n\n"
         f"Nossa oração é que Deus continue conduzindo seus passos, "
         f"fortalecendo sua fé e concedendo saúde, paz e alegria.\n\n"
-        f"Parabéns por mais um ano de vida! 🎉🎂.\n\n"
+        f"Parabéns por mais um ano de vida! \n\n"
 
-        f"Mensagem enviada automaticamente pela secretaria da igreja.\n\n"
         f"Pr. Olair Pereira Lopes.\n\n"
     )
 
