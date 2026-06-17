@@ -694,6 +694,7 @@ def _garantir_tabelas_visitantes(conn):
             igreja_origem  TEXT DEFAULT '',
             cidade         TEXT DEFAULT '',
             estado         TEXT DEFAULT '',
+            congregacao    TEXT DEFAULT '',
             denominacao    TEXT DEFAULT '',
             deseja_ser_apresentado INTEGER NOT NULL DEFAULT 0,
             deseja_oracao_final    INTEGER NOT NULL DEFAULT 0,
@@ -706,6 +707,9 @@ def _garantir_tabelas_visitantes(conn):
         CREATE INDEX IF NOT EXISTS idx_visitantes_cultos_departamento
             ON visitantes_cultos(departamento);
     """)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(visitantes_cultos)").fetchall()]
+    if "congregacao" not in cols:
+        conn.execute("ALTER TABLE visitantes_cultos ADD COLUMN congregacao TEXT DEFAULT ''")
 
 
 def _garantir_tabelas_obreiros(conn):
@@ -2713,6 +2717,7 @@ def salvar_visitante_culto(
     deseja_ser_apresentado=False,
     deseja_oracao_final=False,
     observacoes="",
+    congregacao="",
     id_visitante=None,
 ):
     tipo_visitante = str(tipo_visitante or "").strip()
@@ -2751,6 +2756,7 @@ def salvar_visitante_culto(
             sanitizar(igreja_origem),
             sanitizar(cidade),
             sanitizar(estado),
+            sanitizar(congregacao),
             sanitizar(denominacao),
             int(bool(deseja_ser_apresentado)),
             int(bool(deseja_oracao_final)),
@@ -2760,7 +2766,7 @@ def salvar_visitante_culto(
             conn.execute(
                 """UPDATE visitantes_cultos
                    SET data=?, departamento=?, nome_visitante=?, tipo_visitante=?,
-                       igreja_origem=?, cidade=?, estado=?, denominacao=?,
+                       igreja_origem=?, cidade=?, estado=?, congregacao=?, denominacao=?,
                        deseja_ser_apresentado=?, deseja_oracao_final=?,
                        observacoes=?, atualizado_em=datetime('now')
                    WHERE id_visitante=?""",
@@ -2770,9 +2776,9 @@ def salvar_visitante_culto(
         cur = conn.execute(
             """INSERT INTO visitantes_cultos
                (data, departamento, nome_visitante, tipo_visitante,
-                igreja_origem, cidade, estado, denominacao,
+                igreja_origem, cidade, estado, congregacao, denominacao,
                 deseja_ser_apresentado, deseja_oracao_final, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             dados,
         )
         return cur.lastrowid
@@ -2799,7 +2805,7 @@ def listar_visitantes_cultos(slug, data_inicio=None, data_fim=None, departamento
         return pd.read_sql_query(
             f"""SELECT id_visitante, data, departamento, nome_visitante,
                        tipo_visitante, igreja_origem, cidade, estado,
-                       denominacao, deseja_ser_apresentado,
+                       congregacao, denominacao, deseja_ser_apresentado,
                        deseja_oracao_final, observacoes, criado_em, atualizado_em
                 FROM visitantes_cultos
                 {filtro}

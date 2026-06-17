@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from data.repository import (
+    carregar_cadastros,
     excluir_visitante_culto,
     listar_visitantes_cultos,
     salvar_visitante_culto,
@@ -80,6 +81,27 @@ def _cidades_por_estado(uf):
         return ["Outros"]
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _congregacoes_membros(slug):
+    try:
+        df = carregar_cadastros(slug)
+    except Exception:
+        return []
+    if df is None or df.empty or "congregacao" not in df.columns:
+        return []
+    if "tipo_cadastro" in df.columns:
+        df = df[df["tipo_cadastro"].fillna("").astype(str).str.strip().str.upper() == "MEMBRO"]
+    if "situacao" in df.columns:
+        df = df[df["situacao"].fillna("").astype(str).str.strip().str.upper() == "ATIVO"]
+    congregacoes = (
+        df["congregacao"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+    return sorted({c for c in congregacoes if c})
+
+
 def _totais(df):
     if df.empty:
         return {
@@ -140,6 +162,7 @@ def _render_formulario(slug):
     igreja_origem = ""
     cidade = ""
     estado = ""
+    congregacao = ""
     denominacao = ""
 
     if tipo_visitante == "Crente":
@@ -171,6 +194,22 @@ def _render_formulario(slug):
                 placeholder="Digite o nome da cidade",
                 key=f"visitante_cidade_outros_{nonce}",
             )
+        if estado == "GO" and cidade == "Minaçu":
+            congregacoes = _congregacoes_membros(slug)
+            opcoes_congregacao = ["Selecione"] + congregacoes + ["Outros"]
+            congregacao_opcao = st.selectbox(
+                "Congregacao",
+                opcoes_congregacao,
+                key=f"visitante_congregacao_{nonce}",
+            )
+            if congregacao_opcao == "Outros":
+                congregacao = st.text_input(
+                    "Informe a congregacao",
+                    placeholder="Digite o nome da congregacao",
+                    key=f"visitante_congregacao_outros_{nonce}",
+                )
+            elif congregacao_opcao != "Selecione":
+                congregacao = congregacao_opcao
     else:
         denominacao = st.text_input(
             "Pertence a qual denominacao?",
@@ -225,6 +264,7 @@ def _render_formulario(slug):
                 deseja_ser_apresentado,
                 deseja_oracao_final,
                 observacoes,
+                congregacao=congregacao,
             )
             st.success("Visitante registrado com sucesso.")
             st.session_state["visitante_form_nonce"] = nonce + 1
@@ -267,7 +307,7 @@ def _render_consulta(slug):
     st.dataframe(
         exibir[[
             "data", "departamento", "nome_visitante", "tipo_visitante",
-            "igreja_origem", "cidade", "estado", "denominacao",
+            "igreja_origem", "cidade", "estado", "congregacao", "denominacao",
             "deseja_ser_apresentado", "deseja_oracao_final", "observacoes",
         ]],
         use_container_width=True,
