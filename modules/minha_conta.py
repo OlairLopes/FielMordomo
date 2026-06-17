@@ -8,6 +8,7 @@ from data.repository import (
     carregar_cadastros,
     definir_senha_pastoral,
     excluir_subcategoria_despesa,
+    gerar_credencial_temporaria_acesso,
     igreja_alterar_senha,
     atualizar_situacao_acesso_usuario,
     inativar_pastor_auxiliar,
@@ -20,6 +21,7 @@ from data.repository import (
     listar_subcategorias_despesa,
     obter_config_igreja,
     obter_permissoes_usuario,
+    redefinir_senha_acesso_usuario,
     salvar_pastor_auxiliar,
     salvar_permissoes_usuario,
     salvar_recepcao_usuario,
@@ -163,6 +165,37 @@ def _render_controle_acessos(slug):
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
+
+    with st.expander("Redefinir senha ou PIN deste usuario", expanded=False):
+        st.warning(
+            "Esta acao nao mostra a senha antiga. Ela substitui a credencial atual "
+            "por uma temporaria. Entregue a nova credencial somente ao proprio usuario."
+        )
+        confirmar_reset = st.checkbox(
+            "Confirmo que validei a identidade do usuario antes de redefinir o acesso",
+            key=f"confirmar_reset_{tipo_login}_{id_usuario}",
+        )
+        if st.button(
+            "Gerar credencial temporaria",
+            type="primary",
+            disabled=not confirmar_reset,
+            key=f"btn_reset_senha_{tipo_login}_{id_usuario}",
+        ):
+            try:
+                credencial_temporaria = gerar_credencial_temporaria_acesso(tipo_login)
+                redefinir_senha_acesso_usuario(
+                    slug, tipo_login, id_usuario, credencial_temporaria
+                )
+            except Exception as exc:
+                LOGGER.exception("Nao foi possivel redefinir a credencial do usuario.")
+                st.error(str(exc))
+            else:
+                st.success("Credencial temporaria gerada. Copie agora; ela nao sera exibida novamente.")
+                st.code(credencial_temporaria)
+                st.caption(
+                    "Oriente o usuario a entrar com esta credencial e alterar a senha "
+                    "assim que acessar o sistema."
+                )
 
 
 def render():

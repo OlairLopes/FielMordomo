@@ -2599,6 +2599,7 @@ TABELAS_ACESSO_USUARIOS = {
     "secretaria_orhafe": ("orhafe_secretarias", "id_secretaria", "Secretaria Circulo de Oracao"),
 }
 SITUACOES_ACESSO = {"Ativo", "Inativo", "Bloqueado"}
+TIPOS_LOGIN_PIN = {"recepcao", "secretario_ebd", "secretaria_orhafe"}
 
 
 def _garantir_tabelas_acesso_usuarios(conn):
@@ -2659,6 +2660,134 @@ def atualizar_situacao_acesso_usuario(slug, tipo_login, id_usuario, situacao):
                 WHERE {id_col}=?""",
             (situacao, int(id_usuario)),
         )
+
+
+def _validar_senha_por_tipo_login(tipo_login, nova_senha):
+    tipo_login = str(tipo_login or "").strip()
+    nova_senha = str(nova_senha or "")
+
+    if tipo_login in {"igreja", "admin", "tesoureiro"}:
+        erros = validar_nova_senha(nova_senha)
+        if erros:
+            raise ValueError(" ".join(erros))
+        return nova_senha
+
+    if tipo_login == "pastor_auxiliar":
+        return _validar_senha_pastor_auxiliar(nova_senha)
+
+    if tipo_login == "secretario_geral":
+        return _validar_senha_secretario_geral(nova_senha)
+
+    if tipo_login == "recepcao":
+        return _validar_pin_recepcao(nova_senha)
+
+    if tipo_login == "secretario_ebd":
+        return _validar_pin_ebd(nova_senha)
+
+    if tipo_login == "secretaria_orhafe":
+        return _validar_pin_orhafe(nova_senha)
+
+    raise ValueError("Tipo de login invalido.")
+
+
+def gerar_credencial_temporaria_acesso(tipo_login):
+    """
+    Gera uma credencial temporaria adequada ao tipo de login.
+
+    Perfis de PIN recebem 4 digitos. Perfis de senha recebem senha forte
+    compativel com validar_nova_senha().
+    """
+    tipo_login = str(tipo_login or "").strip()
+    if tipo_login in TIPOS_LOGIN_PIN:
+        return f"{secrets.randbelow(10000):04d}"
+    if tipo_login in {"igreja", "admin", "tesoureiro", "pastor_auxiliar", "secretario_geral"}:
+        return secrets.token_urlsafe(18)
+    raise ValueError("Tipo de login invalido.")
+
+
+def redefinir_senha_acesso_usuario(slug, tipo_login, id_usuario, nova_senha):
+    """
+    Redefine a senha/PIN de um usuario sem expor a senha anterior.
+
+    Use esta funcao apenas em telas administrativas ja autenticadas/autorizadas.
+    Para Gestor/Pastor, informe tipo_login='igreja' e id_usuario=id da igreja.
+    Para Administrador do sistema, informe tipo_login='admin' e id_usuario=usuario.
+    Para os demais perfis, informe o id_usuario retornado em listar_acessos_usuarios().
+    """
+    tipo_login = str(tipo_login or "").strip()
+    nova_senha = _validar_senha_por_tipo_login(tipo_login, nova_senha)
+
+    if tipo_login == "igreja":
+        id_igreja = int(id_usuario)
+        with _conn(MASTER_DB) as conn:
+            row = conn.execute(
+                "SELECT slug FROM igrejas WHERE id=? LIMIT 1",
+                (id_igreja,),
+            ).fetchone()
+            if not row:
+                raise ValueError("Igreja nao encontrada.")
+            conn.execute(
+                "UPDATE igrejas SET senha_hash=? WHERE id=?",
+                (hash_senha(nova_senha), id_igreja),
+            )
+            _garantir_tabela_tentativas_login(conn)
+            conn.execute(
+                "DELETE FROM tentativas_login WHERE chave=?",
+                (f"igreja:{row['slug']}",),
+            )
+        return True
+
+    if tipo_login == "admin":
+        usuario = str(id_usuario or "").strip()
+        if not usuario:
+            raise ValueError("Usuario administrador invalido.")
+        with _conn(MASTER_DB) as conn:
+            cur = conn.execute(
+                "UPDATE super_admin SET senha_hash=? WHERE usuario=?",
+                (hash_senha(nova_senha), usuario),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Usuario administrador nao encontrado.")
+            _garantir_tabela_tentativas_login(conn)
+            conn.execute(
+                "DELETE FROM tentativas_login WHERE chave=?",
+                (f"admin:{usuario.lower()}",),
+            )
+        return True
+
+    if tipo_login not in TABELAS_ACESSO_USUARIOS:
+        raise ValueError("Tipo de login invalido.")
+
+    tabela, id_col, _ = TABELAS_ACESSO_USUARIOS[tipo_login]
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+
+    with _conn(db) as conn:
+        _garantir_tabelas_acesso_usuarios(conn)
+        row = conn.execute(
+            f"SELECT usuario FROM {tabela} WHERE {id_col}=? LIMIT 1",
+            (int(id_usuario),),
+        ).fetchone()
+        if not row:
+            raise ValueError("Usuario nao encontrado.")
+
+        conn.execute(
+            f"""UPDATE {tabela}
+                SET senha_hash=?, atualizado_em=datetime('now')
+                WHERE {id_col}=?""",
+            (hash_senha(nova_senha), int(id_usuario)),
+        )
+
+        usuario = str(row["usuario"] or "").strip().lower()
+        _garantir_tabela_tentativas_login(conn)
+        chaves = [f"{tipo_login}:{slug}:{usuario}"]
+        if tipo_login == "tesoureiro":
+            chaves.append(f"tesoureiro:{usuario}")
+        for chave in chaves:
+            conn.execute("DELETE FROM tentativas_login WHERE chave=?", (chave,))
+
+    return True
 
 
 def obter_permissoes_usuario(slug, tipo_login, id_usuario):
