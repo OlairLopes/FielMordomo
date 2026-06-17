@@ -146,6 +146,7 @@ def _login_css():
                 margin-bottom: 18px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
                 overflow: visible;
+                position: relative;
                 box-sizing: border-box;
             }
             .fm-login-side * {
@@ -155,15 +156,20 @@ def _login_css():
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                padding: 8px 0 18px;
+                padding: 6px 0 18px;
                 margin-bottom: 18px;
                 border-bottom: 1px solid rgba(255,255,255,.14);
+                overflow: visible;
+                position: relative;
+                z-index: 3;
             }
             .fm-login-logo img {
-                width: 150px;
-                max-width: 78%;
+                width: 210px;
+                max-width: 106%;
                 height: auto;
                 object-fit: contain;
+                position: relative;
+                z-index: 4;
             }
             .fm-login-logo-fallback {
                 width: 82px;
@@ -684,6 +690,21 @@ def _selectbox_usuario_login(slug, perfil, label, key):
     )
 
 
+def _selectbox_recepcao_usuario_login(slug):
+    op_usuarios, erro_usuarios = _opcoes_usuarios_por_perfil(slug, "recepcao")
+    if erro_usuarios:
+        st.warning(erro_usuarios)
+        return ""
+
+    usuarios = list(op_usuarios.values())
+    return st.selectbox(
+        "Usuario da Recepcao",
+        usuarios,
+        key=f"login_recepcao_usuario_{slug or 'sem_igreja'}",
+        help="Selecione o usuario cadastrado para a recepcao.",
+    )
+
+
 
 def _login_recepcao():
     st.markdown("#### Acesso da Recepcao")
@@ -694,24 +715,27 @@ def _login_recepcao():
         key="login_recepcao_igreja",
         help="Digite o identificador da igreja, por exemplo: adserrinha.",
     )
+    slug_normalizado = str(slug or "").strip().lower()
+    usuario = _selectbox_recepcao_usuario_login(slug_normalizado) if slug_normalizado else ""
 
     with st.form("form_login_recepcao"):
-        cpf4 = st.text_input(
-            "Ultimos 4 digitos do CPF",
+        senha = st.text_input(
+            "PIN de 4 digitos",
             type="password",
             max_chars=4,
-            help="Informe somente os 4 ultimos numeros do CPF cadastrado.",
+            help="Informe o PIN de 4 digitos cadastrado.",
         )
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
-            cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
-            if not slug or not cpf4:
+            usuario = str(usuario or "").strip().lower()
+            senha = "".join(c for c in str(senha or "") if c.isdigit())
+            if not slug or not usuario or not senha:
                 st.error("Preencha todos os campos.")
                 return
-            if len(cpf4) != 4:
-                st.error("Informe exatamente os 4 ultimos digitos do CPF.")
+            if len(senha) != 4:
+                st.error("Informe exatamente os 4 digitos do PIN.")
                 return
-            acesso = autenticar_recepcao_por_cpf4(slug, cpf4)
+            acesso = autenticar_recepcao(slug, usuario, senha)
             if acesso:
                 _iniciar_sessao(
                     "recepcao",
@@ -721,7 +745,7 @@ def _login_recepcao():
                 st.toast(f"Bem-vindo, {acesso['recepcao']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador ou ultimos 4 digitos do CPF incorretos, ou acesso inativo.")
+                st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Recepcao", "btn_esqueci_recepcao")
 
