@@ -10,7 +10,9 @@ from data.repository import (
     autenticar_senha_pastoral,
     carregar_cadastros,
     carregar_lancamentos,
+    listar_orhafe_reunioes,
     obter_config_igreja,
+    relatorio_orhafe_visitantes,
     senha_pastoral_configurada,
 )
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
@@ -329,6 +331,145 @@ def _grafico_ranking(resumo, rotulos, valores, cor):
         xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
         yaxis=dict(fixedrange=True, showgrid=False),
     ))
+    return fig
+
+
+def _orhafe_contar_visitantes(visitantes, lider=None):
+    if visitantes is None or visitantes.empty:
+        return 0
+    dados = visitantes.copy()
+    if lider is not None:
+        dados = dados[
+            _texto(dados["lider"]).replace("", "Sem lider") == str(lider)
+        ].copy()
+    if dados.empty or "nome" not in dados.columns:
+        return 0
+    nomes = _texto(dados["nome"]).str.lower()
+    return int(nomes[nomes.ne("")].nunique())
+
+
+def _orhafe_indicadores_resumo(reunioes, visitantes=None, lider=None):
+    if reunioes.empty:
+        return {
+            "Presenca media (%)": 0.0,
+            "Ausencia media (%)": 0.0,
+            "Visitantes": 0,
+            "Ofertas": 0.0,
+        }
+
+    matriculadas = pd.to_numeric(reunioes["matriculadas"], errors="coerce").fillna(0)
+    presentes = pd.to_numeric(reunioes["presentes"], errors="coerce").fillna(0)
+    ausentes = pd.to_numeric(reunioes["ausentes"], errors="coerce").fillna(0)
+    media_matriculadas = float(matriculadas.mean()) if not matriculadas.empty else 0.0
+    media_presentes = float(presentes.mean()) if not presentes.empty else 0.0
+    media_ausentes = float(ausentes.mean()) if not ausentes.empty else 0.0
+    if media_matriculadas > 0:
+        presenca_pct = media_presentes / media_matriculadas * 100
+        ausencia_pct = media_ausentes / media_matriculadas * 100
+    else:
+        presenca_pct = 0.0
+        ausencia_pct = 0.0
+    return {
+        "Presenca media (%)": round(presenca_pct, 1),
+        "Ausencia media (%)": round(ausencia_pct, 1),
+        "Visitantes": _orhafe_contar_visitantes(visitantes, lider),
+        "Ofertas": float(pd.to_numeric(reunioes["ofertas"], errors="coerce").fillna(0).sum()),
+    }
+
+
+def _orhafe_resumo_lideres(reunioes, visitantes=None):
+    if reunioes.empty:
+        return pd.DataFrame(columns=[
+            "lider", "reunioes", "presenca_media_pct", "ausencia_media_pct",
+            "visitantes", "ofertas",
+        ])
+    dados = reunioes.copy()
+    dados["lider"] = _texto(dados["lider"]).replace("", "Sem lider")
+    for coluna in ("matriculadas", "presentes", "ausentes", "ofertas"):
+        dados[coluna] = pd.to_numeric(dados[coluna], errors="coerce").fillna(0)
+    resumo = dados.groupby("lider", as_index=False).agg(
+        reunioes=("id_reuniao", "nunique"),
+        media_matriculadas=("matriculadas", "mean"),
+        media_presentes=("presentes", "mean"),
+        media_ausentes=("ausentes", "mean"),
+        ofertas=("ofertas", "sum"),
+    )
+    resumo["presenca_media_pct"] = (
+        resumo["media_presentes"] / resumo["media_matriculadas"].where(resumo["media_matriculadas"] > 0, 1) * 100
+    ).round(1)
+    resumo["ausencia_media_pct"] = (
+        resumo["media_ausentes"] / resumo["media_matriculadas"].where(resumo["media_matriculadas"] > 0, 1) * 100
+    ).round(1)
+    resumo["visitantes"] = resumo["lider"].apply(
+        lambda lider: _orhafe_contar_visitantes(visitantes, lider)
+    )
+    return resumo.sort_values("lider")
+
+
+def _grafico_orhafe_resumo(titulo, dados):
+    df = pd.DataFrame(
+        [{"Indicador": chave, "Valor": valor} for chave, valor in dados.items()]
+    )
+    fig = go.Figure(go.Bar(
+        name="Indicador",
+        x=df["Indicador"],
+        y=df["Valor"],
+        marker_color=[CORES["entrada"], CORES["saida"], CORES["alerta"], CORES["funcao"]][:len(df)],
+        text=[
+            formatar_moeda(valor)
+            if indicador == "Ofertas"
+            else f"{valor:.1f}%"
+            if "(%)" in indicador
+            else str(int(valor))
+            for indicador, valor in zip(df["Indicador"], df["Valor"])
+        ],
+        textposition="outside",
+        textfont=dict(size=10, color="#CBD5E1"),
+    ))
+    fig.update_layout(**_layout_grafico(
+        altura=360,
+        margem=dict(t=55, b=85, l=20, r=20),
+        showlegend=False,
+        xaxis=dict(fixedrange=True, showgrid=False),
+        yaxis=dict(fixedrange=True, gridcolor="#334155"),
+    ))
+    fig.update_layout(title=titulo)
+    return fig
+
+
+def _grafico_orhafe_por_lider(resumo):
+    dados = resumo.sort_values("presenca_media_pct", ascending=True)
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Presenca media",
+        x=dados["presenca_media_pct"],
+        y=dados["lider"],
+        orientation="h",
+        marker_color=CORES["entrada"],
+        text=[f"{valor:.1f}%" for valor in dados["presenca_media_pct"]],
+        textposition="outside",
+        textfont=dict(size=10, color="#CBD5E1"),
+    ))
+    fig.add_trace(go.Bar(
+        name="Ausencia media",
+        x=dados["ausencia_media_pct"],
+        y=dados["lider"],
+        orientation="h",
+        marker_color=CORES["saida"],
+        text=[f"{valor:.1f}%" for valor in dados["ausencia_media_pct"]],
+        textposition="outside",
+        textfont=dict(size=10, color="#CBD5E1"),
+    ))
+    fig.update_layout(**_layout_grafico(
+        altura=max(340, len(dados) * 74 + 120),
+        margem=dict(t=60, b=45, l=20, r=40),
+        barmode="group",
+        showlegend=True,
+        xaxis=dict(fixedrange=True, gridcolor="#334155", range=[0, 105]),
+        yaxis=dict(fixedrange=True, showgrid=False),
+        legend=dict(orientation="h", y=1.12, x=0),
+    ))
+    fig.update_layout(title="Resumo por lider")
     return fig
 
 
@@ -1012,6 +1153,65 @@ def render():
             mes_fim_pastoral = pd.Period(fim_pastoral, freq="M")
             mes_inicio_pastoral = pd.Period(inicio_pastoral, freq="M")
             qtd_meses_pastoral = max(1, (mes_fim_pastoral - mes_inicio_pastoral).n + 1)
+
+            _secao_dashboard(
+                "Círculo de Oração",
+                "Resumo pastoral das chamadas no período selecionado.",
+            )
+            try:
+                reunioes_orhafe = listar_orhafe_reunioes(
+                    slug,
+                    inicio_pastoral.isoformat(),
+                    fim_pastoral.isoformat(),
+                )
+                visitantes_orhafe = relatorio_orhafe_visitantes(
+                    slug,
+                    inicio_pastoral.isoformat(),
+                    fim_pastoral.isoformat(),
+                )
+            except Exception as exc:
+                st.warning(f"Não foi possível carregar os indicadores do Círculo de Oração: {exc}")
+                reunioes_orhafe = pd.DataFrame()
+                visitantes_orhafe = pd.DataFrame()
+
+            if reunioes_orhafe.empty:
+                st.info("Sem chamadas do Círculo de Oração no período selecionado.")
+            else:
+                lideres_orhafe = sorted(
+                    _texto(reunioes_orhafe["lider"]).replace("", "Sem lider").unique().tolist()
+                )
+                lider_escolhida = st.selectbox(
+                    "Líder para resumo",
+                    lideres_orhafe,
+                    key=_sk("orhafe_lider", slug),
+                )
+                reunioes_lider = reunioes_orhafe[
+                    _texto(reunioes_orhafe["lider"]).replace("", "Sem lider") == lider_escolhida
+                ].copy()
+                c_orhafe1, c_orhafe2 = st.columns([1, 1])
+                with c_orhafe1:
+                    st.plotly_chart(
+                        _grafico_orhafe_resumo(
+                            f"Resumo da líder {lider_escolhida}",
+                            _orhafe_indicadores_resumo(
+                                reunioes_lider,
+                                visitantes=visitantes_orhafe,
+                                lider=lider_escolhida,
+                            ),
+                        ),
+                        use_container_width=True,
+                        config=CONFIG_PLOTLY,
+                    )
+                with c_orhafe2:
+                    resumo_lideres_orhafe = _orhafe_resumo_lideres(
+                        reunioes_orhafe,
+                        visitantes_orhafe,
+                    )
+                    st.plotly_chart(
+                        _grafico_orhafe_por_lider(resumo_lideres_orhafe),
+                        use_container_width=True,
+                        config=CONFIG_PLOTLY,
+                    )
 
             _secao_dashboard(
                 "Evolucao dos dizimos",

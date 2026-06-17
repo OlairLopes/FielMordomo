@@ -736,21 +736,6 @@ def _render_relatorios(slug):
         c5.metric("Matriculadas no periodo", totais["Matriculadas"])
         c6.metric("Total de ofertas", _moeda(totais["Ofertas"]))
 
-        st.markdown("#### Grafico por lider")
-        lideres = sorted(reunioes["lider"].fillna("Sem lider").astype(str).unique().tolist())
-        lider_escolhida = st.selectbox("Escolha a lider", lideres, key="grafico_orhafe_lider")
-        reunioes_lider = reunioes[
-            reunioes["lider"].fillna("Sem lider").astype(str) == lider_escolhida
-        ]
-        _grafico_totais_orhafe(
-            f"Resumo da lider {lider_escolhida}",
-            _indicadores_grafico_resumo(
-                reunioes_lider,
-                visitantes=visitantes,
-                lider=lider_escolhida,
-            ),
-        )
-
         st.markdown("#### Gráfico geral do Círculo de Oração")
         _grafico_totais_orhafe(
             "Resumo geral do Círculo de Oração",
@@ -760,8 +745,7 @@ def _render_relatorios(slug):
         st.markdown("#### Evolucao das reunioes")
         _grafico_reunioes(reunioes)
 
-    st.markdown("#### Resumo por lider")
-    _grafico_resumo_lideres(resumo_lideres)
+    st.markdown("#### Tabela por lider")
     if not resumo_lideres.empty:
         tabela_lideres = resumo_lideres.copy()
         tabela_lideres["frequencia_pct"] = tabela_lideres["frequencia_pct"].apply(_pct)
