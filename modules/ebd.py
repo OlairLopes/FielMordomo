@@ -578,6 +578,13 @@ def _render_chamada(slug, id_classe_fixo=None):
         tema_atual = str(escala_aula.get("tema", "") or "")
         professor_atual = str(escala_aula.get("professor", "") or "")
 
+    acao_presencas = st.radio(
+        "Presenças da lista de chamada",
+        ["Manter marcação atual", "Marcar todos", "Desmarcar todos"],
+        horizontal=True,
+        key=f"ebd_acao_presencas_{id_classe}_{data_aula.isoformat()}",
+    )
+
     with st.form("form_ebd_chamada"):
         if escala_aula:
             st.success(
@@ -629,11 +636,17 @@ def _render_chamada(slug, id_classe_fixo=None):
         obs = st.text_area("Observacoes da aula", value=obs_atual)
         st.caption("Marque os alunos presentes. Alunos desmarcados serao contabilizados como falta.")
         dados = matriculas[["id_matricula", "nome_aluno"]].copy()
-        dados["presente"] = dados["id_matricula"].apply(lambda x: presencas_salvas.get(int(x), True))
+        if acao_presencas == "Marcar todos":
+            dados["presente"] = True
+        elif acao_presencas == "Desmarcar todos":
+            dados["presente"] = False
+        else:
+            dados["presente"] = dados["id_matricula"].apply(lambda x: presencas_salvas.get(int(x), True))
         editado = st.data_editor(
             dados,
             hide_index=True,
             use_container_width=True,
+            key=f"ebd_editor_chamada_{id_classe}_{data_aula.isoformat()}_{acao_presencas}",
             disabled=["id_matricula", "nome_aluno"],
             column_config={
                 "id_matricula": st.column_config.NumberColumn("ID"),

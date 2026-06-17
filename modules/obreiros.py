@@ -189,6 +189,20 @@ def _render_chamada(slug):
 
     st.markdown("#### Folha de chamada")
     st.caption(f"{len(membros)} obreiro(s) incluidos automaticamente.")
+    c_marcar, c_desmarcar = st.columns(2)
+    chaves_presenca = [
+        f'obreiros_presenca_{data}_{int(row["id_cadastro"])}'
+        for _, row in membros.iterrows()
+    ]
+    if c_marcar.button("Marcar todos", use_container_width=True, key=f"obreiros_marcar_todos_{data}"):
+        for chave in chaves_presenca:
+            st.session_state[chave] = True
+        st.rerun()
+    if c_desmarcar.button("Desmarcar todos", use_container_width=True, key=f"obreiros_desmarcar_todos_{data}"):
+        for chave in chaves_presenca:
+            st.session_state[chave] = False
+        st.rerun()
+
     presencas = {}
     for funcao, grupo in membros.groupby("funcao"):
         with st.expander(f"{funcao} ({len(grupo)})", expanded=True):

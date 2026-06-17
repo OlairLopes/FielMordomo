@@ -667,6 +667,13 @@ def _render_chamada(slug):
             elif row.get("id_matricula"):
                 presencas_salvas[int(row["id_matricula"])] = bool(row["presente"])
 
+    acao_presencas = st.radio(
+        "Presenças da lista de chamada",
+        ["Manter marcação atual", "Marcar todas", "Desmarcar todas"],
+        horizontal=True,
+        key=f"orhafe_acao_presencas_{data_reuniao.isoformat()}",
+    )
+
     with st.form("form_orhafe_chamada"):
         c1, c2 = st.columns(2)
         lider_label = c1.selectbox("Lider da chamada", lider_labels, index=lider_index)
@@ -682,13 +689,19 @@ def _render_chamada(slug):
 
         with st.expander("Lista de chamada", expanded=True):
             dados = matriculas[["id_matricula", "nome"]].copy()
-            dados["presente"] = dados["id_matricula"].apply(
-                lambda x: presencas_salvas.get(int(x), True)
-            )
+            if acao_presencas == "Marcar todas":
+                dados["presente"] = True
+            elif acao_presencas == "Desmarcar todas":
+                dados["presente"] = False
+            else:
+                dados["presente"] = dados["id_matricula"].apply(
+                    lambda x: presencas_salvas.get(int(x), True)
+                )
             editado = st.data_editor(
                 dados,
                 hide_index=True,
                 use_container_width=True,
+                key=f"orhafe_editor_chamada_{data_reuniao.isoformat()}_{acao_presencas}",
                 disabled=["id_matricula", "nome"],
                 column_config={
                     "id_matricula": st.column_config.NumberColumn("ID"),
