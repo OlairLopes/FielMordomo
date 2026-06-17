@@ -24,7 +24,7 @@ DEPARTAMENTOS_CULTO = [
     "Conscientização Missionária",
     "Consagração",
     "Culto de Ensino",
-    "Culto Ministério de Homens",
+    "Culto Ministério Homens",
     "Culto Ministério Família",
     "Culto Ministério Infantil",
     "Culto Ministério Jovens",
@@ -36,6 +36,46 @@ DEPARTAMENTOS_CULTO = [
     "Fraternal",
     "Outros",
     "Vigília",
+]
+
+
+IGREJAS_ORIGEM = [
+    "Assembleia de Deus",
+    "Presbiteriana",
+    "Presbiteriana Renovada",
+    "Batista",
+    "Batista Renovada",
+    "Igreja Catolica",
+    "Igreja CIMADSETA",
+    "Igreja Apostolica Fonte da Vida",
+    "Igreja Crista Evangelica",
+    "Tabernaculo da Fe",
+    "Congregacao Crista no Brasil",
+    "Igreja Universal do Reino de Deus",
+    "Igreja do Evangelho Quadrangular",
+    "Igreja Missao Outras",
+    "Outros",
+]
+
+CONGREGACOES_VISITANTES = [
+    "Setor Central",
+    "Jardim de Deus",
+    "Jardim Arimateia",
+    "Jardim Emilia",
+    "Jardim Floresta",
+    "Minacu Norte",
+    "Nova Jerusalem",
+    "Galileia",
+    "Distrito Cana Brava",
+    "Marajoara",
+    "AD Serrinha",
+    "Vila Nova",
+    "Vila de Furnas",
+    "Vila Manchester",
+    "Vila Uniao",
+    "Rua Dezoito",
+    "Monte Sinai",
+    "Outros",
 ]
 
 
@@ -168,10 +208,18 @@ def _render_formulario(slug):
     if tipo_visitante == "Crente":
         st.markdown("#### Dados da igreja de origem")
         c3, c4, c5 = st.columns([2, 1.4, 1])
-        igreja_origem = c3.text_input(
+        igreja_origem_opcao = c3.selectbox(
             "De qual igreja?",
+            IGREJAS_ORIGEM,
             key=f"visitante_igreja_origem_{nonce}",
         )
+        igreja_origem = igreja_origem_opcao
+        if igreja_origem_opcao == "Outros":
+            igreja_origem = st.text_input(
+                "Informe a igreja",
+                placeholder="Digite o nome da igreja",
+                key=f"visitante_igreja_origem_outros_{nonce}",
+            )
         estado_opcao = c5.selectbox(
             "Qual estado?",
             ["Selecione"] + ESTADOS_BR,
@@ -196,7 +244,9 @@ def _render_formulario(slug):
             )
         if estado == "GO" and cidade == "Minaçu":
             congregacoes = _congregacoes_membros(slug)
-            opcoes_congregacao = ["Selecione"] + congregacoes + ["Outros"]
+            congregacoes_base = CONGREGACOES_VISITANTES[:-1] + congregacoes
+            congregacoes_unicas = sorted({c for c in congregacoes_base if c})
+            opcoes_congregacao = ["Selecione"] + congregacoes_unicas + ["Outros"]
             congregacao_opcao = st.selectbox(
                 "Congregacao",
                 opcoes_congregacao,
