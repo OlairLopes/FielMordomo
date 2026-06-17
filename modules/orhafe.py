@@ -457,8 +457,12 @@ def _render_matriculas(slug):
     exibir = matriculas.copy()
     exibir["situacao_matricula"] = exibir["ativa"].map({1: "Ativa", 0: "Encerrada"})
     exibir["data_inicio"] = exibir["data_inicio"].apply(_fmt_data)
+    exibir["data_fim"] = exibir["data_fim"].apply(_fmt_data)
     st.dataframe(
-        exibir[["nome", "telefone", "funcao", "congregacao", "situacao_matricula", "data_inicio", "observacoes"]],
+        exibir[[
+            "nome", "telefone", "funcao", "congregacao", "situacao_matricula",
+            "data_inicio", "data_fim", "observacoes",
+        ]],
         use_container_width=True,
         hide_index=True,
     )
@@ -501,19 +505,67 @@ def _render_matriculas(slug):
 
     ativas = matriculas[matriculas["ativa"] == 1]
     if not ativas.empty:
-        encerrar = st.selectbox(
-            "Excluir/encerrar matricula",
-            ["Selecione"] + [
-                f'{int(row["id_matricula"])} - {row["nome"]}'
-                for _, row in ativas.iterrows()
-            ],
-        )
-        if encerrar != "Selecione" and confirmar_exclusao(
-            f"encerrar_orhafe_{encerrar}", "Excluir ou encerrar matricula selecionada"
-        ):
-            removida = excluir_orhafe_matricula(slug, int(encerrar.split(" - ")[0]), _hoje().isoformat())
-            st.success("Matricula excluida." if removida else "Matricula encerrada porque possui historico.")
-            st.rerun()
+        op_ativas = [
+            f'{int(row["id_matricula"])} - {row["nome"]}'
+            for _, row in ativas.iterrows()
+        ]
+
+        with st.expander("Encerrar matricula", expanded=False):
+            st.caption(
+                "Use esta opção para remover a matriculada das próximas chamadas "
+                "sem apagar o histórico de participação já registrado."
+            )
+            encerrar = st.selectbox(
+                "Matrícula ativa",
+                ["Selecione"] + op_ativas,
+                key="orhafe_encerrar_matricula",
+            )
+            data_fim = st.date_input(
+                "Data de encerramento",
+                value=_hoje(),
+                format="DD/MM/YYYY",
+                key="orhafe_data_fim_matricula",
+            )
+            if encerrar != "Selecione" and confirmar_exclusao(
+                f"encerrar_orhafe_{encerrar}",
+                "Confirmar encerramento da matricula",
+            ):
+                encerrar_orhafe_matricula(
+                    slug,
+                    int(encerrar.split(" - ")[0]),
+                    data_fim.isoformat(),
+                )
+                st.success(
+                    "Matrícula encerrada. O histórico foi preservado e ela "
+                    "não aparecerá nas próximas chamadas."
+                )
+                st.rerun()
+
+        with st.expander("Excluir matricula sem historico", expanded=False):
+            st.caption(
+                "A exclusão definitiva só deve ser usada para cadastro lançado por engano. "
+                "Se houver histórico, o sistema encerrará a matrícula em vez de apagar."
+            )
+            excluir = st.selectbox(
+                "Matrícula para excluir",
+                ["Selecione"] + op_ativas,
+                key="orhafe_excluir_matricula",
+            )
+            if excluir != "Selecione" and confirmar_exclusao(
+                f"excluir_orhafe_{excluir}",
+                "Confirmar exclusao da matricula sem historico",
+            ):
+                removida = excluir_orhafe_matricula(
+                    slug,
+                    int(excluir.split(" - ")[0]),
+                    _hoje().isoformat(),
+                )
+                st.success(
+                    "Matrícula excluída."
+                    if removida
+                    else "A matrícula possui histórico e foi encerrada, sem apagar registros anteriores."
+                )
+                st.rerun()
 
 
 def _render_chamada(slug):
