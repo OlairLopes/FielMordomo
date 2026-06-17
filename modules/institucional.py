@@ -1375,7 +1375,37 @@ def _fmt_data_evento(valor):
         return str(valor or "")
 
 
-def _render_cards_eventos(df, titulo):
+def _cartaz_evento_html(slug, id_evento):
+    if not slug or not id_evento:
+        return ""
+    try:
+        from data.repository import obter_evento_cartaz
+
+        cartaz = obter_evento_cartaz(slug, int(id_evento))
+    except Exception:
+        LOGGER.exception("Não foi possível carregar o cartaz do evento.")
+        return ""
+    if not cartaz:
+        return ""
+
+    mime = str(cartaz.get("mime", "") or "application/octet-stream")
+    nome = html.escape(str(cartaz.get("nome", "") or "cartaz-evento"), quote=True)
+    b64 = base64.b64encode(cartaz.get("bytes", b"")).decode("utf-8")
+    if mime.startswith("image/"):
+        return (
+            '<div class="fm-event-poster">'
+            f'<img src="data:{mime};base64,{b64}" alt="Cartaz do evento">'
+            '</div>'
+        )
+    return (
+        '<div class="fm-event-poster-download">'
+        f'<a href="data:{mime};base64,{b64}" download="{nome}">'
+        'Baixar cartaz do evento</a>'
+        '</div>'
+    )
+
+
+def _render_cards_eventos(df, titulo, slug=None):
     st.markdown(f"### {titulo}")
     if df.empty:
         st.info("Nenhum evento encontrado.")
@@ -1393,6 +1423,9 @@ def _render_cards_eventos(df, titulo):
         visibilidade = html.escape(str(row.get("visibilidade", "") or "Publico"))
         responsavel = html.escape(str(row.get("responsavel", "") or ""))
         contato = html.escape(str(row.get("contato", "") or ""))
+        cartaz_html = ""
+        if int(row.get("tem_cartaz", 0) or 0) == 1:
+            cartaz_html = _cartaz_evento_html(slug, row.get("id_evento"))
         meta_extra = ""
         if departamento:
             meta_extra += f"<span>{departamento}</span>"
@@ -1408,6 +1441,7 @@ def _render_cards_eventos(df, titulo):
                     <small>{horario or "Horario a confirmar"}</small>
                 </div>
                 <div class="fm-event-body">
+                    {cartaz_html}
                     <div class="fm-event-top">
                         <h3>{titulo_evento}</h3>
                         <span>{visibilidade}</span>
@@ -1505,6 +1539,34 @@ def _render_agenda_publica():
                 margin: 6px 0;
                 line-height: 1.5;
             }
+            .fm-event-poster {
+                width: 100%;
+                margin: 0 0 14px;
+                border-radius: 14px;
+                overflow: hidden;
+                border: 1px solid #E2E8F0;
+                background: #F8FAFC;
+            }
+            .fm-event-poster img {
+                display: block;
+                width: 100%;
+                max-height: 520px;
+                object-fit: contain;
+                background: #F8FAFC;
+            }
+            .fm-event-poster-download {
+                margin: 0 0 14px;
+            }
+            .fm-event-poster-download a {
+                display: inline-block;
+                background: #061B44;
+                color: #FFFFFF;
+                text-decoration: none;
+                border-radius: 999px;
+                padding: 9px 14px;
+                font-weight: 800;
+                font-size: .86rem;
+            }
             .fm-event-local {
                 font-weight: 700;
                 color: #1F2933 !important;
@@ -1594,7 +1656,7 @@ def _render_agenda_publica():
 
     eventos = listar_eventos_publicos(slug, incluir_membros=incluir_membros, data_inicio=hoje)
     titulo = "Eventos publicos e eventos para membros" if incluir_membros else "Eventos publicos"
-    _render_cards_eventos(eventos, titulo)
+    _render_cards_eventos(eventos, titulo, slug=slug)
 
 
 def render_institucional():
