@@ -24,7 +24,7 @@ DEPARTAMENTOS_CULTO = [
     "Conscientização Missionária",
     "Consagração",
     "Culto de Ensino",
-    "Culto Ministério Homens",
+    "Culto Ministério de Homens",
     "Culto Ministério Família",
     "Culto Ministério Infantil",
     "Culto Ministério Jovens",
@@ -211,7 +211,8 @@ def _render_formulario(slug):
         igreja_origem_opcao = c3.selectbox(
             "De qual igreja?",
             IGREJAS_ORIGEM,
-            key=f"visitante_igreja_origem_{nonce}",
+            index=0,
+            key=f"visitante_igreja_origem_select_{nonce}",
         )
         igreja_origem = igreja_origem_opcao
         if igreja_origem_opcao == "Outros":
@@ -242,15 +243,16 @@ def _render_formulario(slug):
                 placeholder="Digite o nome da cidade",
                 key=f"visitante_cidade_outros_{nonce}",
             )
-        if estado == "GO" and cidade == "Minaçu":
-            congregacoes = _congregacoes_membros(slug)
-            congregacoes_base = CONGREGACOES_VISITANTES[:-1] + congregacoes
-            congregacoes_unicas = sorted({c for c in congregacoes_base if c})
-            opcoes_congregacao = ["Selecione"] + congregacoes_unicas + ["Outros"]
+        if (
+            igreja_origem_opcao == "Assembleia de Deus"
+            and estado == "GO"
+            and cidade == "Minaçu"
+        ):
+            opcoes_congregacao = ["Selecione"] + CONGREGACOES_VISITANTES
             congregacao_opcao = st.selectbox(
                 "Congregacao",
                 opcoes_congregacao,
-                key=f"visitante_congregacao_{nonce}",
+                key=f"visitante_congregacao_select_{nonce}",
             )
             if congregacao_opcao == "Outros":
                 congregacao = st.text_input(
