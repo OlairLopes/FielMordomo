@@ -2027,6 +2027,36 @@ def relatorio_orhafe_frequencia(slug, data_inicio=None, data_fim=None):
         )
 
 
+def relatorio_orhafe_visitantes(slug, data_inicio=None, data_fim=None):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        where = ["p.visitante=1", "TRIM(COALESCE(p.nome, ''))<>''"]
+        params = []
+        if data_inicio:
+            where.append("r.data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("r.data<=?")
+            params.append(str(data_fim))
+        filtro = f"WHERE {' AND '.join(where)}"
+        return pd.read_sql_query(
+            f"""SELECT TRIM(p.nome) AS nome,
+                       COALESCE(NULLIF(TRIM(l.nome), ''), 'Sem lider') AS lider,
+                       COUNT(p.id_presenca) AS visitas
+                FROM orhafe_presencas p
+                JOIN orhafe_reunioes r ON r.id_reuniao=p.id_reuniao
+                LEFT JOIN orhafe_lideres l ON l.id_lider=r.id_lider
+                {filtro}
+                GROUP BY LOWER(TRIM(p.nome)), COALESCE(NULLIF(TRIM(l.nome), ''), 'Sem lider')
+                ORDER BY nome""",
+            conn,
+            params=params,
+        )
+
+
 def _normalizar_usuario_orhafe(usuario):
     usuario = str(usuario or "").strip().lower()
     if not USUARIO_EBD_RE.fullmatch(usuario):

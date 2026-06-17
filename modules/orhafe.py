@@ -18,6 +18,7 @@ from data.repository import (
     listar_orhafe_reunioes,
     listar_orhafe_secretarias,
     relatorio_orhafe_frequencia,
+    relatorio_orhafe_visitantes,
     salvar_orhafe_chamada,
     salvar_orhafe_coordenadora,
     salvar_orhafe_lider,
@@ -101,7 +102,7 @@ def _metricas_chamadas(reunioes):
         return
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Reunioes", int(reunioes["id_reuniao"].nunique()))
-    c2.metric("Presentes", int(reunioes["presentes"].fillna(0).sum()))
+    c2.metric("Presentes", int(reunioes["presentes"].fillna(0).max()))
     c3.metric("Visitantes", int(reunioes["visitantes"].fillna(0).sum()))
     c4.metric("Ofertas", _moeda(reunioes["ofertas"].fillna(0).sum()))
 
@@ -173,7 +174,40 @@ def _grafico_frequencia(freq):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
 
-def _totais_reunioes(reunioes):
+def _contagens_pessoas_periodo(freq):
+    if freq is None or freq.empty:
+        return {
+            "Matriculadas": 0,
+            "Presentes": 0,
+            "Ausentes": 0,
+        }
+    dados = freq.copy()
+    dados["presencas"] = pd.to_numeric(dados["presencas"], errors="coerce").fillna(0)
+    matriculadas = int(len(dados))
+    presentes = int((dados["presencas"] > 0).sum())
+    ausentes = max(matriculadas - presentes, 0)
+    return {
+        "Matriculadas": matriculadas,
+        "Presentes": presentes,
+        "Ausentes": ausentes,
+    }
+
+
+def _contar_visitantes_periodo(visitantes, lider=None):
+    if visitantes is None or visitantes.empty:
+        return 0
+    dados = visitantes.copy()
+    if lider is not None:
+        dados = dados[
+            dados["lider"].fillna("Sem lider").astype(str) == str(lider)
+        ].copy()
+    if dados.empty or "nome" not in dados.columns:
+        return 0
+    nomes = dados["nome"].fillna("").astype(str).str.strip().str.lower()
+    return int(nomes[nomes.ne("")].nunique())
+
+
+def _totais_reunioes(reunioes, freq=None, visitantes=None):
     if reunioes.empty:
         return {
             "Matriculadas": 0,
@@ -183,17 +217,24 @@ def _totais_reunioes(reunioes):
             "Ofertas": 0.0,
             "Reunioes": 0,
         }
+    contagens = _contagens_pessoas_periodo(freq)
+    if contagens["Matriculadas"] == 0:
+        contagens = {
+            "Matriculadas": int(reunioes["matriculadas"].fillna(0).max()),
+            "Presentes": int(reunioes["presentes"].fillna(0).max()),
+            "Ausentes": int(reunioes["ausentes"].fillna(0).max()),
+        }
     return {
-        "Matriculadas": int(reunioes["matriculadas"].fillna(0).sum()),
-        "Presentes": int(reunioes["presentes"].fillna(0).sum()),
-        "Ausentes": int(reunioes["ausentes"].fillna(0).sum()),
-        "Visitantes": int(reunioes["visitantes"].fillna(0).sum()),
+        "Matriculadas": contagens["Matriculadas"],
+        "Presentes": contagens["Presentes"],
+        "Ausentes": contagens["Ausentes"],
+        "Visitantes": _contar_visitantes_periodo(visitantes),
         "Ofertas": float(reunioes["ofertas"].fillna(0).sum()),
         "Reunioes": int(reunioes["id_reuniao"].nunique()),
     }
 
 
-def _resumo_lideres(reunioes):
+def _resumo_lideres(reunioes, visitantes=None):
     if reunioes.empty:
         return pd.DataFrame(
             columns=[
@@ -205,12 +246,29 @@ def _resumo_lideres(reunioes):
     resumo["lider"] = resumo["lider"].fillna("").replace("", "Sem lider")
     resumo = resumo.groupby("lider", as_index=False).agg(
         reunioes=("id_reuniao", "nunique"),
-        matriculadas=("matriculadas", "sum"),
-        presentes=("presentes", "sum"),
-        ausentes=("ausentes", "sum"),
-        visitantes=("visitantes", "sum"),
+        matriculadas=("matriculadas", "max"),
+        presentes=("presentes", "max"),
+        ausentes=("ausentes", "max"),
+        visitantes=("visitantes", "max"),
         ofertas=("ofertas", "sum"),
     )
+    if visitantes is not None and not visitantes.empty:
+        visitantes_lider = (
+            visitantes.assign(
+                lider=visitantes["lider"].fillna("Sem lider").astype(str),
+                nome_norm=visitantes["nome"].fillna("").astype(str).str.strip().str.lower(),
+            )
+            .query("nome_norm != ''")
+            .groupby("lider", as_index=False)["nome_norm"]
+            .nunique()
+            .rename(columns={"nome_norm": "visitantes"})
+        )
+        resumo = resumo.drop(columns=["visitantes"]).merge(
+            visitantes_lider,
+            on="lider",
+            how="left",
+        )
+        resumo["visitantes"] = resumo["visitantes"].fillna(0).astype(int)
     total = resumo["presentes"] + resumo["ausentes"]
     resumo["frequencia_pct"] = (
         resumo["presentes"] / total.where(total > 0, 1) * 100
@@ -567,20 +625,21 @@ def _render_relatorios(slug):
 
     reunioes = listar_orhafe_reunioes(slug, inicio.isoformat(), fim.isoformat())
     freq = relatorio_orhafe_frequencia(slug, inicio.isoformat(), fim.isoformat())
-    resumo_lideres = _resumo_lideres(reunioes)
+    visitantes = relatorio_orhafe_visitantes(slug, inicio.isoformat(), fim.isoformat())
+    resumo_lideres = _resumo_lideres(reunioes, visitantes)
 
     st.markdown("#### Relatorio geral")
     if reunioes.empty:
         st.info("Nenhuma reuniao registrada no periodo selecionado.")
     else:
-        totais = _totais_reunioes(reunioes)
+        totais = _totais_reunioes(reunioes, freq, visitantes)
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total de reunioes", totais["Reunioes"])
-        c2.metric("Total de presentes", totais["Presentes"])
-        c3.metric("Total de ausentes", totais["Ausentes"])
+        c2.metric("Presentes no periodo", totais["Presentes"])
+        c3.metric("Ausentes no periodo", totais["Ausentes"])
         c4.metric("Total de visitantes", totais["Visitantes"])
         c5, c6 = st.columns(2)
-        c5.metric("Total de matriculadas nas chamadas", totais["Matriculadas"])
+        c5.metric("Matriculadas no periodo", totais["Matriculadas"])
         c6.metric("Total de ofertas", _moeda(totais["Ofertas"]))
 
         st.markdown("#### Grafico por lider")
@@ -591,7 +650,10 @@ def _render_relatorios(slug):
         ]
         _grafico_totais_orhafe(
             f"Resumo da lider {lider_escolhida}",
-            _totais_reunioes(reunioes_lider),
+            _totais_reunioes(
+                reunioes_lider,
+                visitantes=visitantes,
+            ) | {"Visitantes": _contar_visitantes_periodo(visitantes, lider_escolhida)},
         )
 
         st.markdown("#### Gráfico geral do Círculo de Oração")
