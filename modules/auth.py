@@ -140,9 +140,9 @@ def _login_css():
             .fm-login-side {
                 background: linear-gradient(180deg, #061B44 0%, #0A0A0A 100%);
                 border-radius: 24px;
-                padding: 36px 22px 24px;
+                padding: 28px 22px 24px;
                 min-height: 660px;
-                margin-top: 18px;
+                margin-top: 34px;
                 margin-bottom: 18px;
                 box-shadow: 0 24px 54px rgba(6, 27, 68, .28);
                 overflow: visible;
@@ -156,20 +156,21 @@ def _login_css():
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                padding: 6px 0 18px;
-                margin-bottom: 18px;
+                padding: 0 0 20px;
+                margin: -48px -10px 18px;
                 border-bottom: 1px solid rgba(255,255,255,.14);
                 overflow: visible;
                 position: relative;
-                z-index: 3;
+                z-index: 10;
             }
             .fm-login-logo img {
-                width: 210px;
-                max-width: 106%;
+                width: 240px;
+                max-width: 118%;
                 height: auto;
                 object-fit: contain;
                 position: relative;
-                z-index: 4;
+                z-index: 11;
+                filter: drop-shadow(0 10px 18px rgba(0,0,0,.28));
             }
             .fm-login-logo-fallback {
                 width: 82px;
@@ -260,9 +261,18 @@ def _login_css():
                     gap: .75rem !important;
                 }
                 .fm-login-side {
-                    padding: 22px 14px 16px;
+                    padding: 20px 14px 16px;
                     min-height: auto;
                     border-radius: 18px;
+                    margin-top: 28px;
+                }
+                .fm-login-logo {
+                    margin: -38px -6px 14px;
+                    padding-bottom: 14px;
+                }
+                .fm-login-logo img {
+                    width: 205px;
+                    max-width: 112%;
                 }
                 .fm-login-link {
                     padding: .68rem .68rem;
