@@ -720,8 +720,6 @@ def _render_relatorios(slug):
     reunioes = listar_orhafe_reunioes(slug, inicio.isoformat(), fim.isoformat())
     freq = relatorio_orhafe_frequencia(slug, inicio.isoformat(), fim.isoformat())
     visitantes = relatorio_orhafe_visitantes(slug, inicio.isoformat(), fim.isoformat())
-    resumo_lideres = _resumo_lideres(reunioes, visitantes)
-
     st.markdown("#### Relatorio geral")
     if reunioes.empty:
         st.info("Nenhuma reuniao registrada no periodo selecionado.")
@@ -744,19 +742,6 @@ def _render_relatorios(slug):
 
         st.markdown("#### Evolucao das reunioes")
         _grafico_reunioes(reunioes)
-
-    st.markdown("#### Tabela por lider")
-    if not resumo_lideres.empty:
-        tabela_lideres = resumo_lideres.copy()
-        tabela_lideres["frequencia_pct"] = tabela_lideres["frequencia_pct"].apply(_pct)
-        tabela_lideres["ofertas"] = tabela_lideres["ofertas"].apply(_moeda)
-        st.dataframe(tabela_lideres, use_container_width=True, hide_index=True)
-        st.download_button(
-            "Baixar relatorio de lideres CSV",
-            data=gerar_csv(resumo_lideres),
-            file_name="relatorio_orhafe_lideres.csv",
-            mime="text/csv",
-        )
 
     st.markdown("#### Frequencia das matriculadas")
     _grafico_frequencia(freq)

@@ -1212,6 +1212,40 @@ def render():
                         use_container_width=True,
                         config=CONFIG_PLOTLY,
                     )
+                if not resumo_lideres_orhafe.empty:
+                    with st.expander("Tabela por líder", expanded=False):
+                        tabela_lideres = resumo_lideres_orhafe[[
+                            "lider",
+                            "reunioes",
+                            "presenca_media_pct",
+                            "ausencia_media_pct",
+                            "visitantes",
+                            "ofertas",
+                        ]].copy()
+                        tabela_lideres["presenca_media_pct"] = tabela_lideres["presenca_media_pct"].apply(
+                            lambda valor: f"{valor:.1f}%"
+                        )
+                        tabela_lideres["ausencia_media_pct"] = tabela_lideres["ausencia_media_pct"].apply(
+                            lambda valor: f"{valor:.1f}%"
+                        )
+                        tabela_lideres["ofertas"] = tabela_lideres["ofertas"].apply(formatar_moeda)
+                        tabela_lideres = tabela_lideres.rename(columns={
+                            "lider": "Líder",
+                            "reunioes": "Reuniões",
+                            "presenca_media_pct": "Presença média",
+                            "ausencia_media_pct": "Ausência média",
+                            "visitantes": "Visitantes",
+                            "ofertas": "Ofertas",
+                        })
+                        st.dataframe(tabela_lideres, use_container_width=True, hide_index=True)
+                        st.download_button(
+                            "Baixar tabela por líder CSV",
+                            data=gerar_csv(tabela_lideres),
+                            file_name="dashboard_orhafe_lideres.csv",
+                            mime="text/csv",
+                            use_container_width=True,
+                            key=_sk("baixar_orhafe_lideres", slug),
+                        )
 
             _secao_dashboard(
                 "Evolucao dos dizimos",
