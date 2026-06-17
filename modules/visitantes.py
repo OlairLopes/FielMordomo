@@ -1,4 +1,6 @@
 import datetime
+import json
+import urllib.request
 
 import pandas as pd
 import streamlit as st
@@ -56,6 +58,26 @@ def _sim_nao(valor):
     return "Sim" if bool(valor) else "Não"
 
 
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _cidades_por_estado(uf):
+    uf = str(uf or "").strip().upper()
+    if not uf or uf == "SELECIONE":
+        return ["Outros"]
+    try:
+        url = f"https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios"
+        with urllib.request.urlopen(url, timeout=8) as resposta:
+            dados = json.loads(resposta.read().decode("utf-8"))
+        cidades = sorted(
+            str(item.get("nome", "")).strip()
+            for item in dados
+            if str(item.get("nome", "")).strip()
+        )
+        return cidades + ["Outros"] if cidades else ["Outros"]
+    except Exception:
+        return ["Outros"]
+
+
 def _totais(df):
     if df.empty:
         return {
@@ -78,75 +100,132 @@ def _render_formulario(slug):
     st.markdown("### Registrar visitante")
     st.caption("Registre visitantes recebidos nos cultos e departamentos da igreja.")
 
-    with st.form("form_registro_visitante"):
-        c1, c2 = st.columns(2)
-        c1.text_input("Identificador da igreja", value=slug, disabled=True)
-        data = c2.date_input("Data", value=_hoje())
+    nonce = st.session_state.get("visitante_form_nonce", 0)
 
-        departamento_opcao = st.selectbox(
-            "Departamento na direcao do culto",
-            DEPARTAMENTOS_CULTO,
-            index=0,
+    c1, c2 = st.columns(2)
+    c1.text_input(
+        "Identificador da igreja",
+        value=slug,
+        disabled=True,
+        key=f"visitante_slug_{nonce}",
+    )
+    data = c2.date_input("Data", value=_hoje(), key=f"visitante_data_{nonce}")
+
+    departamento_opcao = st.selectbox(
+        "Departamento na direcao do culto",
+        DEPARTAMENTOS_CULTO,
+        index=0,
+        key=f"visitante_departamento_{nonce}",
+    )
+    departamento = departamento_opcao
+    if departamento_opcao == "Outros":
+        departamento = st.text_input(
+            "Informe o departamento",
+            placeholder="Ex.: Ministerio de louvor, familia, adolescentes...",
+            key=f"visitante_departamento_outros_{nonce}",
         )
-        departamento = departamento_opcao
-        if departamento_opcao == "Outros":
-            departamento = st.text_input(
-                "Informe o departamento",
-                placeholder="Ex.: Ministerio de louvor, familia, adolescentes...",
-            )
-        nome_visitante = st.text_input("Nome do visitante")
 
-        crente = st.radio(
-            "Tipo de visitante: é crente?",
-            ["Sim", "Não"],
-            horizontal=True,
+    nome_visitante = st.text_input("Nome do visitante", key=f"visitante_nome_{nonce}")
+
+    crente = st.radio(
+        "Tipo de visitante: e crente?",
+        ["Sim", "Nao"],
+        horizontal=True,
+        key=f"visitante_crente_{nonce}",
+    )
+    tipo_visitante = "Crente" if crente == "Sim" else "Nao crente"
+
+    igreja_origem = ""
+    cidade = ""
+    estado = ""
+    denominacao = ""
+
+    if tipo_visitante == "Crente":
+        st.markdown("#### Dados da igreja de origem")
+        c3, c4, c5 = st.columns([2, 1.4, 1])
+        igreja_origem = c3.text_input(
+            "De qual igreja?",
+            key=f"visitante_igreja_origem_{nonce}",
         )
-        tipo_visitante = "Crente" if crente == "Sim" else "Nao crente"
-
-        igreja_origem = ""
-        cidade = ""
-        estado = ""
-        denominacao = ""
-
-        if tipo_visitante == "Crente":
-            st.markdown("#### Dados da igreja de origem")
-            c3, c4, c5 = st.columns([2, 1.4, 1])
-            igreja_origem = c3.text_input("De qual igreja?")
-            cidade = c4.text_input("Qual cidade?")
-            estado = c5.selectbox("Qual estado?", ["Selecione"] + ESTADOS_BR)
-            estado = "" if estado == "Selecione" else estado
-        else:
-            denominacao = st.text_input(
-                "Pertence a qual denominação?",
-                placeholder="Ex.: Católica, Assembleia de Deus, sem denominação...",
+        estado_opcao = c5.selectbox(
+            "Qual estado?",
+            ["Selecione"] + ESTADOS_BR,
+            key=f"visitante_estado_{nonce}",
+        )
+        estado = "" if estado_opcao == "Selecione" else estado_opcao
+        cidades = _cidades_por_estado(estado)
+        cidade_opcao = c4.selectbox(
+            "Qual cidade?",
+            cidades,
+            key=f"visitante_cidade_{estado or 'sem_uf'}_{nonce}",
+        )
+        cidade = cidade_opcao
+        if cidade_opcao == "Outros":
+            cidade = st.text_input(
+                "Informe a cidade",
+                placeholder="Digite o nome da cidade",
+                key=f"visitante_cidade_outros_{nonce}",
             )
+    else:
+        denominacao = st.text_input(
+            "Pertence a qual denominacao?",
+            placeholder="Ex.: Catolica, Assembleia de Deus, sem denominacao...",
+            key=f"visitante_denominacao_{nonce}",
+        )
 
-        c6, c7 = st.columns(2)
-        deseja_ser_apresentado = c6.checkbox("Deseja ser apresentado?")
-        deseja_oracao_final = c7.checkbox("Deseja receber oração ao final do culto?")
-        observacoes = st.text_area("Observações", placeholder="Opcional")
+    c6, c7 = st.columns(2)
+    deseja_ser_apresentado = c6.checkbox(
+        "Deseja ser apresentado?",
+        key=f"visitante_apresentar_{nonce}",
+    )
+    deseja_oracao_final = c7.checkbox(
+        "Deseja receber oracao ao final do culto?",
+        key=f"visitante_oracao_{nonce}",
+    )
+    observacoes = st.text_area(
+        "Observacoes",
+        placeholder="Opcional",
+        key=f"visitante_obs_{nonce}",
+    )
 
-        if st.form_submit_button("Salvar visitante", type="primary"):
-            try:
-                salvar_visitante_culto(
-                    slug,
-                    data.isoformat(),
-                    departamento,
-                    nome_visitante,
-                    tipo_visitante,
-                    igreja_origem,
-                    cidade,
-                    estado,
-                    denominacao,
-                    deseja_ser_apresentado,
-                    deseja_oracao_final,
-                    observacoes,
-                )
-                st.success("Visitante registrado com sucesso.")
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
+    b1, b2 = st.columns([1, 1])
+    salvar = b1.button(
+        "Salvar visitante",
+        type="primary",
+        use_container_width=True,
+        key=f"visitante_salvar_{nonce}",
+    )
+    novo = b2.button(
+        "Novo cadastro",
+        use_container_width=True,
+        key=f"visitante_novo_{nonce}",
+    )
 
+    if novo:
+        st.session_state["visitante_form_nonce"] = nonce + 1
+        st.rerun()
+
+    if salvar:
+        try:
+            salvar_visitante_culto(
+                slug,
+                data.isoformat(),
+                departamento,
+                nome_visitante,
+                tipo_visitante,
+                igreja_origem,
+                cidade,
+                estado,
+                denominacao,
+                deseja_ser_apresentado,
+                deseja_oracao_final,
+                observacoes,
+            )
+            st.success("Visitante registrado com sucesso.")
+            st.session_state["visitante_form_nonce"] = nonce + 1
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
 
 def _render_consulta(slug):
     st.markdown("### Visitantes registrados")

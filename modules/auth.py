@@ -581,6 +581,7 @@ def _login_pastor_auxiliar():
     _botao_recuperar_senha("Pastor Auxiliar", "btn_esqueci_pastor_auxiliar")
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def _opcoes_igrejas_ativas():
     try:
         igrejas = listar_igrejas()
@@ -605,6 +606,7 @@ def _opcoes_recepcao(slug):
     return _opcoes_usuarios_por_perfil(slug, "recepcao")
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def _opcoes_usuarios_por_perfil(slug, perfil):
     if not slug:
         return {}, "Selecione uma igreja."
