@@ -11,6 +11,7 @@ import importlib
 import logging
 import os
 import sys
+import unicodedata
 from urllib.parse import urlsplit
 
 import streamlit as st
@@ -214,6 +215,17 @@ def _esc(valor):
     return html.escape(str(valor if valor is not None else ""), quote=True)
 
 
+def _chave_ordenacao_menu(item):
+    _chave, (rotulo, _modulo) = item
+    texto = unicodedata.normalize("NFKD", str(rotulo or ""))
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return texto.casefold()
+
+
+def _paginas_ordenadas(paginas):
+    return sorted(paginas.items(), key=_chave_ordenacao_menu)
+
+
 def _injetar_css():
     st.markdown(
         """
@@ -350,7 +362,7 @@ def _sidebar_igreja(pagina_atual, igreja):
             "</div>",
             unsafe_allow_html=True,
         )
-        for chave, (rotulo, _) in PAGINAS_IGREJA.items():
+        for chave, (rotulo, _) in _paginas_ordenadas(PAGINAS_IGREJA):
             if st.button(
                 rotulo,
                 key=f"sb_{chave}",
@@ -388,7 +400,7 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_TESOUREIRO, "tesoureiro", tesoureiro)
-        for chave, (rotulo, _) in paginas.items():
+        for chave, (rotulo, _) in _paginas_ordenadas(paginas):
             if st.button(
                 rotulo,
                 key=f"sb_tesoureiro_{chave}",
@@ -414,13 +426,8 @@ def _sidebar_secretario_ebd(pagina_atual, igreja, secretario):
             "</div>",
             unsafe_allow_html=True,
         )
-        if st.button("Escola Bíblica", key="sb_secretario_ebd", use_container_width=True, type="primary"):
-            st.session_state["pagina"] = "ebd"
-            st.rerun()
         paginas_extras = _paginas_com_permissoes(PAGINAS_EBD, "secretario_ebd", secretario)
-        for chave, (rotulo, _) in paginas_extras.items():
-            if chave == "ebd":
-                continue
+        for chave, (rotulo, _) in _paginas_ordenadas(paginas_extras):
             if st.button(
                 rotulo,
                 key=f"sb_secretario_ebd_{chave}",
@@ -445,13 +452,8 @@ def _sidebar_secretaria_orhafe(pagina_atual, igreja, secretaria):
             "</div>",
             unsafe_allow_html=True,
         )
-        if st.button("Círculo de Oração", key="sb_secretaria_orhafe", use_container_width=True, type="primary"):
-            st.session_state["pagina"] = "orhafe"
-            st.rerun()
         paginas_extras = _paginas_com_permissoes({"orhafe": PAGINAS_IGREJA["orhafe"]}, "secretaria_orhafe", secretaria)
-        for chave, (rotulo, _) in paginas_extras.items():
-            if chave == "orhafe":
-                continue
+        for chave, (rotulo, _) in _paginas_ordenadas(paginas_extras):
             if st.button(
                 rotulo,
                 key=f"sb_secretaria_orhafe_{chave}",
@@ -476,7 +478,7 @@ def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_PASTOR_AUXILIAR, "pastor_auxiliar", pastor)
-        for chave, (rotulo, _) in paginas.items():
+        for chave, (rotulo, _) in _paginas_ordenadas(paginas):
             if st.button(
                 rotulo,
                 key=f"sb_pastor_auxiliar_{chave}",
@@ -501,7 +503,7 @@ def _sidebar_recepcao(pagina_atual, igreja, recepcao):
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_RECEPCAO, "recepcao", recepcao)
-        for chave, (rotulo, _) in paginas.items():
+        for chave, (rotulo, _) in _paginas_ordenadas(paginas):
             if st.button(
                 rotulo,
                 key=f"sb_recepcao_{chave}",
@@ -526,7 +528,7 @@ def _sidebar_secretario_geral(pagina_atual, igreja, secretario):
             unsafe_allow_html=True,
         )
         paginas = _paginas_com_permissoes(PAGINAS_SECRETARIO_GERAL, "secretario_geral", secretario)
-        for chave, (rotulo, _) in paginas.items():
+        for chave, (rotulo, _) in _paginas_ordenadas(paginas):
             if st.button(
                 rotulo,
                 key=f"sb_secretario_geral_{chave}",
