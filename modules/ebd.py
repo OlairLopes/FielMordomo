@@ -65,6 +65,43 @@ def _fmt_data(valor):
         return str(valor or "")
 
 
+def _data_iso(valor):
+    try:
+        if isinstance(valor, datetime.date):
+            return valor.isoformat()
+        texto = str(valor or "").strip()
+        if not texto:
+            return ""
+        for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.datetime.strptime(texto, formato).date().isoformat()
+            except Exception:
+                pass
+        return datetime.date.fromisoformat(texto).isoformat()
+    except Exception:
+        return ""
+
+
+def _filtrar_matriculas_validas_na_data(matriculas, data_referencia):
+    if matriculas.empty:
+        return matriculas
+
+    data_ref = _data_iso(data_referencia)
+    if not data_ref:
+        return matriculas[matriculas["ativa"] == 1].copy()
+
+    dados = matriculas.copy()
+    if "data_inicio" not in dados.columns:
+        dados["data_inicio"] = ""
+    if "data_fim" not in dados.columns:
+        dados["data_fim"] = ""
+    inicio = dados["data_inicio"].apply(_data_iso)
+    fim = dados["data_fim"].apply(_data_iso)
+
+    validas = (inicio.eq("") | (inicio <= data_ref)) & (fim.eq("") | (fim >= data_ref))
+    return dados[validas].copy()
+
+
 def _pct(valor):
     try:
         return f"{float(valor):.1f}%"
@@ -384,10 +421,15 @@ def _render_classes(slug):
         tabela = matriculas.copy()
         tabela["situacao"] = tabela["ativa"].map({1: "Ativo", 0: "Encerrado"})
         tabela["data_inicio"] = tabela["data_inicio"].apply(_fmt_data)
+        tabela["data_fim"] = tabela["data_fim"].apply(_fmt_data)
         st.dataframe(
-            tabela[["nome_aluno", "classe", "situacao", "data_inicio", "observacoes"]],
+            tabela[["nome_aluno", "classe", "situacao", "data_inicio", "data_fim", "observacoes"]],
             use_container_width=True,
             hide_index=True,
+        )
+        st.caption(
+            "Encerrar uma matrícula remove o aluno das próximas chamadas, "
+            "mas mantém o histórico das aulas anteriores."
         )
         encerrar = st.selectbox(
             "Encerrar matricula",
@@ -487,9 +529,17 @@ def _render_chamada(slug, id_classe_fixo=None):
         escala_aula = op_escalas[escala_label]
         data_aula = datetime.date.fromisoformat(str(escala_aula["data"]))
 
-    matriculas = listar_ebd_matriculas(slug, id_classe)
+    matriculas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
     if matriculas.empty:
-        st.warning("Esta classe ainda nao possui alunos ativos.")
+        st.warning("Esta classe ainda nao possui alunos matriculados.")
+        return
+
+    matriculas = _filtrar_matriculas_validas_na_data(matriculas, data_aula)
+    if matriculas.empty:
+        st.warning(
+            "Nenhuma matricula estava ativa na data desta chamada. "
+            "Verifique a data da aula ou a data de inicio das matriculas."
+        )
         return
 
     aulas = listar_ebd_aulas(slug, data_aula.isoformat(), data_aula.isoformat(), id_classe)

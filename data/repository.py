@@ -1194,6 +1194,47 @@ def salvar_ebd_chamada(
         raise ValueError("Informe valores validos para a chamada da Escola Bíblica.") from ex
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
+        data_ref = str(data or "").strip()
+
+        def normalizar_data_texto(valor):
+            texto = str(valor or "").strip()
+            if not texto:
+                return ""
+            for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+                try:
+                    return datetime.datetime.strptime(texto, formato).date().isoformat()
+                except Exception:
+                    pass
+            return texto
+
+        data_ref = normalizar_data_texto(data_ref)
+
+        def matricula_valida_na_data(row):
+            if not row:
+                return False
+            inicio = normalizar_data_texto(row["data_inicio"])
+            fim = normalizar_data_texto(row["data_fim"])
+            if inicio and data_ref and inicio > data_ref:
+                return False
+            if fim and data_ref and fim < data_ref:
+                return False
+            return True
+
+        presencas_validas = []
+        for id_matricula, presente in presencas.items():
+            row_matricula = conn.execute(
+                """SELECT id_matricula, id_classe, data_inicio, data_fim
+                   FROM ebd_matriculas
+                   WHERE id_matricula=? AND id_classe=?""",
+                (int(id_matricula), int(id_classe)),
+            ).fetchone()
+            if matricula_valida_na_data(row_matricula):
+                presencas_validas.append((int(id_matricula), int(bool(presente))))
+
+        qtd_matriculados = len(presencas_validas)
+        qtd_presentes = sum(presente for _, presente in presencas_validas)
+        qtd_ausentes = max(qtd_matriculados - qtd_presentes, 0)
+
         cur = conn.execute(
             """INSERT INTO ebd_aulas
                (id_classe, data, tema, professor, qtd_matriculados, qtd_presentes,
@@ -1224,13 +1265,14 @@ def salvar_ebd_chamada(
             (int(id_classe), str(data)),
         ).fetchone()
         id_aula = int(row["id_aula"] if row else cur.lastrowid)
-        for id_matricula, presente in presencas.items():
+        conn.execute("DELETE FROM ebd_presencas WHERE id_aula=?", (id_aula,))
+        for id_matricula, presente in presencas_validas:
             conn.execute(
                 """INSERT INTO ebd_presencas (id_aula, id_matricula, presente)
                    VALUES (?, ?, ?)
                    ON CONFLICT(id_aula, id_matricula) DO UPDATE SET
                        presente=excluded.presente""",
-                (id_aula, int(id_matricula), int(bool(presente))),
+                (id_aula, id_matricula, presente),
             )
         return id_aula
 
