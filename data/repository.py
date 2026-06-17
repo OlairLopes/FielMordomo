@@ -829,6 +829,10 @@ def _garantir_tabelas_eventos(conn):
             contato       TEXT DEFAULT '',
             visibilidade  TEXT NOT NULL DEFAULT 'Publico',
             situacao      TEXT NOT NULL DEFAULT 'Programado',
+            cartaz_nome    TEXT DEFAULT '',
+            cartaz_mime    TEXT DEFAULT '',
+            cartaz_bytes   BLOB,
+            cartaz_enviado_em TEXT DEFAULT '',
             criado_em     TEXT DEFAULT (datetime('now')),
             atualizado_em TEXT DEFAULT (datetime('now'))
         );
@@ -851,6 +855,10 @@ def _garantir_tabelas_eventos(conn):
         ("contato", "TEXT DEFAULT ''"),
         ("visibilidade", "TEXT NOT NULL DEFAULT 'Publico'"),
         ("situacao", "TEXT NOT NULL DEFAULT 'Programado'"),
+        ("cartaz_nome", "TEXT DEFAULT ''"),
+        ("cartaz_mime", "TEXT DEFAULT ''"),
+        ("cartaz_bytes", "BLOB"),
+        ("cartaz_enviado_em", "TEXT DEFAULT ''"),
         ("atualizado_em", "TEXT DEFAULT ''"),
     ):
         if coluna not in cols:
@@ -2532,7 +2540,9 @@ def listar_eventos_igreja(
         return pd.read_sql_query(
             f"""SELECT id_evento, titulo, data, hora_inicio, hora_fim, local,
                        departamento, descricao, responsavel, contato,
-                       visibilidade, situacao, criado_em, atualizado_em
+                       visibilidade, situacao, cartaz_nome,
+                       CASE WHEN cartaz_bytes IS NULL THEN 0 ELSE 1 END AS tem_cartaz,
+                       cartaz_enviado_em, criado_em, atualizado_em
                 FROM eventos_igreja
                 {filtro}
                 ORDER BY data ASC, hora_inicio ASC, titulo ASC""",
@@ -2558,7 +2568,8 @@ def listar_eventos_publicos(slug, incluir_membros=False, data_inicio=None, data_
         return pd.read_sql_query(
             f"""SELECT id_evento, titulo, data, hora_inicio, hora_fim, local,
                        departamento, descricao, responsavel, contato,
-                       visibilidade, situacao
+                       visibilidade, situacao, cartaz_nome,
+                       CASE WHEN cartaz_bytes IS NULL THEN 0 ELSE 1 END AS tem_cartaz
                 FROM eventos_igreja
                 WHERE visibilidade IN ({placeholders})
                       AND situacao='Programado'
@@ -2583,6 +2594,9 @@ def salvar_evento_igreja(
     contato="",
     visibilidade="Publico",
     situacao="Programado",
+    cartaz_nome="",
+    cartaz_mime="",
+    cartaz_bytes=None,
     id_evento=None,
 ):
     titulo = sanitizar(titulo)
@@ -2613,6 +2627,7 @@ def salvar_evento_igreja(
         visibilidade,
         situacao,
     )
+    tem_cartaz = cartaz_bytes is not None
     with _conn(db) as conn:
         _garantir_tabelas_eventos(conn)
         if id_evento:
@@ -2620,19 +2635,61 @@ def salvar_evento_igreja(
                 """UPDATE eventos_igreja
                    SET titulo=?, data=?, hora_inicio=?, hora_fim=?, local=?,
                        departamento=?, descricao=?, responsavel=?, contato=?,
-                       visibilidade=?, situacao=?, atualizado_em=datetime('now')
+                       visibilidade=?, situacao=?,
+                       cartaz_nome=CASE WHEN ? THEN ? ELSE cartaz_nome END,
+                       cartaz_mime=CASE WHEN ? THEN ? ELSE cartaz_mime END,
+                       cartaz_bytes=CASE WHEN ? THEN ? ELSE cartaz_bytes END,
+                       cartaz_enviado_em=CASE WHEN ? THEN datetime('now') ELSE cartaz_enviado_em END,
+                       atualizado_em=datetime('now')
                    WHERE id_evento=?""",
-                dados + (int(id_evento),),
+                dados + (
+                    int(tem_cartaz), sanitizar(cartaz_nome),
+                    int(tem_cartaz), sanitizar(cartaz_mime),
+                    int(tem_cartaz), cartaz_bytes,
+                    int(tem_cartaz),
+                    int(id_evento),
+                ),
             )
             return int(id_evento)
         cur = conn.execute(
             """INSERT INTO eventos_igreja
                (titulo, data, hora_inicio, hora_fim, local, departamento,
-                descricao, responsavel, contato, visibilidade, situacao)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            dados,
+                descricao, responsavel, contato, visibilidade, situacao,
+                cartaz_nome, cartaz_mime, cartaz_bytes, cartaz_enviado_em)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE '' END)""",
+            dados + (
+                sanitizar(cartaz_nome),
+                sanitizar(cartaz_mime),
+                cartaz_bytes,
+                int(tem_cartaz),
+            ),
         )
         return int(cur.lastrowid)
+
+
+def obter_evento_cartaz(slug, id_evento):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_eventos(conn)
+        row = conn.execute(
+            """SELECT id_evento, titulo, data, cartaz_nome, cartaz_mime, cartaz_bytes
+               FROM eventos_igreja
+               WHERE id_evento=?""",
+            (int(id_evento),),
+        ).fetchone()
+    if not row or row["cartaz_bytes"] is None:
+        return None
+    nome = row["cartaz_nome"] or f"cartaz-evento-{row['id_evento']}.bin"
+    return {
+        "id_evento": row["id_evento"],
+        "titulo": row["titulo"],
+        "data": row["data"],
+        "nome": nome,
+        "mime": row["cartaz_mime"] or "application/octet-stream",
+        "bytes": row["cartaz_bytes"],
+    }
 
 
 def excluir_evento_igreja(slug, id_evento):

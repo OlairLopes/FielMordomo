@@ -6,6 +6,7 @@ import streamlit as st
 from data.repository import (
     excluir_evento_igreja,
     listar_eventos_igreja,
+    obter_evento_cartaz,
     salvar_evento_igreja,
 )
 from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
@@ -87,6 +88,12 @@ def _render_form(slug):
         c8, c9 = st.columns(2)
         visibilidade = c8.selectbox("Visibilidade", VISIBILIDADES)
         situacao = c9.selectbox("Situacao", SITUACOES)
+        cartaz = st.file_uploader(
+            "Cartaz do evento",
+            type=["png", "jpg", "jpeg", "webp", "pdf"],
+            help="Anexe uma imagem ou PDF do cartaz do evento.",
+            key="evento_novo_cartaz",
+        )
 
         if st.form_submit_button("Salvar evento", type="primary", use_container_width=True):
             try:
@@ -103,6 +110,9 @@ def _render_form(slug):
                     contato,
                     visibilidade,
                     situacao,
+                    cartaz_nome=cartaz.name if cartaz else "",
+                    cartaz_mime=cartaz.type if cartaz else "",
+                    cartaz_bytes=cartaz.getvalue() if cartaz else None,
                 )
                 st.success("Evento salvo com sucesso.")
                 st.rerun()
@@ -166,6 +176,18 @@ def _render_lista(slug):
     id_evento = int(row["id_evento"])
 
     with st.expander("Editar evento selecionado", expanded=False):
+        if int(row.get("tem_cartaz", 0) or 0) == 1:
+            cartaz_atual = obter_evento_cartaz(slug, id_evento)
+            if cartaz_atual:
+                st.download_button(
+                    "Baixar cartaz atual",
+                    data=cartaz_atual["bytes"],
+                    file_name=cartaz_atual["nome"],
+                    mime=cartaz_atual["mime"],
+                    use_container_width=True,
+                    key=f"baixar_cartaz_evento_{id_evento}",
+                )
+
         with st.form(f"form_evento_editar_{id_evento}"):
             titulo = st.text_input("Titulo", value=row["titulo"])
             c1, c2, c3 = st.columns(3)
@@ -201,6 +223,12 @@ def _render_lista(slug):
                 index=_idx(SITUACOES, row["situacao"]),
                 key=f"evento_sit_{id_evento}",
             )
+            cartaz = st.file_uploader(
+                "Novo cartaz do evento",
+                type=["png", "jpg", "jpeg", "webp", "pdf"],
+                help="Se nenhum arquivo for enviado, o cartaz atual sera mantido.",
+                key=f"evento_cartaz_{id_evento}",
+            )
 
             if st.form_submit_button("Atualizar evento", type="primary"):
                 try:
@@ -217,6 +245,9 @@ def _render_lista(slug):
                         contato,
                         visibilidade,
                         situacao,
+                        cartaz_nome=cartaz.name if cartaz else "",
+                        cartaz_mime=cartaz.type if cartaz else "",
+                        cartaz_bytes=cartaz.getvalue() if cartaz else None,
                         id_evento=id_evento,
                     )
                     st.success("Evento atualizado.")
