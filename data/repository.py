@@ -21,7 +21,7 @@ import pandas as pd
 
 
 LOGGER = logging.getLogger(__name__)
-PBKDF2_ITERACOES = 600_000
+PBKDF2_ITERACOES = 210_000
 SENHA_MIN_CARACTERES = 15
 SENHA_MAX_CARACTERES = 128
 TAMANHO_MAXIMO_LOGO = 5 * 1024 * 1024
@@ -3521,6 +3521,10 @@ def _normalizar_usuario_secretario_geral(usuario):
     return usuario
 
 
+def _normalizar_usuario_login_secretario_geral(usuario):
+    return str(usuario or "").strip().lower()
+
+
 def _validar_senha_secretario_geral(senha):
     senha = str(senha or "")
     if len(senha) < 8:
@@ -3647,8 +3651,10 @@ def inativar_secretario_geral(slug, id_secretario_geral):
 def autenticar_secretario_geral(slug, usuario, senha):
     try:
         slug = _validar_slug(slug)
-        usuario = _normalizar_usuario_secretario_geral(usuario)
+        usuario = _normalizar_usuario_login_secretario_geral(usuario)
     except ValueError:
+        return None
+    if not usuario:
         return None
     igreja = buscar_igreja_por_slug(slug)
     if not igreja:
@@ -3664,7 +3670,7 @@ def autenticar_secretario_geral(slug, usuario, senha):
         row = conn.execute(
             """SELECT id_secretario_geral, nome, usuario, senha_hash
                FROM secretarios_gerais
-               WHERE usuario=? AND situacao='Ativo'""",
+               WHERE LOWER(TRIM(usuario))=? AND situacao='Ativo'""",
             (usuario,),
         ).fetchone()
         valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
