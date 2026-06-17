@@ -685,33 +685,44 @@ def _opcoes_usuarios_por_perfil(slug, perfil):
 
 
 def _selectbox_igreja_login(key):
-    return st.text_input(
+    op_igrejas, erro_igrejas = _opcoes_igrejas_ativas()
+    if erro_igrejas:
+        st.warning(erro_igrejas)
+        return ""
+
+    slugs = list(op_igrejas.keys())
+    return st.selectbox(
         "Identificador da igreja",
+        slugs,
         key=key,
-        help="Digite o identificador da igreja, por exemplo: adserrinha.",
+        format_func=lambda slug: slug,
+        help="Selecione o identificador da igreja.",
     )
 
 
 def _selectbox_usuario_login(slug, perfil, label, key):
-    return st.text_input(
-        label,
-        key=key,
-        help="Digite o usuario cadastrado para este perfil.",
-    )
-
-
-def _selectbox_recepcao_usuario_login(slug):
-    op_usuarios, erro_usuarios = _opcoes_usuarios_por_perfil(slug, "recepcao")
+    slug = str(slug or "").strip().lower()
+    op_usuarios, erro_usuarios = _opcoes_usuarios_por_perfil(slug, perfil)
     if erro_usuarios:
         st.warning(erro_usuarios)
         return ""
 
     usuarios = list(op_usuarios.values())
     return st.selectbox(
-        "Usuario da Recepcao",
+        label,
         usuarios,
-        key=f"login_recepcao_usuario_{slug or 'sem_igreja'}",
-        help="Selecione o usuario cadastrado para a recepcao.",
+        key=key,
+        format_func=lambda usuario: usuario,
+        help="Selecione o usuario cadastrado para este perfil.",
+    )
+
+
+def _selectbox_recepcao_usuario_login(slug):
+    return _selectbox_usuario_login(
+        slug,
+        "recepcao",
+        "Usuario da Recepcao",
+        f"login_recepcao_usuario_{slug or 'sem_igreja'}",
     )
 
 
@@ -720,11 +731,7 @@ def _login_recepcao():
     st.markdown("#### Acesso da Recepcao")
     st.caption("Acesso restrito somente ao registro de visitantes.")
 
-    slug = st.text_input(
-        "Identificador da igreja",
-        key="login_recepcao_igreja",
-        help="Digite o identificador da igreja, por exemplo: adserrinha.",
-    )
+    slug = _selectbox_igreja_login("login_recepcao_igreja")
     slug_normalizado = str(slug or "").strip().lower()
     usuario = _selectbox_recepcao_usuario_login(slug_normalizado) if slug_normalizado else ""
 
