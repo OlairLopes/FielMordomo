@@ -11,6 +11,7 @@ import streamlit as st
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
     autenticar_ebd_secretario, autenticar_orhafe_secretaria,
+    autenticar_orhafe_secretaria_por_cpf4,
     autenticar_pastor_auxiliar, autenticar_recepcao,
     autenticar_recepcao_por_cpf4, autenticar_secretario_geral,
     carregar_tesoureiros, inicializar_master, listar_ebd_secretarios,
@@ -847,14 +848,23 @@ def _login_orhafe():
     )
 
     with st.form("form_login_orhafe"):
-        senha = st.text_input("PIN de 4 digitos", type="password", max_chars=4)
+        cpf4 = st.text_input(
+            "4 ultimos digitos do CPF",
+            type="password",
+            max_chars=4,
+            help="Informe os 4 ultimos digitos do CPF cadastrado para esta secretaria.",
+        )
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
-            if not slug or not usuario or not senha:
+            cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
+            if not slug or not usuario or not cpf4:
                 st.error("Preencha todos os campos.")
                 return
-            acesso = autenticar_orhafe_secretaria(slug, usuario, senha)
+            if len(cpf4) != 4:
+                st.error("Informe exatamente os 4 ultimos digitos do CPF.")
+                return
+            acesso = autenticar_orhafe_secretaria_por_cpf4(slug, usuario, cpf4)
             if acesso:
                 _iniciar_sessao(
                     "secretaria_orhafe",
@@ -864,7 +874,7 @@ def _login_orhafe():
                 st.toast(f"Bem-vinda, {acesso['secretaria_orhafe']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuario ou PIN incorretos, ou acesso inativo.")
+                st.error("Identificador, usuario ou CPF incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Circulo de Oracao", "btn_esqueci_orhafe")
 

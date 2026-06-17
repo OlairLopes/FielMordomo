@@ -2194,6 +2194,64 @@ def autenticar_orhafe_secretaria(slug, usuario, senha):
     }
 
 
+def autenticar_orhafe_secretaria_por_cpf4(slug, usuario, cpf4):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_orhafe(usuario)
+    except ValueError:
+        return None
+
+    cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
+    if len(cpf4) != 4:
+        return None
+
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+
+    chave = f"orhafe_cpf4:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+
+    with _conn(db) as conn:
+        _garantir_tabelas_orhafe(conn)
+        _garantir_colunas_cadastros(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+
+        row = conn.execute(
+            """SELECT s.id_secretaria, s.nome, s.usuario, s.perfil
+                 FROM orhafe_secretarias s
+                 JOIN cadastros c ON c.id_cadastro=s.id_cadastro
+                WHERE s.usuario=?
+                  AND s.situacao='Ativo'
+                  AND UPPER(TRIM(c.tipo_cadastro))='MEMBRO'
+                  AND UPPER(TRIM(c.situacao))='ATIVO'
+                  AND substr(
+                        replace(replace(replace(COALESCE(c.cpf, ''), '.', ''), '-', ''), ' ', ''),
+                        -4
+                      )=?
+                LIMIT 1""",
+            (usuario, cpf4),
+        ).fetchone()
+        valido = row is not None
+        _registrar_resultado_login(conn, chave, valido)
+
+    if not row:
+        return None
+
+    return {
+        "igreja": igreja,
+        "secretaria_orhafe": {
+            "id": row["id_secretaria"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+            "perfil": row["perfil"],
+        },
+    }
+
+
 def listar_funcoes_obreiros(slug):
     db = _tenant_db(slug)
     if not db.exists():
