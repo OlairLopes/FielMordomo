@@ -197,7 +197,9 @@ def _login_css():
                 font-weight: 700;
                 font-size: .86rem;
                 line-height: 1.25;
-                white-space: nowrap;
+                white-space: normal;
+                overflow-wrap: anywhere;
+                word-break: normal;
                 text-decoration: none !important;
                 transition: .18s ease;
                 box-sizing: border-box;
@@ -250,6 +252,22 @@ def _login_css():
                 }
                 div[data-testid="stHorizontalBlock"] {
                     gap: .75rem !important;
+                }
+                .fm-login-side {
+                    padding: 22px 14px 16px;
+                    min-height: auto;
+                    border-radius: 18px;
+                }
+                .fm-login-link {
+                    padding: .68rem .68rem;
+                    font-size: .8rem;
+                    line-height: 1.18;
+                    margin-bottom: .42rem;
+                    max-width: 100%;
+                }
+                .fm-login-side-label {
+                    font-size: .68rem;
+                    margin: 12px 4px 8px;
                 }
                 .fm-login-heading {
                     font-size: 1.45rem;
@@ -306,7 +324,7 @@ def _sidebar_login(modo_atual):
         logo_html = '<div class="fm-login-logo-fallback">FM</div>'
     links = []
     for modo, titulo, descricao in LOGIN_OPCOES:
-        label = f"{titulo} | {modo}"
+        label = modo
         classe = "fm-login-link active" if modo == modo_atual else "fm-login-link"
         href = f"?pagina=login&acesso={urllib.parse.quote(modo)}"
         links.append(
