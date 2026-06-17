@@ -1926,6 +1926,32 @@ def salvar_orhafe_chamada(
         raise ValueError("Informe um valor valido para ofertas.") from ex
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
+        data_ref = str(data or "").strip()
+
+        def normalizar_data_texto(valor):
+            texto = str(valor or "").strip()
+            if not texto:
+                return ""
+            for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+                try:
+                    return datetime.datetime.strptime(texto, formato).date().isoformat()
+                except Exception:
+                    pass
+            return texto
+
+        data_ref = normalizar_data_texto(data_ref)
+
+        def matricula_valida_na_data(row):
+            if not row:
+                return False
+            inicio = normalizar_data_texto(row["data_inicio"])
+            fim = normalizar_data_texto(row["data_fim"])
+            if inicio and data_ref and inicio > data_ref:
+                return False
+            if fim and data_ref and fim < data_ref:
+                return False
+            return True
+
         id_lider = int(id_lider) if id_lider else None
         if id_lider:
             row_lider = conn.execute(
@@ -1937,10 +1963,12 @@ def salvar_orhafe_chamada(
         dados_presenca = []
         for id_matricula, marcado in presencas.items():
             row = conn.execute(
-                "SELECT nome FROM orhafe_matriculas WHERE id_matricula=?",
+                """SELECT nome, ativa, data_inicio, data_fim
+                   FROM orhafe_matriculas
+                   WHERE id_matricula=?""",
                 (int(id_matricula),),
             ).fetchone()
-            if row:
+            if matricula_valida_na_data(row):
                 dados_presenca.append((int(id_matricula), row["nome"], bool(marcado), False))
         nomes_visitantes = [
             sanitizar(nome)

@@ -55,6 +55,43 @@ def _fmt_data(valor):
         return str(valor or "")
 
 
+def _data_iso(valor):
+    try:
+        if isinstance(valor, datetime.date):
+            return valor.isoformat()
+        texto = str(valor or "").strip()
+        if not texto:
+            return ""
+        for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.datetime.strptime(texto, formato).date().isoformat()
+            except Exception:
+                pass
+        return datetime.date.fromisoformat(texto).isoformat()
+    except Exception:
+        return ""
+
+
+def _filtrar_matriculas_validas_na_data(matriculas, data_referencia):
+    if matriculas.empty:
+        return matriculas
+
+    data_ref = _data_iso(data_referencia)
+    if not data_ref:
+        return matriculas[matriculas["ativa"] == 1].copy()
+
+    dados = matriculas.copy()
+    if "data_inicio" not in dados.columns:
+        dados["data_inicio"] = ""
+    if "data_fim" not in dados.columns:
+        dados["data_fim"] = ""
+    inicio = dados["data_inicio"].apply(_data_iso)
+    fim = dados["data_fim"].apply(_data_iso)
+
+    validas = (inicio.eq("") | (inicio <= data_ref)) & (fim.eq("") | (fim >= data_ref))
+    return dados[validas].copy()
+
+
 def _pct(valor):
     try:
         return f"{float(valor):.1f}%"
@@ -574,11 +611,6 @@ def _render_chamada(slug):
     if lideres.empty:
         st.warning("Cadastre ate 5 lideres na aba Configuracoes antes de registrar chamada.")
         return
-    matriculas = listar_orhafe_matriculas(slug)
-    if matriculas.empty:
-        st.warning("Cadastre matriculas antes de registrar chamada.")
-        return
-
     chamadas_salvas = listar_orhafe_reunioes(slug)
     modo = st.radio(
         "Modo",
@@ -596,6 +628,19 @@ def _render_chamada(slug):
         data_reuniao = datetime.date.fromisoformat(str(reuniao_atual["data"]))
     else:
         data_reuniao = st.date_input("Data da reuniao", value=_hoje(), format="DD/MM/YYYY")
+
+    matriculas = listar_orhafe_matriculas(slug, incluir_inativas=True)
+    if matriculas.empty:
+        st.warning("Cadastre matriculas antes de registrar chamada.")
+        return
+
+    matriculas = _filtrar_matriculas_validas_na_data(matriculas, data_reuniao)
+    if matriculas.empty:
+        st.warning(
+            "Nenhuma matricula estava ativa na data desta chamada. "
+            "Verifique a data da reuniao ou a data de inicio das matriculas."
+        )
+        return
 
     lider_opcoes = _lideres_opcoes(lideres)
     lider_labels = list(lider_opcoes.keys())
