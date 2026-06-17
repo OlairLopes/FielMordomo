@@ -433,7 +433,7 @@ def _render_matriculas(slug):
         else:
             membro_label = st.selectbox("Membro", list(op_membros.keys()))
         c1, c2 = st.columns(2)
-        data_inicio = c1.date_input("Data de inicio", value=_hoje())
+        data_inicio = c1.date_input("Data de inicio", value=_hoje(), format="DD/MM/YYYY")
         observacoes = c2.text_input("Observacoes")
         if st.form_submit_button("Matricular", type="primary"):
             if not membro_label:
@@ -543,7 +543,7 @@ def _render_chamada(slug):
         reuniao_atual = op_reunioes[reuniao_label]
         data_reuniao = datetime.date.fromisoformat(str(reuniao_atual["data"]))
     else:
-        data_reuniao = st.date_input("Data da reuniao", value=_hoje())
+        data_reuniao = st.date_input("Data da reuniao", value=_hoje(), format="DD/MM/YYYY")
 
     lider_opcoes = _lideres_opcoes(lideres)
     lider_labels = list(lider_opcoes.keys())
@@ -659,8 +659,8 @@ def _render_chamada(slug):
 def _render_relatorios(slug):
     st.markdown("### Relatórios do Círculo de Oração")
     c1, c2 = st.columns(2)
-    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="orhafe_rel_ini")
-    fim = c2.date_input("Data final", value=_hoje(), key="orhafe_rel_fim")
+    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="orhafe_rel_ini", format="DD/MM/YYYY")
+    fim = c2.date_input("Data final", value=_hoje(), key="orhafe_rel_fim", format="DD/MM/YYYY")
     if inicio > fim:
         st.error("A data inicial nao pode ser maior que a data final.")
         return

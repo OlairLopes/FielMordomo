@@ -5604,7 +5604,7 @@ def exportar_backup_igreja(slug) -> bytes:
     if "data" in lancamentos.columns:
         lancamentos["data"] = pd.to_datetime(
             lancamentos["data"], errors="coerce"
-        ).dt.strftime("%Y-%m-%d").fillna("")
+        ).dt.strftime("%d/%m/%Y").fillna("")
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:

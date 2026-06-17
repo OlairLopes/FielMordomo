@@ -369,7 +369,7 @@ def _render_classes(slug):
         else:
             nome_manual = st.text_input("Nome do aluno")
             nome_aluno = nome_manual
-        data_inicio = st.date_input("Data de inicio", value=_hoje())
+        data_inicio = st.date_input("Data de inicio", value=_hoje(), format="DD/MM/YYYY")
         obs = st.text_area("Observacoes da matricula")
         if st.form_submit_button("Matricular", type="primary"):
             try:
@@ -628,8 +628,8 @@ def _render_chamada(slug, id_classe_fixo=None):
 def _render_relatorios(slug):
     st.markdown("### Relatorios da Escola Bíblica")
     c1, c2 = st.columns(2)
-    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="ebd_rel_ini")
-    fim = c2.date_input("Data final", value=_hoje(), key="ebd_rel_fim")
+    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="ebd_rel_ini", format="DD/MM/YYYY")
+    fim = c2.date_input("Data final", value=_hoje(), key="ebd_rel_fim", format="DD/MM/YYYY")
     if inicio > fim:
         st.error("A data inicial nao pode ser maior que a data final.")
         return
@@ -731,7 +731,7 @@ def _render_escala(slug):
 
     with st.form("form_ebd_escala"):
         c1, c2 = st.columns(2)
-        data = c1.date_input("Data", value=_hoje())
+        data = c1.date_input("Data", value=_hoje(), format="DD/MM/YYYY")
         classe_label = c2.selectbox("Classe", list(op_classes.keys()))
         st.markdown("#### Professor")
         professor, telefone_professor, funcao_professor = _selecionar_pessoa_escala(
@@ -771,8 +771,8 @@ def _render_escala(slug):
                 st.error(str(exc))
 
     c1, c2 = st.columns(2)
-    inicio = c1.date_input("Inicio da escala", value=_inicio_mes(), key="escala_ini")
-    fim = c2.date_input("Fim da escala", value=_hoje() + datetime.timedelta(days=60), key="escala_fim")
+    inicio = c1.date_input("Inicio da escala", value=_inicio_mes(), key="escala_ini", format="DD/MM/YYYY")
+    fim = c2.date_input("Fim da escala", value=_hoje() + datetime.timedelta(days=60), key="escala_fim", format="DD/MM/YYYY")
     escala = listar_ebd_escala(slug, inicio.isoformat(), fim.isoformat())
     if escala.empty:
         st.info("Nenhuma escala cadastrada para o periodo.")

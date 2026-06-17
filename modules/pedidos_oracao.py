@@ -425,8 +425,8 @@ def render_publico():
 
 def _render_pedidos(slug):
     c1, c2, c3 = st.columns(3)
-    inicio = c1.date_input("Data inicial", value=_hoje() - dt.timedelta(days=30))
-    fim = c2.date_input("Data final", value=_hoje())
+    inicio = c1.date_input("Data inicial", value=_hoje() - dt.timedelta(days=30), format="DD/MM/YYYY")
+    fim = c2.date_input("Data final", value=_hoje(), format="DD/MM/YYYY")
     status = c3.selectbox("Status", ["Todos"] + STATUS_PEDIDO)
     df = listar_pedidos_oracao(
         slug,
@@ -492,7 +492,7 @@ def _render_agenda(slug):
     with st.form("form_agenda_pastoral"):
         st.markdown("#### Novo horario disponivel")
         c1, c2, c3 = st.columns(3)
-        data = c1.date_input("Data", value=_hoje())
+        data = c1.date_input("Data", value=_hoje(), format="DD/MM/YYYY")
         hora_inicio = c2.time_input("Inicio", value=dt.time(19, 0))
         hora_fim = c3.time_input("Fim", value=dt.time(20, 0))
         local = st.text_input("Local", placeholder="Gabinete pastoral, residencia, igreja...")

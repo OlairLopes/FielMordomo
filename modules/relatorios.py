@@ -173,7 +173,7 @@ def _detalhes_exibicao(df):
 
 def _detalhes_exportacao(df):
     detalhes = df.copy()
-    detalhes["data"] = detalhes["data"].dt.strftime("%Y-%m-%d").fillna("")
+    detalhes["data"] = detalhes["data"].dt.strftime("%d/%m/%Y").fillna("")
     remover = ["tipo_norm", "categoria_norm", "mes_ref"]
     return detalhes.drop(columns=[c for c in remover if c in detalhes.columns])
 

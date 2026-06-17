@@ -72,7 +72,7 @@ def _render_form(slug):
     with st.form("form_evento_novo"):
         titulo = st.text_input("Titulo do evento")
         c1, c2, c3 = st.columns(3)
-        data = c1.date_input("Data", value=_hoje())
+        data = c1.date_input("Data", value=_hoje(), format="DD/MM/YYYY")
         hora_inicio = c2.text_input("Hora inicio", placeholder="19:00")
         hora_fim = c3.text_input("Hora fim", placeholder="21:00")
 
@@ -123,8 +123,8 @@ def _render_form(slug):
 def _render_lista(slug):
     st.markdown("### Eventos cadastrados")
     c1, c2, c3, c4 = st.columns(4)
-    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="eventos_ini")
-    fim = c2.date_input("Data final", value=_hoje() + datetime.timedelta(days=120), key="eventos_fim")
+    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="eventos_ini", format="DD/MM/YYYY")
+    fim = c2.date_input("Data final", value=_hoje() + datetime.timedelta(days=120), key="eventos_fim", format="DD/MM/YYYY")
     vis = c3.selectbox("Visibilidade", ["Todas"] + VISIBILIDADES, key="eventos_vis")
     sit = c4.selectbox("Situacao", ["Todas"] + SITUACOES, key="eventos_sit")
 
@@ -191,7 +191,7 @@ def _render_lista(slug):
         with st.form(f"form_evento_editar_{id_evento}"):
             titulo = st.text_input("Titulo", value=row["titulo"])
             c1, c2, c3 = st.columns(3)
-            data = c1.date_input("Data", value=_parse_data(row["data"]), key=f"evento_data_{id_evento}")
+            data = c1.date_input("Data", value=_parse_data(row["data"]), key=f"evento_data_{id_evento}", format="DD/MM/YYYY")
             hora_inicio = c2.text_input("Hora inicio", value=row["hora_inicio"] or "")
             hora_fim = c3.text_input("Hora fim", value=row["hora_fim"] or "")
 

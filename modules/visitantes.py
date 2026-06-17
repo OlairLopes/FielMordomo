@@ -173,7 +173,7 @@ def _render_formulario(slug):
         disabled=True,
         key=f"visitante_slug_{nonce}",
     )
-    data = c2.date_input("Data", value=_hoje(), key=f"visitante_data_{nonce}")
+    data = c2.date_input("Data", value=_hoje(), key=f"visitante_data_{nonce}", format="DD/MM/YYYY")
 
     departamento_opcao = st.selectbox(
         "Departamento na direcao do culto",
@@ -327,8 +327,8 @@ def _render_formulario(slug):
 def _render_consulta(slug):
     st.markdown("### Visitantes registrados")
     c1, c2, c3 = st.columns(3)
-    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="visitantes_ini")
-    fim = c2.date_input("Data final", value=_hoje(), key="visitantes_fim")
+    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="visitantes_ini", format="DD/MM/YYYY")
+    fim = c2.date_input("Data final", value=_hoje(), key="visitantes_fim", format="DD/MM/YYYY")
     departamento = c3.text_input("Filtrar departamento", placeholder="Opcional")
     if inicio > fim:
         st.error("A data inicial não pode ser maior que a data final.")

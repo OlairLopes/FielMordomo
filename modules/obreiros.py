@@ -170,7 +170,7 @@ def _render_chamada(slug):
         st.warning("Nenhuma funcao encontrada no cadastro de membros.")
         return
 
-    data = st.date_input("Data da reuniao", value=_hoje(), key="obreiros_data")
+    data = st.date_input("Data da reuniao", value=_hoje(), key="obreiros_data", format="DD/MM/YYYY")
     tema = st.text_input("Tema / pauta da reuniao", key="obreiros_tema")
     selecionadas = st.multiselect(
         "Funcoes que participarao da chamada",
@@ -242,8 +242,8 @@ def _render_chamada(slug):
 def _render_relatorios(slug):
     st.markdown("### Relatorios de obreiros")
     c1, c2, c3 = st.columns(3)
-    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="obreiros_rel_ini")
-    fim = c2.date_input("Data final", value=_hoje(), key="obreiros_rel_fim")
+    inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="obreiros_rel_ini", format="DD/MM/YYYY")
+    fim = c2.date_input("Data final", value=_hoje(), key="obreiros_rel_fim", format="DD/MM/YYYY")
     funcoes = ["Todas"] + listar_funcoes_obreiros(slug)
     funcao = c3.selectbox("Funcao", funcoes, key="obreiros_rel_funcao")
 
