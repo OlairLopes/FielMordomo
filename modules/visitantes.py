@@ -75,6 +75,8 @@ def _cidades_por_estado(uf):
         )
         return cidades + ["Outros"] if cidades else ["Outros"]
     except Exception:
+        if uf == "GO":
+            return ["Minaçu", "Outros"]
         return ["Outros"]
 
 
@@ -150,13 +152,16 @@ def _render_formulario(slug):
         estado_opcao = c5.selectbox(
             "Qual estado?",
             ["Selecione"] + ESTADOS_BR,
+            index=ESTADOS_BR.index("GO") + 1,
             key=f"visitante_estado_{nonce}",
         )
         estado = "" if estado_opcao == "Selecione" else estado_opcao
         cidades = _cidades_por_estado(estado)
+        cidade_index = cidades.index("Minaçu") if "Minaçu" in cidades else 0
         cidade_opcao = c4.selectbox(
             "Qual cidade?",
             cidades,
+            index=cidade_index,
             key=f"visitante_cidade_{estado or 'sem_uf'}_{nonce}",
         )
         cidade = cidade_opcao
