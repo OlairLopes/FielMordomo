@@ -619,6 +619,30 @@ def _render_chamada(slug):
     )
     reuniao_atual = None
     if modo == "Editar chamada salva":
+        c_ini, c_fim = st.columns(2)
+        editar_inicio = c_ini.date_input(
+            "Data inicial para localizar chamada",
+            value=_inicio_mes(),
+            key="orhafe_edit_ini",
+            format="DD/MM/YYYY",
+        )
+        editar_fim = c_fim.date_input(
+            "Data final para localizar chamada",
+            value=_hoje(),
+            key="orhafe_edit_fim",
+            format="DD/MM/YYYY",
+        )
+        if editar_inicio > editar_fim:
+            st.error("A data inicial nao pode ser maior que a data final.")
+            return
+        chamadas_salvas = listar_orhafe_reunioes(
+            slug,
+            editar_inicio.isoformat(),
+            editar_fim.isoformat(),
+        )
+        if chamadas_salvas.empty:
+            st.info("Nenhuma chamada encontrada no periodo selecionado.")
+            return
         op_reunioes = {
             f'{int(row["id_reuniao"])} - {_fmt_data(row["data"])} - {row.get("lider", "") or "sem lider"}': row
             for _, row in chamadas_salvas.iterrows()

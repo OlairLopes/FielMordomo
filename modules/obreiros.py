@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from data.repository import (
+    carregar_obreiros_presencas,
     listar_funcoes_obreiros,
     listar_obreiros_por_funcoes,
     listar_obreiros_reunioes,
@@ -170,13 +171,93 @@ def _render_chamada(slug):
         st.warning("Nenhuma funcao encontrada no cadastro de membros.")
         return
 
-    data = st.date_input("Data da reuniao", value=_hoje(), key="obreiros_data", format="DD/MM/YYYY")
-    tema = st.text_input("Tema / pauta da reuniao", key="obreiros_tema")
+    chamadas_salvas = listar_obreiros_reunioes(slug)
+    opcoes_modo = ["Nova chamada"]
+    if not chamadas_salvas.empty:
+        opcoes_modo.append("Editar chamada salva")
+    modo = st.radio(
+        "Modo da chamada",
+        opcoes_modo,
+        horizontal=True,
+        key="obreiros_modo_chamada",
+    )
+
+    reuniao_atual = None
+    tema_atual = ""
+    visitantes_atual = 0
+    ofertas_atual = 0.0
+    observacoes_atual = ""
+    presencas_salvas = {}
+    funcoes_padrao = []
+
+    if modo == "Editar chamada salva":
+        c_ini, c_fim = st.columns(2)
+        editar_inicio = c_ini.date_input(
+            "Data inicial para localizar chamada",
+            value=_inicio_mes(),
+            key="obreiros_edit_ini",
+            format="DD/MM/YYYY",
+        )
+        editar_fim = c_fim.date_input(
+            "Data final para localizar chamada",
+            value=_hoje(),
+            key="obreiros_edit_fim",
+            format="DD/MM/YYYY",
+        )
+        if editar_inicio > editar_fim:
+            st.error("A data inicial nao pode ser maior que a data final.")
+            return
+        chamadas_salvas = listar_obreiros_reunioes(
+            slug,
+            editar_inicio.isoformat(),
+            editar_fim.isoformat(),
+        )
+        if chamadas_salvas.empty:
+            st.info("Nenhuma chamada encontrada no periodo selecionado.")
+            return
+        op_reunioes = {
+            f'{int(row["id_reuniao"])} - {_fmt_data(row["data"])} - {row.get("tema", "") or "sem tema"}': row
+            for _, row in chamadas_salvas.iterrows()
+        }
+        reuniao_label = st.selectbox(
+            "Chamada salva para editar",
+            list(op_reunioes.keys()),
+            key="obreiros_editar_chamada",
+        )
+        reuniao_atual = op_reunioes[reuniao_label]
+        data = datetime.date.fromisoformat(str(reuniao_atual["data"]))
+        tema_atual = str(reuniao_atual.get("tema", "") or "")
+        visitantes_atual = int(reuniao_atual.get("visitantes", 0) or 0)
+        ofertas_atual = float(reuniao_atual.get("ofertas", 0) or 0)
+        observacoes_atual = str(reuniao_atual.get("observacoes", "") or "")
+        funcoes_salvas = [
+            f.strip()
+            for f in str(reuniao_atual.get("funcoes", "") or "").split(";")
+            if f.strip()
+        ]
+        funcoes_padrao = [f for f in funcoes_salvas if f in funcoes]
+        df_pres = carregar_obreiros_presencas(slug, int(reuniao_atual["id_reuniao"]))
+        if not df_pres.empty:
+            presencas_salvas = {
+                int(row["id_cadastro"]): bool(row["presente"])
+                for _, row in df_pres.iterrows()
+            }
+        st.info(f"Editando chamada salva de {_fmt_data(data.isoformat())}.")
+    else:
+        data = st.date_input("Data da reuniao", value=_hoje(), key="obreiros_data", format="DD/MM/YYYY")
+
+    chave_data = data.isoformat()
+    chave_chamada = (
+        f"edit_{int(reuniao_atual['id_reuniao'])}"
+        if reuniao_atual is not None
+        else f"nova_{chave_data}"
+    )
+    tema = st.text_input("Tema / pauta da reuniao", value=tema_atual, key=f"obreiros_tema_{chave_data}")
     selecionadas = st.multiselect(
         "Funcoes que participarao da chamada",
         funcoes,
-        default=[],
-        key="obreiros_funcoes",
+        default=funcoes_padrao,
+        key=f"obreiros_funcoes_{chave_data}",
     )
     if not selecionadas:
         st.info("Selecione uma ou mais funcoes para gerar a folha de chamada.")
@@ -191,14 +272,14 @@ def _render_chamada(slug):
     st.caption(f"{len(membros)} obreiro(s) incluidos automaticamente.")
     c_marcar, c_desmarcar = st.columns(2)
     chaves_presenca = [
-        f'obreiros_presenca_{data}_{int(row["id_cadastro"])}'
+        f'obreiros_presenca_{chave_chamada}_{int(row["id_cadastro"])}'
         for _, row in membros.iterrows()
     ]
-    if c_marcar.button("Marcar todos", use_container_width=True, key=f"obreiros_marcar_todos_{data}"):
+    if c_marcar.button("Marcar todos", use_container_width=True, key=f"obreiros_marcar_todos_{chave_chamada}"):
         for chave in chaves_presenca:
             st.session_state[chave] = True
         st.rerun()
-    if c_desmarcar.button("Desmarcar todos", use_container_width=True, key=f"obreiros_desmarcar_todos_{data}"):
+    if c_desmarcar.button("Desmarcar todos", use_container_width=True, key=f"obreiros_desmarcar_todos_{chave_chamada}"):
         for chave in chaves_presenca:
             st.session_state[chave] = False
         st.rerun()
@@ -209,19 +290,19 @@ def _render_chamada(slug):
             for _, row in grupo.iterrows():
                 presencas[int(row["id_cadastro"])] = st.checkbox(
                     row["nome"],
-                    value=True,
-                    key=f'obreiros_presenca_{data}_{int(row["id_cadastro"])}',
+                    value=presencas_salvas.get(int(row["id_cadastro"]), True),
+                    key=f'obreiros_presenca_{chave_chamada}_{int(row["id_cadastro"])}',
                 )
 
     c1, c2 = st.columns(2)
-    visitantes = c1.number_input("Visitantes", min_value=0, step=1, value=0)
-    ofertas = c2.number_input("Ofertas", min_value=0.0, step=1.0, value=0.0)
-    observacoes = st.text_area("Observacoes")
+    visitantes = c1.number_input("Visitantes", min_value=0, step=1, value=visitantes_atual, key=f"obreiros_visitantes_{chave_data}")
+    ofertas = c2.number_input("Ofertas", min_value=0.0, step=1.0, value=ofertas_atual, key=f"obreiros_ofertas_{chave_data}")
+    observacoes = st.text_area("Observacoes", value=observacoes_atual, key=f"obreiros_obs_{chave_data}")
     arquivo_ata = st.file_uploader(
         "Ata da reunião",
         type=["pdf", "doc", "docx", "png", "jpg", "jpeg"],
         help="Anexe a ata em PDF, Word ou imagem. Se a chamada ja tiver uma ata salva, ela sera mantida quando nenhum novo arquivo for enviado.",
-        key=f"obreiros_ata_{data}",
+        key=f"obreiros_ata_{chave_chamada}",
     )
 
     presentes = sum(1 for v in presencas.values() if v)

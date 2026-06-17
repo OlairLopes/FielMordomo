@@ -497,6 +497,31 @@ def _render_chamada(slug, id_classe_fixo=None):
 
     escala_aula = None
     if modo_chamada == "Editar chamada salva":
+        c_ini, c_fim = st.columns(2)
+        editar_inicio = c_ini.date_input(
+            "Data inicial para localizar chamada",
+            value=_inicio_mes(),
+            key=f"ebd_edit_ini_{id_classe}",
+            format="DD/MM/YYYY",
+        )
+        editar_fim = c_fim.date_input(
+            "Data final para localizar chamada",
+            value=_hoje(),
+            key=f"ebd_edit_fim_{id_classe}",
+            format="DD/MM/YYYY",
+        )
+        if editar_inicio > editar_fim:
+            st.error("A data inicial nao pode ser maior que a data final.")
+            return
+        chamadas_salvas = listar_ebd_aulas(
+            slug,
+            editar_inicio.isoformat(),
+            editar_fim.isoformat(),
+            id_classe,
+        )
+        if chamadas_salvas.empty:
+            st.info("Nenhuma chamada encontrada no periodo selecionado.")
+            return
         op_chamadas = {
             f'{_fmt_data(row["data"])} - {row["classe"]} - {row.get("tema", "") or "sem tema"}': row
             for _, row in chamadas_salvas.iterrows()
