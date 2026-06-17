@@ -234,6 +234,44 @@ def _totais_reunioes(reunioes, freq=None, visitantes=None):
     }
 
 
+def _indicadores_grafico_resumo(reunioes, visitantes=None, lider=None):
+    if reunioes.empty:
+        return {
+            "Presença média (%)": 0.0,
+            "Ausência média (%)": 0.0,
+            "Visitantes": 0,
+            "Ofertas": 0.0,
+        }
+
+    matriculadas = pd.to_numeric(
+        reunioes["matriculadas"], errors="coerce"
+    ).fillna(0)
+    presentes = pd.to_numeric(
+        reunioes["presentes"], errors="coerce"
+    ).fillna(0)
+    ausentes = pd.to_numeric(
+        reunioes["ausentes"], errors="coerce"
+    ).fillna(0)
+
+    media_matriculadas = float(matriculadas.mean()) if not matriculadas.empty else 0.0
+    media_presentes = float(presentes.mean()) if not presentes.empty else 0.0
+    media_ausentes = float(ausentes.mean()) if not ausentes.empty else 0.0
+
+    if media_matriculadas > 0:
+        presenca_pct = (media_presentes / media_matriculadas) * 100
+        ausencia_pct = (media_ausentes / media_matriculadas) * 100
+    else:
+        presenca_pct = 0.0
+        ausencia_pct = 0.0
+
+    return {
+        "Presença média (%)": round(presenca_pct, 1),
+        "Ausência média (%)": round(ausencia_pct, 1),
+        "Visitantes": _contar_visitantes_periodo(visitantes, lider),
+        "Ofertas": float(reunioes["ofertas"].fillna(0).sum()),
+    }
+
+
 def _resumo_lideres(reunioes, visitantes=None):
     if reunioes.empty:
         return pd.DataFrame(
@@ -288,11 +326,15 @@ def _grafico_totais_orhafe(titulo, dados):
         x=df["Indicador"],
         y=df["Total"],
         marker_color=[
-            CORES["azul"], CORES["verde"], CORES["vermelho"],
-            CORES["laranja"], CORES["roxo"], CORES["cinza"],
+            CORES["verde"], CORES["vermelho"],
+            CORES["laranja"], CORES["roxo"],
         ][:len(df)],
         text=[
-            _moeda(v) if str(k) == "Ofertas" else str(int(v))
+            _moeda(v)
+            if str(k) == "Ofertas"
+            else _pct(v)
+            if "(%)" in str(k)
+            else str(int(v))
             for k, v in dados.items()
         ],
         textposition="outside",
@@ -650,14 +692,18 @@ def _render_relatorios(slug):
         ]
         _grafico_totais_orhafe(
             f"Resumo da lider {lider_escolhida}",
-            _totais_reunioes(
+            _indicadores_grafico_resumo(
                 reunioes_lider,
                 visitantes=visitantes,
-            ) | {"Visitantes": _contar_visitantes_periodo(visitantes, lider_escolhida)},
+                lider=lider_escolhida,
+            ),
         )
 
         st.markdown("#### Gráfico geral do Círculo de Oração")
-        _grafico_totais_orhafe("Resumo geral do Círculo de Oração", totais)
+        _grafico_totais_orhafe(
+            "Resumo geral do Círculo de Oração",
+            _indicadores_grafico_resumo(reunioes, visitantes=visitantes),
+        )
 
         st.markdown("#### Evolucao das reunioes")
         _grafico_reunioes(reunioes)
