@@ -54,6 +54,15 @@ def _grupo_opcoes(grupos):
     }
 
 
+def _lideres_opcoes(lideres):
+    if lideres.empty:
+        return {}
+    return {
+        f'{row["nome"]} ({row.get("setor", "") or "Sem setor"})': row
+        for _, row in lideres.sort_values(["setor", "nome"]).iterrows()
+    }
+
+
 def _membros_opcoes(slug):
     df = carregar_cadastros(slug)
     if df.empty:
@@ -81,17 +90,27 @@ def _render_grupos(slug):
     st.caption("Cadastre os grupos familiares de crescimento e seus setores.")
 
     grupos = listar_gfc_grupos(slug, incluir_inativos=True)
+    lideres = listar_gfc_lideres(slug)
+    op_lideres = _lideres_opcoes(lideres)
 
     with st.expander("Cadastrar grupo familiar", expanded=grupos.empty):
+        if not op_lideres:
+            st.warning("Cadastre ao menos um lider ativo na aba Coordenadores e lideres antes de criar grupos.")
         with st.form("form_gfc_grupo"):
             c1, c2 = st.columns(2)
             nome = c1.text_input("Nome do grupo familiar")
             setor = c2.text_input("Setor do grupo familiar")
             c3, c4 = st.columns(2)
-            responsavel = c3.text_input("Responsável")
-            telefone = c4.text_input("Telefone")
+            lider_label = c3.selectbox("Lider", list(op_lideres.keys()) if op_lideres else ["Cadastre um lider"])
+            lider_row = op_lideres.get(lider_label)
+            responsavel = str(lider_row.get("nome", "") or "") if lider_row is not None else ""
+            telefone_padrao = str(lider_row.get("telefone", "") or "") if lider_row is not None else ""
+            telefone = c4.text_input("Telefone", value=telefone_padrao)
             observacoes = st.text_area("Observações")
             if st.form_submit_button("Salvar grupo", type="primary"):
+                if not responsavel:
+                    st.error("Cadastre e selecione um lider para o grupo familiar.")
+                    return
                 try:
                     salvar_gfc_grupo(
                         slug,
@@ -112,8 +131,9 @@ def _render_grupos(slug):
 
     exibir = grupos.copy()
     exibir["situação"] = exibir["ativo"].map({1: "Ativo", 0: "Inativo"})
+    exibir = exibir.rename(columns={"responsavel": "lider"})
     st.dataframe(
-        exibir[["nome", "setor", "responsavel", "telefone", "situação", "observacoes"]],
+        exibir[["nome", "setor", "lider", "telefone", "situação", "observacoes"]],
         use_container_width=True,
         hide_index=True,
     )
@@ -131,8 +151,24 @@ def _render_grupos(slug):
                 nome = c1.text_input("Nome do grupo familiar", value=str(row.get("nome", "") or ""))
                 setor = c2.text_input("Setor do grupo familiar", value=str(row.get("setor", "") or ""))
                 c3, c4 = st.columns(2)
-                responsavel = c3.text_input("Responsável", value=str(row.get("responsavel", "") or ""))
-                telefone = c4.text_input("Telefone", value=str(row.get("telefone", "") or ""))
+                lider_labels = list(op_lideres.keys()) if op_lideres else ["Cadastre um lider"]
+                lider_atual = str(row.get("responsavel", "") or "").strip()
+                idx_lider = 0
+                for idx, label in enumerate(lider_labels):
+                    lider_row = op_lideres.get(label)
+                    if lider_row is not None and str(lider_row.get("nome", "") or "").strip() == lider_atual:
+                        idx_lider = idx
+                        break
+                lider_label = c3.selectbox(
+                    "Lider",
+                    lider_labels,
+                    index=idx_lider,
+                    key=f"gfc_grupo_lider_{int(row['id_grupo'])}",
+                )
+                lider_row = op_lideres.get(lider_label)
+                responsavel = str(lider_row.get("nome", "") or "") if lider_row is not None else lider_atual
+                telefone_padrao = str(lider_row.get("telefone", "") or "") if lider_row is not None else str(row.get("telefone", "") or "")
+                telefone = c4.text_input("Telefone", value=telefone_padrao)
                 ativo = st.selectbox(
                     "Situação",
                     ["Ativo", "Inativo"],
@@ -140,6 +176,9 @@ def _render_grupos(slug):
                 )
                 observacoes = st.text_area("Observações", value=str(row.get("observacoes", "") or ""))
                 if st.form_submit_button("Atualizar grupo", type="primary"):
+                    if not responsavel:
+                        st.error("Cadastre e selecione um lider para o grupo familiar.")
+                        return
                     try:
                         salvar_gfc_grupo(
                             slug,
