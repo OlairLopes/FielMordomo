@@ -526,11 +526,32 @@ def _render_chamada(slug, id_classe_fixo=None):
             f'{_fmt_data(row["data"])} - {row["classe"]} - {row.get("tema", "") or "sem tema"}': row
             for _, row in chamadas_salvas.iterrows()
         }
-        chamada_label = st.selectbox(
-            "Chamada salva para editar",
-            list(op_chamadas.keys()),
-            key="editar_chamada_salva",
-        )
+        labels_chamadas = list(op_chamadas.keys())
+        chave_chamada_salva = "editar_chamada_salva"
+        if st.session_state.get(chave_chamada_salva) not in labels_chamadas:
+            st.session_state[chave_chamada_salva] = labels_chamadas[0]
+        idx_atual = labels_chamadas.index(st.session_state[chave_chamada_salva])
+        nav_ant, nav_sel, nav_seg = st.columns([1, 3, 1])
+        if nav_ant.button(
+            "Dia anterior",
+            use_container_width=True,
+            disabled=idx_atual >= len(labels_chamadas) - 1,
+            key=f"ebd_chamada_anterior_{id_classe}",
+        ):
+            st.session_state[chave_chamada_salva] = labels_chamadas[idx_atual + 1]
+        if nav_seg.button(
+            "Dia seguinte",
+            use_container_width=True,
+            disabled=idx_atual <= 0,
+            key=f"ebd_chamada_seguinte_{id_classe}",
+        ):
+            st.session_state[chave_chamada_salva] = labels_chamadas[idx_atual - 1]
+        with nav_sel:
+            chamada_label = st.selectbox(
+                "Chamada salva para editar",
+                labels_chamadas,
+                key=chave_chamada_salva,
+            )
         chamada_row = op_chamadas[chamada_label]
         data_aula = datetime.date.fromisoformat(str(chamada_row["data"]))
         escala_aula = _escala_da_aula(slug, data_aula, id_classe)

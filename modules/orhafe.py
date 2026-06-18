@@ -647,7 +647,28 @@ def _render_chamada(slug):
             f'{int(row["id_reuniao"])} - {_fmt_data(row["data"])} - {row.get("lider", "") or "sem lider"}': row
             for _, row in chamadas_salvas.iterrows()
         }
-        reuniao_label = st.selectbox("Chamada salva", list(op_reunioes.keys()))
+        labels_reunioes = list(op_reunioes.keys())
+        chave_reuniao = "orhafe_editar_chamada"
+        if st.session_state.get(chave_reuniao) not in labels_reunioes:
+            st.session_state[chave_reuniao] = labels_reunioes[0]
+        idx_atual = labels_reunioes.index(st.session_state[chave_reuniao])
+        nav_ant, nav_sel, nav_seg = st.columns([1, 3, 1])
+        if nav_ant.button(
+            "Dia anterior",
+            use_container_width=True,
+            disabled=idx_atual >= len(labels_reunioes) - 1,
+            key="orhafe_chamada_anterior",
+        ):
+            st.session_state[chave_reuniao] = labels_reunioes[idx_atual + 1]
+        if nav_seg.button(
+            "Dia seguinte",
+            use_container_width=True,
+            disabled=idx_atual <= 0,
+            key="orhafe_chamada_seguinte",
+        ):
+            st.session_state[chave_reuniao] = labels_reunioes[idx_atual - 1]
+        with nav_sel:
+            reuniao_label = st.selectbox("Chamada salva", labels_reunioes, key=chave_reuniao)
         reuniao_atual = op_reunioes[reuniao_label]
         data_reuniao = datetime.date.fromisoformat(str(reuniao_atual["data"]))
     else:
