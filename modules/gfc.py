@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 
 import pandas as pd
 import streamlit as st
@@ -799,3 +799,4 @@ def render():
             _render_coordenadores_lideres(slug)
         with tab_secretarias:
             _render_secretarias(slug)
+

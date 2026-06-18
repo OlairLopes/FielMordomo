@@ -1,4 +1,4 @@
-"""
+﻿"""
 FielMordomo - ponto de entrada da aplicação Streamlit.
 
 Mantém as rotas públicas separadas da área autenticada e carrega os módulos
@@ -847,3 +847,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

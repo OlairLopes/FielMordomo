@@ -1,4 +1,4 @@
-"""
+﻿"""
 Camada de persistencia multi-tenant.
 """
 
@@ -6756,3 +6756,4 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
         resultado["erros"].append(f"Erro ao migrar master.db restaurado: {ex}")
 
     return resultado
+

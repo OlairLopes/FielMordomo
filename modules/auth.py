@@ -1,5 +1,5 @@
 ﻿"""
-AutenticaÃ§Ã£o do FielMordomo.
+Autenticação do FielMordomo.
 """
 
 import base64
@@ -116,22 +116,22 @@ def _logo_login_src():
 
 
 LOGIN_OPCOES = [
-    ("Gestor/Pastor", "Acesso principal", "GestÃ£o completa da igreja"),
-    ("Pastor Auxiliar", "Acesso pastoral", "Visitantes, pedidos e relatÃ³rios permitidos"),
-    ("Tesoureiro", "Financeiro", "LanÃ§amentos, membros e relatÃ³rios"),
+    ("Gestor/Pastor", "Acesso principal", "Gestão completa da igreja"),
+    ("Pastor Auxiliar", "Acesso pastoral", "Visitantes, pedidos e relatórios permitidos"),
+    ("Tesoureiro", "Financeiro", "Lançamentos, membros e relatórios"),
     ("Recepcao", "Visitantes", "Registro de visitantes"),
-    ("Secretario Geral", "Secretaria geral", "Membros, obreiros e aniversÃ¡rios"),
-    ("Escola Biblica", "Secretaria", "Chamada e gestÃ£o da Escola BÃ­blica"),
-    ("Circulo de Oracao", "Secretaria", "Chamada e relatÃ³rios do CÃ­rculo de OraÃ§Ã£o"),
+    ("Secretario Geral", "Secretaria geral", "Membros, obreiros e aniversários"),
+    ("Escola Biblica", "Secretaria", "Chamada e gestão da Escola Bíblica"),
+    ("Circulo de Oracao", "Secretaria", "Chamada e relatórios do Círculo de Oração"),
     ("GFC", "Secretaria", "Registro dos Grupos Familiares de Crescimento"),
     ("Administrador do sistema", "Admin", "Painel geral da plataforma"),
 ]
 
 LOGIN_ROTULOS = {
-    "Recepcao": "RecepÃ§Ã£o",
-    "Secretario Geral": "SecretÃ¡rio Geral",
-    "Escola Biblica": "Escola BÃ­blica",
-    "Circulo de Oracao": "CÃ­rculo de OraÃ§Ã£o",
+    "Recepcao": "Recepção",
+    "Secretario Geral": "Secretário Geral",
+    "Escola Biblica": "Escola Bíblica",
+    "Circulo de Oracao": "Círculo de Oração",
 }
 
 
@@ -370,7 +370,7 @@ def _sidebar_login(modo_atual):
         <div class="fm-login-side">
             <div class="fm-login-logo">{logo_html}</div>
             <a class="fm-login-link" href="?pagina=inicio" target="_top"
-               title="Voltar para a pÃ¡gina inicial">InÃ­cio</a>
+               title="Voltar para a página inicial">Início</a>
             <div class="fm-login-side-label">Tipo de acesso</div>
             {''.join(links)}
         </div>
@@ -418,7 +418,7 @@ def _seletor_login(modo_atual):
 
 
 def _mostrar_recuperacao_senha():
-    """Tela com contato do admin para recuperaÃ§Ã£o de senha."""
+    """Tela com contato do admin para recuperação de senha."""
     modo_recuperacao = st.session_state.get("recuperacao_modo") or st.session_state.get("login_modo", "acesso")
     modo_recuperacao_txt = _rotulo_login(modo_recuperacao)
     email_admin  = _normalizar_email(obter_config("contato_email", "admin@fielmordomo.com"))
@@ -435,14 +435,14 @@ def _mostrar_recuperacao_senha():
     st.markdown("**Canais de contato:**")
 
     if email_admin:
-        assunto = urllib.parse.quote("SolicitaÃ§Ã£o de redefiniÃ§Ã£o de senha - FielMordomo")
+        assunto = urllib.parse.quote("Solicitação de redefinição de senha - FielMordomo")
         corpo = urllib.parse.quote(
-            "OlÃ¡,\n\n"
-            "Solicito a redefiniÃ§Ã£o de senha/acesso no sistema FielMordomo.\n\n"
+            "Olá,\n\n"
+            "Solicito a redefinição de senha/acesso no sistema FielMordomo.\n\n"
             f"Tipo de acesso: {modo_recuperacao_txt}\n"
             "Identificador da igreja (slug): \n"
-            "Nome da igreja/congregaÃ§Ã£o: \n"
-            "UsuÃ¡rio, quando houver: \n"
+            "Nome da igreja/congregação: \n"
+            "Usuário, quando houver: \n"
             "Motivo: \n\n"
             "Obrigado!"
         )
@@ -462,7 +462,7 @@ def _mostrar_recuperacao_senha():
 
     if wpp_admin:
         msg_wpp = urllib.parse.quote(
-            f"OlÃ¡! Preciso de ajuda para redefinir meu acesso no FielMordomo. Tipo de acesso: {modo_recuperacao_txt}. "
+            f"Olá! Preciso de ajuda para redefinir meu acesso no FielMordomo. Tipo de acesso: {modo_recuperacao_txt}. "
             "Pode me ajudar?"
         )
         wpp_link = html.escape(f"https://wa.me/{wpp_admin}?text={msg_wpp}", quote=True)
@@ -492,7 +492,7 @@ def _botao_recuperar_senha(modo, key):
             st.session_state["mostrar_recuperacao"] = True
             st.rerun()
     with col2:
-        st.caption("NÃ£o tem acesso? Entre em contato com o administrador.")
+        st.caption("Não tem acesso? Entre em contato com o administrador.")
 
 
 def tela_login():
@@ -552,7 +552,7 @@ def _login_igreja():
 def _login_admin():
     with st.form("form_login_admin"):
         st.markdown("#### Administrador do sistema")
-        usuario = st.text_input("UsuÃ¡rio")
+        usuario = st.text_input("Usuário")
         senha   = st.text_input("Senha", type="password")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
@@ -565,7 +565,7 @@ def _login_admin():
                 st.toast("Acesso de administrador autorizado.")
                 st.rerun()
             else:
-                st.error("Credenciais invÃ¡lidas.")
+                st.error("Credenciais inválidas.")
 
     _botao_recuperar_senha("Administrador do sistema", "btn_esqueci_admin")
 
@@ -573,12 +573,12 @@ def _login_admin():
 
 def _login_tesoureiro():
     st.markdown("#### Acesso restrito do tesoureiro")
-    st.caption("Este acesso permite somente registrar e consultar lanÃ§amentos.")
+    st.caption("Este acesso permite somente registrar e consultar lançamentos.")
     slug = _selectbox_igreja_login("login_tesoureiro_igreja")
     usuario = _selectbox_usuario_login(
         slug,
         "tesoureiro",
-        "UsuÃ¡rio do tesoureiro",
+        "Usuário do tesoureiro",
         f"login_tesoureiro_usuario_{slug or 'sem_igreja'}",
     )
 
@@ -600,19 +600,19 @@ def _login_tesoureiro():
                 st.toast(f"Bem-vindo, {acesso['tesoureiro']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuÃ¡rio ou senha incorretos, ou acesso inativo.")
+                st.error("Identificador, usuário ou senha incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Tesoureiro", "btn_esqueci_tesoureiro")
 
 
 def _login_pastor_auxiliar():
     st.markdown("#### Acesso do Pastor Auxiliar")
-    st.caption("Acesso restrito a visitantes, aniversÃ¡rios, relatÃ³rios ministeriais e dashboard limitado.")
+    st.caption("Acesso restrito a visitantes, aniversários, relatórios ministeriais e dashboard limitado.")
     slug = _selectbox_igreja_login("login_pastor_auxiliar_igreja")
     usuario = _selectbox_usuario_login(
         slug,
         "pastor_auxiliar",
-        "UsuÃ¡rio do Pastor Auxiliar",
+        "Usuário do Pastor Auxiliar",
         f"login_pastor_auxiliar_usuario_{slug or 'sem_igreja'}",
     )
 
@@ -634,7 +634,7 @@ def _login_pastor_auxiliar():
                 st.toast(f"Bem-vindo, {acesso['pastor_auxiliar']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuÃ¡rio ou senha incorretos, ou acesso inativo.")
+                st.error("Identificador, usuário ou senha incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Pastor Auxiliar", "btn_esqueci_pastor_auxiliar")
 
@@ -644,7 +644,7 @@ def _opcoes_igrejas_ativas():
     try:
         igrejas = listar_igrejas()
     except Exception:
-        return {}, "NÃ£o foi possÃ­vel carregar as igrejas."
+        return {}, "Não foi possível carregar as igrejas."
     if igrejas is None or igrejas.empty:
         return {}, "Nenhuma igreja cadastrada."
     try:
@@ -691,22 +691,22 @@ def _opcoes_usuarios_por_perfil(slug, perfil):
             usuarios = listar_gfc_secretarias(slug, incluir_inativas=False)
             id_col = "id_secretaria"
         else:
-            return {}, "Perfil de acesso invÃ¡lido."
+            return {}, "Perfil de acesso inválido."
     except Exception:
-        return {}, "NÃ£o foi possÃ­vel carregar os usuÃ¡rios deste perfil."
+        return {}, "Não foi possível carregar os usuários deste perfil."
     if usuarios is None or usuarios.empty:
-        return {}, "Nenhum usuÃ¡rio ativo encontrado para esta igreja."
+        return {}, "Nenhum usuário ativo encontrado para esta igreja."
     if "situacao" in usuarios.columns:
         usuarios = usuarios[usuarios["situacao"].astype(str).str.upper() == "ATIVO"].copy()
     if usuarios.empty:
-        return {}, "Nenhum usuÃ¡rio ativo encontrado para esta igreja."
+        return {}, "Nenhum usuário ativo encontrado para esta igreja."
     opcoes = {
         str(row["usuario"]).strip(): str(row["usuario"]).strip()
         for _, row in usuarios.sort_values("usuario").iterrows()
         if str(row.get("usuario", "") or "").strip()
     }
     if not opcoes:
-        return {}, "Nenhum usuÃ¡rio ativo encontrado para esta igreja."
+        return {}, "Nenhum usuário ativo encontrado para esta igreja."
     return opcoes, ""
 
 
@@ -739,7 +739,7 @@ def _selectbox_usuario_login(slug, perfil, label, key):
         usuarios,
         key=key,
         format_func=lambda usuario: usuario,
-        help="Selecione o usuÃ¡rio cadastrado para este perfil.",
+        help="Selecione o usuário cadastrado para este perfil.",
     )
 
 
@@ -747,7 +747,7 @@ def _selectbox_recepcao_usuario_login(slug):
     return _selectbox_usuario_login(
         slug,
         "recepcao",
-        "UsuÃ¡rio da RecepÃ§Ã£o",
+        "Usuário da Recepção",
         f"login_recepcao_usuario_{slug or 'sem_igreja'}",
     )
 
@@ -815,7 +815,7 @@ def _grupo_gfc_do_usuario(slug, usuario):
 
 
 def _login_recepcao():
-    st.markdown("#### Acesso da RecepÃ§Ã£o")
+    st.markdown("#### Acesso da Recepção")
     st.caption("Acesso restrito somente ao registro de visitantes.")
 
     slug = _selectbox_igreja_login("login_recepcao_igreja")
@@ -824,10 +824,10 @@ def _login_recepcao():
 
     with st.form("form_login_recepcao"):
         senha = st.text_input(
-            "PIN de 4 dÃ­gitos",
+            "PIN de 4 dígitos",
             type="password",
             max_chars=4,
-            help="Informe o PIN de 4 dÃ­gitos cadastrado.",
+            help="Informe o PIN de 4 dígitos cadastrado.",
         )
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
@@ -837,7 +837,7 @@ def _login_recepcao():
                 st.error("Preencha todos os campos.")
                 return
             if len(senha) != 4:
-                st.error("Informe exatamente os 4 dÃ­gitos do PIN.")
+                st.error("Informe exatamente os 4 dígitos do PIN.")
                 return
             acesso = autenticar_recepcao(slug, usuario, senha)
             if acesso:
@@ -849,19 +849,19 @@ def _login_recepcao():
                 st.toast(f"Bem-vindo, {acesso['recepcao']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuÃ¡rio ou PIN incorretos, ou acesso inativo.")
+                st.error("Identificador, usuário ou PIN incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Recepcao", "btn_esqueci_recepcao")
 
 
 def _login_secretario_geral():
-    st.markdown("#### Acesso do SecretÃ¡rio Geral")
-    st.caption("Acesso restrito a membros, aniversÃ¡rios e chamada de obreiros.")
+    st.markdown("#### Acesso do Secretário Geral")
+    st.caption("Acesso restrito a membros, aniversários e chamada de obreiros.")
     slug = _selectbox_igreja_login("login_secretario_geral_igreja")
     usuario = _selectbox_usuario_login(
         slug,
         "secretario_geral",
-        "UsuÃ¡rio do SecretÃ¡rio Geral",
+        "Usuário do Secretário Geral",
         f"login_secretario_geral_usuario_{slug or 'sem_igreja'}",
     )
 
@@ -883,24 +883,24 @@ def _login_secretario_geral():
                 st.toast(f"Bem-vindo, {acesso['secretario_geral']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuÃ¡rio ou senha incorretos, ou acesso inativo.")
+                st.error("Identificador, usuário ou senha incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Secretario Geral", "btn_esqueci_secretario_geral")
 
 
 def _login_ebd():
-    st.markdown("#### Acesso da Escola BÃ­blica")
-    st.caption("SecretÃ¡rio de classe acessa somente chamada. SecretÃ¡rio geral acessa todo o mÃ³dulo Escola BÃ­blica.")
+    st.markdown("#### Acesso da Escola Bíblica")
+    st.caption("Secretário de classe acessa somente chamada. Secretário geral acessa todo o módulo Escola Bíblica.")
     slug = _selectbox_igreja_login("login_ebd_igreja")
     usuario = _selectbox_usuario_login(
         slug,
         "ebd",
-        "UsuÃ¡rio da Escola BÃ­blica",
+        "Usuário da Escola Bíblica",
         f"login_ebd_usuario_{slug or 'sem_igreja'}",
     )
 
     with st.form("form_login_ebd"):
-        senha = st.text_input("PIN de 4 dÃ­gitos", type="password", max_chars=4)
+        senha = st.text_input("PIN de 4 dígitos", type="password", max_chars=4)
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -917,28 +917,28 @@ def _login_ebd():
                 st.toast(f"Bem-vindo, {acesso['secretario_ebd']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuÃ¡rio ou PIN incorretos, ou acesso inativo.")
+                st.error("Identificador, usuário ou PIN incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Escola Biblica", "btn_esqueci_ebd")
 
 
 def _login_orhafe():
-    st.markdown("#### Acesso do CÃ­rculo de OraÃ§Ã£o")
-    st.caption("SecretÃ¡ria de chamada acessa somente a chamada. SecretÃ¡ria geral acessa todo o mÃ³dulo CÃ­rculo de OraÃ§Ã£o.")
+    st.markdown("#### Acesso do Círculo de Oração")
+    st.caption("Secretária de chamada acessa somente a chamada. Secretária geral acessa todo o módulo Círculo de Oração.")
     slug = _selectbox_igreja_login("login_orhafe_igreja")
     usuario = _selectbox_usuario_login(
         slug,
         "orhafe",
-        "UsuÃ¡rio do CÃ­rculo de OraÃ§Ã£o",
+        "Usuário do Círculo de Oração",
         f"login_orhafe_usuario_{slug or 'sem_igreja'}",
     )
 
     with st.form("form_login_orhafe"):
         cpf4 = st.text_input(
-            "4 Ãºltimos dÃ­gitos do CPF",
+            "4 últimos dígitos do CPF",
             type="password",
             max_chars=4,
-            help="Informe os 4 Ãºltimos dÃ­gitos do CPF cadastrado para esta secretÃ¡ria.",
+            help="Informe os 4 últimos dígitos do CPF cadastrado para esta secretária.",
         )
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
@@ -948,7 +948,7 @@ def _login_orhafe():
                 st.error("Preencha todos os campos.")
                 return
             if len(cpf4) != 4:
-                st.error("Informe exatamente os 4 Ãºltimos dÃ­gitos do CPF.")
+                st.error("Informe exatamente os 4 últimos dígitos do CPF.")
                 return
             acesso = autenticar_orhafe_secretaria_por_cpf4(slug, usuario, cpf4)
             if acesso:
@@ -960,7 +960,7 @@ def _login_orhafe():
                 st.toast(f"Bem-vinda, {acesso['secretaria_orhafe']['nome']}!")
                 st.rerun()
             else:
-                st.error("Identificador, usuÃ¡rio ou CPF incorretos, ou acesso inativo.")
+                st.error("Identificador, usuário ou CPF incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Circulo de Oracao", "btn_esqueci_orhafe")
 
@@ -1049,4 +1049,5 @@ def exigir_autenticacao() -> bool:
 
 def modo_atual() -> str:
     return st.session_state.get("modo", "")
+
 
