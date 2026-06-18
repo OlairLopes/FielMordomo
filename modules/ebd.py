@@ -907,8 +907,43 @@ def _render_escala(slug):
         hide_index=True,
     )
     st.markdown("#### Avisos por WhatsApp")
-    st.caption("Clique para abrir o WhatsApp com a mensagem pronta para cada professor escalado.")
-    for _, row in escala.iterrows():
+    st.caption("Filtre por data e clique para abrir o WhatsApp com a mensagem pronta.")
+    modo_aviso = st.radio(
+        "Filtro dos avisos",
+        ["Todos do período", "Uma data específica"],
+        horizontal=True,
+        key="ebd_avisos_modo_data",
+    )
+    escala_avisos = escala.copy()
+    if modo_aviso == "Uma data específica":
+        datas_disponiveis = sorted(
+            {
+                _data_iso(data)
+                for data in escala_avisos["data"].dropna().tolist()
+                if _data_iso(data)
+            }
+        )
+        if not datas_disponiveis:
+            st.info("Nenhuma data disponível para avisos no período selecionado.")
+            escala_avisos = escala_avisos.iloc[0:0]
+        else:
+            data_padrao = _data_iso(_hoje())
+            index_data = datas_disponiveis.index(data_padrao) if data_padrao in datas_disponiveis else 0
+            data_aviso = st.selectbox(
+                "Data dos avisos",
+                datas_disponiveis,
+                index=index_data,
+                format_func=_fmt_data,
+                key="ebd_avisos_data",
+            )
+            escala_avisos = escala_avisos[
+                escala_avisos["data"].apply(_data_iso) == data_aviso
+            ].copy()
+
+    if escala_avisos.empty:
+        st.info("Nenhum aviso encontrado para o filtro selecionado.")
+
+    for _, row in escala_avisos.iterrows():
         titulo = f'{_fmt_data(row["data"])} - {row.get("classe", "Escola Bíblica")} - {row["professor"]}'
         with st.expander(titulo):
             c1, c2 = st.columns(2)
