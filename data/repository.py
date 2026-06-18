@@ -686,6 +686,32 @@ def _garantir_tabelas_orhafe(conn):
 
 def _garantir_tabelas_gfc(conn):
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS gfc_coordenadores (
+            id_coordenador INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro    INTEGER REFERENCES cadastros(id_cadastro),
+            nome           TEXT NOT NULL,
+            telefone       TEXT DEFAULT '',
+            funcao         TEXT DEFAULT 'Coordenador',
+            setor          TEXT DEFAULT '',
+            ordem          INTEGER NOT NULL DEFAULT 0,
+            ativo          INTEGER NOT NULL DEFAULT 1,
+            observacoes    TEXT DEFAULT '',
+            criado_em      TEXT DEFAULT (datetime('now')),
+            atualizado_em  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS gfc_lideres (
+            id_lider      INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
+            nome          TEXT NOT NULL,
+            telefone      TEXT DEFAULT '',
+            funcao        TEXT DEFAULT 'Lider',
+            setor         TEXT DEFAULT '',
+            ordem         INTEGER NOT NULL DEFAULT 0,
+            ativo         INTEGER NOT NULL DEFAULT 1,
+            observacoes   TEXT DEFAULT '',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS gfc_grupos (
             id_grupo    INTEGER PRIMARY KEY AUTOINCREMENT,
             nome        TEXT NOT NULL,
@@ -736,7 +762,33 @@ def _garantir_tabelas_gfc(conn):
             ON gfc_reunioes(id_grupo);
         CREATE INDEX IF NOT EXISTS idx_gfc_secretarias_usuario
             ON gfc_secretarias(usuario);
+        CREATE INDEX IF NOT EXISTS idx_gfc_coordenadores_ativo
+            ON gfc_coordenadores(ativo);
+        CREATE INDEX IF NOT EXISTS idx_gfc_lideres_ativo
+            ON gfc_lideres(ativo);
     """)
+    cols_coordenadores = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(gfc_coordenadores)").fetchall()
+    ]
+    if "id_cadastro" not in cols_coordenadores:
+        conn.execute(
+            "ALTER TABLE gfc_coordenadores ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
+    if "setor" not in cols_coordenadores:
+        conn.execute("ALTER TABLE gfc_coordenadores ADD COLUMN setor TEXT DEFAULT ''")
+
+    cols_lideres = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(gfc_lideres)").fetchall()
+    ]
+    if "id_cadastro" not in cols_lideres:
+        conn.execute(
+            "ALTER TABLE gfc_lideres ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
+    if "setor" not in cols_lideres:
+        conn.execute("ALTER TABLE gfc_lideres ADD COLUMN setor TEXT DEFAULT ''")
+
     cols_secretarias = [
         row[1]
         for row in conn.execute("PRAGMA table_info(gfc_secretarias)").fetchall()
@@ -860,6 +912,172 @@ def excluir_gfc_grupo(slug, id_grupo):
             return False
         conn.execute("DELETE FROM gfc_grupos WHERE id_grupo=?", (int(id_grupo),))
         return True
+
+
+def listar_gfc_coordenadores(slug, incluir_inativos=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        where = "" if incluir_inativos else "WHERE ativo=1"
+        return pd.read_sql_query(
+            f"""SELECT id_coordenador, id_cadastro, nome, telefone, funcao, setor,
+                       ordem, ativo, observacoes, criado_em, atualizado_em
+                FROM gfc_coordenadores
+                {where}
+                ORDER BY ativo DESC, ordem, nome""",
+            conn,
+        )
+
+
+def salvar_gfc_coordenador(
+    slug,
+    nome,
+    id_cadastro=None,
+    telefone="",
+    funcao="Coordenador",
+    setor="",
+    ordem=0,
+    ativo=True,
+    observacoes="",
+    id_coordenador=None,
+):
+    nome = sanitizar(nome)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        _garantir_colunas_cadastros(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone, funcao, congregacao FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+                funcao = sanitizar(funcao or row["funcao"] or "Coordenador")
+                setor = sanitizar(setor or row["congregacao"] or "")
+        if not nome:
+            raise ValueError("Nome do coordenador e obrigatorio.")
+        dados = (
+            id_cadastro, nome, sanitizar(telefone), sanitizar(funcao or "Coordenador"),
+            sanitizar(setor), int(ordem or 0), int(bool(ativo)), sanitizar(observacoes),
+        )
+        if id_coordenador:
+            conn.execute(
+                """UPDATE gfc_coordenadores
+                   SET id_cadastro=?, nome=?, telefone=?, funcao=?, setor=?,
+                       ordem=?, ativo=?, observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_coordenador=?""",
+                dados + (int(id_coordenador),),
+            )
+            return int(id_coordenador)
+        cur = conn.execute(
+            """INSERT INTO gfc_coordenadores
+               (id_cadastro, nome, telefone, funcao, setor, ordem, ativo, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return int(cur.lastrowid)
+
+
+def excluir_gfc_coordenador(slug, id_coordenador):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        conn.execute(
+            "DELETE FROM gfc_coordenadores WHERE id_coordenador=?",
+            (int(id_coordenador),),
+        )
+        return True
+
+
+def listar_gfc_lideres(slug, incluir_inativos=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        where = "" if incluir_inativos else "WHERE ativo=1"
+        return pd.read_sql_query(
+            f"""SELECT id_lider, id_cadastro, nome, telefone, funcao, setor,
+                       ordem, ativo, observacoes, criado_em, atualizado_em
+                FROM gfc_lideres
+                {where}
+                ORDER BY ativo DESC, ordem, nome""",
+            conn,
+        )
+
+
+def salvar_gfc_lider(
+    slug,
+    nome,
+    id_cadastro=None,
+    telefone="",
+    funcao="Lider",
+    setor="",
+    ordem=0,
+    ativo=True,
+    observacoes="",
+    id_lider=None,
+):
+    nome = sanitizar(nome)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        _garantir_colunas_cadastros(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone, funcao, congregacao FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+                funcao = sanitizar(funcao or row["funcao"] or "Lider")
+                setor = sanitizar(setor or row["congregacao"] or "")
+        if not nome:
+            raise ValueError("Nome do lider e obrigatorio.")
+        dados = (
+            id_cadastro, nome, sanitizar(telefone), sanitizar(funcao or "Lider"),
+            sanitizar(setor), int(ordem or 0), int(bool(ativo)), sanitizar(observacoes),
+        )
+        if id_lider:
+            conn.execute(
+                """UPDATE gfc_lideres
+                   SET id_cadastro=?, nome=?, telefone=?, funcao=?, setor=?,
+                       ordem=?, ativo=?, observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_lider=?""",
+                dados + (int(id_lider),),
+            )
+            return int(id_lider)
+        cur = conn.execute(
+            """INSERT INTO gfc_lideres
+               (id_cadastro, nome, telefone, funcao, setor, ordem, ativo, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return int(cur.lastrowid)
+
+
+def excluir_gfc_lider(slug, id_lider):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        conn.execute(
+            """UPDATE gfc_lideres
+               SET ativo=0, atualizado_em=datetime('now')
+               WHERE id_lider=?""",
+            (int(id_lider),),
+        )
+        return False
 
 
 def listar_gfc_reunioes(slug, data_inicio=None, data_fim=None, id_grupo=None, setor="", tipo_culto=""):

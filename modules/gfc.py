@@ -5,13 +5,19 @@ import streamlit as st
 
 from data.repository import (
     carregar_cadastros,
+    excluir_gfc_coordenador,
     excluir_gfc_grupo,
+    excluir_gfc_lider,
     excluir_gfc_reuniao,
     inativar_gfc_secretaria,
+    listar_gfc_coordenadores,
     listar_gfc_grupos,
+    listar_gfc_lideres,
     listar_gfc_reunioes,
     listar_gfc_secretarias,
+    salvar_gfc_coordenador,
     salvar_gfc_grupo,
+    salvar_gfc_lider,
     salvar_gfc_reuniao,
     salvar_gfc_secretaria,
 )
@@ -373,6 +379,194 @@ def _render_relatorios(slug):
             st.rerun()
 
 
+def _dados_membro(row_membro, funcao_padrao):
+    return {
+        "id_cadastro": int(row_membro["id_cadastro"]),
+        "nome": str(row_membro.get("nome", "") or ""),
+        "telefone": str(row_membro.get("telefone", "") or ""),
+        "funcao": str(row_membro.get("funcao", "") or funcao_padrao),
+        "setor": str(row_membro.get("congregacao", "") or ""),
+    }
+
+
+def _render_form_pessoa_gfc(slug, tipo, op_membros, salvar_fn, expandido=False):
+    funcao_padrao = "Coordenador" if tipo == "Coordenador" else "Lider"
+    with st.expander(f"Cadastrar {tipo.lower()}", expanded=expandido):
+        origem = st.radio(
+            f"Origem do {tipo.lower()}",
+            ["Cadastro de membro", "Inserir manualmente"],
+            horizontal=True,
+            key=f"gfc_{tipo.lower()}_origem",
+        )
+        id_cadastro = None
+        nome = ""
+        telefone = ""
+        funcao = funcao_padrao
+        setor = ""
+
+        if origem == "Cadastro de membro":
+            if not op_membros:
+                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+            else:
+                membro_label = st.selectbox(
+                    tipo,
+                    list(op_membros.keys()),
+                    key=f"gfc_{tipo.lower()}_membro",
+                )
+                dados = _dados_membro(op_membros[membro_label], funcao_padrao)
+                id_cadastro = dados["id_cadastro"]
+                nome = dados["nome"]
+                telefone = dados["telefone"]
+                funcao = dados["funcao"]
+                setor = dados["setor"]
+                c1, c2 = st.columns(2)
+                c1.text_input("Nome", value=nome, disabled=True, key=f"gfc_{tipo.lower()}_nome_auto")
+                c2.text_input("Telefone", value=telefone, disabled=True, key=f"gfc_{tipo.lower()}_tel_auto")
+        else:
+            c1, c2 = st.columns(2)
+            nome = c1.text_input(f"Nome do {tipo.lower()}", key=f"gfc_{tipo.lower()}_nome_manual")
+            telefone = c2.text_input("Telefone / WhatsApp", key=f"gfc_{tipo.lower()}_telefone_manual")
+
+        with st.form(f"form_gfc_{tipo.lower()}_novo"):
+            c3, c4 = st.columns(2)
+            funcao = c3.text_input("Funcao", value=funcao)
+            setor = c4.text_input("Setor", value=setor)
+            ordem = st.number_input("Ordem", min_value=0, max_value=999, value=0, step=1)
+            observacoes = st.text_area("Observacoes")
+            if st.form_submit_button(f"Salvar {tipo.lower()}", type="primary"):
+                try:
+                    salvar_fn(
+                        slug,
+                        nome=nome,
+                        id_cadastro=id_cadastro,
+                        telefone=telefone,
+                        funcao=funcao,
+                        setor=setor,
+                        ordem=ordem,
+                        ativo=True,
+                        observacoes=observacoes,
+                    )
+                    st.success(f"{tipo} salvo.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+
+def _render_tabela_pessoa_gfc(slug, titulo, dados, id_col, salvar_fn, excluir_fn):
+    if dados.empty:
+        st.info(f"Nenhum {titulo.lower()} cadastrado ainda.")
+        return
+
+    st.markdown(f"#### {titulo}")
+    st.dataframe(
+        dados[["id_cadastro", "nome", "telefone", "funcao", "setor", "ordem", "ativo", "observacoes"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    with st.expander(f"Editar ou inativar {titulo.lower()}", expanded=False):
+        opcoes = {
+            f'{int(row[id_col])} - {row["nome"]}': row
+            for _, row in dados.iterrows()
+        }
+        selecionado = st.selectbox(
+            titulo,
+            ["Selecione"] + list(opcoes.keys()),
+            key=f"gfc_edit_{id_col}",
+        )
+        if selecionado == "Selecione":
+            return
+
+        row = opcoes[selecionado]
+        with st.form(f"form_gfc_edit_{id_col}_{int(row[id_col])}"):
+            c1, c2 = st.columns(2)
+            nome = c1.text_input("Nome", value=str(row.get("nome", "") or ""))
+            telefone = c2.text_input("Telefone / WhatsApp", value=str(row.get("telefone", "") or ""))
+            c3, c4 = st.columns(2)
+            funcao = c3.text_input("Funcao", value=str(row.get("funcao", "") or ""))
+            setor = c4.text_input("Setor", value=str(row.get("setor", "") or ""))
+            c5, c6 = st.columns(2)
+            ordem = c5.number_input(
+                "Ordem",
+                min_value=0,
+                max_value=999,
+                value=int(row.get("ordem", 0) or 0),
+                step=1,
+            )
+            situacao = c6.selectbox(
+                "Situacao",
+                ["Ativo", "Inativo"],
+                index=0 if int(row.get("ativo", 1) or 0) == 1 else 1,
+            )
+            observacoes = st.text_area("Observacoes", value=str(row.get("observacoes", "") or ""))
+            if st.form_submit_button("Atualizar", type="primary"):
+                try:
+                    salvar_fn(
+                        slug,
+                        nome=nome,
+                        id_cadastro=int(row["id_cadastro"]) if pd.notna(row.get("id_cadastro")) else None,
+                        telefone=telefone,
+                        funcao=funcao,
+                        setor=setor,
+                        ordem=ordem,
+                        ativo=situacao == "Ativo",
+                        observacoes=observacoes,
+                        **{id_col: int(row[id_col])},
+                    )
+                    st.success("Cadastro atualizado.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+        if st.button("Inativar cadastro", key=f"gfc_inativar_{id_col}_{int(row[id_col])}"):
+            excluir_fn(slug, int(row[id_col]))
+            st.success("Cadastro inativado.")
+            st.rerun()
+
+
+def _render_coordenadores_lideres(slug):
+    st.markdown("### Coordenadores e lideres")
+    st.caption("Organize a estrutura de acompanhamento dos Grupos Familiares de Crescimento.")
+
+    coordenadores = listar_gfc_coordenadores(slug, incluir_inativos=True)
+    lideres = listar_gfc_lideres(slug, incluir_inativos=True)
+    op_membros, _ = _membros_opcoes(slug)
+
+    _render_form_pessoa_gfc(
+        slug,
+        "Coordenador",
+        op_membros,
+        salvar_gfc_coordenador,
+        expandido=coordenadores.empty,
+    )
+    _render_tabela_pessoa_gfc(
+        slug,
+        "Coordenadores cadastrados",
+        coordenadores,
+        "id_coordenador",
+        salvar_gfc_coordenador,
+        excluir_gfc_coordenador,
+    )
+
+    st.divider()
+
+    _render_form_pessoa_gfc(
+        slug,
+        "Lider",
+        op_membros,
+        salvar_gfc_lider,
+        expandido=lideres.empty,
+    )
+    _render_tabela_pessoa_gfc(
+        slug,
+        "Lideres cadastrados",
+        lideres,
+        "id_lider",
+        salvar_gfc_lider,
+        excluir_gfc_lider,
+    )
+
+
 def _render_secretarias(slug):
     st.markdown("### Secretarias GFC")
     st.caption("Cadastre os usuarios que poderao acessar o modulo GFC com igreja, usuario e 4 ultimos digitos do CPF.")
@@ -515,10 +709,11 @@ def render():
 
     incluir_secretarias = modo != "secretaria_gfc" or perfil_secretaria == "geral"
     if incluir_secretarias:
-        tab_grupos, tab_reunioes, tab_relatorios, tab_secretarias = st.tabs([
+        tab_grupos, tab_reunioes, tab_relatorios, tab_coord_lideres, tab_secretarias = st.tabs([
             "Grupos",
             "Registro de culto",
             "RelatÃ³rios",
+            "Coordenadores e lideres",
             "Secretarias",
         ])
     else:
@@ -535,5 +730,7 @@ def render():
     with tab_relatorios:
         _render_relatorios(slug)
     if incluir_secretarias:
+        with tab_coord_lideres:
+            _render_coordenadores_lideres(slug)
         with tab_secretarias:
             _render_secretarias(slug)
