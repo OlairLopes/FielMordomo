@@ -1176,6 +1176,7 @@ def salvar_ebd_chamada(
     qtd_biblias=0,
     qtd_harpas=0,
     ofertas=0,
+    id_aula=None,
 ):
     db = _tenant_db(slug)
     if not db.exists():
@@ -1235,36 +1236,61 @@ def salvar_ebd_chamada(
         qtd_presentes = sum(presente for _, presente in presencas_validas)
         qtd_ausentes = max(qtd_matriculados - qtd_presentes, 0)
 
-        cur = conn.execute(
-            """INSERT INTO ebd_aulas
-               (id_classe, data, tema, professor, qtd_matriculados, qtd_presentes,
-                qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
-                qtd_harpas, ofertas, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id_classe, data) DO UPDATE SET
-                   tema=excluded.tema,
-                   professor=excluded.professor,
-                   qtd_matriculados=excluded.qtd_matriculados,
-                   qtd_presentes=excluded.qtd_presentes,
-                   qtd_ausentes=excluded.qtd_ausentes,
-                   qtd_visitantes=excluded.qtd_visitantes,
-                   qtd_revistas=excluded.qtd_revistas,
-                   qtd_biblias=excluded.qtd_biblias,
-                   qtd_harpas=excluded.qtd_harpas,
-                   ofertas=excluded.ofertas,
-                   observacoes=excluded.observacoes""",
-            (
-                int(id_classe), str(data), sanitizar(tema),
-                sanitizar(professor), qtd_matriculados, qtd_presentes,
-                qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
-                qtd_harpas, ofertas, sanitizar(observacoes),
-            ),
-        )
-        row = conn.execute(
-            "SELECT id_aula FROM ebd_aulas WHERE id_classe=? AND data=?",
-            (int(id_classe), str(data)),
-        ).fetchone()
-        id_aula = int(row["id_aula"] if row else cur.lastrowid)
+        if id_aula:
+            id_aula = int(id_aula)
+            conflito = conn.execute(
+                """SELECT 1 FROM ebd_aulas
+                   WHERE id_classe=? AND data=? AND id_aula<>?
+                   LIMIT 1""",
+                (int(id_classe), str(data), id_aula),
+            ).fetchone()
+            if conflito:
+                raise ValueError("Ja existe uma chamada desta classe nesta data.")
+            conn.execute(
+                """UPDATE ebd_aulas
+                   SET id_classe=?, data=?, tema=?, professor=?,
+                       qtd_matriculados=?, qtd_presentes=?, qtd_ausentes=?,
+                       qtd_visitantes=?, qtd_revistas=?, qtd_biblias=?,
+                       qtd_harpas=?, ofertas=?, observacoes=?
+                   WHERE id_aula=?""",
+                (
+                    int(id_classe), str(data), sanitizar(tema),
+                    sanitizar(professor), qtd_matriculados, qtd_presentes,
+                    qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
+                    qtd_harpas, ofertas, sanitizar(observacoes), id_aula,
+                ),
+            )
+        else:
+            cur = conn.execute(
+                """INSERT INTO ebd_aulas
+                   (id_classe, data, tema, professor, qtd_matriculados, qtd_presentes,
+                    qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
+                    qtd_harpas, ofertas, observacoes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id_classe, data) DO UPDATE SET
+                       tema=excluded.tema,
+                       professor=excluded.professor,
+                       qtd_matriculados=excluded.qtd_matriculados,
+                       qtd_presentes=excluded.qtd_presentes,
+                       qtd_ausentes=excluded.qtd_ausentes,
+                       qtd_visitantes=excluded.qtd_visitantes,
+                       qtd_revistas=excluded.qtd_revistas,
+                       qtd_biblias=excluded.qtd_biblias,
+                       qtd_harpas=excluded.qtd_harpas,
+                       ofertas=excluded.ofertas,
+                       observacoes=excluded.observacoes""",
+                (
+                    int(id_classe), str(data), sanitizar(tema),
+                    sanitizar(professor), qtd_matriculados, qtd_presentes,
+                    qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
+                    qtd_harpas, ofertas, sanitizar(observacoes),
+                ),
+            )
+            row = conn.execute(
+                "SELECT id_aula FROM ebd_aulas WHERE id_classe=? AND data=?",
+                (int(id_classe), str(data)),
+            ).fetchone()
+            id_aula = int(row["id_aula"] if row else cur.lastrowid)
         conn.execute("DELETE FROM ebd_presencas WHERE id_aula=?", (id_aula,))
         for id_matricula, presente in presencas_validas:
             conn.execute(
@@ -1956,6 +1982,7 @@ def salvar_orhafe_chamada(
     presencas=None,
     visitantes=None,
     ofertas=0,
+    id_reuniao=None,
 ):
     db = _tenant_db(slug)
     if not db.exists():
@@ -2022,33 +2049,55 @@ def salvar_orhafe_chamada(
         qtd_ausentes = max(qtd_matriculadas - qtd_presentes, 0)
         qtd_visitantes = len(nomes_visitantes)
 
-        conn.execute(
-            """INSERT INTO orhafe_reunioes
-               (data, tema, id_lider, lider_nome, qtd_matriculadas,
-                qtd_presentes, qtd_ausentes, qtd_visitantes, ofertas, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(data) DO UPDATE SET
-                   tema=excluded.tema,
-                   id_lider=excluded.id_lider,
-                   lider_nome=excluded.lider_nome,
-                   qtd_matriculadas=excluded.qtd_matriculadas,
-                   qtd_presentes=excluded.qtd_presentes,
-                   qtd_ausentes=excluded.qtd_ausentes,
-                   qtd_visitantes=excluded.qtd_visitantes,
-                   ofertas=excluded.ofertas,
-                   observacoes=excluded.observacoes,
-                   atualizado_em=datetime('now')""",
-            (
-                str(data), sanitizar(tema), id_lider, sanitizar(lider_nome),
-                qtd_matriculadas, qtd_presentes, qtd_ausentes, qtd_visitantes,
-                ofertas, sanitizar(observacoes),
-            ),
-        )
-        row_reuniao = conn.execute(
-            "SELECT id_reuniao FROM orhafe_reunioes WHERE data=?",
-            (str(data),),
-        ).fetchone()
-        id_reuniao = int(row_reuniao["id_reuniao"])
+        if id_reuniao:
+            id_reuniao = int(id_reuniao)
+            conflito = conn.execute(
+                "SELECT 1 FROM orhafe_reunioes WHERE data=? AND id_reuniao<>? LIMIT 1",
+                (str(data), id_reuniao),
+            ).fetchone()
+            if conflito:
+                raise ValueError("Ja existe uma chamada do Circulo de Oracao nesta data.")
+            conn.execute(
+                """UPDATE orhafe_reunioes
+                   SET data=?, tema=?, id_lider=?, lider_nome=?,
+                       qtd_matriculadas=?, qtd_presentes=?, qtd_ausentes=?,
+                       qtd_visitantes=?, ofertas=?, observacoes=?,
+                       atualizado_em=datetime('now')
+                   WHERE id_reuniao=?""",
+                (
+                    str(data), sanitizar(tema), id_lider, sanitizar(lider_nome),
+                    qtd_matriculadas, qtd_presentes, qtd_ausentes, qtd_visitantes,
+                    ofertas, sanitizar(observacoes), id_reuniao,
+                ),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO orhafe_reunioes
+                   (data, tema, id_lider, lider_nome, qtd_matriculadas,
+                    qtd_presentes, qtd_ausentes, qtd_visitantes, ofertas, observacoes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(data) DO UPDATE SET
+                       tema=excluded.tema,
+                       id_lider=excluded.id_lider,
+                       lider_nome=excluded.lider_nome,
+                       qtd_matriculadas=excluded.qtd_matriculadas,
+                       qtd_presentes=excluded.qtd_presentes,
+                       qtd_ausentes=excluded.qtd_ausentes,
+                       qtd_visitantes=excluded.qtd_visitantes,
+                       ofertas=excluded.ofertas,
+                       observacoes=excluded.observacoes,
+                       atualizado_em=datetime('now')""",
+                (
+                    str(data), sanitizar(tema), id_lider, sanitizar(lider_nome),
+                    qtd_matriculadas, qtd_presentes, qtd_ausentes, qtd_visitantes,
+                    ofertas, sanitizar(observacoes),
+                ),
+            )
+            row_reuniao = conn.execute(
+                "SELECT id_reuniao FROM orhafe_reunioes WHERE data=?",
+                (str(data),),
+            ).fetchone()
+            id_reuniao = int(row_reuniao["id_reuniao"])
         conn.execute("DELETE FROM orhafe_presencas WHERE id_reuniao=?", (id_reuniao,))
         for id_matricula, nome, presente, visitante in dados_presenca:
             conn.execute(
@@ -2483,6 +2532,7 @@ def salvar_obreiros_chamada(
     ata_nome="",
     ata_mime="",
     ata_bytes=None,
+    id_reuniao=None,
 ):
     funcoes = [sanitizar(f) for f in (funcoes or []) if str(f or "").strip()]
     presencas = presencas or {}
@@ -2518,35 +2568,64 @@ def salvar_obreiros_chamada(
         ofertas = max(float(ofertas or 0), 0.0)
         funcoes_txt = "; ".join(funcoes)
         tem_ata = ata_bytes is not None
-        conn.execute(
-            """INSERT INTO obreiros_reunioes
-               (data, tema, funcoes, qtd_matriculados, qtd_presentes,
-                qtd_ausentes, qtd_visitantes, ofertas, observacoes,
-                ata_nome, ata_mime, ata_bytes, ata_enviada_em)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE '' END)
-               ON CONFLICT(data) DO UPDATE SET
-                   tema=excluded.tema,
-                   funcoes=excluded.funcoes,
-                   qtd_matriculados=excluded.qtd_matriculados,
-                   qtd_presentes=excluded.qtd_presentes,
-                   qtd_ausentes=excluded.qtd_ausentes,
-                   qtd_visitantes=excluded.qtd_visitantes,
-                   ofertas=excluded.ofertas,
-                   observacoes=excluded.observacoes,
-                   ata_nome=CASE WHEN excluded.ata_bytes IS NULL THEN ata_nome ELSE excluded.ata_nome END,
-                   ata_mime=CASE WHEN excluded.ata_bytes IS NULL THEN ata_mime ELSE excluded.ata_mime END,
-                   ata_bytes=CASE WHEN excluded.ata_bytes IS NULL THEN ata_bytes ELSE excluded.ata_bytes END,
-                   ata_enviada_em=CASE WHEN excluded.ata_bytes IS NULL THEN ata_enviada_em ELSE datetime('now') END,
-                   atualizado_em=datetime('now')""",
-            (
-                data, sanitizar(tema), funcoes_txt, total, presentes,
-                ausentes, visitantes, ofertas, sanitizar(observacoes),
-                sanitizar(ata_nome), sanitizar(ata_mime), ata_bytes, int(tem_ata),
-            ),
-        )
-        id_reuniao = conn.execute(
-            "SELECT id_reuniao FROM obreiros_reunioes WHERE data=?", (data,)
-        ).fetchone()["id_reuniao"]
+        if id_reuniao:
+            id_reuniao = int(id_reuniao)
+            conflito = conn.execute(
+                "SELECT 1 FROM obreiros_reunioes WHERE data=? AND id_reuniao<>? LIMIT 1",
+                (data, id_reuniao),
+            ).fetchone()
+            if conflito:
+                raise ValueError("Ja existe uma reuniao de obreiros nesta data.")
+            conn.execute(
+                """UPDATE obreiros_reunioes
+                   SET data=?, tema=?, funcoes=?, qtd_matriculados=?,
+                       qtd_presentes=?, qtd_ausentes=?, qtd_visitantes=?,
+                       ofertas=?, observacoes=?,
+                       ata_nome=CASE WHEN ? IS NULL THEN ata_nome ELSE ? END,
+                       ata_mime=CASE WHEN ? IS NULL THEN ata_mime ELSE ? END,
+                       ata_bytes=CASE WHEN ? IS NULL THEN ata_bytes ELSE ? END,
+                       ata_enviada_em=CASE WHEN ? IS NULL THEN ata_enviada_em ELSE datetime('now') END,
+                       atualizado_em=datetime('now')
+                   WHERE id_reuniao=?""",
+                (
+                    data, sanitizar(tema), funcoes_txt, total, presentes,
+                    ausentes, visitantes, ofertas, sanitizar(observacoes),
+                    ata_bytes, sanitizar(ata_nome),
+                    ata_bytes, sanitizar(ata_mime),
+                    ata_bytes, ata_bytes,
+                    ata_bytes, id_reuniao,
+                ),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO obreiros_reunioes
+                   (data, tema, funcoes, qtd_matriculados, qtd_presentes,
+                    qtd_ausentes, qtd_visitantes, ofertas, observacoes,
+                    ata_nome, ata_mime, ata_bytes, ata_enviada_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE '' END)
+                   ON CONFLICT(data) DO UPDATE SET
+                       tema=excluded.tema,
+                       funcoes=excluded.funcoes,
+                       qtd_matriculados=excluded.qtd_matriculados,
+                       qtd_presentes=excluded.qtd_presentes,
+                       qtd_ausentes=excluded.qtd_ausentes,
+                       qtd_visitantes=excluded.qtd_visitantes,
+                       ofertas=excluded.ofertas,
+                       observacoes=excluded.observacoes,
+                       ata_nome=CASE WHEN excluded.ata_bytes IS NULL THEN ata_nome ELSE excluded.ata_nome END,
+                       ata_mime=CASE WHEN excluded.ata_bytes IS NULL THEN ata_mime ELSE excluded.ata_mime END,
+                       ata_bytes=CASE WHEN excluded.ata_bytes IS NULL THEN ata_bytes ELSE excluded.ata_bytes END,
+                       ata_enviada_em=CASE WHEN excluded.ata_bytes IS NULL THEN ata_enviada_em ELSE datetime('now') END,
+                       atualizado_em=datetime('now')""",
+                (
+                    data, sanitizar(tema), funcoes_txt, total, presentes,
+                    ausentes, visitantes, ofertas, sanitizar(observacoes),
+                    sanitizar(ata_nome), sanitizar(ata_mime), ata_bytes, int(tem_ata),
+                ),
+            )
+            id_reuniao = conn.execute(
+                "SELECT id_reuniao FROM obreiros_reunioes WHERE data=?", (data,)
+            ).fetchone()["id_reuniao"]
         conn.execute("DELETE FROM obreiros_presencas WHERE id_reuniao=?", (id_reuniao,))
         for row in membros:
             conn.execute(

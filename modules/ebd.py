@@ -496,6 +496,7 @@ def _render_chamada(slug, id_classe_fixo=None):
     )
 
     escala_aula = None
+    aula_editada = None
     if modo_chamada == "Editar chamada salva":
         c_ini, c_fim = st.columns(2)
         editar_inicio = c_ini.date_input(
@@ -553,7 +554,14 @@ def _render_chamada(slug, id_classe_fixo=None):
                 key=chave_chamada_salva,
             )
         chamada_row = op_chamadas[chamada_label]
-        data_aula = datetime.date.fromisoformat(str(chamada_row["data"]))
+        aula_editada = chamada_row
+        data_aula_original = datetime.date.fromisoformat(str(chamada_row["data"]))
+        data_aula = st.date_input(
+            "Data da aula",
+            value=data_aula_original,
+            key=f"ebd_data_edit_{int(chamada_row['id_aula'])}",
+            format="DD/MM/YYYY",
+        )
         escala_aula = _escala_da_aula(slug, data_aula, id_classe)
         st.info(f"Editando chamada salva de {_fmt_data(data_aula.isoformat())}.")
     else:
@@ -601,8 +609,8 @@ def _render_chamada(slug, id_classe_fixo=None):
     biblias_atual = 0
     harpas_atual = 0
     ofertas_atual = 0.0
-    if not aulas.empty:
-        aula = aulas.iloc[0]
+    if aula_editada is not None or not aulas.empty:
+        aula = aula_editada if aula_editada is not None else aulas.iloc[0]
         tema_atual = aula.get("tema", "")
         professor_atual = aula.get("professor", "")
         obs_atual = aula.get("observacoes", "")
@@ -729,6 +737,7 @@ def _render_chamada(slug, id_classe_fixo=None):
                 qtd_biblias,
                 qtd_harpas,
                 ofertas,
+                id_aula=int(aula_editada["id_aula"]) if aula_editada is not None else None,
             )
             st.success("Chamada salva.")
             st.rerun()

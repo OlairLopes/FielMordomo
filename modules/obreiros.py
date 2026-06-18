@@ -244,9 +244,15 @@ def _render_chamada(slug):
                 "Chamada salva para editar",
                 labels_reunioes,
                 key=chave_reuniao,
-            )
+        )
         reuniao_atual = op_reunioes[reuniao_label]
-        data = datetime.date.fromisoformat(str(reuniao_atual["data"]))
+        data_original = datetime.date.fromisoformat(str(reuniao_atual["data"]))
+        data = st.date_input(
+            "Data da reuniao",
+            value=data_original,
+            key=f"obreiros_data_edit_{int(reuniao_atual['id_reuniao'])}",
+            format="DD/MM/YYYY",
+        )
         tema_atual = str(reuniao_atual.get("tema", "") or "")
         visitantes_atual = int(reuniao_atual.get("visitantes", 0) or 0)
         ofertas_atual = float(reuniao_atual.get("ofertas", 0) or 0)
@@ -347,6 +353,7 @@ def _render_chamada(slug):
                 ata_nome=arquivo_ata.name if arquivo_ata else "",
                 ata_mime=arquivo_ata.type if arquivo_ata else "",
                 ata_bytes=arquivo_ata.getvalue() if arquivo_ata else None,
+                id_reuniao=int(reuniao_atual["id_reuniao"]) if reuniao_atual is not None else None,
             )
         except Exception as ex:
             st.error(str(ex))

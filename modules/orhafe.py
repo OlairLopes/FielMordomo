@@ -670,7 +670,13 @@ def _render_chamada(slug):
         with nav_sel:
             reuniao_label = st.selectbox("Chamada salva", labels_reunioes, key=chave_reuniao)
         reuniao_atual = op_reunioes[reuniao_label]
-        data_reuniao = datetime.date.fromisoformat(str(reuniao_atual["data"]))
+        data_reuniao_original = datetime.date.fromisoformat(str(reuniao_atual["data"]))
+        data_reuniao = st.date_input(
+            "Data da reuniao",
+            value=data_reuniao_original,
+            key=f"orhafe_data_edit_{int(reuniao_atual['id_reuniao'])}",
+            format="DD/MM/YYYY",
+        )
     else:
         data_reuniao = st.date_input("Data da reuniao", value=_hoje(), format="DD/MM/YYYY")
 
@@ -806,6 +812,7 @@ def _render_chamada(slug):
                 presencas=presencas,
                 visitantes=visitantes,
                 ofertas=ofertas,
+                id_reuniao=int(reuniao_atual["id_reuniao"]) if reuniao_atual is not None else None,
             )
             st.success("Chamada salva.")
             st.rerun()
