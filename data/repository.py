@@ -423,6 +423,7 @@ def inicializar_tenant(slug):
         """)
         _garantir_tabelas_ebd(conn)
         _garantir_tabelas_orhafe(conn)
+        _garantir_tabelas_gfc(conn)
         _garantir_tabelas_obreiros(conn)
         _garantir_tabelas_visitantes(conn)
         _garantir_tabelas_pedidos_oracao(conn)
@@ -681,6 +682,282 @@ def _garantir_tabelas_orhafe(conn):
         conn.execute(
             "ALTER TABLE orhafe_secretarias ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
         )
+
+
+def _garantir_tabelas_gfc(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS gfc_grupos (
+            id_grupo    INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome        TEXT NOT NULL,
+            setor       TEXT DEFAULT '',
+            responsavel TEXT DEFAULT '',
+            telefone    TEXT DEFAULT '',
+            ativo       INTEGER NOT NULL DEFAULT 1,
+            observacoes TEXT DEFAULT '',
+            criado_em   TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now')),
+            UNIQUE(nome, setor)
+        );
+        CREATE TABLE IF NOT EXISTS gfc_reunioes (
+            id_reuniao       INTEGER PRIMARY KEY AUTOINCREMENT,
+            data             TEXT NOT NULL,
+            id_grupo         INTEGER REFERENCES gfc_grupos(id_grupo),
+            grupo_nome       TEXT NOT NULL,
+            setor            TEXT DEFAULT '',
+            tipo_culto       TEXT NOT NULL,
+            tema             TEXT DEFAULT '',
+            qtd_pessoas      INTEGER NOT NULL DEFAULT 0,
+            qtd_nao_crentes  INTEGER NOT NULL DEFAULT 0,
+            qtd_conversoes   INTEGER NOT NULL DEFAULT 0,
+            observacoes      TEXT DEFAULT '',
+            criado_em        TEXT DEFAULT (datetime('now')),
+            atualizado_em    TEXT DEFAULT (datetime('now')),
+            UNIQUE(data, id_grupo, tipo_culto)
+        );
+        CREATE INDEX IF NOT EXISTS idx_gfc_grupos_ativo
+            ON gfc_grupos(ativo);
+        CREATE INDEX IF NOT EXISTS idx_gfc_reunioes_data
+            ON gfc_reunioes(data);
+        CREATE INDEX IF NOT EXISTS idx_gfc_reunioes_grupo
+            ON gfc_reunioes(id_grupo);
+    """)
+
+
+def _normalizar_tipo_culto_gfc(tipo):
+    tipos = {
+        "Culto Evangelístico",
+        "Culto de Oração",
+        "Culto Ação de Graças",
+        "Vigília",
+    }
+    tipo = str(tipo or "").strip()
+    if tipo not in tipos:
+        raise ValueError("Selecione um tipo de culto valido para o GFC.")
+    return tipo
+
+
+def listar_gfc_grupos(slug, incluir_inativos=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        where = "" if incluir_inativos else "WHERE ativo=1"
+        return pd.read_sql_query(
+            f"""SELECT id_grupo, nome, setor, responsavel, telefone,
+                       ativo, observacoes, criado_em, atualizado_em
+                FROM gfc_grupos
+                {where}
+                ORDER BY ativo DESC, setor, nome""",
+            conn,
+        )
+
+
+def salvar_gfc_grupo(
+    slug,
+    nome,
+    setor="",
+    responsavel="",
+    telefone="",
+    observacoes="",
+    ativo=True,
+    id_grupo=None,
+):
+    nome = sanitizar(nome).strip()
+    setor = sanitizar(setor).strip()
+    if not nome:
+        raise ValueError("Informe o nome do grupo familiar.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        if id_grupo:
+            conflito = conn.execute(
+                """SELECT 1 FROM gfc_grupos
+                   WHERE LOWER(TRIM(nome))=LOWER(TRIM(?))
+                     AND LOWER(TRIM(setor))=LOWER(TRIM(?))
+                     AND id_grupo<>?
+                   LIMIT 1""",
+                (nome, setor, int(id_grupo)),
+            ).fetchone()
+            if conflito:
+                raise ValueError("Ja existe um grupo familiar com este nome e setor.")
+            conn.execute(
+                """UPDATE gfc_grupos
+                   SET nome=?, setor=?, responsavel=?, telefone=?,
+                       ativo=?, observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_grupo=?""",
+                (
+                    nome, setor, sanitizar(responsavel), sanitizar(telefone),
+                    int(bool(ativo)), sanitizar(observacoes), int(id_grupo),
+                ),
+            )
+            return int(id_grupo)
+        cur = conn.execute(
+            """INSERT INTO gfc_grupos
+               (nome, setor, responsavel, telefone, ativo, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                nome, setor, sanitizar(responsavel), sanitizar(telefone),
+                int(bool(ativo)), sanitizar(observacoes),
+            ),
+        )
+        return int(cur.lastrowid)
+
+
+def excluir_gfc_grupo(slug, id_grupo):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        usos = conn.execute(
+            "SELECT COUNT(*) AS total FROM gfc_reunioes WHERE id_grupo=?",
+            (int(id_grupo),),
+        ).fetchone()["total"]
+        if usos:
+            conn.execute(
+                "UPDATE gfc_grupos SET ativo=0, atualizado_em=datetime('now') WHERE id_grupo=?",
+                (int(id_grupo),),
+            )
+            return False
+        conn.execute("DELETE FROM gfc_grupos WHERE id_grupo=?", (int(id_grupo),))
+        return True
+
+
+def listar_gfc_reunioes(slug, data_inicio=None, data_fim=None, id_grupo=None, setor="", tipo_culto=""):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        where = []
+        params = []
+        if data_inicio:
+            where.append("r.data>=?")
+            params.append(str(data_inicio))
+        if data_fim:
+            where.append("r.data<=?")
+            params.append(str(data_fim))
+        if id_grupo:
+            where.append("r.id_grupo=?")
+            params.append(int(id_grupo))
+        if str(setor or "").strip():
+            where.append("LOWER(TRIM(r.setor))=LOWER(TRIM(?))")
+            params.append(str(setor).strip())
+        if str(tipo_culto or "").strip():
+            where.append("r.tipo_culto=?")
+            params.append(_normalizar_tipo_culto_gfc(tipo_culto))
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return pd.read_sql_query(
+            f"""SELECT r.id_reuniao, r.data, r.id_grupo,
+                       COALESCE(g.nome, r.grupo_nome) AS grupo,
+                       r.grupo_nome, r.setor, r.tipo_culto, r.tema,
+                       r.qtd_pessoas, r.qtd_nao_crentes, r.qtd_conversoes,
+                       r.observacoes, r.criado_em, r.atualizado_em
+                FROM gfc_reunioes r
+                LEFT JOIN gfc_grupos g ON g.id_grupo=r.id_grupo
+                {filtro}
+                ORDER BY r.data DESC, r.setor, grupo""",
+            conn,
+            params=params,
+        )
+
+
+def salvar_gfc_reuniao(
+    slug,
+    data,
+    id_grupo,
+    tipo_culto,
+    tema="",
+    qtd_pessoas=0,
+    qtd_nao_crentes=0,
+    qtd_conversoes=0,
+    observacoes="",
+    id_reuniao=None,
+):
+    data = str(data or "").strip()
+    if not data:
+        raise ValueError("Informe a data do culto do GFC.")
+    tipo_culto = _normalizar_tipo_culto_gfc(tipo_culto)
+    try:
+        qtd_pessoas = max(int(qtd_pessoas or 0), 0)
+        qtd_nao_crentes = max(int(qtd_nao_crentes or 0), 0)
+        qtd_conversoes = max(int(qtd_conversoes or 0), 0)
+    except (TypeError, ValueError) as ex:
+        raise ValueError("Informe quantidades validas para o GFC.") from ex
+    if qtd_nao_crentes > qtd_pessoas:
+        raise ValueError("A quantidade de nao crentes nao pode ser maior que a quantidade de pessoas.")
+    if qtd_conversoes > qtd_nao_crentes:
+        raise ValueError("A quantidade de conversoes nao pode ser maior que a quantidade de nao crentes.")
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        grupo = conn.execute(
+            "SELECT nome, setor FROM gfc_grupos WHERE id_grupo=?",
+            (int(id_grupo),),
+        ).fetchone()
+        if not grupo:
+            raise ValueError("Grupo familiar nao encontrado.")
+        grupo_nome = grupo["nome"]
+        setor = grupo["setor"] or ""
+        if id_reuniao:
+            id_reuniao = int(id_reuniao)
+            conflito = conn.execute(
+                """SELECT 1 FROM gfc_reunioes
+                   WHERE data=? AND id_grupo=? AND tipo_culto=? AND id_reuniao<>?
+                   LIMIT 1""",
+                (data, int(id_grupo), tipo_culto, id_reuniao),
+            ).fetchone()
+            if conflito:
+                raise ValueError("Ja existe um registro deste grupo, data e tipo de culto.")
+            conn.execute(
+                """UPDATE gfc_reunioes
+                   SET data=?, id_grupo=?, grupo_nome=?, setor=?, tipo_culto=?,
+                       tema=?, qtd_pessoas=?, qtd_nao_crentes=?,
+                       qtd_conversoes=?, observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_reuniao=?""",
+                (
+                    data, int(id_grupo), sanitizar(grupo_nome), sanitizar(setor), tipo_culto,
+                    sanitizar(tema), qtd_pessoas, qtd_nao_crentes,
+                    qtd_conversoes, sanitizar(observacoes), id_reuniao,
+                ),
+            )
+            return id_reuniao
+        cur = conn.execute(
+            """INSERT INTO gfc_reunioes
+               (data, id_grupo, grupo_nome, setor, tipo_culto, tema,
+                qtd_pessoas, qtd_nao_crentes, qtd_conversoes, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(data, id_grupo, tipo_culto) DO UPDATE SET
+                   grupo_nome=excluded.grupo_nome,
+                   setor=excluded.setor,
+                   tema=excluded.tema,
+                   qtd_pessoas=excluded.qtd_pessoas,
+                   qtd_nao_crentes=excluded.qtd_nao_crentes,
+                   qtd_conversoes=excluded.qtd_conversoes,
+                   observacoes=excluded.observacoes,
+                   atualizado_em=datetime('now')""",
+            (
+                data, int(id_grupo), sanitizar(grupo_nome), sanitizar(setor),
+                tipo_culto, sanitizar(tema), qtd_pessoas,
+                qtd_nao_crentes, qtd_conversoes, sanitizar(observacoes),
+            ),
+        )
+        row = conn.execute(
+            "SELECT id_reuniao FROM gfc_reunioes WHERE data=? AND id_grupo=? AND tipo_culto=?",
+            (data, int(id_grupo), tipo_culto),
+        ).fetchone()
+        return int(row["id_reuniao"] if row else cur.lastrowid)
+
+
+def excluir_gfc_reuniao(slug, id_reuniao):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        conn.execute("DELETE FROM gfc_reunioes WHERE id_reuniao=?", (int(id_reuniao),))
 
 
 def _garantir_tabelas_visitantes(conn):

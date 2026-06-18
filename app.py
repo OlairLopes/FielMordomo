@@ -46,6 +46,7 @@ PAGINAS_IGREJA = {
     "relatorios": ("Relatórios", "modules.relatorios"),
     "dashboard": ("Dashboard", "modules.dashboard"),
     "ebd": ("Escola Bíblica", "modules.ebd"),
+    "gfc": ("GFC", "modules.gfc"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
     "obreiros": ("Reunião de Obreiros", "modules.obreiros"),
     "eventos": ("Agenda", "modules.eventos"),
