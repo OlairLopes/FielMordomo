@@ -201,14 +201,24 @@ def _render_grupos(slug):
                 st.rerun()
 
 
-def _render_reunioes(slug):
+def _render_reunioes(slug, id_grupo_restrito=None):
     st.markdown("### Registro de Culto GFC")
     grupos = listar_gfc_grupos(slug)
+    if id_grupo_restrito:
+        grupos = grupos[
+            grupos["id_grupo"].astype(int) == int(id_grupo_restrito)
+        ].copy()
     if grupos.empty:
-        st.warning("Cadastre ao menos um grupo familiar ativo antes de registrar o culto.")
+        st.warning("Nenhum grupo familiar ativo foi encontrado para este acesso.")
         return
+    if id_grupo_restrito:
+        grupo_sessao = grupos.iloc[0]
+        st.info(
+            f"Grupo selecionado no login: {grupo_sessao.get('nome', '')} "
+            f"({grupo_sessao.get('setor', '') or 'Sem setor'})"
+        )
 
-    reunioes_salvas = listar_gfc_reunioes(slug)
+    reunioes_salvas = listar_gfc_reunioes(slug, id_grupo=id_grupo_restrito)
     modo = st.radio(
         "Modo",
         ["Novo registro", "Editar registro salvo"] if not reunioes_salvas.empty else ["Novo registro"],
@@ -234,7 +244,12 @@ def _render_reunioes(slug):
         if inicio > fim:
             st.error("A data inicial não pode ser maior que a data final.")
             return
-        reunioes_salvas = listar_gfc_reunioes(slug, inicio.isoformat(), fim.isoformat())
+        reunioes_salvas = listar_gfc_reunioes(
+            slug,
+            inicio.isoformat(),
+            fim.isoformat(),
+            id_grupo=id_grupo_restrito,
+        )
         if reunioes_salvas.empty:
             st.info("Nenhum registro encontrado no período selecionado.")
             return
@@ -743,7 +758,7 @@ def render():
     st.caption("Primeira etapa: cadastro dos grupos, registro dos cultos e relatório básico.")
 
     if modo == "secretaria_gfc" and perfil_secretaria != "geral":
-        _render_reunioes(slug)
+        _render_reunioes(slug, id_grupo_restrito=secretaria.get("id_grupo"))
         return
 
     incluir_secretarias = modo != "secretaria_gfc" or perfil_secretaria == "geral"
