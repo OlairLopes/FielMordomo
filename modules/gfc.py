@@ -712,7 +712,7 @@ def render():
         tab_grupos, tab_reunioes, tab_relatorios, tab_coord_lideres, tab_secretarias = st.tabs([
             "Grupos",
             "Registro de culto",
-            "RelatÃ³rios",
+            "Relatórios",
             "Coordenadores e lideres",
             "Secretarias",
         ])
