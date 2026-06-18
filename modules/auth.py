@@ -10,12 +10,13 @@ import streamlit as st
 
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
+    autenticar_gfc_secretaria, autenticar_gfc_secretaria_por_cpf4,
     autenticar_ebd_secretario, autenticar_orhafe_secretaria,
     autenticar_orhafe_secretaria_por_cpf4,
     autenticar_pastor_auxiliar, autenticar_recepcao,
     autenticar_recepcao_por_cpf4, autenticar_secretario_geral,
     carregar_tesoureiros, inicializar_master, listar_ebd_secretarios,
-    listar_igrejas, listar_orhafe_secretarias, listar_pastores_auxiliares,
+    listar_gfc_secretarias, listar_igrejas, listar_orhafe_secretarias, listar_pastores_auxiliares,
     listar_recepcao_usuarios, listar_secretarios_gerais,
     obter_logo_sistema, obter_config,
 )
@@ -42,6 +43,7 @@ def _iniciar_sessao(
     tesoureiro=None,
     secretario_ebd=None,
     secretaria_orhafe=None,
+    secretaria_gfc=None,
     pastor_auxiliar=None,
     recepcao=None,
     secretario_geral=None,
@@ -57,6 +59,8 @@ def _iniciar_sessao(
         st.session_state["secretario_ebd"] = secretario_ebd
     if secretaria_orhafe is not None:
         st.session_state["secretaria_orhafe"] = secretaria_orhafe
+    if secretaria_gfc is not None:
+        st.session_state["secretaria_gfc"] = secretaria_gfc
     if pastor_auxiliar is not None:
         st.session_state["pastor_auxiliar"] = pastor_auxiliar
     if recepcao is not None:
@@ -68,7 +72,7 @@ def _iniciar_sessao(
 def _limpar_sessao():
     for key in (
         "autenticado", "modo", "igreja", "tesoureiro", "secretario_ebd",
-        "secretaria_orhafe", "pastor_auxiliar", "recepcao", "secretario_geral",
+        "secretaria_orhafe", "secretaria_gfc", "pastor_auxiliar", "recepcao", "secretario_geral",
         "pagina", "mostrar_recuperacao", "recuperacao_modo", "_login_acesso_url_aplicado",
     ):
         st.session_state.pop(key, None)
@@ -119,6 +123,7 @@ LOGIN_OPCOES = [
     ("Secretario Geral", "Secretaria geral", "Membros, obreiros e aniversários"),
     ("Escola Biblica", "Secretaria", "Chamada e gestão da Escola Bíblica"),
     ("Circulo de Oracao", "Secretaria", "Chamada e relatórios do Círculo de Oração"),
+    ("GFC", "Secretaria", "Registro dos Grupos Familiares de Crescimento"),
     ("Administrador do sistema", "Admin", "Painel geral da plataforma"),
 ]
 
@@ -389,6 +394,8 @@ def _render_login_por_modo(modo):
         _login_ebd()
     elif modo == "Circulo de Oracao":
         _login_orhafe()
+    elif modo == "GFC":
+        _login_gfc()
     else:
         _login_admin()
 
@@ -680,6 +687,9 @@ def _opcoes_usuarios_por_perfil(slug, perfil):
         elif perfil == "orhafe":
             usuarios = listar_orhafe_secretarias(slug, incluir_inativas=False)
             id_col = "id_secretaria"
+        elif perfil == "gfc":
+            usuarios = listar_gfc_secretarias(slug, incluir_inativas=False)
+            id_col = "id_secretaria"
         else:
             return {}, "Perfil de acesso inválido."
     except Exception:
@@ -892,6 +902,49 @@ def _login_orhafe():
                 st.error("Identificador, usuário ou CPF incorretos, ou acesso inativo.")
 
     _botao_recuperar_senha("Circulo de Oracao", "btn_esqueci_orhafe")
+
+
+def _login_gfc():
+    st.markdown("#### Acesso GFC")
+    st.caption("Secretaria de chamada acessa os registros. Secretaria geral acessa todo o modulo GFC.")
+    slug = _selectbox_igreja_login("login_gfc_igreja")
+    usuario = _selectbox_usuario_login(
+        slug,
+        "gfc",
+        "Usuario do GFC",
+        f"login_gfc_usuario_{slug or 'sem_igreja'}",
+    )
+
+    with st.form("form_login_gfc"):
+        cpf4 = st.text_input(
+            "4 ultimos digitos do CPF",
+            type="password",
+            max_chars=4,
+            help="Informe os 4 ultimos digitos do CPF cadastrado para esta secretaria.",
+        )
+        if st.form_submit_button("Entrar", type="primary", use_container_width=True):
+            slug = str(slug or "").strip().lower()
+            usuario = str(usuario or "").strip().lower()
+            cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
+            if not slug or not usuario or not cpf4:
+                st.error("Preencha todos os campos.")
+                return
+            if len(cpf4) != 4:
+                st.error("Informe exatamente os 4 ultimos digitos do CPF.")
+                return
+            acesso = autenticar_gfc_secretaria_por_cpf4(slug, usuario, cpf4)
+            if acesso:
+                _iniciar_sessao(
+                    "secretaria_gfc",
+                    igreja=acesso["igreja"],
+                    secretaria_gfc=acesso["secretaria_gfc"],
+                )
+                st.toast(f"Bem-vinda, {acesso['secretaria_gfc']['nome']}!")
+                st.rerun()
+            else:
+                st.error("Identificador, usuario ou CPF incorretos, ou acesso inativo.")
+
+    _botao_recuperar_senha("GFC", "btn_esqueci_gfc")
 
 
 def logout():

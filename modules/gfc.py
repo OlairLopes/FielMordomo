@@ -4,12 +4,16 @@ import pandas as pd
 import streamlit as st
 
 from data.repository import (
+    carregar_cadastros,
     excluir_gfc_grupo,
     excluir_gfc_reuniao,
+    inativar_gfc_secretaria,
     listar_gfc_grupos,
     listar_gfc_reunioes,
+    listar_gfc_secretarias,
     salvar_gfc_grupo,
     salvar_gfc_reuniao,
+    salvar_gfc_secretaria,
 )
 from utils.helpers import gerar_csv, slug_da_sessao
 
@@ -42,6 +46,28 @@ def _grupo_opcoes(grupos):
         f'{int(row["id_grupo"])} - {row["nome"]} ({row.get("setor", "") or "Sem setor"})': int(row["id_grupo"])
         for _, row in grupos.iterrows()
     }
+
+
+def _membros_opcoes(slug):
+    df = carregar_cadastros(slug)
+    if df.empty:
+        return {}, df
+    df = df.copy()
+    for col in ["tipo_cadastro", "situacao", "nome", "cpf"]:
+        if col not in df.columns:
+            df[col] = ""
+    membros = df[
+        (df["tipo_cadastro"].fillna("").astype(str).str.upper() == "MEMBRO") &
+        (df["situacao"].fillna("").astype(str).str.upper() == "ATIVO")
+    ].copy()
+    if membros.empty:
+        return {}, membros
+    membros = membros.sort_values("nome")
+    opcoes = {
+        f'{row["nome"]} - CPF final {str(row.get("cpf", "") or "")[-4:]}': row
+        for _, row in membros.iterrows()
+    }
+    return opcoes, membros
 
 
 def _render_grupos(slug):
@@ -347,12 +373,156 @@ def _render_relatorios(slug):
             st.rerun()
 
 
+def _render_secretarias(slug):
+    st.markdown("### Secretarias GFC")
+    st.caption("Cadastre os usuarios que poderao acessar o modulo GFC com igreja, usuario e 4 ultimos digitos do CPF.")
+
+    secretarias = listar_gfc_secretarias(slug, incluir_inativas=True)
+    op_membros, _ = _membros_opcoes(slug)
+
+    with st.expander("Cadastrar secretaria GFC", expanded=secretarias.empty):
+        if not op_membros:
+            st.warning("Cadastre membros ativos com CPF antes de criar logins por CPF para o GFC.")
+
+        origem = st.radio(
+            "Origem do usuario",
+            ["Cadastro de membro", "Nome manual"],
+            horizontal=True,
+            key="gfc_sec_origem",
+        )
+        id_cadastro = None
+        nome = ""
+        telefone = ""
+
+        if origem == "Cadastro de membro" and op_membros:
+            membro_label = st.selectbox("Membro vinculado", list(op_membros.keys()), key="gfc_sec_membro")
+            membro = op_membros[membro_label]
+            id_cadastro = int(membro["id_cadastro"])
+            nome = str(membro.get("nome", "") or "")
+            telefone = str(membro.get("telefone", "") or "")
+            st.info(f"Login por CPF habilitado para: {nome}")
+        else:
+            nome = st.text_input("Nome da secretaria", key="gfc_sec_nome_manual")
+
+        with st.form("form_gfc_secretaria_nova"):
+            usuario = st.text_input(
+                "Usuario",
+                help="Use letras, numeros, ponto, hifen ou underline. Exemplo: maria.gfc",
+            )
+            perfil_label = st.selectbox("Perfil", ["Secretaria de chamada", "Secretaria geral"])
+            pin = st.text_input("PIN inicial de 4 digitos", type="password", max_chars=4)
+            email = st.text_input("E-mail")
+            telefone_form = st.text_input("Telefone", value=telefone)
+            observacoes = st.text_area("Observacoes")
+
+            if st.form_submit_button("Salvar secretaria", type="primary"):
+                try:
+                    salvar_gfc_secretaria(
+                        slug,
+                        nome=nome,
+                        usuario=usuario,
+                        senha=pin,
+                        id_cadastro=id_cadastro,
+                        perfil="geral" if perfil_label == "Secretaria geral" else "chamada",
+                        telefone=telefone_form,
+                        email=email,
+                        observacoes=observacoes,
+                    )
+                    st.success("Secretaria GFC cadastrada.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    if secretarias.empty:
+        st.info("Nenhuma secretaria GFC cadastrada ainda.")
+        return
+
+    tabela = secretarias.copy()
+    tabela["perfil"] = tabela["perfil"].map({
+        "chamada": "Secretaria de chamada",
+        "geral": "Secretaria geral",
+    }).fillna(tabela["perfil"])
+    st.dataframe(
+        tabela[["nome", "usuario", "perfil", "telefone", "email", "situacao", "observacoes"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    with st.expander("Editar secretaria GFC", expanded=False):
+        opcoes = {
+            f'{int(row["id_secretaria"])} - {row["nome"]} ({row["usuario"]})': row
+            for _, row in secretarias.iterrows()
+        }
+        selecionada = st.selectbox("Secretaria", ["Selecione"] + list(opcoes.keys()), key="gfc_sec_edit_sel")
+        if selecionada != "Selecione":
+            row = opcoes[selecionada]
+            with st.form(f"form_gfc_secretaria_edit_{int(row['id_secretaria'])}"):
+                nome_edit = st.text_input("Nome", value=str(row.get("nome", "") or ""))
+                usuario_edit = st.text_input("Usuario", value=str(row.get("usuario", "") or ""))
+                perfil_atual = "Secretaria geral" if row.get("perfil") == "geral" else "Secretaria de chamada"
+                perfil_edit = st.selectbox(
+                    "Perfil",
+                    ["Secretaria de chamada", "Secretaria geral"],
+                    index=1 if perfil_atual == "Secretaria geral" else 0,
+                )
+                situacao_edit = st.selectbox(
+                    "Situacao",
+                    ["Ativo", "Inativo"],
+                    index=0 if str(row.get("situacao", "Ativo")) == "Ativo" else 1,
+                )
+                novo_pin = st.text_input("Novo PIN de 4 digitos (opcional)", type="password", max_chars=4)
+                telefone_edit = st.text_input("Telefone", value=str(row.get("telefone", "") or ""))
+                email_edit = st.text_input("E-mail", value=str(row.get("email", "") or ""))
+                obs_edit = st.text_area("Observacoes", value=str(row.get("observacoes", "") or ""))
+
+                if st.form_submit_button("Atualizar secretaria", type="primary"):
+                    try:
+                        salvar_gfc_secretaria(
+                            slug,
+                            nome=nome_edit,
+                            usuario=usuario_edit,
+                            senha=novo_pin,
+                            id_cadastro=int(row["id_cadastro"]) if pd.notna(row.get("id_cadastro")) else None,
+                            perfil="geral" if perfil_edit == "Secretaria geral" else "chamada",
+                            telefone=telefone_edit,
+                            email=email_edit,
+                            situacao=situacao_edit,
+                            observacoes=obs_edit,
+                            id_secretaria=int(row["id_secretaria"]),
+                        )
+                        st.success("Secretaria GFC atualizada.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+
+            if st.button("Inativar secretaria", key=f"gfc_sec_inativar_{int(row['id_secretaria'])}"):
+                inativar_gfc_secretaria(slug, int(row["id_secretaria"]))
+                st.success("Secretaria GFC inativada.")
+                st.rerun()
+
+
 def render():
     slug = slug_da_sessao()
+    modo = st.session_state.get("modo", "")
+    secretaria = st.session_state.get("secretaria_gfc", {})
+    perfil_secretaria = secretaria.get("perfil") if isinstance(secretaria, dict) else ""
     st.subheader("GFC - Grupos Familiares de Crescimento")
     st.caption("Primeira etapa: cadastro dos grupos, registro dos cultos e relatório básico.")
 
-    tab_grupos, tab_reunioes, tab_relatorios = st.tabs([
+    if modo == "secretaria_gfc" and perfil_secretaria != "geral":
+        _render_reunioes(slug)
+        return
+
+    incluir_secretarias = modo != "secretaria_gfc" or perfil_secretaria == "geral"
+    if incluir_secretarias:
+        tab_grupos, tab_reunioes, tab_relatorios, tab_secretarias = st.tabs([
+            "Grupos",
+            "Registro de culto",
+            "RelatÃ³rios",
+            "Secretarias",
+        ])
+    else:
+        tab_grupos, tab_reunioes, tab_relatorios = st.tabs([
         "Grupos",
         "Registro de culto",
         "Relatórios",
@@ -364,3 +534,6 @@ def render():
         _render_reunioes(slug)
     with tab_relatorios:
         _render_relatorios(slug)
+    if incluir_secretarias:
+        with tab_secretarias:
+            _render_secretarias(slug)

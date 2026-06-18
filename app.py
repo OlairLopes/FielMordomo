@@ -492,6 +492,35 @@ def _sidebar_secretaria_orhafe(pagina_atual, igreja, secretaria):
             _auth().logout()
 
 
+def _sidebar_secretaria_gfc(pagina_atual, igreja, secretaria):
+    perfil = "Secretaria geral" if secretaria.get("perfil") == "geral" else "Secretaria de chamada"
+    with st.sidebar:
+        _render_logo_sidebar(igreja.get("slug", ""))
+        st.markdown(
+            '<div class="sidebar-info">'
+            f'<b>{_esc(secretaria.get("nome", "Secretaria GFC"))}</b>'
+            f'<div class="plano">{_esc(perfil)} - GFC</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        paginas_extras = _paginas_com_permissoes({"gfc": PAGINAS_IGREJA["gfc"]}, "secretaria_gfc", secretaria)
+        _botao_inicio_sidebar("sb_inicio_secretaria_gfc", "gfc")
+        for chave, (rotulo, _) in _paginas_ordenadas(paginas_extras):
+            if chave == "gfc":
+                continue
+            if st.button(
+                rotulo,
+                key=f"sb_secretaria_gfc_{chave}",
+                use_container_width=True,
+                type="primary" if pagina_atual == chave else "secondary",
+            ):
+                st.session_state["pagina"] = chave
+                st.rerun()
+        st.divider()
+        if st.button("Sair", key="sb_sair_secretaria_gfc", use_container_width=True):
+            _auth().logout()
+
+
 def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
     with st.sidebar:
         _render_logo_sidebar(igreja.get("slug", ""))
@@ -683,6 +712,31 @@ def _renderizar_secretaria_orhafe():
         )
 
 
+def _renderizar_secretaria_gfc():
+    igreja = st.session_state.get("igreja", {})
+    secretaria = st.session_state.get("secretaria_gfc", {})
+    if not isinstance(igreja, dict) or not igreja.get("slug") or not isinstance(secretaria, dict):
+        st.error("Sessao invalida. Faca login novamente.")
+        if st.button("Voltar ao login"):
+            _auth().logout()
+        return
+    paginas = _paginas_com_permissoes({"gfc": PAGINAS_IGREJA["gfc"]}, "secretaria_gfc", secretaria)
+    pagina = st.session_state.get("pagina", "gfc")
+    if pagina not in paginas:
+        pagina = "gfc"
+        st.session_state["pagina"] = pagina
+    _sidebar_secretaria_gfc(pagina, igreja, secretaria)
+    _, caminho_modulo = paginas[pagina]
+    try:
+        _importar(caminho_modulo).render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao carregar GFC para secretaria.")
+        st.error(
+            "Nao foi possivel carregar esta pagina. "
+            f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
+        )
+
+
 def _renderizar_pastor_auxiliar():
     igreja = st.session_state.get("igreja", {})
     pastor = st.session_state.get("pastor_auxiliar", {})
@@ -777,6 +831,8 @@ def main():
         _renderizar_secretario_ebd()
     elif modo == "secretaria_orhafe":
         _renderizar_secretaria_orhafe()
+    elif modo == "secretaria_gfc":
+        _renderizar_secretaria_gfc()
     elif modo == "pastor_auxiliar":
         _renderizar_pastor_auxiliar()
     elif modo == "recepcao":

@@ -714,13 +714,37 @@ def _garantir_tabelas_gfc(conn):
             atualizado_em    TEXT DEFAULT (datetime('now')),
             UNIQUE(data, id_grupo, tipo_culto)
         );
+        CREATE TABLE IF NOT EXISTS gfc_secretarias (
+            id_secretaria INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
+            nome          TEXT NOT NULL,
+            usuario       TEXT NOT NULL UNIQUE,
+            senha_hash    TEXT NOT NULL,
+            perfil        TEXT NOT NULL DEFAULT 'chamada',
+            telefone      TEXT DEFAULT '',
+            email         TEXT DEFAULT '',
+            situacao      TEXT NOT NULL DEFAULT 'Ativo',
+            observacoes   TEXT DEFAULT '',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now'))
+        );
         CREATE INDEX IF NOT EXISTS idx_gfc_grupos_ativo
             ON gfc_grupos(ativo);
         CREATE INDEX IF NOT EXISTS idx_gfc_reunioes_data
             ON gfc_reunioes(data);
         CREATE INDEX IF NOT EXISTS idx_gfc_reunioes_grupo
             ON gfc_reunioes(id_grupo);
+        CREATE INDEX IF NOT EXISTS idx_gfc_secretarias_usuario
+            ON gfc_secretarias(usuario);
     """)
+    cols_secretarias = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(gfc_secretarias)").fetchall()
+    ]
+    if "id_cadastro" not in cols_secretarias:
+        conn.execute(
+            "ALTER TABLE gfc_secretarias ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
+        )
 
 
 def _normalizar_tipo_culto_gfc(tipo):
@@ -734,6 +758,20 @@ def _normalizar_tipo_culto_gfc(tipo):
     if tipo not in tipos:
         raise ValueError("Selecione um tipo de culto valido para o GFC.")
     return tipo
+
+
+def _normalizar_usuario_gfc(usuario):
+    usuario = str(usuario or "").strip().lower()
+    if not USUARIO_EBD_RE.fullmatch(usuario):
+        raise ValueError("Usuario deve ter 3 a 40 caracteres, usando letras, numeros, ponto, hifen ou underline.")
+    return usuario
+
+
+def _validar_pin_gfc(pin):
+    pin = str(pin or "").strip()
+    if not re.fullmatch(r"\d{4}", pin):
+        raise ValueError("O PIN da secretaria GFC deve possuir exatamente 4 digitos.")
+    return pin
 
 
 def listar_gfc_grupos(slug, incluir_inativos=False):
@@ -958,6 +996,226 @@ def excluir_gfc_reuniao(slug, id_reuniao):
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
         conn.execute("DELETE FROM gfc_reunioes WHERE id_reuniao=?", (int(id_reuniao),))
+
+
+def listar_gfc_secretarias(slug, incluir_inativas=True):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        where = "" if incluir_inativas else "WHERE situacao='Ativo'"
+        return pd.read_sql_query(
+            f"""SELECT id_secretaria, id_cadastro, nome, usuario, perfil, telefone, email,
+                       situacao, observacoes, criado_em, atualizado_em
+                FROM gfc_secretarias
+                {where}
+                ORDER BY situacao, nome""",
+            conn,
+        )
+
+
+def salvar_gfc_secretaria(
+    slug,
+    nome,
+    usuario,
+    senha="",
+    id_cadastro=None,
+    perfil="chamada",
+    telefone="",
+    email="",
+    situacao="Ativo",
+    observacoes="",
+    id_secretaria=None,
+):
+    nome = sanitizar(nome)
+    usuario = _normalizar_usuario_gfc(usuario)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    perfil = str(perfil or "").strip().lower()
+    situacao = str(situacao or "Ativo").strip()
+    if perfil not in {"chamada", "geral"}:
+        raise ValueError("Perfil de secretaria GFC invalido.")
+    if situacao not in {"Ativo", "Inativo"}:
+        raise ValueError("Situacao invalida.")
+    if not id_secretaria:
+        senha = _validar_pin_gfc(senha)
+    elif senha:
+        senha = _validar_pin_gfc(senha)
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        _garantir_colunas_cadastros(conn)
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+        if not nome:
+            raise ValueError("Nome da secretaria GFC e obrigatorio.")
+        duplicado = conn.execute(
+            """SELECT 1 FROM gfc_secretarias
+               WHERE usuario=? AND (? IS NULL OR id_secretaria!=?) LIMIT 1""",
+            (
+                usuario,
+                int(id_secretaria) if id_secretaria else None,
+                int(id_secretaria) if id_secretaria else None,
+            ),
+        ).fetchone()
+        if duplicado:
+            raise ValueError("Ja existe uma secretaria GFC com este usuario.")
+        dados = (
+            id_cadastro, nome, usuario, perfil, sanitizar(telefone), sanitizar(email),
+            situacao, sanitizar(observacoes),
+        )
+        if id_secretaria:
+            if senha:
+                conn.execute(
+                    """UPDATE gfc_secretarias
+                       SET id_cadastro=?, nome=?, usuario=?, perfil=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, senha_hash=?,
+                           atualizado_em=datetime('now')
+                       WHERE id_secretaria=?""",
+                    dados + (hash_senha(senha), int(id_secretaria)),
+                )
+            else:
+                conn.execute(
+                    """UPDATE gfc_secretarias
+                       SET id_cadastro=?, nome=?, usuario=?, perfil=?, telefone=?, email=?,
+                           situacao=?, observacoes=?, atualizado_em=datetime('now')
+                       WHERE id_secretaria=?""",
+                    dados + (int(id_secretaria),),
+                )
+            return int(id_secretaria)
+        cur = conn.execute(
+            """INSERT INTO gfc_secretarias
+               (id_cadastro, nome, usuario, senha_hash, perfil, telefone, email,
+                situacao, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                id_cadastro, nome, usuario, hash_senha(senha), perfil,
+                sanitizar(telefone), sanitizar(email), situacao, sanitizar(observacoes),
+            ),
+        )
+        return cur.lastrowid
+
+
+def inativar_gfc_secretaria(slug, id_secretaria):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        conn.execute(
+            """UPDATE gfc_secretarias
+               SET situacao='Inativo', atualizado_em=datetime('now')
+               WHERE id_secretaria=?""",
+            (int(id_secretaria),),
+        )
+
+
+def autenticar_gfc_secretaria(slug, usuario, senha):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_gfc(usuario)
+    except ValueError:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+    chave = f"gfc:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+        row = conn.execute(
+            """SELECT id_secretaria, nome, usuario, senha_hash, perfil
+               FROM gfc_secretarias
+               WHERE usuario=? AND situacao='Ativo'""",
+            (usuario,),
+        ).fetchone()
+        valido, migrar = _verificar_senha(senha, row["senha_hash"] if row else "")
+        _registrar_resultado_login(conn, chave, valido)
+        if valido and migrar:
+            conn.execute(
+                "UPDATE gfc_secretarias SET senha_hash=? WHERE id_secretaria=?",
+                (hash_senha(senha), row["id_secretaria"]),
+            )
+    if not row or not valido:
+        return None
+    return {
+        "igreja": igreja,
+        "secretaria_gfc": {
+            "id": row["id_secretaria"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+            "perfil": row["perfil"],
+        },
+    }
+
+
+def autenticar_gfc_secretaria_por_cpf4(slug, usuario, cpf4):
+    try:
+        slug = _validar_slug(slug)
+        usuario = _normalizar_usuario_gfc(usuario)
+    except ValueError:
+        return None
+
+    cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
+    if len(cpf4) != 4:
+        return None
+
+    igreja = buscar_igreja_por_slug(slug)
+    if not igreja:
+        return None
+
+    chave = f"gfc_cpf4:{slug}:{usuario}"
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        _garantir_colunas_cadastros(conn)
+        if _autenticacao_bloqueada(conn, chave):
+            return None
+
+        row = conn.execute(
+            """SELECT s.id_secretaria, s.nome, s.usuario, s.perfil
+                 FROM gfc_secretarias s
+                 JOIN cadastros c ON c.id_cadastro=s.id_cadastro
+                WHERE s.usuario=?
+                  AND s.situacao='Ativo'
+                  AND UPPER(TRIM(c.tipo_cadastro))='MEMBRO'
+                  AND UPPER(TRIM(c.situacao))='ATIVO'
+                  AND substr(
+                        replace(replace(replace(COALESCE(c.cpf, ''), '.', ''), '-', ''), ' ', ''),
+                        -4
+                      )=?
+                LIMIT 1""",
+            (usuario, cpf4),
+        ).fetchone()
+        valido = row is not None
+        _registrar_resultado_login(conn, chave, valido)
+
+    if not row:
+        return None
+
+    return {
+        "igreja": igreja,
+        "secretaria_gfc": {
+            "id": row["id_secretaria"],
+            "nome": row["nome"],
+            "usuario": row["usuario"],
+            "perfil": row["perfil"],
+        },
+    }
 
 
 def _garantir_tabelas_visitantes(conn):
@@ -3168,9 +3426,10 @@ TABELAS_ACESSO_USUARIOS = {
     "recepcao": ("recepcao_usuarios", "id_recepcao", "Recepcao"),
     "secretario_ebd": ("ebd_secretarios", "id_secretario", "Secretaria Escola Biblica"),
     "secretaria_orhafe": ("orhafe_secretarias", "id_secretaria", "Secretaria Circulo de Oracao"),
+    "secretaria_gfc": ("gfc_secretarias", "id_secretaria", "Secretaria GFC"),
 }
 SITUACOES_ACESSO = {"Ativo", "Inativo", "Bloqueado"}
-TIPOS_LOGIN_PIN = {"recepcao", "secretario_ebd", "secretaria_orhafe"}
+TIPOS_LOGIN_PIN = {"recepcao", "secretario_ebd", "secretaria_orhafe", "secretaria_gfc"}
 
 
 def _garantir_tabelas_acesso_usuarios(conn):
@@ -3180,6 +3439,7 @@ def _garantir_tabelas_acesso_usuarios(conn):
     _garantir_tabela_recepcao(conn)
     _garantir_tabelas_ebd(conn)
     _garantir_tabelas_orhafe(conn)
+    _garantir_tabelas_gfc(conn)
     _garantir_tabela_permissoes_usuarios(conn)
 
 
@@ -3257,6 +3517,9 @@ def _validar_senha_por_tipo_login(tipo_login, nova_senha):
 
     if tipo_login == "secretaria_orhafe":
         return _validar_pin_orhafe(nova_senha)
+
+    if tipo_login == "secretaria_gfc":
+        return _validar_pin_gfc(nova_senha)
 
     raise ValueError("Tipo de login invalido.")
 
