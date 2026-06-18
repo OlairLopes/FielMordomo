@@ -641,6 +641,7 @@ def _render_secretarias(slug):
         id_cadastro = None
         nome = ""
         telefone = ""
+        pin = ""
 
         if origem == "Cadastro de membro" and op_membros:
             membro_label = st.selectbox("Membro vinculado", list(op_membros.keys()), key="gfc_sec_membro")
@@ -648,6 +649,8 @@ def _render_secretarias(slug):
             id_cadastro = int(membro["id_cadastro"])
             nome = str(membro.get("nome", "") or "")
             telefone = str(membro.get("telefone", "") or "")
+            cpf_digitos = "".join(c for c in str(membro.get("cpf", "") or "") if c.isdigit())
+            pin = cpf_digitos[-4:] if len(cpf_digitos) >= 4 else ""
             st.info(f"Login por CPF habilitado para: {nome}")
         else:
             nome = st.text_input("Nome da secretaria", key="gfc_sec_nome_manual")
@@ -658,28 +661,36 @@ def _render_secretarias(slug):
                 help="Use letras, numeros, ponto, hifen ou underline. Exemplo: maria.gfc",
             )
             perfil_label = st.selectbox("Perfil", ["Secretaria de chamada", "Secretaria geral"])
-            pin = st.text_input("PIN inicial de 4 digitos", type="password", max_chars=4)
+            if id_cadastro:
+                st.caption("O PIN de acesso sera validado pelos 4 ultimos digitos do CPF do membro vinculado.")
+            else:
+                st.warning("Para login por CPF, a secretaria precisa estar vinculada a um membro cadastrado.")
             email = st.text_input("E-mail")
             telefone_form = st.text_input("Telefone", value=telefone)
             observacoes = st.text_area("Observacoes")
 
             if st.form_submit_button("Salvar secretaria", type="primary"):
-                try:
-                    salvar_gfc_secretaria(
-                        slug,
-                        nome=nome,
-                        usuario=usuario,
-                        senha=pin,
-                        id_cadastro=id_cadastro,
-                        perfil="geral" if perfil_label == "Secretaria geral" else "chamada",
-                        telefone=telefone_form,
-                        email=email,
-                        observacoes=observacoes,
-                    )
-                    st.success("Secretaria GFC cadastrada.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
+                if not id_cadastro:
+                    st.error("Selecione um membro vinculado para habilitar o login por CPF.")
+                elif len(pin) != 4:
+                    st.error("O membro vinculado precisa ter CPF cadastrado para gerar o PIN de acesso.")
+                else:
+                    try:
+                        salvar_gfc_secretaria(
+                            slug,
+                            nome=nome,
+                            usuario=usuario,
+                            senha=pin,
+                            id_cadastro=id_cadastro,
+                            perfil="geral" if perfil_label == "Secretaria geral" else "chamada",
+                            telefone=telefone_form,
+                            email=email,
+                            observacoes=observacoes,
+                        )
+                        st.success("Secretaria GFC cadastrada.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
 
     if secretarias.empty:
         st.info("Nenhuma secretaria GFC cadastrada ainda.")

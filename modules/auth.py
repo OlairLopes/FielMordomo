@@ -16,7 +16,7 @@ from data.repository import (
     autenticar_pastor_auxiliar, autenticar_recepcao,
     autenticar_recepcao_por_cpf4, autenticar_secretario_geral,
     carregar_tesoureiros, inicializar_master, listar_ebd_secretarios,
-    listar_gfc_secretarias, listar_igrejas, listar_orhafe_secretarias, listar_pastores_auxiliares,
+    listar_gfc_grupos, listar_gfc_secretarias, listar_igrejas, listar_orhafe_secretarias, listar_pastores_auxiliares,
     listar_recepcao_usuarios, listar_secretarios_gerais,
     obter_logo_sistema, obter_config,
 )
@@ -753,6 +753,27 @@ def _selectbox_recepcao_usuario_login(slug):
 
 
 
+@st.cache_data(ttl=120, show_spinner=False)
+def _opcoes_grupos_gfc(slug):
+    if not slug:
+        return {}, "Selecione uma igreja."
+    try:
+        grupos = listar_gfc_grupos(slug, incluir_inativos=False)
+    except Exception:
+        return {}, "Nao foi possivel carregar os grupos GFC desta igreja."
+    if grupos is None or grupos.empty:
+        return {}, "Nenhum grupo GFC ativo encontrado para esta igreja."
+    opcoes = {
+        f'{int(row["id_grupo"])} | {row["nome"]} ({row.get("setor", "") or "Sem setor"})': {
+            "id_grupo": int(row["id_grupo"]),
+            "nome": str(row.get("nome", "") or ""),
+            "setor": str(row.get("setor", "") or ""),
+        }
+        for _, row in grupos.sort_values(["setor", "nome"]).iterrows()
+    }
+    return opcoes, ""
+
+
 def _login_recepcao():
     st.markdown("#### Acesso da Recepção")
     st.caption("Acesso restrito somente ao registro de visitantes.")
@@ -914,19 +935,33 @@ def _login_gfc():
         "Usuario do GFC",
         f"login_gfc_usuario_{slug or 'sem_igreja'}",
     )
+    slug_normalizado = str(slug or "").strip().lower()
+    op_grupos, erro_grupos = _opcoes_grupos_gfc(slug_normalizado)
+    grupo_sel = ""
+    grupo_dados = None
+    if erro_grupos:
+        st.warning(erro_grupos)
+    else:
+        grupo_sel = st.selectbox(
+            "Grupo familiar de atuação",
+            list(op_grupos.keys()),
+            key=f"login_gfc_grupo_{slug_normalizado or 'sem_igreja'}",
+            help="Selecione o grupo familiar em que esta secretaria atuara.",
+        )
+        grupo_dados = op_grupos.get(grupo_sel)
 
     with st.form("form_login_gfc"):
         cpf4 = st.text_input(
-            "4 ultimos digitos do CPF",
+            "PIN - 4 ultimos digitos do CPF",
             type="password",
             max_chars=4,
-            help="Informe os 4 ultimos digitos do CPF cadastrado para esta secretaria.",
+            help="Informe os 4 ultimos digitos do CPF do membro vinculado a esta secretaria.",
         )
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
             cpf4 = "".join(c for c in str(cpf4 or "") if c.isdigit())
-            if not slug or not usuario or not cpf4:
+            if not slug or not usuario or not cpf4 or not grupo_dados:
                 st.error("Preencha todos os campos.")
                 return
             if len(cpf4) != 4:
@@ -934,6 +969,9 @@ def _login_gfc():
                 return
             acesso = autenticar_gfc_secretaria_por_cpf4(slug, usuario, cpf4)
             if acesso:
+                acesso["secretaria_gfc"]["id_grupo"] = grupo_dados["id_grupo"]
+                acesso["secretaria_gfc"]["grupo"] = grupo_dados["nome"]
+                acesso["secretaria_gfc"]["setor_grupo"] = grupo_dados["setor"]
                 _iniciar_sessao(
                     "secretaria_gfc",
                     igreja=acesso["igreja"],
