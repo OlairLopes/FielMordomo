@@ -732,13 +732,30 @@ def _garantir_tabelas_gfc(conn):
             setor            TEXT DEFAULT '',
             tipo_culto       TEXT NOT NULL,
             tema             TEXT DEFAULT '',
+            coordenador1_nome TEXT DEFAULT '',
+            coordenador2_nome TEXT DEFAULT '',
+            lider_nome       TEXT DEFAULT '',
             qtd_pessoas      INTEGER NOT NULL DEFAULT 0,
+            qtd_participantes INTEGER NOT NULL DEFAULT 0,
+            qtd_presentes    INTEGER NOT NULL DEFAULT 0,
+            qtd_ausentes     INTEGER NOT NULL DEFAULT 0,
             qtd_nao_crentes  INTEGER NOT NULL DEFAULT 0,
             qtd_conversoes   INTEGER NOT NULL DEFAULT 0,
             observacoes      TEXT DEFAULT '',
             criado_em        TEXT DEFAULT (datetime('now')),
             atualizado_em    TEXT DEFAULT (datetime('now')),
             UNIQUE(data, id_grupo, tipo_culto)
+        );
+        CREATE TABLE IF NOT EXISTS gfc_presencas (
+            id_presenca   INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_reuniao    INTEGER NOT NULL REFERENCES gfc_reunioes(id_reuniao) ON DELETE CASCADE,
+            id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
+            nome          TEXT NOT NULL,
+            presente      INTEGER NOT NULL DEFAULT 0,
+            observacao    TEXT DEFAULT '',
+            criado_em     TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now')),
+            UNIQUE(id_reuniao, id_cadastro, nome)
         );
         CREATE TABLE IF NOT EXISTS gfc_secretarias (
             id_secretaria INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -760,6 +777,8 @@ def _garantir_tabelas_gfc(conn):
             ON gfc_reunioes(data);
         CREATE INDEX IF NOT EXISTS idx_gfc_reunioes_grupo
             ON gfc_reunioes(id_grupo);
+        CREATE INDEX IF NOT EXISTS idx_gfc_presencas_reuniao
+            ON gfc_presencas(id_reuniao);
         CREATE INDEX IF NOT EXISTS idx_gfc_secretarias_usuario
             ON gfc_secretarias(usuario);
         CREATE INDEX IF NOT EXISTS idx_gfc_coordenadores_ativo
@@ -797,6 +816,21 @@ def _garantir_tabelas_gfc(conn):
         conn.execute(
             "ALTER TABLE gfc_secretarias ADD COLUMN id_cadastro INTEGER REFERENCES cadastros(id_cadastro)"
         )
+
+    cols_reunioes = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(gfc_reunioes)").fetchall()
+    ]
+    for col, tipo in [
+        ("coordenador1_nome", "TEXT DEFAULT ''"),
+        ("coordenador2_nome", "TEXT DEFAULT ''"),
+        ("lider_nome", "TEXT DEFAULT ''"),
+        ("qtd_participantes", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_presentes", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_ausentes", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        if col not in cols_reunioes:
+            conn.execute(f"ALTER TABLE gfc_reunioes ADD COLUMN {col} {tipo}")
 
 
 def _normalizar_tipo_culto_gfc(tipo):
@@ -1108,7 +1142,9 @@ def listar_gfc_reunioes(slug, data_inicio=None, data_fim=None, id_grupo=None, se
             f"""SELECT r.id_reuniao, r.data, r.id_grupo,
                        COALESCE(g.nome, r.grupo_nome) AS grupo,
                        r.grupo_nome, r.setor, r.tipo_culto, r.tema,
-                       r.qtd_pessoas, r.qtd_nao_crentes, r.qtd_conversoes,
+                       r.coordenador1_nome, r.coordenador2_nome, r.lider_nome,
+                       r.qtd_pessoas, r.qtd_participantes, r.qtd_presentes,
+                       r.qtd_ausentes, r.qtd_nao_crentes, r.qtd_conversoes,
                        r.observacoes, r.criado_em, r.atualizado_em
                 FROM gfc_reunioes r
                 LEFT JOIN gfc_grupos g ON g.id_grupo=r.id_grupo
@@ -1119,16 +1155,36 @@ def listar_gfc_reunioes(slug, data_inicio=None, data_fim=None, id_grupo=None, se
         )
 
 
+def listar_gfc_presencas(slug, id_reuniao):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        return pd.read_sql_query(
+            """SELECT id_presenca, id_reuniao, id_cadastro, nome, presente, observacao
+               FROM gfc_presencas
+               WHERE id_reuniao=?
+               ORDER BY nome""",
+            conn,
+            params=(int(id_reuniao),),
+        )
+
+
 def salvar_gfc_reuniao(
     slug,
     data,
     id_grupo,
     tipo_culto,
     tema="",
+    coordenador1_nome="",
+    coordenador2_nome="",
+    lider_nome="",
     qtd_pessoas=0,
     qtd_nao_crentes=0,
     qtd_conversoes=0,
     observacoes="",
+    presencas=None,
     id_reuniao=None,
 ):
     data = str(data or "").strip()
@@ -1146,6 +1202,11 @@ def salvar_gfc_reuniao(
     if qtd_conversoes > qtd_nao_crentes:
         raise ValueError("A quantidade de conversoes nao pode ser maior que a quantidade de nao crentes.")
 
+    presencas = presencas or []
+    qtd_participantes = len(presencas)
+    qtd_presentes = sum(1 for p in presencas if bool(p.get("presente")))
+    qtd_ausentes = max(qtd_participantes - qtd_presentes, 0)
+
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
@@ -1159,6 +1220,27 @@ def salvar_gfc_reuniao(
             raise ValueError("Grupo familiar nao encontrado.")
         grupo_nome = grupo["nome"]
         setor = grupo["setor"] or ""
+
+        def _salvar_presencas(id_reuniao_final):
+            conn.execute("DELETE FROM gfc_presencas WHERE id_reuniao=?", (int(id_reuniao_final),))
+            for presenca in presencas:
+                nome_presenca = sanitizar(str(presenca.get("nome", "") or "").strip())
+                if not nome_presenca:
+                    continue
+                id_cadastro_presenca = presenca.get("id_cadastro")
+                conn.execute(
+                    """INSERT INTO gfc_presencas
+                       (id_reuniao, id_cadastro, nome, presente, observacao)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        int(id_reuniao_final),
+                        int(id_cadastro_presenca) if id_cadastro_presenca else None,
+                        nome_presenca,
+                        1 if bool(presenca.get("presente")) else 0,
+                        sanitizar(presenca.get("observacao", "") or ""),
+                    ),
+                )
+
         if id_reuniao:
             id_reuniao = int(id_reuniao)
             conflito = conn.execute(
@@ -1172,33 +1254,47 @@ def salvar_gfc_reuniao(
             conn.execute(
                 """UPDATE gfc_reunioes
                    SET data=?, id_grupo=?, grupo_nome=?, setor=?, tipo_culto=?,
-                       tema=?, qtd_pessoas=?, qtd_nao_crentes=?,
-                       qtd_conversoes=?, observacoes=?, atualizado_em=datetime('now')
+                       tema=?, coordenador1_nome=?, coordenador2_nome=?, lider_nome=?,
+                       qtd_pessoas=?, qtd_participantes=?, qtd_presentes=?, qtd_ausentes=?,
+                       qtd_nao_crentes=?, qtd_conversoes=?, observacoes=?, atualizado_em=datetime('now')
                    WHERE id_reuniao=?""",
                 (
                     data, int(id_grupo), sanitizar(grupo_nome), sanitizar(setor), tipo_culto,
-                    sanitizar(tema), qtd_pessoas, qtd_nao_crentes,
+                    sanitizar(tema), sanitizar(coordenador1_nome), sanitizar(coordenador2_nome),
+                    sanitizar(lider_nome), qtd_pessoas, qtd_participantes,
+                    qtd_presentes, qtd_ausentes, qtd_nao_crentes,
                     qtd_conversoes, sanitizar(observacoes), id_reuniao,
                 ),
             )
+            _salvar_presencas(id_reuniao)
             return id_reuniao
         cur = conn.execute(
             """INSERT INTO gfc_reunioes
                (data, id_grupo, grupo_nome, setor, tipo_culto, tema,
-                qtd_pessoas, qtd_nao_crentes, qtd_conversoes, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                coordenador1_nome, coordenador2_nome, lider_nome,
+                qtd_pessoas, qtd_participantes, qtd_presentes, qtd_ausentes,
+                qtd_nao_crentes, qtd_conversoes, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(data, id_grupo, tipo_culto) DO UPDATE SET
                    grupo_nome=excluded.grupo_nome,
                    setor=excluded.setor,
                    tema=excluded.tema,
+                   coordenador1_nome=excluded.coordenador1_nome,
+                   coordenador2_nome=excluded.coordenador2_nome,
+                   lider_nome=excluded.lider_nome,
                    qtd_pessoas=excluded.qtd_pessoas,
+                   qtd_participantes=excluded.qtd_participantes,
+                   qtd_presentes=excluded.qtd_presentes,
+                   qtd_ausentes=excluded.qtd_ausentes,
                    qtd_nao_crentes=excluded.qtd_nao_crentes,
                    qtd_conversoes=excluded.qtd_conversoes,
                    observacoes=excluded.observacoes,
                    atualizado_em=datetime('now')""",
             (
                 data, int(id_grupo), sanitizar(grupo_nome), sanitizar(setor),
-                tipo_culto, sanitizar(tema), qtd_pessoas,
+                tipo_culto, sanitizar(tema), sanitizar(coordenador1_nome),
+                sanitizar(coordenador2_nome), sanitizar(lider_nome), qtd_pessoas,
+                qtd_participantes, qtd_presentes, qtd_ausentes,
                 qtd_nao_crentes, qtd_conversoes, sanitizar(observacoes),
             ),
         )
@@ -1206,7 +1302,9 @@ def salvar_gfc_reuniao(
             "SELECT id_reuniao FROM gfc_reunioes WHERE data=? AND id_grupo=? AND tipo_culto=?",
             (data, int(id_grupo), tipo_culto),
         ).fetchone()
-        return int(row["id_reuniao"] if row else cur.lastrowid)
+        id_final = int(row["id_reuniao"] if row else cur.lastrowid)
+        _salvar_presencas(id_final)
+        return id_final
 
 
 def excluir_gfc_reuniao(slug, id_reuniao):
