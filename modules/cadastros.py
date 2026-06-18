@@ -1,6 +1,8 @@
 import datetime
+import html
 import streamlit as st
 import pandas as pd
+import streamlit.components.v1 as components
 
 from data.models import Cadastro, limpar_documento
 from data.repository import (
@@ -103,6 +105,225 @@ def _congregacao_da_sessao(slug, igreja):
         or slug
         or ""
     ).strip()
+
+
+def _html(valor):
+    return html.escape(str(valor if valor is not None else ""), quote=True)
+
+
+def _campo_linha(rotulo, valor):
+    valor = _html(valor or "")
+    return (
+        '<div class="campo">'
+        f'<div class="rotulo">{_html(rotulo)}</div>'
+        f'<div class="valor">{valor}</div>'
+        '</div>'
+    )
+
+
+def _gerar_html_formulario_membro(row, igreja):
+    igreja = igreja if isinstance(igreja, dict) else {}
+    nome_igreja = igreja.get("nome") or igreja.get("slug") or "Igreja"
+    tipo = _val(row, "tipo_cadastro")
+    documento = _formatar_doc(_val(row, "cpf"), tipo)
+    nascimento = _formatar_data(_val(row, "data_nascimento"))
+    telefone = _formatar_tel(_val(row, "telefone"))
+    cep = _formatar_cep(_val(row, "cep"))
+    endereco = " ".join(
+        p for p in [
+            _val(row, "logradouro"),
+            _val(row, "numero"),
+        ]
+        if p
+    )
+    emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    return f"""
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Formulario de cadastro - {_html(_val(row, "nome"))}</title>
+<style>
+* {{ box-sizing: border-box; }}
+body {{
+    margin: 0;
+    padding: 18px;
+    background: #f3f4f6;
+    color: #111827;
+    font-family: Arial, Helvetica, sans-serif;
+}}
+.toolbar {{
+    text-align: center;
+    margin-bottom: 14px;
+}}
+.toolbar button {{
+    background: #0F6E56;
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}}
+.folha {{
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    background: white;
+    padding: 16mm;
+    border: 1px solid #d1d5db;
+}}
+.cabecalho {{
+    text-align: center;
+    border-bottom: 2px solid #111827;
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+}}
+.igreja {{
+    font-size: 18px;
+    font-weight: 800;
+    text-transform: uppercase;
+}}
+.titulo {{
+    font-size: 15px;
+    font-weight: 700;
+    margin-top: 6px;
+}}
+.emitido {{
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 4px;
+}}
+.secao {{
+    margin-top: 16px;
+}}
+.secao h2 {{
+    font-size: 13px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #9ca3af;
+    padding-bottom: 4px;
+    margin: 0 0 8px;
+}}
+.grid {{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 12px;
+}}
+.grid-3 {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px 12px;
+}}
+.campo {{
+    min-height: 42px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 6px 8px;
+}}
+.campo.full {{
+    grid-column: 1 / -1;
+}}
+.rotulo {{
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}}
+.valor {{
+    font-size: 13px;
+    font-weight: 600;
+    min-height: 16px;
+    word-break: break-word;
+}}
+.observacoes {{
+    height: 80px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px;
+}}
+.assinaturas {{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+    margin-top: 42px;
+}}
+.assinatura {{
+    border-top: 1px solid #111827;
+    text-align: center;
+    padding-top: 6px;
+    font-size: 12px;
+}}
+@media print {{
+    body {{ background: white; padding: 0; }}
+    .toolbar {{ display: none !important; }}
+    .folha {{
+        width: 100%;
+        min-height: auto;
+        margin: 0;
+        border: 0;
+        padding: 12mm;
+    }}
+}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+    <button onclick="window.print()">Imprimir formulario</button>
+</div>
+<main class="folha">
+    <header class="cabecalho">
+        <div class="igreja">{_html(nome_igreja)}</div>
+        <div class="titulo">Formulario de Cadastro de Membro</div>
+        <div class="emitido">Emitido em {emitido}</div>
+    </header>
+
+    <section class="secao">
+        <h2>Dados principais</h2>
+        <div class="grid">
+            {_campo_linha("Nome completo", _val(row, "nome"))}
+            {_campo_linha("Tipo de cadastro", tipo)}
+            {_campo_linha("CPF", documento)}
+            {_campo_linha("Data de nascimento", nascimento)}
+            {_campo_linha("Sexo", _val(row, "sexo"))}
+            {_campo_linha("Situacao", _val(row, "situacao"))}
+            {_campo_linha("Funcao ministerial", _val(row, "funcao"))}
+            {_campo_linha("Congregacao", _val(row, "congregacao"))}
+        </div>
+    </section>
+
+    <section class="secao">
+        <h2>Contato</h2>
+        <div class="grid">
+            {_campo_linha("Telefone / WhatsApp", telefone)}
+            {_campo_linha("CEP", cep)}
+        </div>
+    </section>
+
+    <section class="secao">
+        <h2>Endereco</h2>
+        <div class="grid">
+            {_campo_linha("Rua / Avenida", endereco)}
+            {_campo_linha("Bairro", _val(row, "bairro"))}
+            {_campo_linha("Cidade", _val(row, "cidade"))}
+            {_campo_linha("Numero", _val(row, "numero"))}
+        </div>
+    </section>
+
+    <section class="secao">
+        <h2>Observacoes</h2>
+        <div class="observacoes"></div>
+    </section>
+
+    <section class="assinaturas">
+        <div class="assinatura">Assinatura do membro</div>
+        <div class="assinatura">Responsavel pelo cadastro</div>
+    </section>
+</main>
+</body>
+</html>
+"""
 
 
 def render():
@@ -381,6 +602,45 @@ def render():
             st.dataframe(df_view, use_container_width=True)
 
     # ── Editar / Excluir ──────────────────────────────────────────────────
+    with st.expander("Imprimir formulario de cadastro de membro", expanded=False):
+        if df.empty:
+            st.info("Nenhum cadastro ainda.")
+        else:
+            df_membros = (
+                df[df["tipo_cadastro"].fillna("").astype(str).str.strip().str.upper() == "MEMBRO"].copy()
+                if "tipo_cadastro" in df.columns
+                else pd.DataFrame()
+            )
+
+            if df_membros.empty:
+                st.info("Nenhum membro cadastrado para impressao.")
+            else:
+                df_membros = df_membros.sort_values("nome")
+                op_membros = {
+                    f'{int(row["id_cadastro"])} | {row["nome"]} | {row["situacao"]}': row
+                    for _, row in df_membros.iterrows()
+                }
+                membro_imp = st.selectbox(
+                    "Selecione o membro",
+                    list(op_membros.keys()),
+                    key="sel_membro_impressao_formulario",
+                )
+                row_imp = op_membros[membro_imp]
+                html_form = _gerar_html_formulario_membro(row_imp, igreja)
+                components.html(html_form, height=760, scrolling=True)
+                nome_arquivo = (
+                    "formulario_cadastro_"
+                    + str(row_imp.get("nome", "membro")).strip().replace(" ", "_").lower()
+                    + ".html"
+                )
+                st.download_button(
+                    "Baixar formulario HTML",
+                    data=html_form,
+                    file_name=nome_arquivo,
+                    mime="text/html",
+                    use_container_width=True,
+                )
+
     with st.expander("Editar ou excluir cadastro", expanded=False):
         if df.empty:
             st.info("Nenhum cadastro ainda.")
