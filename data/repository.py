@@ -724,6 +724,20 @@ def _garantir_tabelas_gfc(conn):
             atualizado_em TEXT DEFAULT (datetime('now')),
             UNIQUE(nome, setor)
         );
+        CREATE TABLE IF NOT EXISTS gfc_matriculas (
+            id_matricula INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_grupo     INTEGER NOT NULL REFERENCES gfc_grupos(id_grupo) ON DELETE CASCADE,
+            id_cadastro  INTEGER REFERENCES cadastros(id_cadastro),
+            nome         TEXT NOT NULL,
+            telefone     TEXT DEFAULT '',
+            ativa        INTEGER NOT NULL DEFAULT 1,
+            data_inicio  TEXT DEFAULT '',
+            data_fim     TEXT DEFAULT '',
+            observacoes  TEXT DEFAULT '',
+            criado_em    TEXT DEFAULT (datetime('now')),
+            atualizado_em TEXT DEFAULT (datetime('now')),
+            UNIQUE(id_grupo, id_cadastro)
+        );
         CREATE TABLE IF NOT EXISTS gfc_reunioes (
             id_reuniao       INTEGER PRIMARY KEY AUTOINCREMENT,
             data             TEXT NOT NULL,
@@ -749,6 +763,7 @@ def _garantir_tabelas_gfc(conn):
         CREATE TABLE IF NOT EXISTS gfc_presencas (
             id_presenca   INTEGER PRIMARY KEY AUTOINCREMENT,
             id_reuniao    INTEGER NOT NULL REFERENCES gfc_reunioes(id_reuniao) ON DELETE CASCADE,
+            id_matricula  INTEGER REFERENCES gfc_matriculas(id_matricula) ON DELETE CASCADE,
             id_cadastro   INTEGER REFERENCES cadastros(id_cadastro),
             nome          TEXT NOT NULL,
             presente      INTEGER NOT NULL DEFAULT 0,
@@ -773,6 +788,10 @@ def _garantir_tabelas_gfc(conn):
         );
         CREATE INDEX IF NOT EXISTS idx_gfc_grupos_ativo
             ON gfc_grupos(ativo);
+        CREATE INDEX IF NOT EXISTS idx_gfc_matriculas_grupo
+            ON gfc_matriculas(id_grupo);
+        CREATE INDEX IF NOT EXISTS idx_gfc_matriculas_ativa
+            ON gfc_matriculas(ativa);
         CREATE INDEX IF NOT EXISTS idx_gfc_reunioes_data
             ON gfc_reunioes(data);
         CREATE INDEX IF NOT EXISTS idx_gfc_reunioes_grupo
@@ -831,6 +850,15 @@ def _garantir_tabelas_gfc(conn):
     ]:
         if col not in cols_reunioes:
             conn.execute(f"ALTER TABLE gfc_reunioes ADD COLUMN {col} {tipo}")
+
+    cols_presencas = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(gfc_presencas)").fetchall()
+    ]
+    if "id_matricula" not in cols_presencas:
+        conn.execute(
+            "ALTER TABLE gfc_presencas ADD COLUMN id_matricula INTEGER REFERENCES gfc_matriculas(id_matricula)"
+        )
 
 
 def _normalizar_tipo_culto_gfc(tipo):
@@ -1114,6 +1142,141 @@ def excluir_gfc_lider(slug, id_lider):
         return False
 
 
+def listar_gfc_matriculas(slug, id_grupo=None, incluir_inativas=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        where = []
+        params = []
+        if id_grupo:
+            where.append("m.id_grupo=?")
+            params.append(int(id_grupo))
+        if not incluir_inativas:
+            where.append("m.ativa=1")
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return pd.read_sql_query(
+            f"""SELECT m.id_matricula, m.id_grupo, g.nome AS grupo, g.setor,
+                       m.id_cadastro, m.nome, m.telefone, m.ativa,
+                       m.data_inicio, m.data_fim, m.observacoes,
+                       c.funcao, c.congregacao, c.situacao
+                FROM gfc_matriculas m
+                LEFT JOIN gfc_grupos g ON g.id_grupo=m.id_grupo
+                LEFT JOIN cadastros c ON c.id_cadastro=m.id_cadastro
+                {filtro}
+                ORDER BY g.setor, g.nome, m.ativa DESC, m.nome""",
+            conn,
+            params=params,
+        )
+
+
+def salvar_gfc_matricula(
+    slug,
+    id_grupo,
+    nome="",
+    id_cadastro=None,
+    telefone="",
+    data_inicio="",
+    observacoes="",
+    id_matricula=None,
+    ativa=True,
+):
+    id_grupo = int(id_grupo)
+    id_cadastro = int(id_cadastro) if id_cadastro else None
+    nome = sanitizar(nome)
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        grupo = conn.execute(
+            "SELECT 1 FROM gfc_grupos WHERE id_grupo=?",
+            (id_grupo,),
+        ).fetchone()
+        if not grupo:
+            raise ValueError("Grupo familiar nao encontrado.")
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT nome, telefone FROM cadastros WHERE id_cadastro=?",
+                (id_cadastro,),
+            ).fetchone()
+            if row:
+                nome = sanitizar(row["nome"])
+                telefone = sanitizar(telefone or row["telefone"] or "")
+        if not nome:
+            raise ValueError("Nome do matriculado e obrigatorio.")
+        dados = (
+            id_grupo, id_cadastro, nome, sanitizar(telefone), int(bool(ativa)),
+            str(data_inicio or ""), sanitizar(observacoes),
+        )
+        if id_matricula:
+            conn.execute(
+                """UPDATE gfc_matriculas
+                   SET id_grupo=?, id_cadastro=?, nome=?, telefone=?, ativa=?,
+                       data_inicio=?, observacoes=?, atualizado_em=datetime('now')
+                   WHERE id_matricula=?""",
+                dados + (int(id_matricula),),
+            )
+            return int(id_matricula)
+        cur = conn.execute(
+            """INSERT INTO gfc_matriculas
+               (id_grupo, id_cadastro, nome, telefone, ativa, data_inicio, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id_grupo, id_cadastro) DO UPDATE SET
+                   nome=excluded.nome,
+                   telefone=excluded.telefone,
+                   ativa=1,
+                   data_inicio=excluded.data_inicio,
+                   data_fim='',
+                   observacoes=excluded.observacoes,
+                   atualizado_em=datetime('now')""",
+            dados,
+        )
+        if id_cadastro:
+            row = conn.execute(
+                "SELECT id_matricula FROM gfc_matriculas WHERE id_grupo=? AND id_cadastro=?",
+                (id_grupo, id_cadastro),
+            ).fetchone()
+            return int(row["id_matricula"])
+        return int(cur.lastrowid)
+
+
+def encerrar_gfc_matricula(slug, id_matricula, data_fim=""):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        conn.execute(
+            """UPDATE gfc_matriculas
+               SET ativa=0, data_fim=?, atualizado_em=datetime('now')
+               WHERE id_matricula=?""",
+            (str(data_fim or ""), int(id_matricula)),
+        )
+
+
+def excluir_gfc_matricula(slug, id_matricula, data_fim=""):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_gfc(conn)
+        usos = conn.execute(
+            "SELECT COUNT(*) AS total FROM gfc_presencas WHERE id_matricula=?",
+            (int(id_matricula),),
+        ).fetchone()["total"]
+        if usos:
+            conn.execute(
+                """UPDATE gfc_matriculas
+                   SET ativa=0, data_fim=?, atualizado_em=datetime('now')
+                   WHERE id_matricula=?""",
+                (str(data_fim or ""), int(id_matricula)),
+            )
+            return False
+        conn.execute(
+            "DELETE FROM gfc_matriculas WHERE id_matricula=?",
+            (int(id_matricula),),
+        )
+        return True
+
+
 def listar_gfc_reunioes(slug, data_inicio=None, data_fim=None, id_grupo=None, setor="", tipo_culto=""):
     db = _tenant_db(slug)
     if not db.exists():
@@ -1162,7 +1325,7 @@ def listar_gfc_presencas(slug, id_reuniao):
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
         return pd.read_sql_query(
-            """SELECT id_presenca, id_reuniao, id_cadastro, nome, presente, observacao
+            """SELECT id_presenca, id_reuniao, id_matricula, id_cadastro, nome, presente, observacao
                FROM gfc_presencas
                WHERE id_reuniao=?
                ORDER BY nome""",
@@ -1227,13 +1390,15 @@ def salvar_gfc_reuniao(
                 nome_presenca = sanitizar(str(presenca.get("nome", "") or "").strip())
                 if not nome_presenca:
                     continue
+                id_matricula_presenca = presenca.get("id_matricula")
                 id_cadastro_presenca = presenca.get("id_cadastro")
                 conn.execute(
                     """INSERT INTO gfc_presencas
-                       (id_reuniao, id_cadastro, nome, presente, observacao)
-                       VALUES (?, ?, ?, ?, ?)""",
+                       (id_reuniao, id_matricula, id_cadastro, nome, presente, observacao)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
                     (
                         int(id_reuniao_final),
+                        int(id_matricula_presenca) if id_matricula_presenca else None,
                         int(id_cadastro_presenca) if id_cadastro_presenca else None,
                         nome_presenca,
                         1 if bool(presenca.get("presente")) else 0,

@@ -5,24 +5,28 @@ import streamlit as st
 
 from data.repository import (
     carregar_cadastros,
+    encerrar_gfc_matricula,
     excluir_gfc_coordenador,
     excluir_gfc_grupo,
     excluir_gfc_lider,
+    excluir_gfc_matricula,
     excluir_gfc_reuniao,
     inativar_gfc_secretaria,
     listar_gfc_coordenadores,
     listar_gfc_grupos,
     listar_gfc_lideres,
+    listar_gfc_matriculas,
     listar_gfc_presencas,
     listar_gfc_reunioes,
     listar_gfc_secretarias,
     salvar_gfc_coordenador,
     salvar_gfc_grupo,
     salvar_gfc_lider,
+    salvar_gfc_matricula,
     salvar_gfc_reuniao,
     salvar_gfc_secretaria,
 )
-from utils.helpers import gerar_csv, slug_da_sessao
+from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
 
 
 TIPOS_CULTO_GFC = [
@@ -46,6 +50,45 @@ def _fmt_data(valor):
         return datetime.date.fromisoformat(str(valor)).strftime("%d/%m/%Y")
     except Exception:
         return str(valor or "")
+
+
+def _data_iso(valor):
+    try:
+        if isinstance(valor, datetime.datetime):
+            return valor.date().isoformat()
+        if isinstance(valor, datetime.date):
+            return valor.isoformat()
+        texto = str(valor or "").strip()
+        if not texto:
+            return ""
+        for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.datetime.strptime(texto, formato).date().isoformat()
+            except Exception:
+                pass
+        return datetime.date.fromisoformat(texto).isoformat()
+    except Exception:
+        return ""
+
+
+def _filtrar_matriculas_validas_na_data(matriculas, data_referencia):
+    if matriculas.empty:
+        return matriculas
+
+    data_ref = _data_iso(data_referencia)
+    if not data_ref:
+        return matriculas[matriculas["ativa"] == 1].copy()
+
+    dados = matriculas.copy()
+    if "data_inicio" not in dados.columns:
+        dados["data_inicio"] = ""
+    if "data_fim" not in dados.columns:
+        dados["data_fim"] = ""
+    inicio = dados["data_inicio"].apply(_data_iso)
+    fim = dados["data_fim"].apply(_data_iso)
+
+    validas = (inicio.eq("") | (inicio <= data_ref)) & (fim.eq("") | (fim >= data_ref))
+    return dados[validas].copy()
 
 
 def _grupo_opcoes(grupos):
@@ -222,6 +265,191 @@ def _render_grupos(slug):
                 st.rerun()
 
 
+def _render_matriculas(slug, id_grupo_restrito=None):
+    st.markdown("### Matrículas GFC")
+    st.caption("Matricule participantes por grupo familiar. A chamada respeita a data de início e encerramento.")
+
+    grupos = listar_gfc_grupos(slug)
+    if id_grupo_restrito:
+        grupos = grupos[grupos["id_grupo"].astype(int) == int(id_grupo_restrito)].copy()
+    if grupos.empty:
+        st.warning("Nenhum grupo familiar ativo foi encontrado.")
+        return
+
+    op_grupos = _grupo_opcoes(grupos)
+    op_membros, _ = _membros_opcoes(slug)
+
+    with st.expander("Nova matrícula", expanded=False):
+        with st.form("form_gfc_matricula"):
+            grupo_label = st.selectbox("Grupo familiar", list(op_grupos.keys()))
+            if not op_membros:
+                st.warning("Não há membros ativos disponíveis para matrícula.")
+                membro_label = None
+            else:
+                membro_label = st.selectbox("Membro", list(op_membros.keys()))
+            c1, c2 = st.columns(2)
+            data_inicio = c1.date_input("Data de início", value=_hoje(), format="DD/MM/YYYY")
+            observacoes = c2.text_input("Observações")
+            if st.form_submit_button("Matricular", type="primary"):
+                if not membro_label:
+                    st.error("Selecione um membro.")
+                else:
+                    membro = op_membros[membro_label]
+                    salvar_gfc_matricula(
+                        slug,
+                        id_grupo=op_grupos[grupo_label],
+                        id_cadastro=int(membro["id_cadastro"]),
+                        data_inicio=data_inicio.isoformat(),
+                        observacoes=observacoes,
+                    )
+                    st.success("Matrícula GFC salva.")
+                    st.rerun()
+
+    grupo_filtro = None
+    if id_grupo_restrito:
+        grupo_filtro = int(id_grupo_restrito)
+    else:
+        filtro_label = st.selectbox(
+            "Filtrar matrículas por grupo",
+            ["Todos"] + list(op_grupos.keys()),
+            key="gfc_matriculas_filtro_grupo",
+        )
+        if filtro_label != "Todos":
+            grupo_filtro = op_grupos[filtro_label]
+
+    matriculas = listar_gfc_matriculas(
+        slug,
+        id_grupo=grupo_filtro,
+        incluir_inativas=True,
+    )
+    if matriculas.empty:
+        st.info("Nenhuma matrícula GFC cadastrada.")
+        return
+
+    exibir = matriculas.copy()
+    exibir["situacao_matricula"] = exibir["ativa"].map({1: "Ativa", 0: "Encerrada"})
+    exibir["data_inicio"] = exibir["data_inicio"].apply(_fmt_data)
+    exibir["data_fim"] = exibir["data_fim"].apply(_fmt_data)
+    st.dataframe(
+        exibir[[
+            "grupo", "setor", "nome", "telefone", "funcao", "situacao_matricula",
+            "data_inicio", "data_fim", "observacoes",
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    op_matriculas = {
+        f'{int(row["id_matricula"])} - {row["nome"]} ({row["grupo"]})': row
+        for _, row in matriculas.iterrows()
+    }
+
+    with st.expander("Editar matrícula", expanded=False):
+        selecionada = st.selectbox(
+            "Matrícula para editar",
+            ["Selecione"] + list(op_matriculas.keys()),
+            key="gfc_editar_matricula",
+        )
+        if selecionada != "Selecione":
+            row = op_matriculas[selecionada]
+            grupo_labels = list(op_grupos.keys())
+            grupo_idx = 0
+            for idx, label in enumerate(grupo_labels):
+                if op_grupos[label] == int(row["id_grupo"]):
+                    grupo_idx = idx
+                    break
+            with st.form(f"form_editar_matricula_gfc_{int(row['id_matricula'])}"):
+                grupo_label = st.selectbox("Grupo familiar", grupo_labels, index=grupo_idx)
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome", value=row.get("nome", ""))
+                telefone = c2.text_input("Telefone / WhatsApp", value=row.get("telefone", ""))
+                data_inicio = st.text_input("Data de início", value=str(row.get("data_inicio", "") or ""))
+                ativa = st.selectbox(
+                    "Situação",
+                    ["Ativa", "Encerrada"],
+                    index=0 if int(row.get("ativa", 1) or 0) == 1 else 1,
+                )
+                observacoes = st.text_area("Observações", value=row.get("observacoes", ""))
+                if st.form_submit_button("Atualizar matrícula", type="primary"):
+                    salvar_gfc_matricula(
+                        slug,
+                        id_grupo=op_grupos[grupo_label],
+                        nome=nome,
+                        id_cadastro=row.get("id_cadastro"),
+                        telefone=telefone,
+                        data_inicio=data_inicio,
+                        observacoes=observacoes,
+                        id_matricula=int(row["id_matricula"]),
+                        ativa=ativa == "Ativa",
+                    )
+                    st.success("Matrícula GFC atualizada.")
+                    st.rerun()
+
+    ativas = matriculas[matriculas["ativa"] == 1]
+    if not ativas.empty:
+        op_ativas = [
+            f'{int(row["id_matricula"])} - {row["nome"]} ({row["grupo"]})'
+            for _, row in ativas.iterrows()
+        ]
+
+        with st.expander("Encerrar matrícula", expanded=False):
+            st.caption(
+                "Use esta opção para remover a pessoa das próximas chamadas "
+                "sem apagar o histórico de participação já registrado."
+            )
+            encerrar = st.selectbox(
+                "Matrícula ativa",
+                ["Selecione"] + op_ativas,
+                key="gfc_encerrar_matricula",
+            )
+            data_fim = st.date_input(
+                "Data de encerramento",
+                value=_hoje(),
+                format="DD/MM/YYYY",
+                key="gfc_data_fim_matricula",
+            )
+            if encerrar != "Selecione" and confirmar_exclusao(
+                f"encerrar_gfc_{encerrar}",
+                "Confirmar encerramento da matrícula",
+            ):
+                encerrar_gfc_matricula(
+                    slug,
+                    int(encerrar.split(" - ")[0]),
+                    data_fim.isoformat(),
+                )
+                st.success(
+                    "Matrícula encerrada. O histórico foi preservado e ela "
+                    "não aparecerá nas próximas chamadas após a data de encerramento."
+                )
+                st.rerun()
+
+        with st.expander("Excluir matrícula sem histórico", expanded=False):
+            st.caption(
+                "A exclusão definitiva só deve ser usada para cadastro lançado por engano. "
+                "Se houver histórico, o sistema encerrará a matrícula em vez de apagar."
+            )
+            excluir = st.selectbox(
+                "Matrícula para excluir",
+                ["Selecione"] + op_ativas,
+                key="gfc_excluir_matricula",
+            )
+            if excluir != "Selecione" and confirmar_exclusao(
+                f"excluir_gfc_{excluir}",
+                "Confirmar exclusão da matrícula sem histórico",
+            ):
+                removida = excluir_gfc_matricula(
+                    slug,
+                    int(excluir.split(" - ")[0]),
+                    _hoje().isoformat(),
+                )
+                st.success(
+                    "Matrícula excluída."
+                    if removida
+                    else "Matrícula encerrada porque já possui histórico."
+                )
+                st.rerun()
+
+
 def _render_reunioes(slug, id_grupo_restrito=None):
     st.markdown("### Registro de Culto GFC")
     grupos = listar_gfc_grupos(slug)
@@ -321,8 +549,8 @@ def _render_reunioes(slug, id_grupo_restrito=None):
     if reuniao_atual is not None:
         df_pres = listar_gfc_presencas(slug, int(reuniao_atual["id_reuniao"]))
         for _, row in df_pres.iterrows():
-            if pd.notna(row.get("id_cadastro")):
-                presencas_salvas[int(row["id_cadastro"])] = bool(row.get("presente", 0))
+            if pd.notna(row.get("id_matricula")):
+                presencas_salvas[int(row["id_matricula"])] = bool(row.get("presente", 0))
 
     acao_presencas = st.radio(
         "Presenças da lista de chamada",
@@ -386,30 +614,40 @@ def _render_reunioes(slug, id_grupo_restrito=None):
             value=str(reuniao_atual.get("tema", "") or "") if reuniao_atual is not None else "",
         )
 
-        _, membros_chamada = _membros_opcoes(slug)
-        if membros_chamada.empty:
-            st.info("Nenhum membro ativo encontrado para montar a lista de chamada.")
-            editado = pd.DataFrame(columns=["id_cadastro", "nome", "presente"])
+        matriculas_chamada = listar_gfc_matriculas(
+            slug,
+            id_grupo=int(op_grupos[grupo_label]),
+            incluir_inativas=True,
+        )
+        matriculas_chamada = _filtrar_matriculas_validas_na_data(matriculas_chamada, data)
+        if matriculas_chamada.empty:
+            st.info(
+                "Nenhuma matrícula ativa para este grupo na data selecionada. "
+                "Use a aba Matrículas para incluir participantes."
+            )
+            editado = pd.DataFrame(columns=["id_matricula", "id_cadastro", "nome", "presente"])
         else:
-            dados = membros_chamada[["id_cadastro", "nome"]].copy()
+            dados = matriculas_chamada[["id_matricula", "id_cadastro", "nome"]].copy()
+            dados["id_matricula"] = pd.to_numeric(dados["id_matricula"], errors="coerce").fillna(0).astype(int)
             dados["id_cadastro"] = pd.to_numeric(dados["id_cadastro"], errors="coerce").fillna(0).astype(int)
             if acao_presencas == "Marcar todas":
                 dados["presente"] = True
             elif acao_presencas == "Desmarcar todas":
                 dados["presente"] = False
             else:
-                dados["presente"] = dados["id_cadastro"].apply(
+                dados["presente"] = dados["id_matricula"].apply(
                     lambda x: presencas_salvas.get(int(x), False)
                 )
             with st.expander("Lista de chamada", expanded=True):
-                st.caption("Marque os membros presentes no culto do grupo familiar.")
+                st.caption("Marque os matriculados presentes no culto do grupo familiar.")
                 editado = st.data_editor(
                     dados,
                     hide_index=True,
                     use_container_width=True,
-                    disabled=["id_cadastro", "nome"],
+                    disabled=["id_matricula", "id_cadastro", "nome"],
                     key=f"gfc_editor_chamada_{int(op_grupos[grupo_label])}_{acao_presencas}",
                     column_config={
+                        "id_matricula": st.column_config.NumberColumn("Matrícula"),
                         "id_cadastro": st.column_config.NumberColumn("ID"),
                         "nome": st.column_config.TextColumn("Nome"),
                         "presente": st.column_config.CheckboxColumn("Presente"),
@@ -457,6 +695,7 @@ def _render_reunioes(slug, id_grupo_restrito=None):
                         if not nome_presenca:
                             continue
                         presencas.append({
+                            "id_matricula": int(row.get("id_matricula", 0) or 0),
                             "id_cadastro": int(row.get("id_cadastro", 0) or 0),
                             "nome": nome_presenca,
                             "presente": bool(row.get("presente", False)),
@@ -895,27 +1134,38 @@ def render():
     st.caption("Primeira etapa: cadastro dos grupos, registro dos cultos e relatório básico.")
 
     if modo == "secretaria_gfc" and perfil_secretaria != "geral":
-        _render_reunioes(slug, id_grupo_restrito=secretaria.get("id_grupo"))
+        tab_matriculas_sec, tab_reunioes_sec = st.tabs([
+            "Matrículas",
+            "Registro de culto",
+        ])
+        with tab_matriculas_sec:
+            _render_matriculas(slug, id_grupo_restrito=secretaria.get("id_grupo"))
+        with tab_reunioes_sec:
+            _render_reunioes(slug, id_grupo_restrito=secretaria.get("id_grupo"))
         return
 
     incluir_secretarias = modo != "secretaria_gfc" or perfil_secretaria == "geral"
     if incluir_secretarias:
-        tab_grupos, tab_reunioes, tab_relatorios, tab_coord_lideres, tab_secretarias = st.tabs([
+        tab_grupos, tab_matriculas, tab_reunioes, tab_relatorios, tab_coord_lideres, tab_secretarias = st.tabs([
             "Grupos",
+            "Matrículas",
             "Registro de culto",
             "Relatórios",
             "Coordenadores e lideres",
             "Secretarias",
         ])
     else:
-        tab_grupos, tab_reunioes, tab_relatorios = st.tabs([
-        "Grupos",
-        "Registro de culto",
-        "Relatórios",
-    ])
+        tab_grupos, tab_matriculas, tab_reunioes, tab_relatorios = st.tabs([
+            "Grupos",
+            "Matrículas",
+            "Registro de culto",
+            "Relatórios",
+        ])
 
     with tab_grupos:
         _render_grupos(slug)
+    with tab_matriculas:
+        _render_matriculas(slug)
     with tab_reunioes:
         _render_reunioes(slug)
     with tab_relatorios:
