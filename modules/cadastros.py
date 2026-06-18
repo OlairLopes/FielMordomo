@@ -603,7 +603,40 @@ def render():
 
     # ── Editar / Excluir ──────────────────────────────────────────────────
     with st.expander("Imprimir formulario de cadastro de membro", expanded=False):
-        if df.empty:
+        tipo_formulario = st.radio(
+            "Tipo de formulario",
+            ["Em branco", "Preenchido com dados de um membro"],
+            horizontal=True,
+            key="tipo_formulario_impressao_membro",
+        )
+
+        if tipo_formulario == "Em branco":
+            row_imp = {
+                "nome": "",
+                "tipo_cadastro": "Membro",
+                "cpf": "",
+                "data_nascimento": "",
+                "sexo": "",
+                "situacao": "",
+                "funcao": "",
+                "congregacao": congregacao_fixa,
+                "telefone": "",
+                "cep": "",
+                "logradouro": "",
+                "numero": "",
+                "bairro": "",
+                "cidade": "",
+            }
+            html_form = _gerar_html_formulario_membro(row_imp, igreja)
+            components.html(html_form, height=760, scrolling=True)
+            st.download_button(
+                "Baixar formulario em branco HTML",
+                data=html_form,
+                file_name="formulario_cadastro_membro_em_branco.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+        elif df.empty:
             st.info("Nenhum cadastro ainda.")
         else:
             df_membros = (
