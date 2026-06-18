@@ -1165,12 +1165,15 @@ def _render_atualizar_cadastro_publico():
     data_salva = st.session_state.get("cadastro_publico_data", "")
     data_salva_br = st.session_state.get("cadastro_publico_data_br", _formatar_data_br(data_salva))
     if not cadastro and st.session_state.get("mostrar_pre_cadastro_publico"):
-        st.markdown("### Enviar pre-cadastro")
-        st.caption(
-            "Seu pre-cadastro sera enviado para analise. A secretaria da igreja "
-            "precisara aprovar antes de virar cadastro oficial."
-        )
-        st.info(f"Data de nascimento informada: {data_salva_br}")
+        info_col1, info_col2 = st.columns(2)
+        with info_col1:
+            st.markdown("### Enviar pre-cadastro")
+        with info_col2:
+            st.caption(
+                "Seu pre-cadastro sera enviado para analise. A secretaria da igreja "
+                "precisara aprovar antes de virar cadastro oficial."
+            )
+            st.info(f"Data de nascimento informada: {data_salva_br}")
         with st.form("form_pre_cadastro_publico"):
             nome = st.text_input("Nome completo")
             c1, c2, c3 = st.columns(3)
@@ -1232,8 +1235,12 @@ def _render_atualizar_cadastro_publico():
     if not cadastro:
         return
 
-    st.info(f"Igreja: {cadastro.get('igreja_nome', slug_salvo)}")
-    st.caption(f"Data de nascimento confirmada: {data_salva_br}")
+    info_col1, info_col2 = st.columns(2)
+    with info_col1:
+        st.markdown("### Atualizar cadastro")
+    with info_col2:
+        st.info(f"Igreja: {cadastro.get('igreja_nome', slug_salvo)}")
+        st.caption(f"Data de nascimento confirmada: {data_salva_br}")
     with st.form("form_atualizar_cadastro_publico"):
         nome = st.text_input("Nome completo", value=cadastro.get("nome", ""))
         c1, c2 = st.columns(2)
