@@ -10,6 +10,8 @@ from data.repository import (
     autenticar_senha_pastoral,
     carregar_cadastros,
     carregar_lancamentos,
+    listar_orhafe_coordenadoras,
+    listar_orhafe_lideres,
     listar_orhafe_reunioes,
     obter_config_igreja,
     relatorio_orhafe_visitantes,
@@ -1169,17 +1171,56 @@ def render():
                     inicio_pastoral.isoformat(),
                     fim_pastoral.isoformat(),
                 )
+                lideres_cadastradas_orhafe = listar_orhafe_lideres(slug)
+                coordenadoras_cadastradas_orhafe = listar_orhafe_coordenadoras(slug)
             except Exception as exc:
                 st.warning(f"Não foi possível carregar os indicadores do Círculo de Oração: {exc}")
                 reunioes_orhafe = pd.DataFrame()
                 visitantes_orhafe = pd.DataFrame()
+                lideres_cadastradas_orhafe = pd.DataFrame()
+                coordenadoras_cadastradas_orhafe = pd.DataFrame()
 
             if reunioes_orhafe.empty:
                 st.info("Sem chamadas do Círculo de Oração no período selecionado.")
             else:
+                tipo_grafico_orhafe = st.selectbox(
+                    "Filtrar grÃ¡ficos por",
+                    ["Todas", "LÃ­deres", "Coordenadoras"],
+                    key=_sk("orhafe_tipo_grafico", slug),
+                )
+                nomes_permitidos = None
+                if tipo_grafico_orhafe == "LÃ­deres":
+                    nomes_permitidos = set(
+                        _texto(lideres_cadastradas_orhafe.get("nome", pd.Series(dtype=str)))
+                        .str.strip()
+                        .replace("", pd.NA)
+                        .dropna()
+                        .tolist()
+                    )
+                elif tipo_grafico_orhafe == "Coordenadoras":
+                    nomes_permitidos = set(
+                        _texto(coordenadoras_cadastradas_orhafe.get("nome", pd.Series(dtype=str)))
+                        .str.strip()
+                        .replace("", pd.NA)
+                        .dropna()
+                        .tolist()
+                    )
+
+                if nomes_permitidos is not None:
+                    reunioes_orhafe = reunioes_orhafe[
+                        _texto(reunioes_orhafe["lider"]).replace("", "Sem lider").isin(nomes_permitidos)
+                    ].copy()
+                    if not visitantes_orhafe.empty and "lider" in visitantes_orhafe.columns:
+                        visitantes_orhafe = visitantes_orhafe[
+                            _texto(visitantes_orhafe["lider"]).replace("", "Sem lider").isin(nomes_permitidos)
+                        ].copy()
+
+                if reunioes_orhafe.empty:
+                    st.info("Nenhuma chamada encontrada para o filtro selecionado.")
+
                 lideres_orhafe = sorted(
                     _texto(reunioes_orhafe["lider"]).replace("", "Sem lider").unique().tolist()
-                )
+                ) or ["Sem dados"]
                 lider_escolhida = st.selectbox(
                     "Líder para resumo",
                     lideres_orhafe,
