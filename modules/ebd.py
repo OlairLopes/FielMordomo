@@ -743,7 +743,10 @@ def _render_chamada(slug, id_classe_fixo=None):
         )
         return
 
-    aulas = listar_ebd_aulas(slug, data_aula.isoformat(), data_aula.isoformat(), id_classe)
+    if modo_chamada == "Editar chamada salva":
+        aulas = listar_ebd_aulas(slug, data_aula.isoformat(), data_aula.isoformat(), id_classe)
+    else:
+        aulas = pd.DataFrame()
     presencas_salvas = {}
     tema_atual = ""
     professor_atual = ""
@@ -756,8 +759,8 @@ def _render_chamada(slug, id_classe_fixo=None):
     biblias_atual = 0
     harpas_atual = 0
     ofertas_atual = 0.0
-    if aula_editada is not None or not aulas.empty:
-        aula = aula_editada if aula_editada is not None else aulas.iloc[0]
+    if aula_editada is not None:
+        aula = aula_editada
         tema_atual = aula.get("tema", "")
         professor_atual = aula.get("professor", "")
         obs_atual = aula.get("observacoes", "")
