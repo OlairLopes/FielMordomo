@@ -16,6 +16,7 @@ from data.repository import (
     autenticar_pastor_auxiliar, autenticar_recepcao,
     autenticar_recepcao_por_cpf4, autenticar_secretario_geral,
     carregar_tesoureiros, inicializar_master, listar_ebd_secretarios,
+    formatar_telefone,
     listar_gfc_grupos, listar_gfc_secretarias, listar_igrejas, listar_orhafe_secretarias, listar_pastores_auxiliares,
     listar_recepcao_usuarios, listar_secretarios_gerais,
     obter_logo_sistema, obter_config,
@@ -474,7 +475,7 @@ def _mostrar_recuperacao_senha():
             f'ðŸ’¬ Falar pelo WhatsApp</a>',
             unsafe_allow_html=True,
         )
-        st.caption(f"WhatsApp: **{wpp_admin}**")
+        st.caption(f"WhatsApp: **{formatar_telefone(wpp_admin)}**")
 
     st.divider()
 

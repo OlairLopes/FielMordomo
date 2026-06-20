@@ -21,6 +21,7 @@ import pandas as pd
 
 
 LOGGER = logging.getLogger(__name__)
+_PD_READ_SQL_QUERY = getattr(pd, "read_sql_query")
 PBKDF2_ITERACOES = 210_000
 SENHA_MIN_CARACTERES = 15
 SENHA_MAX_CARACTERES = 128
@@ -42,6 +43,41 @@ FORMAS_PAGAMENTO = {
     "Cartao Debito", "Cartao Credito",
 }
 MINISTERIO_PADRAO_SLUG = "ministerio-principal"
+
+
+def formatar_telefone(telefone) -> str:
+    texto_original = str(telefone if telefone is not None else "").strip()
+    digitos = "".join(c for c in texto_original if c.isdigit())
+
+    if digitos.startswith("55") and len(digitos) in (12, 13):
+        digitos = digitos[2:]
+
+    while digitos.startswith("0") and len(digitos) > 11:
+        digitos = digitos[1:]
+
+    if len(digitos) == 11:
+        return f"({digitos[:2]}) {digitos[2]} {digitos[3:7]}-{digitos[7:]}"
+
+    if len(digitos) == 10:
+        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
+
+    return texto_original
+
+
+def _formatar_colunas_telefone(df):
+    if df is None or df.empty:
+        return df
+
+    for coluna in df.columns:
+        nome_coluna = str(coluna).lower()
+        if "telefone" in nome_coluna or "whatsapp" in nome_coluna:
+            df[coluna] = df[coluna].apply(formatar_telefone)
+
+    return df
+
+
+def _read_sql_query_formatado(*args, **kwargs):
+    return _formatar_colunas_telefone(_PD_READ_SQL_QUERY(*args, **kwargs))
 
 
 class LimiteMembrosExcedido(ValueError):
@@ -895,7 +931,7 @@ def listar_gfc_grupos(slug, incluir_inativos=False):
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
         where = "" if incluir_inativos else "WHERE ativo=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_grupo, nome, setor, responsavel, telefone,
                        ativo, observacoes, criado_em, atualizado_em
                 FROM gfc_grupos
@@ -983,7 +1019,7 @@ def listar_gfc_coordenadores(slug, incluir_inativos=False):
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
         where = "" if incluir_inativos else "WHERE ativo=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_coordenador, id_cadastro, nome, telefone, funcao, setor,
                        ordem, ativo, observacoes, criado_em, atualizado_em
                 FROM gfc_coordenadores
@@ -1065,7 +1101,7 @@ def listar_gfc_lideres(slug, incluir_inativos=False):
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
         where = "" if incluir_inativos else "WHERE ativo=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_lider, id_cadastro, nome, telefone, funcao, setor,
                        ordem, ativo, observacoes, criado_em, atualizado_em
                 FROM gfc_lideres
@@ -1156,7 +1192,7 @@ def listar_gfc_matriculas(slug, id_grupo=None, incluir_inativas=False):
         if not incluir_inativas:
             where.append("m.ativa=1")
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT m.id_matricula, m.id_grupo, g.nome AS grupo, g.setor,
                        m.id_cadastro, m.nome, m.telefone, m.ativa,
                        m.data_inicio, m.data_fim, m.observacoes,
@@ -1301,7 +1337,7 @@ def listar_gfc_reunioes(slug, data_inicio=None, data_fim=None, id_grupo=None, se
             where.append("r.tipo_culto=?")
             params.append(_normalizar_tipo_culto_gfc(tipo_culto))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT r.id_reuniao, r.data, r.id_grupo,
                        COALESCE(g.nome, r.grupo_nome) AS grupo,
                        r.grupo_nome, r.setor, r.tipo_culto, r.tema,
@@ -1324,7 +1360,7 @@ def listar_gfc_presencas(slug, id_reuniao):
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             """SELECT id_presenca, id_reuniao, id_matricula, id_cadastro, nome, presente, observacao
                FROM gfc_presencas
                WHERE id_reuniao=?
@@ -1486,7 +1522,7 @@ def listar_gfc_secretarias(slug, incluir_inativas=True):
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
         where = "" if incluir_inativas else "WHERE situacao='Ativo'"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_secretaria, id_cadastro, nome, usuario, perfil, telefone, email,
                        situacao, observacoes, criado_em, atualizado_em
                 FROM gfc_secretarias
@@ -1985,7 +2021,7 @@ def listar_ebd_classes(slug, incluir_inativas=False):
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         where = "" if incluir_inativas else "WHERE ativa=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_classe, nome, faixa_etaria, professor_principal,
                        sala, ativa, observacoes, criado_em, atualizado_em
                 FROM ebd_classes
@@ -2061,7 +2097,7 @@ def listar_ebd_matriculas(slug, id_classe=None, incluir_inativas=False):
         if not incluir_inativas:
             where.append("m.ativa=1")
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT m.id_matricula, m.id_classe, c.nome AS classe,
                        m.id_cadastro, m.nome_aluno, m.ativa, m.data_inicio,
                        m.data_fim, m.observacoes
@@ -2142,7 +2178,7 @@ def listar_ebd_aulas(slug, data_inicio=None, data_fim=None, id_classe=None):
             where.append("a.id_classe=?")
             params.append(int(id_classe))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT a.id_aula, a.id_classe, c.nome AS classe, a.data,
                        a.tema, a.professor,
                        CASE WHEN a.qtd_matriculados > 0
@@ -2323,7 +2359,7 @@ def carregar_ebd_presencas(slug, id_aula):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             """SELECT p.id_presenca, p.id_aula, p.id_matricula, p.presente,
                       m.nome_aluno, c.nome AS classe
                FROM ebd_presencas p
@@ -2354,7 +2390,7 @@ def relatorio_ebd_frequencia(slug, data_inicio=None, data_fim=None, id_classe=No
             where.append("a.id_classe=?")
             params.append(int(id_classe))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT c.nome AS classe, m.nome_aluno,
                        COUNT(p.id_presenca) AS aulas,
                        SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presencas,
@@ -2404,7 +2440,7 @@ def listar_ebd_escala(slug, data_inicio=None, data_fim=None, id_classe=None):
             where.append("e.id_classe=?")
             params.append(int(id_classe))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT e.id_escala, e.data, e.id_classe,
                        COALESCE(c.nome, e.classe_nome) AS classe,
                        e.professor, e.funcao_professor, e.telefone_professor,
@@ -2509,7 +2545,7 @@ def listar_ebd_secretarios(slug, incluir_inativos=True):
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         where = "" if incluir_inativos else "WHERE s.situacao='Ativo'"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT s.id_secretario, s.nome, s.usuario, s.perfil,
                        s.id_classe, c.nome AS classe, s.telefone, s.email,
                        s.situacao, s.observacoes, s.criado_em, s.atualizado_em
@@ -2665,7 +2701,7 @@ def listar_orhafe_coordenadoras(slug, incluir_inativas=False):
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
         where = "" if incluir_inativas else "WHERE ativa=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_coordenadora, id_cadastro, nome, telefone, funcao, ordem,
                        ativa, observacoes, criado_em, atualizado_em
                 FROM orhafe_coordenadoras
@@ -2744,7 +2780,7 @@ def listar_orhafe_lideres(slug, incluir_inativos=False):
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
         where = "" if incluir_inativos else "WHERE ativo=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_lider, id_cadastro, nome, telefone, funcao, ordem, ativo,
                        observacoes, criado_em, atualizado_em
                 FROM orhafe_lideres
@@ -2832,7 +2868,7 @@ def listar_orhafe_matriculas(slug, incluir_inativas=False):
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
         where = "" if incluir_inativas else "WHERE m.ativa=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT m.id_matricula, m.id_cadastro, m.nome, m.telefone,
                        m.ativa, m.data_inicio, m.data_fim, m.observacoes,
                        c.funcao, c.congregacao, c.situacao
@@ -2956,7 +2992,7 @@ def listar_orhafe_reunioes(slug, data_inicio=None, data_fim=None):
             where.append("r.data<=?")
             params.append(str(data_fim))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT r.id_reuniao, r.data, r.tema, r.id_lider,
                        COALESCE(l.nome, r.lider_nome) AS lider,
                        r.qtd_matriculadas AS matriculadas,
@@ -2977,7 +3013,7 @@ def carregar_orhafe_presencas(slug, id_reuniao):
     db = _tenant_db(slug)
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             """SELECT id_presenca, id_reuniao, id_matricula, nome,
                       presente, visitante, observacao
                FROM orhafe_presencas
@@ -3147,7 +3183,7 @@ def relatorio_orhafe_frequencia(slug, data_inicio=None, data_fim=None):
             where.append("r.data<=?")
             params.append(str(data_fim))
         filtro = f"WHERE {' AND '.join(where)}"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT p.nome,
                        COUNT(p.id_presenca) AS reunioes,
                        SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presencas,
@@ -3177,7 +3213,7 @@ def relatorio_orhafe_visitantes(slug, data_inicio=None, data_fim=None):
             where.append("r.data<=?")
             params.append(str(data_fim))
         filtro = f"WHERE {' AND '.join(where)}"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT TRIM(p.nome) AS nome,
                        COALESCE(NULLIF(TRIM(l.nome), ''), 'Sem lider') AS lider,
                        COUNT(p.id_presenca) AS visitas
@@ -3213,7 +3249,7 @@ def listar_orhafe_secretarias(slug, incluir_inativas=True):
     with _conn(db) as conn:
         _garantir_tabelas_orhafe(conn)
         where = "" if incluir_inativas else "WHERE situacao='Ativo'"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_secretaria, id_cadastro, nome, usuario, perfil, telefone, email,
                        situacao, observacoes, criado_em, atualizado_em
                 FROM orhafe_secretarias
@@ -3452,7 +3488,7 @@ def listar_obreiros_por_funcoes(slug, funcoes):
     with _conn(db) as conn:
         _garantir_colunas_cadastros(conn)
         placeholders = ",".join("?" for _ in funcoes)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_cadastro, nome, funcao, telefone, congregacao
                 FROM cadastros
                 WHERE UPPER(TRIM(tipo_cadastro))='MEMBRO'
@@ -3479,7 +3515,7 @@ def listar_obreiros_reunioes(slug, data_inicio=None, data_fim=None):
             where.append("data<=?")
             params.append(str(data_fim))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_reuniao, data, tema, funcoes,
                        qtd_matriculados AS matriculados,
                        qtd_presentes AS presentes,
@@ -3502,7 +3538,7 @@ def carregar_obreiros_presencas(slug, id_reuniao):
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabelas_obreiros(conn)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             """SELECT id_presenca, id_reuniao, id_cadastro, nome, funcao,
                       presente, observacao
                FROM obreiros_presencas
@@ -3677,7 +3713,7 @@ def relatorio_obreiros_frequencia(slug, data_inicio=None, data_fim=None, funcao=
             where.append("p.funcao=?")
             params.append(str(funcao).strip())
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        df = pd.read_sql_query(
+        df = _read_sql_query_formatado(
             f"""SELECT p.id_cadastro, p.nome, p.funcao,
                        SUM(CASE WHEN p.presente=1 THEN 1 ELSE 0 END) AS presencas,
                        SUM(CASE WHEN p.presente=0 THEN 1 ELSE 0 END) AS ausencias,
@@ -3732,7 +3768,7 @@ def listar_eventos_igreja(
             where.append("visibilidade IN ('Publico', 'Membros')")
             where.append("situacao='Programado'")
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_evento, titulo, data, hora_inicio, hora_fim, local,
                        departamento, descricao, responsavel, contato,
                        visibilidade, situacao, cartaz_nome,
@@ -3760,7 +3796,7 @@ def listar_eventos_publicos(slug, incluir_membros=False, data_inicio=None, data_
         params.append(str(data_fim))
     with _conn(db) as conn:
         _garantir_tabelas_eventos(conn)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_evento, titulo, data, hora_inicio, hora_fim, local,
                        departamento, descricao, responsavel, contato,
                        visibilidade, situacao, cartaz_nome,
@@ -4246,7 +4282,7 @@ def listar_visitantes_cultos(slug, data_inicio=None, data_fim=None, departamento
             where.append("departamento=?")
             params.append(str(departamento).strip())
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_visitante, data, departamento, nome_visitante,
                        tipo_visitante, igreja_origem, cidade, estado,
                        congregacao, denominacao, deseja_ser_apresentado,
@@ -4340,7 +4376,7 @@ def listar_horarios_visita_pastoral(
         if somente_disponiveis:
             where.append("a.disponivel=1 AND a.id_pedido IS NULL")
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT a.id_slot, a.data, a.hora_inicio, a.hora_fim, a.local,
                        a.observacoes, a.disponivel, a.id_pedido,
                        p.nome_membro AS membro_agendado, p.status AS status_pedido
@@ -4499,7 +4535,7 @@ def listar_pedidos_oracao(slug, data_inicio=None, data_fim=None, status=""):
             where.append("p.status=?")
             params.append(str(status))
         filtro = f"WHERE {' AND '.join(where)}" if where else ""
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT p.id_pedido, p.id_cadastro, p.congregacao, p.nome_membro,
                        p.telefone, p.tipo_pedido, p.motivo_oracao, p.pedido,
                        p.privacidade, p.confidencial, p.deseja_visita,
@@ -4564,7 +4600,7 @@ def listar_pastores_auxiliares(slug, incluir_inativos=True):
     with _conn(db) as conn:
         _garantir_tabela_pastores_auxiliares(conn)
         where = "" if incluir_inativos else "WHERE situacao='Ativo'"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_pastor_auxiliar, id_cadastro, nome, usuario,
                        telefone, email, situacao, observacoes, criado_em, atualizado_em
                 FROM pastores_auxiliares
@@ -4741,7 +4777,7 @@ def listar_secretarios_gerais(slug, incluir_inativos=True):
     with _conn(db) as conn:
         _garantir_tabela_secretarios_gerais(conn)
         where = "" if incluir_inativos else "WHERE situacao='Ativo'"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_secretario_geral, id_cadastro, nome, usuario,
                        telefone, email, situacao, observacoes, criado_em, atualizado_em
                 FROM secretarios_gerais
@@ -5036,7 +5072,7 @@ def listar_recepcao_usuarios(slug, incluir_inativos=True):
         _garantir_tabela_recepcao(conn)
         _sincronizar_recepcao_automatica_conn(conn)
         where = "" if incluir_inativos else "WHERE situacao='Ativo'"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT id_recepcao, id_cadastro, nome, usuario, telefone,
                        email, situacao, automatico, observacoes, criado_em, atualizado_em
                 FROM recepcao_usuarios
@@ -5307,7 +5343,7 @@ def _dados_lancamento_validados(conn, l, lote_id=""):
 
 def listar_igrejas():
     with _conn(MASTER_DB) as conn:
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             "SELECT id, nome, slug, email_admin, plano, ativa, criada_em FROM igrejas ORDER BY nome",
             conn,
         )
@@ -5317,7 +5353,7 @@ def listar_ministerios(incluir_inativos=False):
     with _conn(MASTER_DB) as conn:
         _garantir_ministerio_padrao(conn)
         where = "" if incluir_inativos else "WHERE m.ativo=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT m.id, m.nome, m.slug, m.ativo, m.criado_em,
                        COUNT(mi.igreja_id) AS qtd_igrejas
                 FROM ministerios m
@@ -5365,7 +5401,7 @@ def vincular_igreja_ministerio(ministerio_id, igreja_id, tipo_unidade="congregac
 def listar_igrejas_ministerio(ministerio_id, incluir_inativas=False):
     with _conn(MASTER_DB) as conn:
         where_ativa = "" if incluir_inativas else "AND i.ativa=1"
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT i.id, i.nome, i.slug, i.email_admin, i.plano, i.ativa,
                        i.criada_em, mi.tipo_unidade
                 FROM ministerio_igrejas mi
@@ -5535,7 +5571,7 @@ def carregar_cadastros(slug):
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_colunas_cadastros(conn)
-        df = pd.read_sql_query("SELECT * FROM cadastros ORDER BY nome", conn)
+        df = _read_sql_query_formatado("SELECT * FROM cadastros ORDER BY nome", conn)
     return df
 
 
@@ -5895,7 +5931,7 @@ def listar_pre_cadastros_membros(slug, status="Pendente"):
         if status:
             where = "WHERE status=?"
             params.append(status)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             f"""SELECT * FROM pre_cadastros_membros
                 {where}
                 ORDER BY criado_em DESC""",
@@ -6044,7 +6080,7 @@ def carregar_tesoureiros(slug):
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabela_tesoureiros(conn)
-        return pd.read_sql_query(
+        return _read_sql_query_formatado(
             """SELECT * FROM tesoureiros
                ORDER BY CASE WHEN situacao='Ativo' THEN 0 ELSE 1 END,
                         principal DESC, nome""",
@@ -6254,7 +6290,7 @@ def carregar_lancamentos(slug):
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_colunas_lancamentos(conn)
-        df = pd.read_sql_query(
+        df = _read_sql_query_formatado(
             "SELECT * FROM lancamentos ORDER BY data DESC, id_lancamento DESC", conn
         )
     if not df.empty:
@@ -7019,4 +7055,5 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
         resultado["erros"].append(f"Erro ao migrar master.db restaurado: {ex}")
 
     return resultado
+
 

@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import html
 import streamlit as st
 import pandas as pd
@@ -58,8 +58,10 @@ def _formatar_cep(cep):
 
 def _formatar_tel(tel):
     digits = "".join(c for c in tel if c.isdigit())
+    if digits.startswith("55") and len(digits) in (12, 13):
+        digits = digits[2:]
     if len(digits) == 11:
-        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+        return f"({digits[:2]}) {digits[2]} {digits[3:7]}-{digits[7:]}"
     if len(digits) == 10:
         return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
     return tel
@@ -421,10 +423,10 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Novo cadastro ────────────────────────────────────────────────────
+    # â”€â”€ Novo cadastro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     with st.expander("Novo cadastro", expanded=False):
 
-        # >>> TIPO FORA DO FORM <<< — atualiza dinamicamente os outros campos
+        # >>> TIPO FORA DO FORM <<< - atualiza dinamicamente os outros campos
         st.markdown("**Dados principais**")
         if st.session_state.get("novo_tipo") not in TIPOS_CADASTRO:
             st.session_state.pop("novo_tipo", None)
@@ -555,7 +557,7 @@ def render():
                             st.toast("Cadastro salvo!")
                             st.rerun()
 
-    # ── Tabela ────────────────────────────────────────────────────────────
+    # â”€â”€ Tabela â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     total = len(df)
 
     with st.expander(f"Ver cadastros ({total} registros)", expanded=False):
@@ -601,7 +603,7 @@ def render():
 
             st.dataframe(df_view, use_container_width=True)
 
-    # ── Editar / Excluir ──────────────────────────────────────────────────
+    # â”€â”€ Editar / Excluir â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     with st.expander("Imprimir formulario de cadastro de membro", expanded=False):
         tipo_formulario = st.radio(
             "Tipo de formulario",
@@ -695,7 +697,7 @@ def render():
         sel    = df_r[df_r["rotulo"] == rotulo].iloc[0]
         id_sel = int(sel["id_cadastro"])
 
-        # CHAVE DINAMICA — quando muda a selecao, todos os widgets sao recriados
+        # CHAVE DINAMICA - quando muda a selecao, todos os widgets sao recriados
         kp = f"_edit_cad_{id_sel}_"
 
         st.markdown("**Dados principais**")
@@ -925,3 +927,4 @@ def render():
 
                         st.toast("Excluido.")
                         st.rerun()
+
