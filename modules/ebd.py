@@ -120,6 +120,44 @@ def _filtrar_matriculas_validas_na_data(matriculas, data_referencia):
     return dados[validas].copy()
 
 
+def _diagnostico_matriculas_na_data(matriculas, data_referencia):
+    if matriculas.empty:
+        return pd.DataFrame()
+
+    data_ref = _data_iso(data_referencia)
+    dados = matriculas.copy()
+
+    for col in ["data_inicio", "data_fim", "ativa"]:
+        if col not in dados.columns:
+            dados[col] = "" if col != "ativa" else 1
+
+    def situacao(row):
+        inicio = _data_iso(row.get("data_inicio"))
+        fim = _data_iso(row.get("data_fim"))
+        ativa = _int_seguro(row.get("ativa"), 1) == 1
+
+        if data_ref and inicio and inicio > data_ref:
+            return "Inicia após esta data"
+        if data_ref and fim and fim < data_ref:
+            return "Encerrada antes desta data"
+        if not ativa and not fim:
+            return "Inativa"
+        return "Ativa na data"
+
+    dados["Situação na data"] = dados.apply(situacao, axis=1)
+    dados["Início"] = dados["data_inicio"].apply(_fmt_data)
+    dados["Encerramento"] = dados["data_fim"].apply(lambda v: _fmt_data(v) if str(v or "").strip() else "")
+
+    colunas = ["nome_aluno", "Situação na data", "Início", "Encerramento"]
+    if "classe" in dados.columns:
+        colunas.insert(1, "classe")
+
+    return dados[colunas].rename(columns={
+        "nome_aluno": "Aluno",
+        "classe": "Classe",
+    })
+
+
 def _pct(valor):
     try:
         return f"{float(valor):.1f}%"
@@ -730,16 +768,28 @@ def _render_chamada(slug, id_classe_fixo=None):
         escala_aula = op_escalas[escala_label]
         data_aula = _parse_data(escala_aula["data"]) or _hoje()
 
-    matriculas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
-    if matriculas.empty:
+    matriculas_todas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
+    if matriculas_todas.empty:
         st.warning("Esta classe ainda nao possui alunos matriculados.")
         return
 
-    matriculas = _filtrar_matriculas_validas_na_data(matriculas, data_aula)
+    matriculas = _filtrar_matriculas_validas_na_data(matriculas_todas, data_aula)
+    if not matriculas.empty:
+        matriculas = matriculas.copy()
+        matriculas["id_matricula"] = matriculas["id_matricula"].apply(lambda x: _int_seguro(x, 0))
+        matriculas = matriculas[matriculas["id_matricula"] > 0].copy()
+
     if matriculas.empty:
         st.warning(
-            "Nenhuma matricula estava ativa na data desta chamada. "
-            "Verifique a data da aula ou a data de inicio das matriculas."
+            "Nenhuma matrícula estava ativa na data desta chamada. "
+            "Verifique se a data da escala é anterior ao início das matrículas "
+            "ou posterior ao encerramento delas."
+        )
+        st.caption(f"Data selecionada para a chamada: {_fmt_data(data_aula)}")
+        st.dataframe(
+            _diagnostico_matriculas_na_data(matriculas_todas, data_aula),
+            use_container_width=True,
+            hide_index=True,
         )
         return
 
@@ -843,11 +893,6 @@ def _render_chamada(slug, id_classe_fixo=None):
         obs = st.text_area("Observacoes da aula", value=obs_atual)
         st.caption("Marque os alunos presentes. Alunos desmarcados serao contabilizados como falta.")
         dados = matriculas[["id_matricula", "nome_aluno"]].copy()
-        dados["id_matricula"] = dados["id_matricula"].apply(lambda x: _int_seguro(x, 0))
-        dados = dados[dados["id_matricula"] > 0].copy()
-        if dados.empty:
-            st.warning("Nenhuma matrícula válida foi encontrada para esta chamada.")
-            return
         if acao_presencas == "Marcar todos":
             dados["presente"] = True
         elif acao_presencas == "Desmarcar todos":
