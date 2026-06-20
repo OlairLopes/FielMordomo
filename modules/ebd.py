@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import html
 import urllib.parse
 from collections import defaultdict
@@ -114,6 +114,99 @@ def _moeda(valor):
         return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "R$ 0,00"
+
+
+def _render_cards_superintendentes(slug):
+    escala = listar_ebd_escala(slug)
+    if escala.empty or "superintendente" not in escala.columns:
+        return
+
+    dados = escala.copy()
+    dados["superintendente"] = dados["superintendente"].fillna("").astype(str).str.strip()
+    dados = dados[dados["superintendente"] != ""].copy()
+    if dados.empty:
+        return
+
+    if "data" in dados.columns:
+        dados["_data_ordem"] = pd.to_datetime(dados["data"], errors="coerce")
+        dados = dados.sort_values("_data_ordem", ascending=False)
+
+    cards = []
+    vistos = set()
+    for _, row in dados.iterrows():
+        nome = str(row.get("superintendente", "") or "").strip()
+        chave = nome.lower()
+        if not nome or chave in vistos:
+            continue
+        vistos.add(chave)
+        telefone = str(row.get("telefone_superintendente", "") or "").strip()
+        cards.append(
+            '<div class="ebd-super-card">'
+            '<span class="ebd-super-label">Superintendente</span>'
+            f'<b>{html.escape(nome)}</b>'
+            '<small>Escola Bíblica</small>'
+            f'<small>{html.escape(telefone)}</small>'
+            '</div>'
+        )
+        if len(cards) >= 4:
+            break
+
+    if not cards:
+        return
+
+    st.markdown(
+        """
+        <style>
+        .ebd-super-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin: 18px 0 22px 0;
+        }
+        .ebd-super-card {
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            background: #FFFFFF;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            min-height: 104px;
+        }
+        .ebd-super-card b {
+            display: block;
+            color: #0F172A;
+            font-size: 1.05rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+        .ebd-super-card small {
+            display: block;
+            color: #64748B;
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+        .ebd-super-label {
+            display: block;
+            color: #DC2626;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        @media(max-width: 1100px) {
+            .ebd-super-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media(max-width: 620px) {
+            .ebd-super-grid { grid-template-columns: 1fr; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="ebd-super-grid">{"".join(cards)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _limpar_tel(tel):
@@ -1127,6 +1220,8 @@ def render():
         st.error("Sessao invalida. Faca login novamente.")
         return
 
+    _render_cards_superintendentes(slug)
+
     secretario = st.session_state.get("secretario_ebd", {})
     modo = st.session_state.get("modo", "")
     if modo == "pastor_auxiliar":
@@ -1169,3 +1264,4 @@ def render():
     if pode_gerenciar_secretarios:
         with tabs[4]:
             _render_secretarios(slug)
+
