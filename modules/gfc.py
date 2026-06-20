@@ -451,7 +451,7 @@ def _render_matriculas(slug, id_grupo_restrito=None):
 
 
 def _render_reunioes(slug, id_grupo_restrito=None):
-    st.markdown("### Registro de Culto GFC")
+    st.markdown("### Chamada do GFC")
     grupos = listar_gfc_grupos(slug)
     if id_grupo_restrito:
         grupos = grupos[
@@ -468,15 +468,18 @@ def _render_reunioes(slug, id_grupo_restrito=None):
         )
 
     reunioes_salvas = listar_gfc_reunioes(slug, id_grupo=id_grupo_restrito)
+    opcoes_modo = ["Nova chamada", "Editar chamada salva"] if not reunioes_salvas.empty else ["Nova chamada"]
+    if st.session_state.get("gfc_modo_reuniao") not in opcoes_modo:
+        st.session_state.pop("gfc_modo_reuniao", None)
     modo = st.radio(
         "Modo",
-        ["Novo registro", "Editar registro salvo"] if not reunioes_salvas.empty else ["Novo registro"],
+        opcoes_modo,
         horizontal=True,
         key="gfc_modo_reuniao",
     )
 
     reuniao_atual = None
-    if modo == "Editar registro salvo":
+    if modo == "Editar chamada salva":
         c_ini, c_fim = st.columns(2)
         inicio = c_ini.date_input(
             "Data inicial para localizar registro",
@@ -545,6 +548,13 @@ def _render_reunioes(slug, id_grupo_restrito=None):
                 grupo_index = idx
                 break
 
+    data = st.date_input(
+        "Data da reunião",
+        value=data_padrao,
+        format="DD/MM/YYYY",
+        key=f"gfc_data_reuniao_{int(reuniao_atual['id_reuniao']) if reuniao_atual is not None else 'nova'}",
+    )
+
     presencas_salvas = {}
     if reuniao_atual is not None:
         df_pres = listar_gfc_presencas(slug, int(reuniao_atual["id_reuniao"]))
@@ -561,8 +571,14 @@ def _render_reunioes(slug, id_grupo_restrito=None):
 
     with st.form("form_gfc_reuniao"):
         c1, c2 = st.columns(2)
-        data = c1.date_input("Data", value=data_padrao, format="DD/MM/YYYY")
-        grupo_label = c2.selectbox("Grupo familiar", list(op_grupos.keys()), index=grupo_index)
+        grupo_label = c1.selectbox("Grupo familiar", list(op_grupos.keys()), index=grupo_index)
+        tipo_atual = (
+            str(reuniao_atual.get("tipo_culto", TIPOS_CULTO_GFC[0]))
+            if reuniao_atual is not None
+            else TIPOS_CULTO_GFC[0]
+        )
+        tipo_idx = TIPOS_CULTO_GFC.index(tipo_atual) if tipo_atual in TIPOS_CULTO_GFC else 0
+        tipo_culto = c2.selectbox("Tipo de culto", TIPOS_CULTO_GFC, index=tipo_idx)
         grupo_row = grupos[grupos["id_grupo"].astype(int) == int(op_grupos[grupo_label])].iloc[0]
         setor = str(grupo_row.get("setor", "") or "")
         st.text_input("Setor do grupo familiar", value=setor, disabled=True)
@@ -602,13 +618,6 @@ def _render_reunioes(slug, id_grupo_restrito=None):
         if not op_coordenadores:
             st.caption("Cadastre coordenadores na aba Coordenadores e lideres para seleciona-los aqui.")
 
-        tipo_atual = (
-            str(reuniao_atual.get("tipo_culto", TIPOS_CULTO_GFC[0]))
-            if reuniao_atual is not None
-            else TIPOS_CULTO_GFC[0]
-        )
-        tipo_idx = TIPOS_CULTO_GFC.index(tipo_atual) if tipo_atual in TIPOS_CULTO_GFC else 0
-        tipo_culto = st.selectbox("Tipo de culto", TIPOS_CULTO_GFC, index=tipo_idx)
         tema = st.text_input(
             "Tema/observação breve",
             value=str(reuniao_atual.get("tema", "") or "") if reuniao_atual is not None else "",
@@ -645,7 +654,7 @@ def _render_reunioes(slug, id_grupo_restrito=None):
                     hide_index=True,
                     use_container_width=True,
                     disabled=["id_matricula", "id_cadastro", "nome"],
-                    key=f"gfc_editor_chamada_{int(op_grupos[grupo_label])}_{acao_presencas}",
+                    key=f"gfc_editor_chamada_{data.isoformat()}_{int(op_grupos[grupo_label])}_{acao_presencas}",
                     column_config={
                         "id_matricula": st.column_config.NumberColumn("Matrícula"),
                         "id_cadastro": st.column_config.NumberColumn("ID"),
@@ -686,7 +695,7 @@ def _render_reunioes(slug, id_grupo_restrito=None):
             value=str(reuniao_atual.get("observacoes", "") or "") if reuniao_atual is not None else "",
         )
 
-        if st.form_submit_button("Salvar registro GFC", type="primary"):
+        if st.form_submit_button("Salvar chamada GFC", type="primary"):
             try:
                 presencas = []
                 if not editado.empty:
@@ -716,7 +725,7 @@ def _render_reunioes(slug, id_grupo_restrito=None):
                     presencas=presencas,
                     id_reuniao=int(reuniao_atual["id_reuniao"]) if reuniao_atual is not None else None,
                 )
-                st.success("Registro GFC salvo.")
+                st.success("Chamada GFC salva.")
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
