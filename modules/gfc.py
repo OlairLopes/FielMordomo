@@ -620,9 +620,6 @@ def _render_reunioes(slug, id_grupo_restrito=None):
         data_padrao = _hoje()
 
     op_grupos = _grupo_opcoes(grupos)
-    coordenadores = listar_gfc_coordenadores(slug)
-    op_coordenadores = _coordenadores_opcoes(coordenadores)
-    labels_coord = [""] + list(op_coordenadores.keys())
     grupo_index = 0
     if reuniao_atual is not None:
         id_atual = int(reuniao_atual.get("id_grupo", 0) or 0)
@@ -673,32 +670,8 @@ def _render_reunioes(slug, id_grupo_restrito=None):
         tipo_idx = TIPOS_CULTO_GFC.index(tipo_atual) if tipo_atual in TIPOS_CULTO_GFC else 0
         tipo_culto = c2.selectbox("Tipo de culto", TIPOS_CULTO_GFC, index=tipo_idx)
 
-        c_coord1, c_coord2, c_lider = st.columns(3)
-        coord1_atual = str(reuniao_atual.get("coordenador1_nome", "") or "") if reuniao_atual is not None else ""
-        coord2_atual = str(reuniao_atual.get("coordenador2_nome", "") or "") if reuniao_atual is not None else ""
-        coord1_index = _indice_por_nome(labels_coord, op_coordenadores, coord1_atual)
-        coord2_index = _indice_por_nome(labels_coord, op_coordenadores, coord2_atual)
-        if reuniao_atual is None:
-            coord1_index = 1 if len(labels_coord) > 1 else 0
-            coord2_index = 2 if len(labels_coord) > 2 else 0
-        coord1_label = c_coord1.selectbox(
-            "1º coordenador",
-            labels_coord,
-            index=coord1_index,
-        )
-        coord2_label = c_coord2.selectbox(
-            "2º coordenador",
-            labels_coord,
-            index=coord2_index,
-        )
-        coordenador1_nome = (
-            str(op_coordenadores[coord1_label].get("nome", "") or "")
-            if coord1_label in op_coordenadores else ""
-        )
-        coordenador2_nome = (
-            str(op_coordenadores[coord2_label].get("nome", "") or "")
-            if coord2_label in op_coordenadores else ""
-        )
+        coordenador1_nome = ""
+        coordenador2_nome = ""
         id_grupo_reuniao_atual = (
             int(reuniao_atual.get("id_grupo", 0) or 0)
             if reuniao_atual is not None else 0
@@ -712,9 +685,7 @@ def _render_reunioes(slug, id_grupo_restrito=None):
             if lider_nome_salvo.strip() and int(op_grupos[grupo_label]) == id_grupo_reuniao_atual
             else lider_padrao_grupo
         )
-        c_lider.text_input("Líder", value=lider_nome, disabled=True)
-        if not op_coordenadores:
-            st.caption("Cadastre coordenadores na aba Coordenadores e lideres para seleciona-los aqui.")
+        st.text_input("Líder", value=lider_nome, disabled=True)
 
         tema = st.text_input(
             "Tema/observação breve",
