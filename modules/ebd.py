@@ -664,7 +664,7 @@ def _render_chamada(slug, id_classe_fixo=None):
 
     escala_classe = listar_ebd_escala(slug, id_classe=id_classe)
     chamadas_salvas = listar_ebd_aulas(slug, id_classe=id_classe)
-    opcoes_modo = ["Registrar/editar pela escala"]
+    opcoes_modo = ["Nova chamada"]
     if not chamadas_salvas.empty:
         opcoes_modo.append("Editar chamada salva")
     if st.session_state.get("modo_chamada_ebd") not in opcoes_modo:
@@ -746,27 +746,37 @@ def _render_chamada(slug, id_classe_fixo=None):
         escala_aula = _escala_da_aula(slug, data_aula, id_classe)
         st.info(f"Editando chamada salva de {_fmt_data(data_aula.isoformat())}.")
     else:
-        if escala_classe.empty:
-            st.warning(
-                "Nao ha escala de professores cadastrada para esta classe. "
-                "Cadastre uma escala antes de registrar a chamada."
+        data_padrao = _hoje()
+        if not escala_classe.empty:
+            op_escalas = {
+                f'{_fmt_data(row["data"])} - {row.get("tema", "") or "sem tema"} - {row["professor"]}': row
+                for _, row in escala_classe.iterrows()
+            }
+            chave_escala = f"escala_para_chamada_{int(id_classe)}"
+            if st.session_state.get(chave_escala) not in op_escalas:
+                st.session_state.pop(chave_escala, None)
+            escala_label = st.selectbox(
+                "Escala da aula",
+                list(op_escalas.keys()),
+                key=chave_escala,
+                help="A escala preenche automaticamente data, tema e professor.",
             )
-            return
-        op_escalas = {
-            f'{_fmt_data(row["data"])} - {row.get("tema", "") or "sem tema"} - {row["professor"]}': row
-            for _, row in escala_classe.iterrows()
-        }
-        chave_escala = f"escala_para_chamada_{int(id_classe)}"
-        if st.session_state.get(chave_escala) not in op_escalas:
-            st.session_state.pop(chave_escala, None)
-        st.session_state.pop("escala_para_chamada", None)
-        escala_label = st.selectbox(
-            "Data da chamada conforme escala",
-            list(op_escalas.keys()),
-            key=chave_escala,
+            escala_aula = op_escalas[escala_label]
+            data_padrao = _parse_data(escala_aula.get("data")) or data_padrao
+        else:
+            st.info(
+                "Nao ha escala cadastrada para esta classe. "
+                "Voce ainda pode registrar a chamada informando a data, tema e professor manualmente."
+            )
+
+        data_aula = st.date_input(
+            "Data da aula",
+            value=data_padrao,
+            key=f"ebd_data_nova_{int(id_classe)}",
+            format="DD/MM/YYYY",
         )
-        escala_aula = op_escalas[escala_label]
-        data_aula = _parse_data(escala_aula["data"]) or _hoje()
+        if escala_aula is None:
+            escala_aula = _escala_da_aula(slug, data_aula, id_classe)
 
     matriculas_todas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
     if matriculas_todas.empty:
@@ -793,10 +803,6 @@ def _render_chamada(slug, id_classe_fixo=None):
         )
         return
 
-    if modo_chamada == "Editar chamada salva":
-        aulas = listar_ebd_aulas(slug, data_aula.isoformat(), data_aula.isoformat(), id_classe)
-    else:
-        aulas = pd.DataFrame()
     presencas_salvas = {}
     tema_atual = ""
     professor_atual = ""
@@ -852,6 +858,35 @@ def _render_chamada(slug, id_classe_fixo=None):
         c1, c2 = st.columns(2)
         tema = c1.text_input("Tema da aula", value=tema_atual)
         professor = c2.text_input("Professor", value=professor_atual)
+
+        with st.expander("Lista de chamada", expanded=True):
+            st.caption("Marque os alunos presentes. Alunos desmarcados serao contabilizados como falta.")
+            dados = matriculas[["id_matricula", "nome_aluno"]].copy()
+            if acao_presencas == "Marcar todos":
+                dados["presente"] = True
+            elif acao_presencas == "Desmarcar todos":
+                dados["presente"] = False
+            else:
+                dados["presente"] = dados["id_matricula"].apply(
+                    lambda x: presencas_salvas.get(_int_seguro(x), True)
+                )
+            editado = st.data_editor(
+                dados,
+                hide_index=True,
+                use_container_width=True,
+                key=f"ebd_editor_chamada_{id_classe}_{data_aula.isoformat()}_{acao_presencas}",
+                disabled=["id_matricula", "nome_aluno"],
+                column_config={
+                    "id_matricula": st.column_config.NumberColumn("Matrícula"),
+                    "nome_aluno": st.column_config.TextColumn("Aluno"),
+                    "presente": st.column_config.CheckboxColumn("Presente"),
+                },
+            )
+
+        qtd_matriculados_calc = int(len(editado))
+        qtd_presentes_calc = int(editado["presente"].fillna(False).astype(bool).sum())
+        qtd_ausentes_calc = max(qtd_matriculados_calc - qtd_presentes_calc, 0)
+
         st.markdown("#### Totais da chamada")
         st.caption(
             "Matriculados, presentes e ausentes serao calculados automaticamente "
@@ -863,6 +898,12 @@ def _render_chamada(slug, id_classe_fixo=None):
             step=1,
             value=visitantes_atual,
         )
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Matriculados", qtd_matriculados_calc)
+        m2.metric("Presentes", qtd_presentes_calc)
+        m3.metric("Ausentes", qtd_ausentes_calc)
+        m4.metric("Visitantes", qtd_visitantes)
+
         st.markdown("#### Recursos e ofertas da aula")
         r1, r2, r3, r4 = st.columns(4)
         qtd_revistas = r1.number_input(
@@ -891,62 +932,35 @@ def _render_chamada(slug, id_classe_fixo=None):
             format="%.2f",
         )
         obs = st.text_area("Observacoes da aula", value=obs_atual)
-        st.caption("Marque os alunos presentes. Alunos desmarcados serao contabilizados como falta.")
-        dados = matriculas[["id_matricula", "nome_aluno"]].copy()
-        if acao_presencas == "Marcar todos":
-            dados["presente"] = True
-        elif acao_presencas == "Desmarcar todos":
-            dados["presente"] = False
-        else:
-            dados["presente"] = dados["id_matricula"].apply(
-                lambda x: presencas_salvas.get(_int_seguro(x), True)
-            )
-        editado = st.data_editor(
-            dados,
-            hide_index=True,
-            use_container_width=True,
-            key=f"ebd_editor_chamada_{id_classe}_{data_aula.isoformat()}_{acao_presencas}",
-            disabled=["id_matricula", "nome_aluno"],
-            column_config={
-                "id_matricula": st.column_config.NumberColumn("ID"),
-                "nome_aluno": st.column_config.TextColumn("Aluno"),
-                "presente": st.column_config.CheckboxColumn("Presente"),
-            },
-        )
-        qtd_matriculados_calc = int(len(editado))
-        qtd_presentes_calc = int(editado["presente"].fillna(False).astype(bool).sum())
-        qtd_ausentes_calc = max(qtd_matriculados_calc - qtd_presentes_calc, 0)
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Matriculados", qtd_matriculados_calc)
-        m2.metric("Presentes", qtd_presentes_calc)
-        m3.metric("Ausentes", qtd_ausentes_calc)
-        m4.metric("Visitantes", qtd_visitantes)
         if st.form_submit_button("Salvar chamada", type="primary"):
             presencas = {}
             for _, row in editado.iterrows():
                 id_matricula = _int_seguro(row.get("id_matricula"), 0)
                 if id_matricula:
                     presencas[id_matricula] = bool(row.get("presente"))
-            salvar_ebd_chamada(
-                slug,
-                id_classe,
-                data_aula.isoformat(),
-                tema,
-                professor,
-                obs,
-                presencas,
-                qtd_matriculados_calc,
-                qtd_presentes_calc,
-                qtd_ausentes_calc,
-                qtd_visitantes,
-                qtd_revistas,
-                qtd_biblias,
-                qtd_harpas,
-                ofertas,
-                id_aula=int(aula_editada["id_aula"]) if aula_editada is not None else None,
-            )
-            st.success("Chamada salva.")
-            st.rerun()
+            try:
+                salvar_ebd_chamada(
+                    slug,
+                    id_classe,
+                    data_aula.isoformat(),
+                    tema,
+                    professor,
+                    obs,
+                    presencas,
+                    qtd_matriculados_calc,
+                    qtd_presentes_calc,
+                    qtd_ausentes_calc,
+                    qtd_visitantes,
+                    qtd_revistas,
+                    qtd_biblias,
+                    qtd_harpas,
+                    ofertas,
+                    id_aula=int(aula_editada["id_aula"]) if aula_editada is not None else None,
+                )
+                st.success("Chamada salva.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
 
 
 def _render_relatorios(slug):
