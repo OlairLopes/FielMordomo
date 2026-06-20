@@ -1018,13 +1018,18 @@ def listar_gfc_coordenadores(slug, incluir_inativos=False):
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
-        where = "" if incluir_inativos else "WHERE ativo=1"
+        where = "" if incluir_inativos else "WHERE gc.ativo=1"
         return _read_sql_query_formatado(
-            f"""SELECT id_coordenador, id_cadastro, nome, telefone, funcao, setor,
-                       ordem, ativo, observacoes, criado_em, atualizado_em
-                FROM gfc_coordenadores
+            f"""SELECT gc.id_coordenador, gc.id_cadastro,
+                       COALESCE(c.nome, gc.nome) AS nome,
+                       COALESCE(NULLIF(c.telefone, ''), gc.telefone) AS telefone,
+                       COALESCE(NULLIF(c.funcao, ''), gc.funcao) AS funcao,
+                       COALESCE(NULLIF(c.congregacao, ''), gc.setor) AS setor,
+                       gc.ordem, gc.ativo, gc.observacoes, gc.criado_em, gc.atualizado_em
+                FROM gfc_coordenadores gc
+                LEFT JOIN cadastros c ON c.id_cadastro=gc.id_cadastro
                 {where}
-                ORDER BY ativo DESC, ordem, nome""",
+                ORDER BY gc.ativo DESC, gc.ordem, nome""",
             conn,
         )
 
@@ -1100,13 +1105,18 @@ def listar_gfc_lideres(slug, incluir_inativos=False):
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabelas_gfc(conn)
-        where = "" if incluir_inativos else "WHERE ativo=1"
+        where = "" if incluir_inativos else "WHERE gl.ativo=1"
         return _read_sql_query_formatado(
-            f"""SELECT id_lider, id_cadastro, nome, telefone, funcao, setor,
-                       ordem, ativo, observacoes, criado_em, atualizado_em
-                FROM gfc_lideres
+            f"""SELECT gl.id_lider, gl.id_cadastro,
+                       COALESCE(c.nome, gl.nome) AS nome,
+                       COALESCE(NULLIF(c.telefone, ''), gl.telefone) AS telefone,
+                       COALESCE(NULLIF(c.funcao, ''), gl.funcao) AS funcao,
+                       COALESCE(NULLIF(c.congregacao, ''), gl.setor) AS setor,
+                       gl.ordem, gl.ativo, gl.observacoes, gl.criado_em, gl.atualizado_em
+                FROM gfc_lideres gl
+                LEFT JOIN cadastros c ON c.id_cadastro=gl.id_cadastro
                 {where}
-                ORDER BY ativo DESC, ordem, nome""",
+                ORDER BY gl.ativo DESC, gl.ordem, nome""",
             conn,
         )
 
