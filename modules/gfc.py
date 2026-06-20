@@ -127,6 +127,68 @@ def _indice_por_nome(labels, opcoes, nome):
     return 0
 
 
+def _render_cards_coordenadores_gfc(slug):
+    coordenadores = listar_gfc_coordenadores(slug)
+    if coordenadores.empty:
+        return
+
+    cards = []
+    for _, row in coordenadores.head(2).iterrows():
+        nome = str(row.get("nome", "") or "")
+        funcao = str(row.get("funcao", "") or "Coordenador")
+        telefone = str(row.get("telefone", "") or "")
+        cards.append(
+            f"""
+            <div class="gfc-coord-card">
+                <b>{nome}</b>
+                <small>{funcao}</small>
+                <small>{telefone}</small>
+            </div>
+            """
+        )
+
+    st.markdown(
+        """
+        <style>
+        .gfc-coord-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin: 8px 0 22px 0;
+        }
+        .gfc-coord-card {
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            background: #FFFFFF;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            min-height: 92px;
+        }
+        .gfc-coord-card b {
+            display: block;
+            color: #0F172A;
+            font-size: 0.96rem;
+            margin-bottom: 8px;
+        }
+        .gfc-coord-card small {
+            display: block;
+            color: #64748B;
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+        @media(max-width: 760px) {
+            .gfc-coord-grid { grid-template-columns: 1fr; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="gfc-coord-grid">{"".join(cards)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _membros_opcoes(slug):
     df = carregar_cadastros(slug)
     if df.empty:
@@ -451,6 +513,7 @@ def _render_matriculas(slug, id_grupo_restrito=None):
 
 
 def _render_reunioes(slug, id_grupo_restrito=None):
+    _render_cards_coordenadores_gfc(slug)
     st.markdown("### Chamada do GFC")
     grupos = listar_gfc_grupos(slug)
     if id_grupo_restrito:
@@ -555,6 +618,16 @@ def _render_reunioes(slug, id_grupo_restrito=None):
         key=f"gfc_data_reuniao_{int(reuniao_atual['id_reuniao']) if reuniao_atual is not None else 'nova'}",
     )
 
+    grupo_label = st.selectbox(
+        "Grupo familiar",
+        list(op_grupos.keys()),
+        index=grupo_index,
+        key=f"gfc_grupo_chamada_{int(reuniao_atual['id_reuniao']) if reuniao_atual is not None else 'nova'}",
+    )
+    grupo_row = grupos[grupos["id_grupo"].astype(int) == int(op_grupos[grupo_label])].iloc[0]
+    setor = str(grupo_row.get("setor", "") or "")
+    lider_padrao_grupo = str(grupo_row.get("responsavel", "") or "")
+
     presencas_salvas = {}
     if reuniao_atual is not None:
         df_pres = listar_gfc_presencas(slug, int(reuniao_atual["id_reuniao"]))
@@ -571,7 +644,7 @@ def _render_reunioes(slug, id_grupo_restrito=None):
 
     with st.form("form_gfc_reuniao"):
         c1, c2 = st.columns(2)
-        grupo_label = c1.selectbox("Grupo familiar", list(op_grupos.keys()), index=grupo_index)
+        c1.text_input("Setor do grupo familiar", value=setor, disabled=True)
         tipo_atual = (
             str(reuniao_atual.get("tipo_culto", TIPOS_CULTO_GFC[0]))
             if reuniao_atual is not None
@@ -579,9 +652,6 @@ def _render_reunioes(slug, id_grupo_restrito=None):
         )
         tipo_idx = TIPOS_CULTO_GFC.index(tipo_atual) if tipo_atual in TIPOS_CULTO_GFC else 0
         tipo_culto = c2.selectbox("Tipo de culto", TIPOS_CULTO_GFC, index=tipo_idx)
-        grupo_row = grupos[grupos["id_grupo"].astype(int) == int(op_grupos[grupo_label])].iloc[0]
-        setor = str(grupo_row.get("setor", "") or "")
-        st.text_input("Setor do grupo familiar", value=setor, disabled=True)
 
         c_coord1, c_coord2, c_lider = st.columns(3)
         coord1_atual = str(reuniao_atual.get("coordenador1_nome", "") or "") if reuniao_atual is not None else ""
@@ -609,10 +679,18 @@ def _render_reunioes(slug, id_grupo_restrito=None):
             str(op_coordenadores[coord2_label].get("nome", "") or "")
             if coord2_label in op_coordenadores else ""
         )
-        lider_nome = (
+        id_grupo_reuniao_atual = (
+            int(reuniao_atual.get("id_grupo", 0) or 0)
+            if reuniao_atual is not None else 0
+        )
+        lider_nome_salvo = (
             str(reuniao_atual.get("lider_nome", "") or "")
-            if reuniao_atual is not None and str(reuniao_atual.get("lider_nome", "") or "").strip()
-            else str(grupo_row.get("responsavel", "") or "")
+            if reuniao_atual is not None else ""
+        )
+        lider_nome = (
+            lider_nome_salvo
+            if lider_nome_salvo.strip() and int(op_grupos[grupo_label]) == id_grupo_reuniao_atual
+            else lider_padrao_grupo
         )
         c_lider.text_input("Líder", value=lider_nome, disabled=True)
         if not op_coordenadores:
