@@ -60,24 +60,42 @@ def _inicio_mes():
 
 def _fmt_data(valor):
     try:
-        return datetime.date.fromisoformat(str(valor)).strftime("%d/%m/%Y")
+        data = _parse_data(valor)
+        return data.strftime("%d/%m/%Y") if data else str(valor or "")
     except Exception:
         return str(valor or "")
 
 
+def _parse_data(valor):
+    if valor is None:
+        return None
+    if isinstance(valor, datetime.datetime):
+        return valor.date()
+    if isinstance(valor, datetime.date):
+        return valor
+
+    try:
+        data = pd.to_datetime(valor, errors="coerce")
+        if pd.notna(data):
+            return data.date()
+    except Exception:
+        pass
+
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.datetime.strptime(texto, formato).date()
+        except Exception:
+            pass
+    return None
+
+
 def _data_iso(valor):
     try:
-        if isinstance(valor, datetime.date):
-            return valor.isoformat()
-        texto = str(valor or "").strip()
-        if not texto:
-            return ""
-        for formato in ("%Y-%m-%d", "%d/%m/%Y"):
-            try:
-                return datetime.datetime.strptime(texto, formato).date().isoformat()
-            except Exception:
-                pass
-        return datetime.date.fromisoformat(texto).isoformat()
+        data = _parse_data(valor)
+        return data.isoformat() if data else ""
     except Exception:
         return ""
 
@@ -648,7 +666,7 @@ def _render_chamada(slug, id_classe_fixo=None):
             )
         chamada_row = op_chamadas[chamada_label]
         aula_editada = chamada_row
-        data_aula_original = datetime.date.fromisoformat(str(chamada_row["data"]))
+        data_aula_original = _parse_data(chamada_row["data"]) or _hoje()
         data_aula = st.date_input(
             "Data da aula",
             value=data_aula_original,
@@ -674,7 +692,7 @@ def _render_chamada(slug, id_classe_fixo=None):
             key="escala_para_chamada",
         )
         escala_aula = op_escalas[escala_label]
-        data_aula = datetime.date.fromisoformat(str(escala_aula["data"]))
+        data_aula = _parse_data(escala_aula["data"]) or _hoje()
 
     matriculas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
     if matriculas.empty:
