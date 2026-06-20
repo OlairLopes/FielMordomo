@@ -132,19 +132,29 @@ def _render_cards_coordenadores_gfc(slug):
     if coordenadores.empty:
         return
 
+    def _esc_card(valor):
+        return (
+            str(valor if valor is not None else "")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#x27;")
+        )
+
     cards = []
-    for _, row in coordenadores.head(2).iterrows():
-        nome = str(row.get("nome", "") or "")
-        funcao = str(row.get("funcao", "") or "Coordenador")
-        telefone = str(row.get("telefone", "") or "")
+    for idx, (_, row) in enumerate(coordenadores.head(2).iterrows(), start=1):
+        titulo = f"{idx}º Coordenador"
+        nome = _esc_card(row.get("nome", "") or "")
+        funcao = _esc_card(row.get("funcao", "") or "Coordenador")
+        telefone = _esc_card(row.get("telefone", "") or "")
         cards.append(
-            f"""
-            <div class="gfc-coord-card">
-                <b>{nome}</b>
-                <small>{funcao}</small>
-                <small>{telefone}</small>
-            </div>
-            """
+            '<div class="gfc-coord-card">'
+            f'<span class="gfc-coord-label">{titulo}</span>'
+            f'<b>{nome}</b>'
+            f'<small>{funcao}</small>'
+            f'<small>{telefone}</small>'
+            '</div>'
         )
 
     st.markdown(
@@ -167,8 +177,18 @@ def _render_cards_coordenadores_gfc(slug):
         .gfc-coord-card b {
             display: block;
             color: #0F172A;
-            font-size: 0.96rem;
+            font-size: 1.08rem;
+            font-weight: 800;
             margin-bottom: 8px;
+        }
+        .gfc-coord-label {
+            display: block;
+            color: #DC2626;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
         }
         .gfc-coord-card small {
             display: block;
