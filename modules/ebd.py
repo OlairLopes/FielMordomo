@@ -460,17 +460,26 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
 
     altura = max(460, min(820, 72 * df["Indicador"].nunique() + 220))
     fig = go.Figure()
-    cores = [
-        CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
-        "#7C3AED", "#0891B2", "#B45309", "#DB2777",
-    ]
+    cores_indicador = {
+        "Matriculados": CORES["azul"],
+        "Presentes": CORES["verde"],
+        "Ausentes": CORES["vermelho"],
+        "Visitantes": CORES["laranja"],
+        "Biblias": "#7C3AED",
+        "Revistas": "#0891B2",
+        "Harpas": "#B45309",
+        "Ofertas": "#DB2777",
+    }
     for idx, classe in enumerate(df["Classe"].drop_duplicates().tolist()):
         sub = df[df["Classe"] == classe]
         fig.add_trace(go.Bar(
             name=classe,
             x=sub["Indicador"],
             y=sub["Valor"],
-            marker_color=cores[idx % len(cores)],
+            marker_color=[
+                cores_indicador.get(str(indicador), CORES["cinza"])
+                for indicador in sub["Indicador"]
+            ],
             text=sub["Texto"],
             textposition="outside",
             hovertemplate="<b>%{fullData.name}</b><br>%{x}: %{text}<extra></extra>",
