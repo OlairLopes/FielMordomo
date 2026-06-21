@@ -564,63 +564,157 @@ def _render_classes(slug):
         st.info("Cadastre ao menos uma classe para matricular alunos e registrar chamadas.")
         return
 
-    st.markdown("#### Matricular alunos")
+    st.markdown("#### Matrículas por classe")
+    st.caption(
+        "Matricule alunos em cada classe da EBD. A chamada respeita a data de início "
+        "e a data de encerramento da matrícula, preservando o histórico."
+    )
     op_classes = _classes_opcoes(df_classes_ativas)
-    classe_label = st.selectbox("Classe", list(op_classes.keys()), key="matricula_classe")
-    id_classe = op_classes[classe_label]
     op_membros, df_membros = _membros_opcoes(slug)
 
-    with st.form("form_ebd_matricula"):
-        modo = st.radio("Origem do aluno", ["Membro cadastrado", "Nome manual"], horizontal=True)
-        id_cadastro = None
-        nome_manual = ""
-        if modo == "Membro cadastrado":
-            if op_membros:
-                membro_label = st.selectbox("Membro", list(op_membros.keys()))
-                id_cadastro = op_membros[membro_label]
-                nome_aluno = df_membros[df_membros["id_cadastro"] == id_cadastro].iloc[0]["nome"]
+    with st.expander("Nova matrícula", expanded=False):
+        with st.form("form_ebd_matricula"):
+            classe_label = st.selectbox("Classe", list(op_classes.keys()), key="matricula_classe_nova")
+            modo = st.radio("Origem do aluno", ["Membro cadastrado", "Nome manual"], horizontal=True)
+            id_cadastro = None
+            nome_aluno = ""
+            if modo == "Membro cadastrado":
+                if op_membros:
+                    membro_label = st.selectbox("Membro", list(op_membros.keys()))
+                    id_cadastro = op_membros[membro_label]
+                    nome_aluno = df_membros[df_membros["id_cadastro"] == id_cadastro].iloc[0]["nome"]
+                else:
+                    st.warning("Nao ha membros ativos cadastrados.")
             else:
-                nome_aluno = ""
-                st.warning("Nao ha membros ativos cadastrados.")
-        else:
-            nome_manual = st.text_input("Nome do aluno")
-            nome_aluno = nome_manual
-        data_inicio = st.date_input("Data de inicio", value=_hoje(), format="DD/MM/YYYY")
-        obs = st.text_area("Observacoes da matricula")
-        if st.form_submit_button("Matricular", type="primary"):
-            try:
-                salvar_ebd_matricula(slug, id_classe, nome_aluno, id_cadastro, data_inicio.isoformat(), obs)
-                st.success("Aluno matriculado.")
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
+                nome_aluno = st.text_input("Nome do aluno")
+            c1, c2 = st.columns(2)
+            data_inicio = c1.date_input("Data de início", value=_hoje(), format="DD/MM/YYYY")
+            obs = c2.text_input("Observações")
+            if st.form_submit_button("Matricular", type="primary"):
+                if not str(nome_aluno or "").strip():
+                    st.error("Informe ou selecione o aluno.")
+                else:
+                    try:
+                        salvar_ebd_matricula(
+                            slug,
+                            op_classes[classe_label],
+                            nome_aluno,
+                            id_cadastro,
+                            data_inicio.isoformat(),
+                            obs,
+                        )
+                        st.success("Matrícula salva.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
 
-    matriculas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
-    if not matriculas.empty:
+    filtro_label = st.selectbox(
+        "Filtrar matrículas por classe",
+        ["Todas"] + list(op_classes.keys()),
+        key="ebd_matriculas_filtro_classe",
+    )
+    id_classe_filtro = None if filtro_label == "Todas" else op_classes[filtro_label]
+    matriculas = listar_ebd_matriculas(slug, id_classe_filtro, incluir_inativas=True)
+
+    if matriculas.empty:
+        st.info("Nenhuma matrícula cadastrada para o filtro selecionado.")
+    else:
         tabela = matriculas.copy()
-        tabela["situacao"] = tabela["ativa"].map({1: "Ativo", 0: "Encerrado"})
+        tabela["situacao"] = tabela["ativa"].map({1: "Ativa", 0: "Encerrada"}).fillna("Ativa")
         tabela["data_inicio"] = tabela["data_inicio"].apply(_fmt_data)
         tabela["data_fim"] = tabela["data_fim"].apply(_fmt_data)
         st.dataframe(
-            tabela[["nome_aluno", "classe", "situacao", "data_inicio", "data_fim", "observacoes"]],
+            tabela[["classe", "nome_aluno", "situacao", "data_inicio", "data_fim", "observacoes"]],
             use_container_width=True,
             hide_index=True,
         )
-        st.caption(
-            "Encerrar uma matrícula remove o aluno das próximas chamadas, "
-            "mas mantém o histórico das aulas anteriores."
-        )
-        encerrar = st.selectbox(
-            "Encerrar matricula",
-            ["Selecione"] + [
-                f'{int(row["id_matricula"])} - {row["nome_aluno"]}'
-                for _, row in matriculas[matriculas["ativa"] == 1].iterrows()
-            ],
-        )
-        if encerrar != "Selecione" and confirmar_exclusao(f"encerrar_matricula_{encerrar}", "Encerrar matricula selecionada"):
-            encerrar_ebd_matricula(slug, int(encerrar.split(" - ")[0]), _hoje().isoformat())
-            st.success("Matricula encerrada.")
-            st.rerun()
+
+        op_matriculas = {
+            f'{int(row["id_matricula"])} - {row["nome_aluno"]} ({row["classe"]})': row
+            for _, row in matriculas.iterrows()
+        }
+
+        with st.expander("Editar matrícula", expanded=False):
+            selecionada = st.selectbox(
+                "Matrícula para editar",
+                ["Selecione"] + list(op_matriculas.keys()),
+                key="ebd_editar_matricula",
+            )
+            if selecionada != "Selecione":
+                row = op_matriculas[selecionada]
+                classe_labels = list(op_classes.keys())
+                classe_idx = 0
+                for idx, label in enumerate(classe_labels):
+                    if op_classes[label] == int(row["id_classe"]):
+                        classe_idx = idx
+                        break
+                with st.form(f"form_editar_matricula_ebd_{int(row['id_matricula'])}"):
+                    classe_edit = st.selectbox("Classe", classe_labels, index=classe_idx)
+                    c1, c2 = st.columns(2)
+                    nome_edit = c1.text_input("Nome do aluno", value=str(row.get("nome_aluno", "") or ""))
+                    data_inicio_edit = c2.text_input(
+                        "Data de início",
+                        value=str(row.get("data_inicio", "") or ""),
+                    )
+                    ativa_edit = st.selectbox(
+                        "Situação",
+                        ["Ativa", "Encerrada"],
+                        index=0 if _int_seguro(row.get("ativa"), 1) == 1 else 1,
+                    )
+                    obs_edit = st.text_area("Observações", value=str(row.get("observacoes", "") or ""))
+                    if st.form_submit_button("Atualizar matrícula", type="primary"):
+                        try:
+                            salvar_ebd_matricula(
+                                slug,
+                                op_classes[classe_edit],
+                                nome_edit,
+                                row.get("id_cadastro"),
+                                data_inicio_edit,
+                                obs_edit,
+                                id_matricula=int(row["id_matricula"]),
+                                ativa=ativa_edit == "Ativa",
+                            )
+                            st.success("Matrícula atualizada.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(str(exc))
+
+        ativas = matriculas[matriculas["ativa"] == 1]
+        if not ativas.empty:
+            op_ativas = [
+                f'{int(row["id_matricula"])} - {row["nome_aluno"]} ({row["classe"]})'
+                for _, row in ativas.iterrows()
+            ]
+            with st.expander("Encerrar matrícula", expanded=False):
+                st.caption(
+                    "Use esta opção para retirar o aluno das próximas chamadas "
+                    "sem apagar o histórico de participação já registrado."
+                )
+                encerrar = st.selectbox(
+                    "Matrícula ativa",
+                    ["Selecione"] + op_ativas,
+                    key="ebd_encerrar_matricula",
+                )
+                data_fim = st.date_input(
+                    "Data de encerramento",
+                    value=_hoje(),
+                    format="DD/MM/YYYY",
+                    key="ebd_data_fim_matricula",
+                )
+                if encerrar != "Selecione" and confirmar_exclusao(
+                    f"encerrar_ebd_{encerrar}",
+                    "Confirmar encerramento da matrícula",
+                ):
+                    encerrar_ebd_matricula(
+                        slug,
+                        int(encerrar.split(" - ")[0]),
+                        data_fim.isoformat(),
+                    )
+                    st.success(
+                        "Matrícula encerrada. O histórico foi preservado e o aluno "
+                        "não aparecerá nas chamadas após a data de encerramento."
+                    )
+                    st.rerun()
 
     st.markdown("#### Classes cadastradas")
     st.dataframe(
