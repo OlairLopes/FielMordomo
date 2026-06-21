@@ -1032,22 +1032,10 @@ def _render_relatorios(slug):
     resumo = relatorio_ebd_resumo_classes(slug, inicio.isoformat(), fim.isoformat())
     freq = relatorio_ebd_frequencia(slug, inicio.isoformat(), fim.isoformat())
 
-    st.markdown("#### Relatorio geral")
     if aulas.empty:
         st.info("Nenhuma aula registrada no periodo selecionado.")
     else:
         totais = _totais_aulas(aulas)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total de matriculados", totais["Matriculados"])
-        c2.metric("Total de presentes", totais["Presentes"])
-        c3.metric("Total de ausentes", totais["Ausentes"])
-        c4.metric("Total de visitantes", totais["Visitantes"])
-        c5, c6, c7, c8 = st.columns(4)
-        c5.metric("Biblias", totais["Biblias"])
-        c6.metric("Revistas", totais["Revistas"])
-        c7.metric("Harpas", totais["Harpas"])
-        c8.metric("Total de ofertas", _moeda(totais["Ofertas"]))
-
         st.markdown("#### Grafico por classe")
         classes = sorted(aulas["classe"].dropna().astype(str).unique().tolist())
         classe_escolhida = st.selectbox("Escolha a classe", classes, key="grafico_ebd_classe")
@@ -1056,9 +1044,6 @@ def _render_relatorios(slug):
             f"Resumo da classe {classe_escolhida}",
             _totais_aulas(aulas_classe),
         )
-
-        st.markdown("#### Grafico geral da Escola Bíblica")
-        _grafico_totais_ebd("Resumo geral da Escola Bíblica", totais)
 
     st.markdown("#### Frequencia por classe")
     _grafico_frequencia_classes(resumo)
@@ -1114,6 +1099,23 @@ def _render_relatorios(slug):
                 use_container_width=True,
                 hide_index=True,
             )
+
+    if not aulas.empty:
+        totais = _totais_aulas(aulas)
+        st.markdown("#### Relatorio geral")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total de matriculados", totais["Matriculados"])
+        c2.metric("Total de presentes", totais["Presentes"])
+        c3.metric("Total de ausentes", totais["Ausentes"])
+        c4.metric("Total de visitantes", totais["Visitantes"])
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("Biblias", totais["Biblias"])
+        c6.metric("Revistas", totais["Revistas"])
+        c7.metric("Harpas", totais["Harpas"])
+        c8.metric("Total de ofertas", _moeda(totais["Ofertas"]))
+
+        st.markdown("#### Grafico geral da Escola Bíblica")
+        _grafico_totais_ebd("Resumo geral da Escola Bíblica", totais)
 
 
 def _render_escala(slug):
