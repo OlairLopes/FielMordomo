@@ -390,31 +390,41 @@ def _grafico_frequencia_classes(resumo):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
 
-def _grafico_totais_ebd(titulo, dados):
+def _valor_grafico_ebd(indicador, valor):
+    if "Oferta" in str(indicador):
+        return _moeda(valor)
+    try:
+        numero = float(valor)
+    except Exception:
+        return str(valor)
+    if abs(numero - round(numero)) < 0.05:
+        return str(int(round(numero)))
+    return f"{numero:.1f}".replace(".", ",")
+
+
+def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None):
     if not dados:
         st.info("Sem dados para gerar o grafico.")
         return
     df = pd.DataFrame(
-        [{"Indicador": chave, "Total": valor} for chave, valor in dados.items()]
+        [{"Indicador": chave, modo: valor} for chave, valor in dados.items()]
     )
+    altura = altura or max(380, min(680, 80 * len(df) + 180))
     fig = go.Figure(go.Bar(
-        name="Total",
+        name=modo,
         x=df["Indicador"],
-        y=df["Total"],
+        y=df[modo],
         marker_color=[
             CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
             "#7C3AED", "#0891B2", "#B45309",
         ][:len(df)],
-        text=[
-            _moeda(v) if "Oferta" in str(k) else str(int(v))
-            for k, v in dados.items()
-        ],
+        text=[_valor_grafico_ebd(k, v) for k, v in dados.items()],
         textposition="outside",
-        hovertemplate="<b>%{x}</b><br>Total: %{text}<extra></extra>",
+        hovertemplate=f"<b>%{{x}}</b><br>{modo}: %{{text}}<extra></extra>",
     ))
     fig.update_layout(
         title=titulo,
-        height=430,
+        height=altura,
         margin=dict(t=60, b=80, l=25, r=25),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -425,7 +435,63 @@ def _grafico_totais_ebd(titulo, dados):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
 
-def _totais_aulas(aulas):
+def _grafico_comparativo_classes_ebd(titulo, aulas):
+    if aulas.empty:
+        st.info("Sem dados para gerar o grafico.")
+        return
+
+    linhas = []
+    for classe, grupo in aulas.groupby("classe", dropna=False):
+        classe_nome = str(classe or "Sem classe")
+        media = int(grupo["id_aula"].nunique()) > 1
+        dados = _totais_aulas(grupo, media=media)
+        for indicador, valor in dados.items():
+            linhas.append({
+                "Classe": classe_nome,
+                "Indicador": indicador,
+                "Valor": valor,
+                "Texto": _valor_grafico_ebd(indicador, valor),
+            })
+
+    df = pd.DataFrame(linhas)
+    if df.empty:
+        st.info("Sem dados para gerar o grafico.")
+        return
+
+    altura = max(460, min(900, 120 * df["Classe"].nunique() + 220))
+    fig = go.Figure()
+    cores = [
+        CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
+        "#7C3AED", "#0891B2", "#B45309", "#DB2777",
+    ]
+    for idx, indicador in enumerate(df["Indicador"].drop_duplicates().tolist()):
+        sub = df[df["Indicador"] == indicador]
+        fig.add_trace(go.Bar(
+            name=indicador,
+            y=sub["Classe"],
+            x=sub["Valor"],
+            orientation="h",
+            marker_color=cores[idx % len(cores)],
+            text=sub["Texto"],
+            textposition="outside",
+            hovertemplate="<b>%{y}</b><br>" + indicador + ": %{text}<extra></extra>",
+        ))
+
+    fig.update_layout(
+        title=titulo,
+        height=altura,
+        barmode="group",
+        margin=dict(t=60, b=40, l=25, r=35),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis=dict(title="", fixedrange=True),
+        legend=dict(orientation="h", y=1.12, x=0),
+    )
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+
+
+def _totais_aulas(aulas, media=False):
     if aulas.empty:
         return {
             "Matriculados": 0,
@@ -437,16 +503,23 @@ def _totais_aulas(aulas):
             "Harpas": 0,
             "Ofertas": 0.0,
         }
-    return {
-        "Matriculados": int(aulas["matriculados"].fillna(0).sum()),
-        "Presentes": int(aulas["presentes"].fillna(0).sum()),
-        "Ausentes": int(aulas["ausentes"].fillna(0).sum()),
-        "Visitantes": int(aulas["visitantes"].fillna(0).sum()),
-        "Biblias": int(aulas["qtd_biblias"].fillna(0).sum()),
-        "Revistas": int(aulas["qtd_revistas"].fillna(0).sum()),
-        "Harpas": int(aulas["qtd_harpas"].fillna(0).sum()),
-        "Ofertas": float(aulas["ofertas"].fillna(0).sum()),
+    divisor = int(aulas["id_aula"].nunique()) if media else 1
+    divisor = max(divisor, 1)
+    dados = {
+        "Matriculados": float(aulas["matriculados"].fillna(0).sum()) / divisor,
+        "Presentes": float(aulas["presentes"].fillna(0).sum()) / divisor,
+        "Ausentes": float(aulas["ausentes"].fillna(0).sum()) / divisor,
+        "Visitantes": float(aulas["visitantes"].fillna(0).sum()) / divisor,
+        "Biblias": float(aulas["qtd_biblias"].fillna(0).sum()) / divisor,
+        "Revistas": float(aulas["qtd_revistas"].fillna(0).sum()) / divisor,
+        "Harpas": float(aulas["qtd_harpas"].fillna(0).sum()) / divisor,
+        "Ofertas": float(aulas["ofertas"].fillna(0).sum()) / divisor,
     }
+    if not media:
+        for chave in list(dados.keys()):
+            if chave != "Ofertas":
+                dados[chave] = int(round(dados[chave]))
+    return dados
 
 
 def _classes_opcoes(df_classes):
@@ -1035,15 +1108,35 @@ def _render_relatorios(slug):
     if aulas.empty:
         st.info("Nenhuma aula registrada no periodo selecionado.")
     else:
-        totais = _totais_aulas(aulas)
         st.markdown("#### Grafico por classe")
         classes = sorted(aulas["classe"].dropna().astype(str).unique().tolist())
-        classe_escolhida = st.selectbox("Escolha a classe", classes, key="grafico_ebd_classe")
-        aulas_classe = aulas[aulas["classe"].astype(str) == classe_escolhida]
-        _grafico_totais_ebd(
-            f"Resumo da classe {classe_escolhida}",
-            _totais_aulas(aulas_classe),
+        classe_escolhida = st.selectbox(
+            "Escolha a classe",
+            ["Todas as classes"] + classes,
+            key="grafico_ebd_classe",
         )
+        if classe_escolhida == "Todas as classes":
+            st.caption(
+                "Comparativo por sala. Quando uma sala possui mais de uma chamada "
+                "no periodo, o grafico apresenta a media por chamada daquela sala."
+            )
+            _grafico_comparativo_classes_ebd(
+                "Resumo comparativo por classe",
+                aulas,
+            )
+        else:
+            aulas_classe = aulas[aulas["classe"].astype(str) == classe_escolhida]
+            media_classe = int(aulas_classe["id_aula"].nunique()) > 1
+            modo_classe = "Média por chamada" if media_classe else "Total"
+            st.caption(
+                f"{modo_classe}. Chamadas consideradas: "
+                f"{int(aulas_classe['id_aula'].nunique())}."
+            )
+            _grafico_totais_ebd(
+                f"Resumo da classe {classe_escolhida}",
+                _totais_aulas(aulas_classe, media=media_classe),
+                modo=modo_classe,
+            )
 
     st.markdown("#### Frequencia por classe")
     _grafico_frequencia_classes(resumo)
@@ -1101,21 +1194,31 @@ def _render_relatorios(slug):
             )
 
     if not aulas.empty:
-        totais = _totais_aulas(aulas)
+        media_geral = int(aulas["id_aula"].nunique()) > 1
+        modo_geral = "Média por chamada" if media_geral else "Total"
+        totais = _totais_aulas(aulas, media=media_geral)
         st.markdown("#### Relatorio geral")
+        st.caption(
+            f"{modo_geral}. Chamadas consideradas no periodo: "
+            f"{int(aulas['id_aula'].nunique())}."
+        )
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total de matriculados", totais["Matriculados"])
-        c2.metric("Total de presentes", totais["Presentes"])
-        c3.metric("Total de ausentes", totais["Ausentes"])
-        c4.metric("Total de visitantes", totais["Visitantes"])
+        c1.metric("Matriculados", _valor_grafico_ebd("Matriculados", totais["Matriculados"]))
+        c2.metric("Presentes", _valor_grafico_ebd("Presentes", totais["Presentes"]))
+        c3.metric("Ausentes", _valor_grafico_ebd("Ausentes", totais["Ausentes"]))
+        c4.metric("Visitantes", _valor_grafico_ebd("Visitantes", totais["Visitantes"]))
         c5, c6, c7, c8 = st.columns(4)
-        c5.metric("Biblias", totais["Biblias"])
-        c6.metric("Revistas", totais["Revistas"])
-        c7.metric("Harpas", totais["Harpas"])
-        c8.metric("Total de ofertas", _moeda(totais["Ofertas"]))
+        c5.metric("Biblias", _valor_grafico_ebd("Biblias", totais["Biblias"]))
+        c6.metric("Revistas", _valor_grafico_ebd("Revistas", totais["Revistas"]))
+        c7.metric("Harpas", _valor_grafico_ebd("Harpas", totais["Harpas"]))
+        c8.metric("Ofertas", _moeda(totais["Ofertas"]))
 
         st.markdown("#### Grafico geral da Escola Bíblica")
-        _grafico_totais_ebd("Resumo geral da Escola Bíblica", totais)
+        _grafico_totais_ebd(
+            "Resumo geral da Escola Bíblica",
+            totais,
+            modo=modo_geral,
+        )
 
 
 def _render_escala(slug):
