@@ -458,33 +458,34 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         st.info("Sem dados para gerar o grafico.")
         return
 
-    altura = max(430, min(760, 70 * df["Indicador"].nunique() + 240))
+    altura = max(460, min(820, 72 * df["Indicador"].nunique() + 220))
     fig = go.Figure()
     cores = [
         CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
         "#7C3AED", "#0891B2", "#B45309", "#DB2777",
     ]
-    for idx, indicador in enumerate(df["Indicador"].drop_duplicates().tolist()):
-        sub = df[df["Indicador"] == indicador]
+    for idx, classe in enumerate(df["Classe"].drop_duplicates().tolist()):
+        sub = df[df["Classe"] == classe]
         fig.add_trace(go.Bar(
-            name=indicador,
-            x=sub["Classe"],
-            y=sub["Valor"],
+            name=classe,
+            x=sub["Valor"],
+            y=sub["Indicador"],
+            orientation="h",
             marker_color=cores[idx % len(cores)],
             text=sub["Texto"],
             textposition="outside",
-            hovertemplate="<b>%{x}</b><br>" + indicador + ": %{text}<extra></extra>",
+            hovertemplate="<b>%{fullData.name}</b><br>%{y}: %{text}<extra></extra>",
         ))
 
     fig.update_layout(
         title=titulo,
         height=altura,
         barmode="group",
-        margin=dict(t=60, b=90, l=25, r=35),
+        margin=dict(t=60, b=40, l=120, r=35),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title="", fixedrange=True),
-        yaxis=dict(title="", fixedrange=True, gridcolor="#E2E8F0"),
+        xaxis=dict(title="", fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis=dict(title="", fixedrange=True),
         legend=dict(orientation="h", y=1.12, x=0),
     )
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
