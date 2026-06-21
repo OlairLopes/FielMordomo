@@ -924,7 +924,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
                 id_matricula = _int_seguro(row.get("id_matricula"), 0)
                 if id_matricula:
                     presencas_salvas[id_matricula] = bool(row.get("presente"))
-    elif escala_aula:
+    elif escala_aula is not None:
         tema_atual = str(escala_aula.get("tema", "") or "")
         professor_atual = str(escala_aula.get("professor", "") or "")
 
@@ -936,7 +936,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
     )
 
     with st.form("form_ebd_chamada"):
-        if escala_aula:
+        if escala_aula is not None:
             st.success("Tema e professor preenchidos automaticamente pela escala de professores.")
         else:
             st.info("Nenhuma escala encontrada para esta classe e data.")
