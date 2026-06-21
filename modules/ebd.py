@@ -468,24 +468,23 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         sub = df[df["Classe"] == classe]
         fig.add_trace(go.Bar(
             name=classe,
-            x=sub["Valor"],
-            y=sub["Indicador"],
-            orientation="h",
+            x=sub["Indicador"],
+            y=sub["Valor"],
             marker_color=cores[idx % len(cores)],
             text=sub["Texto"],
             textposition="outside",
-            hovertemplate="<b>%{fullData.name}</b><br>%{y}: %{text}<extra></extra>",
+            hovertemplate="<b>%{fullData.name}</b><br>%{x}: %{text}<extra></extra>",
         ))
 
     fig.update_layout(
         title=titulo,
         height=altura,
         barmode="group",
-        margin=dict(t=60, b=40, l=120, r=35),
+        margin=dict(t=60, b=90, l=25, r=35),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title="", fixedrange=True, gridcolor="#E2E8F0"),
-        yaxis=dict(title="", fixedrange=True),
+        xaxis=dict(title="", fixedrange=True),
+        yaxis=dict(title="", fixedrange=True, gridcolor="#E2E8F0"),
         legend=dict(orientation="h", y=1.12, x=0),
     )
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
