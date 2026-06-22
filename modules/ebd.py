@@ -416,7 +416,7 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None):
         y=df[modo],
         marker_color=[
             CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
-            "#7C3AED", "#0891B2", "#B45309",
+            "#0EA5E9", "#7C3AED", "#0891B2", "#B45309", "#DB2777",
         ][:len(df)],
         text=[_valor_grafico_ebd(k, v) for k, v in dados.items()],
         textposition="outside",
@@ -465,6 +465,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         "Presentes": CORES["verde"],
         "Ausentes": CORES["vermelho"],
         "Visitantes": CORES["laranja"],
+        "Assistentes": "#0EA5E9",
         "Biblias": "#7C3AED",
         "Revistas": "#0891B2",
         "Harpas": "#B45309",
@@ -506,6 +507,7 @@ def _totais_aulas(aulas, media=False):
             "Presentes": 0,
             "Ausentes": 0,
             "Visitantes": 0,
+            "Assistentes": 0,
             "Biblias": 0,
             "Revistas": 0,
             "Harpas": 0,
@@ -518,6 +520,7 @@ def _totais_aulas(aulas, media=False):
         "Presentes": float(aulas["presentes"].fillna(0).sum()) / divisor,
         "Ausentes": float(aulas["ausentes"].fillna(0).sum()) / divisor,
         "Visitantes": float(aulas["visitantes"].fillna(0).sum()) / divisor,
+        "Assistentes": float(aulas["assistentes"].fillna(0).sum()) / divisor,
         "Biblias": float(aulas["qtd_biblias"].fillna(0).sum()) / divisor,
         "Revistas": float(aulas["qtd_revistas"].fillna(0).sum()) / divisor,
         "Harpas": float(aulas["qtd_harpas"].fillna(0).sum()) / divisor,
@@ -982,6 +985,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
     professor_atual = ""
     obs_atual = ""
     visitantes_atual = 0
+    assistentes_atual = 0
     revistas_atual = 0
     biblias_atual = 0
     harpas_atual = 0
@@ -993,6 +997,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
         professor_atual = aula.get("professor", "")
         obs_atual = aula.get("observacoes", "")
         visitantes_atual = _int_seguro(aula.get("visitantes", 0), 0)
+        assistentes_atual = _int_seguro(aula.get("assistentes", 0), 0)
         revistas_atual = _int_seguro(aula.get("qtd_revistas", 0), 0)
         biblias_atual = _int_seguro(aula.get("qtd_biblias", 0), 0)
         harpas_atual = _int_seguro(aula.get("qtd_harpas", 0), 0)
@@ -1054,12 +1059,15 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
         qtd_ausentes_calc = max(qtd_matriculados_calc - qtd_presentes_calc, 0)
 
         st.markdown("#### Totais da chamada")
-        qtd_visitantes = st.number_input("Visitantes", min_value=0, step=1, value=visitantes_atual)
-        m1, m2, m3, m4 = st.columns(4)
+        c_tot1, c_tot2 = st.columns(2)
+        qtd_visitantes = c_tot1.number_input("Visitantes", min_value=0, step=1, value=visitantes_atual)
+        qtd_assistentes = c_tot2.number_input("Assistentes", min_value=0, step=1, value=assistentes_atual)
+        m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Matriculados", qtd_matriculados_calc)
         m2.metric("Presentes", qtd_presentes_calc)
         m3.metric("Ausentes", qtd_ausentes_calc)
         m4.metric("Visitantes", qtd_visitantes)
+        m5.metric("Assistentes", qtd_assistentes)
 
         st.markdown("#### Recursos e ofertas da aula")
         r1, r2, r3, r4 = st.columns(4)
@@ -1088,6 +1096,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
                     qtd_presentes_calc,
                     qtd_ausentes_calc,
                     qtd_visitantes,
+                    qtd_assistentes,
                     qtd_revistas,
                     qtd_biblias,
                     qtd_harpas,
@@ -1195,7 +1204,8 @@ def _render_relatorios(slug):
                 aulas_exibir[[
                     "data", "classe", "tema", "professor", "matriculados",
                     "presentes", "ausentes", "visitantes", "frequencia",
-                    "qtd_revistas", "qtd_biblias", "qtd_harpas", "ofertas",
+                    "assistentes", "qtd_revistas", "qtd_biblias", "qtd_harpas",
+                    "ofertas",
                 ]],
                 use_container_width=True,
                 hide_index=True,
@@ -1210,11 +1220,12 @@ def _render_relatorios(slug):
             f"{modo_geral}. Chamadas consideradas no periodo: "
             f"{int(aulas['id_aula'].nunique())}."
         )
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Matriculados", _valor_grafico_ebd("Matriculados", totais["Matriculados"]))
         c2.metric("Presentes", _valor_grafico_ebd("Presentes", totais["Presentes"]))
         c3.metric("Ausentes", _valor_grafico_ebd("Ausentes", totais["Ausentes"]))
         c4.metric("Visitantes", _valor_grafico_ebd("Visitantes", totais["Visitantes"]))
+        c5.metric("Assistentes", _valor_grafico_ebd("Assistentes", totais["Assistentes"]))
         c5, c6, c7, c8 = st.columns(4)
         c5.metric("Biblias", _valor_grafico_ebd("Biblias", totais["Biblias"]))
         c6.metric("Revistas", _valor_grafico_ebd("Revistas", totais["Revistas"]))

@@ -517,6 +517,7 @@ def _garantir_tabelas_ebd(conn):
             qtd_presentes    INTEGER NOT NULL DEFAULT 0,
             qtd_ausentes     INTEGER NOT NULL DEFAULT 0,
             qtd_visitantes   INTEGER NOT NULL DEFAULT 0,
+            qtd_assistentes  INTEGER NOT NULL DEFAULT 0,
             qtd_revistas INTEGER NOT NULL DEFAULT 0,
             qtd_biblias  INTEGER NOT NULL DEFAULT 0,
             qtd_harpas   INTEGER NOT NULL DEFAULT 0,
@@ -598,6 +599,7 @@ def _garantir_tabelas_ebd(conn):
         ("qtd_presentes", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_ausentes", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_visitantes", "INTEGER NOT NULL DEFAULT 0"),
+        ("qtd_assistentes", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_revistas", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_biblias", "INTEGER NOT NULL DEFAULT 0"),
         ("qtd_harpas", "INTEGER NOT NULL DEFAULT 0"),
@@ -2204,6 +2206,7 @@ def listar_ebd_aulas(slug, data_inicio=None, data_fim=None, id_classe=None):
                             ELSE SUM(CASE WHEN p.presente=0 THEN 1 ELSE 0 END)
                        END AS ausentes,
                        a.qtd_visitantes AS visitantes,
+                       a.qtd_assistentes AS assistentes,
                        a.qtd_revistas, a.qtd_biblias,
                        a.qtd_harpas, a.ofertas, a.observacoes,
                        COUNT(p.id_presenca) AS matriculados_lista,
@@ -2214,7 +2217,8 @@ def listar_ebd_aulas(slug, data_inicio=None, data_fim=None, id_classe=None):
                 {filtro}
                 GROUP BY a.id_aula, a.id_classe, c.nome, a.data, a.tema,
                          a.professor, a.qtd_matriculados, a.qtd_presentes,
-                         a.qtd_ausentes, a.qtd_visitantes, a.qtd_revistas, a.qtd_biblias,
+                         a.qtd_ausentes, a.qtd_visitantes, a.qtd_assistentes,
+                         a.qtd_revistas, a.qtd_biblias,
                          a.qtd_harpas, a.ofertas, a.observacoes
                 ORDER BY a.data DESC, c.nome""",
             conn,
@@ -2234,6 +2238,7 @@ def salvar_ebd_chamada(
     qtd_presentes=0,
     qtd_ausentes=0,
     qtd_visitantes=0,
+    qtd_assistentes=0,
     qtd_revistas=0,
     qtd_biblias=0,
     qtd_harpas=0,
@@ -2249,6 +2254,7 @@ def salvar_ebd_chamada(
         qtd_presentes = max(int(qtd_presentes or 0), 0)
         qtd_ausentes = max(int(qtd_ausentes or 0), 0)
         qtd_visitantes = max(int(qtd_visitantes or 0), 0)
+        qtd_assistentes = max(int(qtd_assistentes or 0), 0)
         qtd_revistas = max(int(qtd_revistas or 0), 0)
         qtd_biblias = max(int(qtd_biblias or 0), 0)
         qtd_harpas = max(int(qtd_harpas or 0), 0)
@@ -2312,13 +2318,13 @@ def salvar_ebd_chamada(
                 """UPDATE ebd_aulas
                    SET id_classe=?, data=?, tema=?, professor=?,
                        qtd_matriculados=?, qtd_presentes=?, qtd_ausentes=?,
-                       qtd_visitantes=?, qtd_revistas=?, qtd_biblias=?,
+                       qtd_visitantes=?, qtd_assistentes=?, qtd_revistas=?, qtd_biblias=?,
                        qtd_harpas=?, ofertas=?, observacoes=?
                    WHERE id_aula=?""",
                 (
                     int(id_classe), str(data), sanitizar(tema),
                     sanitizar(professor), qtd_matriculados, qtd_presentes,
-                    qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
+                    qtd_ausentes, qtd_visitantes, qtd_assistentes, qtd_revistas, qtd_biblias,
                     qtd_harpas, ofertas, sanitizar(observacoes), id_aula,
                 ),
             )
@@ -2326,9 +2332,9 @@ def salvar_ebd_chamada(
             cur = conn.execute(
                 """INSERT INTO ebd_aulas
                    (id_classe, data, tema, professor, qtd_matriculados, qtd_presentes,
-                    qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
+                    qtd_ausentes, qtd_visitantes, qtd_assistentes, qtd_revistas, qtd_biblias,
                     qtd_harpas, ofertas, observacoes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id_classe, data) DO UPDATE SET
                        tema=excluded.tema,
                        professor=excluded.professor,
@@ -2336,6 +2342,7 @@ def salvar_ebd_chamada(
                        qtd_presentes=excluded.qtd_presentes,
                        qtd_ausentes=excluded.qtd_ausentes,
                        qtd_visitantes=excluded.qtd_visitantes,
+                       qtd_assistentes=excluded.qtd_assistentes,
                        qtd_revistas=excluded.qtd_revistas,
                        qtd_biblias=excluded.qtd_biblias,
                        qtd_harpas=excluded.qtd_harpas,
@@ -2344,7 +2351,7 @@ def salvar_ebd_chamada(
                 (
                     int(id_classe), str(data), sanitizar(tema),
                     sanitizar(professor), qtd_matriculados, qtd_presentes,
-                    qtd_ausentes, qtd_visitantes, qtd_revistas, qtd_biblias,
+                    qtd_ausentes, qtd_visitantes, qtd_assistentes, qtd_revistas, qtd_biblias,
                     qtd_harpas, ofertas, sanitizar(observacoes),
                 ),
             )
