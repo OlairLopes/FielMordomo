@@ -391,15 +391,14 @@ def _grafico_frequencia_classes(resumo):
 
 
 def _valor_grafico_ebd(indicador, valor):
-    if "Oferta" in str(indicador):
-        return _moeda(valor)
     try:
         numero = float(valor)
     except Exception:
         return str(valor)
-    if abs(numero - round(numero)) < 0.05:
-        return str(int(round(numero)))
-    return f"{numero:.1f}".replace(".", ",")
+    inteiro = int(round(numero))
+    if "Oferta" in str(indicador):
+        return _moeda(numero)
+    return str(inteiro)
 
 
 def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None):
@@ -524,12 +523,11 @@ def _totais_aulas(aulas, media=False):
         "Biblias": float(aulas["qtd_biblias"].fillna(0).sum()) / divisor,
         "Revistas": float(aulas["qtd_revistas"].fillna(0).sum()) / divisor,
         "Harpas": float(aulas["qtd_harpas"].fillna(0).sum()) / divisor,
-        "Ofertas": float(aulas["ofertas"].fillna(0).sum()) / divisor,
+        "Ofertas": float(aulas["ofertas"].fillna(0).sum()),
     }
-    if not media:
-        for chave in list(dados.keys()):
-            if chave != "Ofertas":
-                dados[chave] = int(round(dados[chave]))
+    for chave in list(dados.keys()):
+        if chave != "Ofertas":
+            dados[chave] = int(round(dados[chave]))
     return dados
 
 
