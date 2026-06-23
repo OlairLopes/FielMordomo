@@ -1054,6 +1054,129 @@ def _render_checkin(slug):
         if erros:
             st.error("Alguns registros falharam: " + " | ".join(erros[:5]))
 
+    st.divider()
+    st.markdown("### Solicitar autoriza\xe7\xe3o de localiza\xe7\xe3o")
+    st.caption(
+        "Envia uma mensagem para os membros abrirem o check-in no pr\xf3prio celular. "
+        "A permiss\xe3o de localiza\xe7\xe3o precisa ser autorizada individualmente por cada membro."
+    )
+
+    tabela_aut = _montar_tabela_frequencia(slug, evento["id_evento"])
+    grupo_aut = st.radio(
+        "Enviar solicita\xe7\xe3o para",
+        ["Todos os membros ativos", "Somente quem ainda n\xe3o fez check-in"],
+        horizontal=True,
+        key=f"geo_grupo_aut_{int(evento['id_evento'])}",
+    )
+    if grupo_aut == "Somente quem ainda n\xe3o fez check-in":
+        destinatarios_aut = tabela_aut[~tabela_aut["presente"]].copy()
+    else:
+        destinatarios_aut = tabela_aut.copy()
+
+    data_fmt_aut = pd.to_datetime(evento.get("data"), errors="coerce")
+    data_txt_aut = data_fmt_aut.strftime("%d/%m/%Y") if pd.notna(data_fmt_aut) else str(evento.get("data", ""))
+
+    link_checkin = st.text_input(
+        "Link para o membro abrir o check-in",
+        value="",
+        key=f"geo_link_checkin_{int(evento['id_evento'])}",
+        placeholder="Cole aqui o link da p\xe1gina de check-in, se houver",
+    )
+    modelo_aut = st.text_area(
+        "Mensagem de solicita\xe7\xe3o",
+        value=(
+            "Paz do Senhor, {nome}! Para registrar sua presen\xe7a em {evento}, "
+            "no dia {data}, abra o link abaixo pelo seu celular e autorize a localiza\xe7\xe3o:\n\n"
+            "{link}\n\n"
+            "Caso j\xe1 esteja no local, fa\xe7a o check-in assim que poss\xedvel."
+        ),
+        height=140,
+        key=f"geo_msg_aut_{int(evento['id_evento'])}",
+        help="Use {nome}, {evento}, {data} e {link}.",
+    )
+
+    linhas_aut = []
+    for _, row in destinatarios_aut.iterrows():
+        nome_aut = str(row.get("nome", "")).strip()
+        telefone_aut = str(row.get("telefone", "")).strip()
+        mensagem_aut = (
+            modelo_aut.replace("{nome}", nome_aut)
+            .replace("{evento}", str(evento.get("nome", "")))
+            .replace("{data}", data_txt_aut)
+            .replace("{link}", str(link_checkin or "").strip())
+        )
+        linhas_aut.append({
+            "Nome": nome_aut,
+            "Telefone": telefone_aut,
+            "Situa\xe7\xe3o": row.get("situacao", ""),
+            "Mensagem": mensagem_aut,
+            "Link WhatsApp": _link_whatsapp(telefone_aut, mensagem_aut),
+        })
+
+    df_aut = pd.DataFrame(linhas_aut)
+    st.caption(f"{len(df_aut)} destinat\xe1rio(s) selecionado(s).")
+    if not df_aut.empty:
+        st.dataframe(
+            df_aut[["Nome", "Telefone", "Situa\xe7\xe3o"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    qtd_validos_aut = (
+        int(df_aut["Telefone"].apply(_normalizar_tel_brasil).astype(bool).sum())
+        if not df_aut.empty
+        else 0
+    )
+    if _whatsapp_api_configurada():
+        st.success("WhatsApp Cloud API configurada para envio em massa.")
+    else:
+        st.warning(
+            "WhatsApp Cloud API n\xe3o configurada. Voc\xea ainda pode usar os links individuais abaixo."
+        )
+
+    confirmar_aut = st.checkbox(
+        f"Confirmo o envio da solicita\xe7\xe3o para {qtd_validos_aut} membro(s)",
+        key=f"geo_conf_aut_{int(evento['id_evento'])}",
+        disabled=not _whatsapp_api_configurada() or qtd_validos_aut == 0,
+    )
+
+    if st.button(
+        "Enviar solicita\xe7\xe3o em massa",
+        type="primary",
+        use_container_width=True,
+        disabled=not confirmar_aut,
+        key=f"geo_btn_aut_{int(evento['id_evento'])}",
+    ):
+        resultados_aut = []
+        barra_aut = st.progress(0)
+        with st.spinner("Enviando solicita\xe7\xf5es..."):
+            total_aut = max(1, len(df_aut))
+            for _, row in df_aut.iterrows():
+                ok, detalhe = _enviar_whatsapp_texto_api(row["Telefone"], row["Mensagem"])
+                resultados_aut.append({
+                    "Nome": row["Nome"],
+                    "Telefone": row["Telefone"],
+                    "Status": "Enviado" if ok else "Erro",
+                    "Detalhe": detalhe,
+                })
+                barra_aut.progress(min(1.0, len(resultados_aut) / total_aut))
+
+        df_result_aut = pd.DataFrame(resultados_aut)
+        enviados_aut = int((df_result_aut["Status"] == "Enviado").sum()) if not df_result_aut.empty else 0
+        erros_aut = int((df_result_aut["Status"] == "Erro").sum()) if not df_result_aut.empty else 0
+        st.success(f"Solicita\xe7\xf5es processadas. Enviadas: {enviados_aut}. Erros: {erros_aut}.")
+        st.dataframe(df_result_aut, use_container_width=True, hide_index=True)
+
+    with st.expander("Links individuais de solicita\xe7\xe3o"):
+        if df_aut.empty:
+            st.info("Nenhum destinat\xe1rio para este filtro.")
+        else:
+            for _, row in df_aut.iterrows():
+                if row["Link WhatsApp"]:
+                    st.markdown(f'[{row["Nome"]} - enviar solicita\xe7\xe3o]({row["Link WhatsApp"]})')
+                else:
+                    st.caption(f"{row['Nome']} - sem telefone v\xe1lido no cadastro.")
+
 
 def _render_frequencia(slug):
     st.subheader("Presentes e ausentes")
