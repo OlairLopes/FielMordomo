@@ -5,6 +5,7 @@ from collections import defaultdict
 
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from data.repository import (
@@ -408,19 +409,42 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None):
     df = pd.DataFrame(
         [{"Indicador": chave, modo: valor} for chave, valor in dados.items()]
     )
+    df_ofertas = df[df["Indicador"] == "Ofertas"].copy()
+    df_qtd = df[df["Indicador"] != "Ofertas"].copy()
     altura = altura or max(380, min(680, 80 * len(df) + 180))
-    fig = go.Figure(go.Bar(
-        name=modo,
-        x=df["Indicador"],
-        y=df[modo],
-        marker_color=[
-            CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
-            "#0EA5E9", "#7C3AED", "#0891B2", "#B45309", "#DB2777",
-        ][:len(df)],
-        text=[_valor_grafico_ebd(k, v) for k, v in dados.items()],
-        textposition="outside",
-        hovertemplate=f"<b>%{{x}}</b><br>{modo}: %{{text}}<extra></extra>",
-    ))
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    if not df_qtd.empty:
+        fig.add_trace(go.Bar(
+            name=modo,
+            x=df_qtd["Indicador"],
+            y=df_qtd[modo],
+            marker_color=[
+                CORES["azul"], CORES["verde"], CORES["vermelho"], CORES["laranja"],
+                "#0EA5E9", "#7C3AED", "#0891B2", "#B45309",
+            ][:len(df_qtd)],
+            text=[
+                _valor_grafico_ebd(row["Indicador"], row[modo])
+                for _, row in df_qtd.iterrows()
+            ],
+            textposition="outside",
+            hovertemplate=f"<b>%{{x}}</b><br>{modo}: %{{text}}<extra></extra>",
+        ), secondary_y=False)
+
+    if not df_ofertas.empty:
+        fig.add_trace(go.Bar(
+            name="Ofertas",
+            x=df_ofertas["Indicador"],
+            y=df_ofertas[modo],
+            marker_color="#DB2777",
+            text=[
+                _valor_grafico_ebd(row["Indicador"], row[modo])
+                for _, row in df_ofertas.iterrows()
+            ],
+            textposition="outside",
+            hovertemplate="<b>%{x}</b><br>Total: %{text}<extra></extra>",
+        ), secondary_y=True)
+
     fig.update_layout(
         title=titulo,
         height=altura,
@@ -428,7 +452,8 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(fixedrange=True),
-        yaxis=dict(fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
         showlegend=False,
     )
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
@@ -458,7 +483,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         return
 
     altura = max(460, min(820, 72 * df["Indicador"].nunique() + 220))
-    fig = go.Figure()
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
     cores_indicador = {
         "Matriculados": CORES["azul"],
         "Presentes": CORES["verde"],
@@ -471,19 +496,33 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         "Ofertas": "#DB2777",
     }
     for idx, classe in enumerate(df["Classe"].drop_duplicates().tolist()):
-        sub = df[df["Classe"] == classe]
-        fig.add_trace(go.Bar(
-            name=classe,
-            x=sub["Indicador"],
-            y=sub["Valor"],
-            marker_color=[
-                cores_indicador.get(str(indicador), CORES["cinza"])
-                for indicador in sub["Indicador"]
-            ],
-            text=sub["Texto"],
-            textposition="outside",
-            hovertemplate="<b>%{fullData.name}</b><br>%{x}: %{text}<extra></extra>",
-        ))
+        sub = df[(df["Classe"] == classe) & (df["Indicador"] != "Ofertas")]
+        if not sub.empty:
+            fig.add_trace(go.Bar(
+                name=classe,
+                x=sub["Indicador"],
+                y=sub["Valor"],
+                marker_color=[
+                    cores_indicador.get(str(indicador), CORES["cinza"])
+                    for indicador in sub["Indicador"]
+                ],
+                text=sub["Texto"],
+                textposition="outside",
+                hovertemplate="<b>%{fullData.name}</b><br>%{x}: %{text}<extra></extra>",
+            ), secondary_y=False)
+
+        sub_ofertas = df[(df["Classe"] == classe) & (df["Indicador"] == "Ofertas")]
+        if not sub_ofertas.empty:
+            fig.add_trace(go.Bar(
+                name=f"{classe} - Ofertas",
+                x=sub_ofertas["Indicador"],
+                y=sub_ofertas["Valor"],
+                marker_color=cores_indicador["Ofertas"],
+                text=sub_ofertas["Texto"],
+                textposition="outside",
+                hovertemplate="<b>%{fullData.name}</b><br>%{x}: %{text}<extra></extra>",
+                showlegend=False,
+            ), secondary_y=True)
 
     fig.update_layout(
         title=titulo,
@@ -493,7 +532,8 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(title="", fixedrange=True),
-        yaxis=dict(title="", fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0"),
+        yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
         legend=dict(orientation="h", y=1.12, x=0),
     )
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
