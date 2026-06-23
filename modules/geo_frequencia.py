@@ -117,7 +117,7 @@ def _html_captura_localizacao(id_evento, id_cadastro):
           <button onclick="capturarGeo()" style="
             background:#0F6E56;color:white;border:0;border-radius:8px;
             padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer">
-            Capturar minha localizaÃ§Ã£o
+            Capturar minha localiza\xe7\xe3o
           </button>
           <div id="geo_msg" style="margin-top:8px;color:#475569;font-size:13px"></div>
         </div>
@@ -125,10 +125,10 @@ def _html_captura_localizacao(id_evento, id_cadastro):
         function capturarGeo() {{
           const msg = document.getElementById("geo_msg");
           if (!navigator.geolocation) {{
-            msg.innerText = "Este navegador nÃ£o oferece geolocalizaÃ§Ã£o.";
+            msg.innerText = "Este navegador n\xe3o oferece geolocaliza\xe7\xe3o.";
             return;
           }}
-          msg.innerText = "Solicitando permissÃ£o de localizaÃ§Ã£o...";
+          msg.innerText = "Solicitando permiss\xe3o de localiza\xe7\xe3o...";
           navigator.geolocation.getCurrentPosition(
             function(pos) {{
               const params = new URLSearchParams(window.parent.location.search);
@@ -140,7 +140,7 @@ def _html_captura_localizacao(id_evento, id_cadastro):
               window.parent.location.search = params.toString();
             }},
             function(err) {{
-              msg.innerText = "NÃ£o foi possÃ­vel capturar a localizaÃ§Ã£o: " + err.message;
+              msg.innerText = "N\xe3o foi poss\xedvel capturar a localiza\xe7\xe3o: " + err.message;
             }},
             {{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }}
           );
@@ -162,7 +162,7 @@ def _processar_captura_query(slug):
 
     evento = obter_geo_evento(slug, id_evento)
     if not evento:
-        st.error("Evento de localizaÃ§Ã£o nÃ£o encontrado.")
+        st.error("Evento de localiza\xe7\xe3o n\xe3o encontrado.")
         _limpar_query_geo()
         return
 
@@ -177,7 +177,7 @@ def _processar_captura_query(slug):
     elif not habilitado:
         status = "Captura desabilitada"
     elif dentro:
-        status = "Presente por localizaÃ§Ã£o"
+        status = "Presente por localiza\xe7\xe3o"
     else:
         status = "Fora do raio configurado"
 
@@ -194,11 +194,11 @@ def _processar_captura_query(slug):
             status=status,
         )
         if presente:
-            st.success(f"PresenÃ§a registrada. DistÃ¢ncia aproximada: {distancia:.0f} m.")
+            st.success(f"Presen\xe7a registrada. Dist\xe2ncia aproximada: {distancia:.0f} m.")
         else:
-            st.warning(f"LocalizaÃ§Ã£o registrada como ausente. Motivo: {status}. DistÃ¢ncia: {distancia:.0f} m.")
+            st.warning(f"Localiza\xe7\xe3o registrada como ausente. Motivo: {status}. Dist\xe2ncia: {distancia:.0f} m.")
     except Exception as exc:
-        st.error(f"NÃ£o foi possÃ­vel registrar a presenÃ§a: {exc}")
+        st.error(f"N\xe3o foi poss\xedvel registrar a presen\xe7a: {exc}")
 
     _limpar_query_geo()
 
@@ -239,17 +239,17 @@ def _mensagem_padrao(evento, grupo):
         msg = str(evento.get("mensagem_presentes") or "").strip()
         if msg:
             return msg
-        return "Paz do Senhor, {nome}! Sua presenÃ§a foi registrada em {evento}, no dia {data}. Deus abenÃ§oe."
+        return "Paz do Senhor, {nome}! Sua presen\xe7a foi registrada em {evento}, no dia {data}. Deus aben\xe7oe."
 
     msg = str(evento.get("mensagem_ausentes") or "").strip()
     if msg:
         return msg
-    return "Paz do Senhor, {nome}! Sentimos sua falta em {evento}, no dia {data}. Deus abenÃ§oe."
+    return "Paz do Senhor, {nome}! Sentimos sua falta em {evento}, no dia {data}. Deus aben\xe7oe."
 
 
 def _render_eventos(slug):
-    st.subheader("Evento e local de referÃªncia")
-    st.caption("Cadastre o culto/reuniÃ£o, defina o ponto central e habilite a captura quando desejar.")
+    st.subheader("Evento e local de refer\xeancia")
+    st.caption("Cadastre o culto/reuni\xe3o, defina o ponto central e habilite a captura quando desejar.")
 
     eventos = listar_geo_eventos(slug, incluir_inativos=True)
     opcoes = ["Novo evento"]
@@ -306,7 +306,7 @@ def _render_eventos(slug):
         c6, c7 = st.columns(2)
         with c6:
             captura = st.checkbox(
-                "Habilitar captura de localizaÃ§Ã£o",
+                "Habilitar captura de localiza\xe7\xe3o",
                 value=bool(int(evento_atual.get("captura_habilitada", 0) or 0)),
             )
         with c7:
@@ -316,17 +316,17 @@ def _render_eventos(slug):
             )
 
         mensagem_presentes = st.text_area(
-            "Mensagem padrÃ£o para presentes",
+            "Mensagem padr\xe3o para presentes",
             value=str(evento_atual.get("mensagem_presentes", "") or ""),
             height=90,
         )
         mensagem_ausentes = st.text_area(
-            "Mensagem padrÃ£o para ausentes",
+            "Mensagem padr\xe3o para ausentes",
             value=str(evento_atual.get("mensagem_ausentes", "") or ""),
             height=90,
         )
         observacoes = st.text_area(
-            "ObservaÃ§Ãµes",
+            "Observa\xe7\xf5es",
             value=str(evento_atual.get("observacoes", "") or ""),
             height=80,
         )
@@ -353,7 +353,7 @@ def _render_eventos(slug):
             st.success("Evento salvo com sucesso.")
             st.rerun()
         except Exception as exc:
-            st.error(f"NÃ£o foi possÃ­vel salvar o evento: {exc}")
+            st.error(f"N\xe3o foi poss\xedvel salvar o evento: {exc}")
 
     st.divider()
     if eventos.empty:
@@ -361,8 +361,8 @@ def _render_eventos(slug):
     else:
         df_view = eventos.copy()
         df_view["data"] = pd.to_datetime(df_view["data"], errors="coerce").dt.strftime("%d/%m/%Y")
-        df_view["captura_habilitada"] = df_view["captura_habilitada"].map({1: "Sim", 0: "NÃ£o"})
-        df_view["ativo"] = df_view["ativo"].map({1: "Sim", 0: "NÃ£o"})
+        df_view["captura_habilitada"] = df_view["captura_habilitada"].map({1: "Sim", 0: "N\xe3o"})
+        df_view["ativo"] = df_view["ativo"].map({1: "Sim", 0: "N\xe3o"})
         st.dataframe(
             df_view[[
                 "id_evento", "data", "nome", "latitude", "longitude",
@@ -394,7 +394,7 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
         eventos = eventos[eventos["captura_habilitada"].astype(int) == 1]
 
     if eventos.empty:
-        st.warning("Nenhum evento disponÃ­vel para este filtro.")
+        st.warning("Nenhum evento dispon\xedvel para este filtro.")
         return None
 
     mapa = {}
@@ -409,8 +409,8 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
 
 
 def _render_checkin(slug):
-    st.subheader("Check-in por localizaÃ§Ã£o")
-    st.caption("O navegador do celular pedirÃ¡ permissÃ£o para acessar a localizaÃ§Ã£o.")
+    st.subheader("Check-in por localiza\xe7\xe3o")
+    st.caption("O navegador do celular pedir\xe1 permiss\xe3o para acessar a localiza\xe7\xe3o.")
 
     _processar_captura_query(slug)
 
@@ -424,7 +424,7 @@ def _render_checkin(slug):
         return
 
     if not bool(int(evento.get("captura_habilitada", 0) or 0)):
-        st.warning("A captura de localizaÃ§Ã£o estÃ¡ desabilitada para este evento.")
+        st.warning("A captura de localiza\xe7\xe3o est\xe1 desabilitada para este evento.")
 
     membros = _membros_ativos(slug)
     if membros.empty:
@@ -444,16 +444,16 @@ def _render_checkin(slug):
 
     _html_captura_localizacao(evento["id_evento"], membro["id_cadastro"])
 
-    with st.expander("Registrar localizaÃ§Ã£o manualmente"):
+    with st.expander("Registrar localiza\xe7\xe3o manualmente"):
         c1, c2 = st.columns(2)
         lat = c1.number_input("Latitude", value=0.0, format="%.8f", key="geo_lat_manual")
         lon = c2.number_input("Longitude", value=0.0, format="%.8f", key="geo_lon_manual")
-        if st.button("Registrar localizaÃ§Ã£o informada", type="primary"):
+        if st.button("Registrar localiza\xe7\xe3o informada", type="primary"):
             distancia = _distancia_metros(evento["latitude"], evento["longitude"], lat, lon)
             dentro = distancia <= float(evento.get("raio_metros", 30) or 30)
             habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
             presente = dentro and habilitado
-            status = "Presente por localizaÃ§Ã£o" if presente else "Fora do raio ou captura desabilitada"
+            status = "Presente por localiza\xe7\xe3o" if presente else "Fora do raio ou captura desabilitada"
             try:
                 registrar_geo_presenca(
                     slug,
@@ -468,7 +468,7 @@ def _render_checkin(slug):
                 )
                 st.success("Registro salvo.")
             except Exception as exc:
-                st.error(f"NÃ£o foi possÃ­vel registrar: {exc}")
+                st.error(f"N\xe3o foi poss\xedvel registrar: {exc}")
 
 
 def _render_frequencia(slug):
@@ -508,14 +508,14 @@ def _render_frequencia(slug):
     view = view.rename(columns={
         "nome": "Nome",
         "telefone": "Telefone",
-        "situacao": "SituaÃ§Ã£o",
-        "distancia_m": "DistÃ¢ncia (m)",
+        "situacao": "Situa\xe7\xe3o",
+        "distancia_m": "Dist\xe2ncia (m)",
         "status": "Status",
         "registrado_em": "Registrado em",
     })
 
     st.dataframe(
-        view[["Nome", "Telefone", "SituaÃ§Ã£o", "DistÃ¢ncia (m)", "Status", "Registrado em"]],
+        view[["Nome", "Telefone", "Situa\xe7\xe3o", "Dist\xe2ncia (m)", "Status", "Registrado em"]],
         use_container_width=True,
         hide_index=True,
     )
@@ -562,7 +562,7 @@ def _render_mensagens(slug):
     data_fmt = pd.to_datetime(evento.get("data"), errors="coerce")
     data_txt = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else str(evento.get("data", ""))
 
-    st.caption(f"{len(destinatarios)} destinatÃ¡rio(s) selecionado(s).")
+    st.caption(f"{len(destinatarios)} destinat\xe1rio(s) selecionado(s).")
 
     linhas = []
     for _, row in destinatarios.iterrows():
@@ -577,14 +577,14 @@ def _render_mensagens(slug):
         linhas.append({
             "Nome": nome,
             "Telefone": telefone,
-            "SituaÃ§Ã£o": row.get("situacao", ""),
+            "Situa\xe7\xe3o": row.get("situacao", ""),
             "Mensagem": mensagem,
             "Link WhatsApp": link,
         })
 
     df_msg = pd.DataFrame(linhas)
     st.dataframe(
-        df_msg[["Nome", "Telefone", "SituaÃ§Ã£o", "Mensagem"]],
+        df_msg[["Nome", "Telefone", "Situa\xe7\xe3o", "Mensagem"]],
         use_container_width=True,
         hide_index=True,
     )
@@ -598,7 +598,7 @@ def _render_mensagens(slug):
 
     st.markdown("#### Links de envio")
     if df_msg.empty:
-        st.info("Nenhum destinatÃ¡rio para este filtro.")
+        st.info("Nenhum destinat\xe1rio para este filtro.")
     else:
         for _, row in df_msg.iterrows():
             if row["Link WhatsApp"]:
@@ -606,20 +606,20 @@ def _render_mensagens(slug):
                     f'[{row["Nome"]} - enviar pelo WhatsApp]({row["Link WhatsApp"]})'
                 )
             else:
-                st.caption(f"{row['Nome']} - sem telefone vÃ¡lido no cadastro.")
+                st.caption(f"{row['Nome']} - sem telefone v\xe1lido no cadastro.")
 
 
 def render():
     slug = slug_da_sessao()
-    st.title("Monitoramento por LocalizaÃ§Ã£o")
+    st.title("Monitoramento por Localiza\xe7\xe3o")
     st.caption(
-        "Controle de presenÃ§a por georreferenciamento, usando o celular cadastrado "
+        "Controle de presen\xe7a por georreferenciamento, usando o celular cadastrado "
         "do membro e envio posterior de mensagens para presentes ou ausentes."
     )
 
     st.info(
-        "A captura de localizaÃ§Ã£o depende da permissÃ£o do navegador/celular. "
-        "Use esse recurso somente com ciÃªncia e consentimento dos participantes."
+        "A captura de localiza\xe7\xe3o depende da permiss\xe3o do navegador/celular. "
+        "Use esse recurso somente com ci\xeancia e consentimento dos participantes."
     )
 
     aba_evento, aba_checkin, aba_freq, aba_msg = st.tabs([
