@@ -1,5 +1,6 @@
 import datetime
 import math
+import re
 import urllib.parse
 
 import pandas as pd
@@ -47,6 +48,31 @@ def _link_whatsapp(tel, mensagem):
     if not tel_limpo:
         return ""
     return f"https://wa.me/{tel_limpo}?text={urllib.parse.quote(mensagem)}"
+
+
+def _extrair_coordenadas_google_maps(texto):
+    texto = urllib.parse.unquote(str(texto or "").strip())
+    if not texto:
+        return None
+
+    padroes = [
+        r"@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)",
+        r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)",
+        r"[?&]q=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)",
+        r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$",
+    ]
+
+    for padrao in padroes:
+        match = re.search(padrao, texto)
+        if not match:
+            continue
+
+        lat = float(match.group(1))
+        lon = float(match.group(2))
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            return lat, lon
+
+    return None
 
 
 def _distancia_metros(lat1, lon1, lat2, lon2):
@@ -267,6 +293,53 @@ def _render_eventos(slug):
     if pd.isna(data_default):
         data_default = pd.Timestamp(datetime.date.today())
 
+    evento_ref = str(evento_atual.get("id_evento", "novo"))
+    if st.session_state.get("geo_evento_ref") != evento_ref:
+        st.session_state["geo_evento_ref"] = evento_ref
+        st.session_state["geo_lat_evento"] = float(evento_atual.get("latitude", 0) or 0)
+        st.session_state["geo_lon_evento"] = float(evento_atual.get("longitude", 0) or 0)
+        st.session_state["geo_lat_evento_input"] = st.session_state["geo_lat_evento"]
+        st.session_state["geo_lon_evento_input"] = st.session_state["geo_lon_evento"]
+
+    st.markdown("#### Localiza\xe7\xe3o do evento")
+    busca_maps = st.text_input(
+        "Buscar local no Google Maps",
+        key="geo_busca_maps",
+        placeholder="Digite o nome do local, igreja ou endere\xe7o",
+    )
+    if str(busca_maps or "").strip():
+        link_busca = (
+            "https://www.google.com/maps/search/?api=1&query="
+            + urllib.parse.quote_plus(str(busca_maps).strip())
+        )
+        st.markdown(f"[Abrir busca no Google Maps]({link_busca})")
+
+    col_maps_1, col_maps_2 = st.columns([3, 1])
+    with col_maps_1:
+        texto_maps = st.text_input(
+            "Cole aqui o link ou as coordenadas do Google Maps",
+            key="geo_link_maps",
+            placeholder="-13.533000, -48.220000 ou link completo do Google Maps",
+        )
+    with col_maps_2:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        usar_maps = st.button("Usar coordenadas", use_container_width=True)
+
+    if usar_maps:
+        coords = _extrair_coordenadas_google_maps(texto_maps)
+        if coords:
+            st.session_state["geo_lat_evento"] = coords[0]
+            st.session_state["geo_lon_evento"] = coords[1]
+            st.session_state["geo_lat_evento_input"] = coords[0]
+            st.session_state["geo_lon_evento_input"] = coords[1]
+            st.success("Coordenadas carregadas do Google Maps.")
+            st.rerun()
+        else:
+            st.error(
+                "N\xe3o consegui encontrar coordenadas nesse texto. "
+                "No Google Maps, copie o link de compartilhamento ou cole latitude,longitude."
+            )
+
     with st.form("form_geo_evento"):
         c1, c2 = st.columns([2, 1])
         with c1:
@@ -285,14 +358,16 @@ def _render_eventos(slug):
         with c3:
             latitude = st.number_input(
                 "Latitude do local",
-                value=float(evento_atual.get("latitude", 0) or 0),
+                value=float(st.session_state.get("geo_lat_evento", 0) or 0),
                 format="%.8f",
+                key="geo_lat_evento_input",
             )
         with c4:
             longitude = st.number_input(
                 "Longitude do local",
-                value=float(evento_atual.get("longitude", 0) or 0),
+                value=float(st.session_state.get("geo_lon_evento", 0) or 0),
                 format="%.8f",
+                key="geo_lon_evento_input",
             )
         with c5:
             raio = st.number_input(
