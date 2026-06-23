@@ -4463,6 +4463,16 @@ def obter_geo_evento(slug, id_evento):
     return filtro.iloc[0].to_dict()
 
 
+def excluir_geo_evento(slug, id_evento):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_geo_frequencia(conn)
+        conn.execute("DELETE FROM geo_eventos WHERE id_evento=?", (int(id_evento),))
+        return True
+
+
 def registrar_geo_presenca(
     slug,
     id_evento,

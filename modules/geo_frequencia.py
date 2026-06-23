@@ -2,6 +2,7 @@ import datetime
 import html
 import math
 import re
+import json
 import urllib.parse
 import urllib.request
 
@@ -14,6 +15,7 @@ from data.repository import (
     formatar_telefone,
     listar_geo_eventos,
     salvar_geo_evento,
+    excluir_geo_evento,
     obter_geo_evento,
     registrar_geo_presenca,
     listar_geo_presencas,
@@ -65,6 +67,101 @@ def _botao_abrir_google_maps(url, texto="Abrir no Google Maps"):
             f'{html.escape(str(texto), quote=True)}</a>'
         ),
         unsafe_allow_html=True,
+    )
+
+
+def _config_whatsapp():
+    try:
+        cfg = st.secrets.get("whatsapp", {})
+    except Exception:
+        cfg = {}
+
+    return {
+        "access_token": str(cfg.get("access_token", "")).strip(),
+        "phone_number_id": str(cfg.get("phone_number_id", "")).strip(),
+        "api_version": str(cfg.get("api_version", "v20.0")).strip(),
+    }
+
+
+def _whatsapp_api_configurada():
+    cfg = _config_whatsapp()
+    return bool(cfg["access_token"] and cfg["phone_number_id"])
+
+
+def _enviar_whatsapp_texto_api(telefone, mensagem):
+    cfg = _config_whatsapp()
+    numero = _normalizar_tel_brasil(telefone)
+    if not numero:
+        return False, "Telefone invalido ou vazio."
+    if not _whatsapp_api_configurada():
+        return False, "WhatsApp Cloud API nao configurada no st.secrets."
+
+    url = (
+        f"https://graph.facebook.com/"
+        f"{cfg['api_version']}/{cfg['phone_number_id']}/messages"
+    )
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {"preview_url": False, "body": mensagem},
+    }
+    dados = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=dados,
+        headers={
+            "Authorization": f"Bearer {cfg['access_token']}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            if 200 <= resp.status < 300:
+                return True, "Mensagem enviada."
+            return False, f"Erro {resp.status}: {resp.read().decode('utf-8', errors='ignore')}"
+    except Exception as exc:
+        return False, f"Falha no envio: {exc}"
+
+
+def _html_captura_local_evento():
+    components.html(
+        """
+        <div style="font-family:Arial,sans-serif">
+          <button onclick="capturarLocalEvento()" style="
+            background:#334155;color:white;border:0;border-radius:8px;
+            padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer">
+            Usar minha localiza\xe7\xe3o atual
+          </button>
+          <div id="geo_evento_msg" style="margin-top:8px;color:#475569;font-size:13px"></div>
+        </div>
+        <script>
+        function capturarLocalEvento() {
+          const msg = document.getElementById("geo_evento_msg");
+          if (!navigator.geolocation) {
+            msg.innerText = "Este navegador n\xe3o oferece geolocaliza\xe7\xe3o.";
+            return;
+          }
+          msg.innerText = "Solicitando permiss\xe3o de localiza\xe7\xe3o...";
+          navigator.geolocation.getCurrentPosition(
+            function(pos) {
+              const params = new URLSearchParams(window.parent.location.search);
+              params.set("geo_evento_lat", pos.coords.latitude.toFixed(8));
+              params.set("geo_evento_lon", pos.coords.longitude.toFixed(8));
+              params.set("geo_evento_ts", Date.now().toString());
+              window.parent.location.search = params.toString();
+            },
+            function(err) {
+              msg.innerText = "N\xe3o foi poss\xedvel capturar a localiza\xe7\xe3o: " + err.message;
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+          );
+        }
+        </script>
+        """,
+        height=84,
     )
 
 
@@ -356,6 +453,29 @@ def _render_eventos(slug):
         st.session_state["geo_lon_evento_input"] = st.session_state["geo_lon_evento"]
 
     st.markdown("#### Localiza\xe7\xe3o do evento")
+    lat_evento_query = _valor_query("geo_evento_lat")
+    lon_evento_query = _valor_query("geo_evento_lon")
+    if lat_evento_query and lon_evento_query:
+        try:
+            st.session_state["geo_lat_evento"] = float(lat_evento_query)
+            st.session_state["geo_lon_evento"] = float(lon_evento_query)
+            st.session_state["geo_lat_evento_input"] = float(lat_evento_query)
+            st.session_state["geo_lon_evento_input"] = float(lon_evento_query)
+            for chave in ["geo_evento_lat", "geo_evento_lon", "geo_evento_ts"]:
+                if chave in st.query_params:
+                    del st.query_params[chave]
+            st.success("Localiza\xe7\xe3o atual carregada para o evento.")
+            st.rerun()
+        except ValueError:
+            pass
+
+    st.caption(
+        "Modo mais r\xe1pido: estando no local do culto, clique em "
+        "'Usar minha localiza\xe7\xe3o atual'. Para local distante, busque no Maps "
+        "e cole o link ou as coordenadas."
+    )
+    _html_captura_local_evento()
+
     busca_maps = st.text_input(
         "Buscar local no Google Maps",
         key="geo_busca_maps",
@@ -493,6 +613,55 @@ def _render_eventos(slug):
             st.rerun()
         except Exception as exc:
             st.error(f"N\xe3o foi poss\xedvel salvar o evento: {exc}")
+
+    if evento_atual.get("id_evento"):
+        st.markdown("#### Editar, cancelar ou excluir")
+        st.caption(
+            "Cancelar mant\xe9m o evento no hist\xf3rico, mas desativa a captura. "
+            "Excluir remove o evento e os registros de presen\xe7a vinculados."
+        )
+        acao_c1, acao_c2 = st.columns(2)
+        with acao_c1:
+            if st.button("Cancelar/desativar evento", use_container_width=True):
+                try:
+                    salvar_geo_evento(
+                        slug=slug,
+                        id_evento=evento_atual.get("id_evento"),
+                        nome=evento_atual.get("nome", ""),
+                        data=evento_atual.get("data", ""),
+                        latitude=evento_atual.get("latitude", 0),
+                        longitude=evento_atual.get("longitude", 0),
+                        raio_metros=evento_atual.get("raio_metros", 30),
+                        captura_habilitada=False,
+                        ativo=False,
+                        mensagem_presentes=evento_atual.get("mensagem_presentes", ""),
+                        mensagem_ausentes=evento_atual.get("mensagem_ausentes", ""),
+                        observacoes=(
+                            str(evento_atual.get("observacoes", "") or "")
+                            + "\nEvento cancelado/desativado."
+                        ).strip(),
+                    )
+                    st.success("Evento cancelado/desativado.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"N\xe3o foi poss\xedvel cancelar o evento: {exc}")
+
+        with acao_c2:
+            confirmar_exclusao = st.checkbox(
+                "Confirmo que desejo excluir definitivamente",
+                key=f"geo_conf_excluir_{int(evento_atual['id_evento'])}",
+            )
+            if st.button(
+                "Excluir evento",
+                use_container_width=True,
+                disabled=not confirmar_exclusao,
+            ):
+                try:
+                    excluir_geo_evento(slug, evento_atual["id_evento"])
+                    st.success("Evento exclu\xeddo.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"N\xe3o foi poss\xedvel excluir o evento: {exc}")
 
     st.divider()
     if eventos.empty:
@@ -734,6 +903,50 @@ def _render_mensagens(slug):
         "text/csv",
         use_container_width=True,
     )
+
+    st.markdown("#### Envio em massa")
+    if _whatsapp_api_configurada():
+        st.success("WhatsApp Cloud API configurada. O envio em massa pode ser usado.")
+    else:
+        st.warning(
+            "WhatsApp Cloud API n\xe3o configurada. Para envio em massa com um clique, "
+            "configure `[whatsapp] access_token` e `phone_number_id` no st.secrets."
+        )
+
+    qtd_validos = int(df_msg["Telefone"].apply(_normalizar_tel_brasil).astype(bool).sum()) if not df_msg.empty else 0
+    st.caption(f"{qtd_validos} telefone(s) v\xe1lido(s) para envio por API.")
+
+    confirmar_envio = st.checkbox(
+        f"Confirmo o envio da mensagem para {qtd_validos} destinat\xe1rio(s) do grupo {grupo}",
+        key=f"geo_conf_envio_massa_{int(evento['id_evento'])}_{grupo}",
+        disabled=not _whatsapp_api_configurada() or qtd_validos == 0,
+    )
+
+    if st.button(
+        "Enviar mensagem em massa",
+        type="primary",
+        use_container_width=True,
+        disabled=not confirmar_envio,
+    ):
+        resultados = []
+        barra = st.progress(0)
+        with st.spinner("Enviando mensagens..."):
+            total_envios = max(1, len(df_msg))
+            for idx, row in df_msg.iterrows():
+                ok, detalhe = _enviar_whatsapp_texto_api(row["Telefone"], row["Mensagem"])
+                resultados.append({
+                    "Nome": row["Nome"],
+                    "Telefone": row["Telefone"],
+                    "Status": "Enviado" if ok else "Erro",
+                    "Detalhe": detalhe,
+                })
+                barra.progress(min(1.0, (len(resultados)) / total_envios))
+
+        df_resultados = pd.DataFrame(resultados)
+        enviados = int((df_resultados["Status"] == "Enviado").sum()) if not df_resultados.empty else 0
+        erros = int((df_resultados["Status"] == "Erro").sum()) if not df_resultados.empty else 0
+        st.success(f"Envio conclu\xeddo. Enviados: {enviados}. Erros: {erros}.")
+        st.dataframe(df_resultados, use_container_width=True, hide_index=True)
 
     st.markdown("#### Links de envio")
     if df_msg.empty:
