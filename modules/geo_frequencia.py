@@ -2,6 +2,7 @@ import datetime
 import math
 import re
 import urllib.parse
+import urllib.request
 
 import pandas as pd
 import streamlit as st
@@ -73,6 +74,42 @@ def _extrair_coordenadas_google_maps(texto):
             return lat, lon
 
     return None
+
+
+def _expandir_link_google_maps(url):
+    url = str(url or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        return ""
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/125.0 Safari/537.36"
+                )
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.geturl()
+    except Exception:
+        return ""
+
+
+def _obter_coordenadas_de_texto_ou_link(texto):
+    coords = _extrair_coordenadas_google_maps(texto)
+    if coords:
+        return coords, ""
+
+    link_expandido = _expandir_link_google_maps(texto)
+    if link_expandido:
+        coords = _extrair_coordenadas_google_maps(link_expandido)
+        if coords:
+            return coords, link_expandido
+
+    return None, link_expandido
 
 
 def _distancia_metros(lat1, lon1, lat2, lon2):
@@ -308,11 +345,16 @@ def _render_eventos(slug):
         placeholder="Digite o nome do local, igreja ou endere\xe7o",
     )
     if str(busca_maps or "").strip():
-        link_busca = (
-            "https://www.google.com/maps/search/?api=1&query="
-            + urllib.parse.quote_plus(str(busca_maps).strip())
-        )
-        st.markdown(f"[Abrir busca no Google Maps]({link_busca})")
+        busca_texto = str(busca_maps).strip()
+        if busca_texto.lower().startswith(("http://", "https://")):
+            link_busca = busca_texto
+            st.markdown(f"[Abrir link no Google Maps]({link_busca})")
+        else:
+            link_busca = (
+                "https://www.google.com/maps/search/?api=1&query="
+                + urllib.parse.quote_plus(busca_texto)
+            )
+            st.markdown(f"[Abrir busca no Google Maps]({link_busca})")
 
     col_maps_1, col_maps_2 = st.columns([3, 1])
     with col_maps_1:
@@ -326,19 +368,24 @@ def _render_eventos(slug):
         usar_maps = st.button("Usar coordenadas", use_container_width=True)
 
     if usar_maps:
-        coords = _extrair_coordenadas_google_maps(texto_maps)
+        coords, link_expandido = _obter_coordenadas_de_texto_ou_link(texto_maps)
         if coords:
             st.session_state["geo_lat_evento"] = coords[0]
             st.session_state["geo_lon_evento"] = coords[1]
             st.session_state["geo_lat_evento_input"] = coords[0]
             st.session_state["geo_lon_evento_input"] = coords[1]
+            if link_expandido:
+                st.session_state["geo_link_maps"] = link_expandido
             st.success("Coordenadas carregadas do Google Maps.")
             st.rerun()
         else:
             st.error(
-                "N\xe3o consegui encontrar coordenadas nesse texto. "
-                "No Google Maps, copie o link de compartilhamento ou cole latitude,longitude."
+                "N\xe3o consegui encontrar coordenadas nesse link/texto. "
+                "Abra o local no Google Maps, clique com o bot\xe3o direito no ponto do mapa "
+                "e copie latitude,longitude."
             )
+            if link_expandido:
+                st.caption(f"Link expandido analisado: {link_expandido}")
 
     with st.form("form_geo_evento"):
         c1, c2 = st.columns([2, 1])
