@@ -1157,8 +1157,8 @@ def render():
             qtd_meses_pastoral = max(1, (mes_fim_pastoral - mes_inicio_pastoral).n + 1)
 
             _secao_dashboard(
-                "Círculo de Oração",
-                "Resumo pastoral das chamadas no período selecionado.",
+                "CÃ­rculo de OraÃ§Ã£o",
+                "Resumo pastoral das chamadas no perÃ­odo selecionado.",
             )
             try:
                 reunioes_orhafe = listar_orhafe_reunioes(
@@ -1174,22 +1174,22 @@ def render():
                 lideres_cadastradas_orhafe = listar_orhafe_lideres(slug)
                 coordenadoras_cadastradas_orhafe = listar_orhafe_coordenadoras(slug)
             except Exception as exc:
-                st.warning(f"Não foi possível carregar os indicadores do Círculo de Oração: {exc}")
+                st.warning(f"NÃ£o foi possÃ­vel carregar os indicadores do CÃ­rculo de OraÃ§Ã£o: {exc}")
                 reunioes_orhafe = pd.DataFrame()
                 visitantes_orhafe = pd.DataFrame()
                 lideres_cadastradas_orhafe = pd.DataFrame()
                 coordenadoras_cadastradas_orhafe = pd.DataFrame()
 
             if reunioes_orhafe.empty:
-                st.info("Sem chamadas do Círculo de Oração no período selecionado.")
+                st.info("Sem chamadas do CÃ­rculo de OraÃ§Ã£o no perÃ­odo selecionado.")
             else:
                 tipo_grafico_orhafe = st.selectbox(
-                    "Filtrar grÃ¡ficos por",
-                    ["Todas", "LÃ­deres", "Coordenadoras"],
+                    "Filtrar grÃƒÂ¡ficos por",
+                    ["Todas", "LÃƒÂ­deres", "Coordenadoras"],
                     key=_sk("orhafe_tipo_grafico", slug),
                 )
                 nomes_permitidos = None
-                if tipo_grafico_orhafe == "LÃ­deres":
+                if tipo_grafico_orhafe == "LÃƒÂ­deres":
                     nomes_permitidos = set(
                         _texto(lideres_cadastradas_orhafe.get("nome", pd.Series(dtype=str)))
                         .str.strip()
@@ -1222,7 +1222,7 @@ def render():
                     _texto(reunioes_orhafe["lider"]).replace("", "Sem lider").unique().tolist()
                 ) or ["Sem dados"]
                 lider_escolhida = st.selectbox(
-                    "Líder para resumo",
+                    "LÃ­der para resumo",
                     lideres_orhafe,
                     key=_sk("orhafe_lider", slug),
                 )
@@ -1233,7 +1233,7 @@ def render():
                 with c_orhafe1:
                     st.plotly_chart(
                         _grafico_orhafe_resumo(
-                            f"Resumo da líder {lider_escolhida}",
+                            f"Resumo da lÃ­der {lider_escolhida}",
                             _orhafe_indicadores_resumo(
                                 reunioes_lider,
                                 visitantes=visitantes_orhafe,
@@ -1254,7 +1254,7 @@ def render():
                         config=CONFIG_PLOTLY,
                     )
                 if not resumo_lideres_orhafe.empty:
-                    with st.expander("Tabela por líder", expanded=False):
+                    with st.expander("Tabela por lÃ­der", expanded=False):
                         tabela_lideres = resumo_lideres_orhafe[[
                             "lider",
                             "reunioes",
@@ -1271,16 +1271,16 @@ def render():
                         )
                         tabela_lideres["ofertas"] = tabela_lideres["ofertas"].apply(formatar_moeda)
                         tabela_lideres = tabela_lideres.rename(columns={
-                            "lider": "Líder",
-                            "reunioes": "Reuniões",
-                            "presenca_media_pct": "Presença média",
-                            "ausencia_media_pct": "Ausência média",
+                            "lider": "LÃ­der",
+                            "reunioes": "ReuniÃµes",
+                            "presenca_media_pct": "PresenÃ§a mÃ©dia",
+                            "ausencia_media_pct": "AusÃªncia mÃ©dia",
                             "visitantes": "Visitantes",
                             "ofertas": "Ofertas",
                         })
                         st.dataframe(tabela_lideres, use_container_width=True, hide_index=True)
                         st.download_button(
-                            "Baixar tabela por líder CSV",
+                            "Baixar tabela por lÃ­der CSV",
                             data=gerar_csv(tabela_lideres),
                             file_name="dashboard_orhafe_lideres.csv",
                             mime="text/csv",

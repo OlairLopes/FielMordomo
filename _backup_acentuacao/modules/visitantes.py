@@ -21,21 +21,21 @@ ESTADOS_BR = [
 ]
 
 DEPARTAMENTOS_CULTO = [
-    "Conscientização Missionária",
-    "Consagração",
+    "ConscientizaÃ§Ã£o MissionÃ¡ria",
+    "ConsagraÃ§Ã£o",
     "Culto de Ensino",
-    "Culto Ministério de Homens",
-    "Culto Ministério Família",
-    "Culto Ministério Infantil",
-    "Culto Ministério Jovens",
-    "Culto Ministério Missões",
-    "Culto Ministério Mulheres",
+    "Culto MinistÃ©rio de Homens",
+    "Culto MinistÃ©rio FamÃ­lia",
+    "Culto MinistÃ©rio Infantil",
+    "Culto MinistÃ©rio Jovens",
+    "Culto MinistÃ©rio MissÃµes",
+    "Culto MinistÃ©rio Mulheres",
     "Dia com Deus",
     "Encontro Unificado",
-    "Escola Bíblica",
+    "Escola BÃ­blica",
     "Fraternal",
     "Outros",
-    "Vigília",
+    "VigÃ­lia",
 ]
 
 
@@ -96,7 +96,7 @@ def _fmt_data(valor):
 
 
 def _sim_nao(valor):
-    return "Sim" if bool(valor) else "Não"
+    return "Sim" if bool(valor) else "NÃ£o"
 
 
 
@@ -117,7 +117,7 @@ def _cidades_por_estado(uf):
         return cidades + ["Outros"] if cidades else ["Outros"]
     except Exception:
         if uf == "GO":
-            return ["Minaçu", "Outros"]
+            return ["MinaÃ§u", "Outros"]
         return ["Outros"]
 
 
@@ -229,7 +229,7 @@ def _render_formulario(slug):
         )
         estado = "" if estado_opcao == "Selecione" else estado_opcao
         cidades = _cidades_por_estado(estado)
-        cidade_index = cidades.index("Minaçu") if "Minaçu" in cidades else 0
+        cidade_index = cidades.index("MinaÃ§u") if "MinaÃ§u" in cidades else 0
         cidade_opcao = c4.selectbox(
             "Qual cidade?",
             cidades,
@@ -246,7 +246,7 @@ def _render_formulario(slug):
         if (
             igreja_origem_opcao == "Assembleia de Deus"
             and estado == "GO"
-            and cidade == "Minaçu"
+            and cidade == "MinaÃ§u"
         ):
             opcoes_congregacao = ["Selecione"] + CONGREGACOES_VISITANTES
             congregacao_opcao = st.selectbox(
@@ -331,7 +331,7 @@ def _render_consulta(slug):
     fim = c2.date_input("Data final", value=_hoje(), key="visitantes_fim", format="DD/MM/YYYY")
     departamento = c3.text_input("Filtrar departamento", placeholder="Opcional")
     if inicio > fim:
-        st.error("A data inicial não pode ser maior que a data final.")
+        st.error("A data inicial nÃ£o pode ser maior que a data final.")
         return
 
     df = listar_visitantes_cultos(
@@ -344,12 +344,12 @@ def _render_consulta(slug):
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Visitantes", totais["visitantes"])
     m2.metric("Crentes", totais["crentes"])
-    m3.metric("Não crentes", totais["nao_crentes"])
+    m3.metric("NÃ£o crentes", totais["nao_crentes"])
     m4.metric("Apresentar", totais["apresentar"])
-    m5.metric("Oração final", totais["oracao"])
+    m5.metric("OraÃ§Ã£o final", totais["oracao"])
 
     if df.empty:
-        st.info("Nenhum visitante encontrado no período selecionado.")
+        st.info("Nenhum visitante encontrado no perÃ­odo selecionado.")
         return
 
     exibir = df.copy()
@@ -384,7 +384,7 @@ def _render_consulta(slug):
         "Excluir registro selecionado",
     ):
         excluir_visitante_culto(slug, int(excluir.split(" - ")[0]))
-        st.success("Registro excluído.")
+        st.success("Registro excluÃ­do.")
         st.rerun()
 
 
@@ -392,7 +392,7 @@ def render():
     st.subheader("Registro de Visitantes")
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessão inválida. Faça login novamente.")
+        st.error("SessÃ£o invÃ¡lida. FaÃ§a login novamente.")
         return
 
     tab_form, tab_consulta = st.tabs(["Registrar visitante", "Consultar registros"])

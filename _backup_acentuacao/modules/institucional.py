@@ -36,10 +36,10 @@ def _img_b64(dados, ext):
     ext = str(ext or "png").lower().replace(".", "")
     mime = MIMES_LOGO_PERMITIDOS.get(ext)
     if not mime:
-        raise ValueError(f"Formato de logo não permitido: {ext}")
+        raise ValueError(f"Formato de logo nÃ£o permitido: {ext}")
 
     if not isinstance(dados, (bytes, bytearray, memoryview)):
-        raise TypeError("Os dados do logo devem estar em formato binário.")
+        raise TypeError("Os dados do logo devem estar em formato binÃ¡rio.")
 
     if len(dados) > TAMANHO_MAXIMO_LOGO:
         raise ValueError("O logo excede o limite de 5 MB.")
@@ -55,7 +55,7 @@ def _logo_sistema_src():
     2. Arquivos locais comuns em assets/static.
     3. Fallback textual.
     """
-    # 1. Logo salvo no banco/configuração do sistema
+    # 1. Logo salvo no banco/configuraÃ§Ã£o do sistema
     try:
         from data.repository import obter_logo_sistema, obter_logo_sidebar_sistema
 
@@ -64,7 +64,7 @@ def _logo_sistema_src():
             dados, ext = logo
             return _img_b64(dados, ext)
     except Exception:
-        LOGGER.exception("Não foi possível carregar o logo configurado no sistema.")
+        LOGGER.exception("NÃ£o foi possÃ­vel carregar o logo configurado no sistema.")
 
     # 2. Logo em arquivo local, caso exista no projeto
     try:
@@ -83,7 +83,7 @@ def _logo_sistema_src():
                 ext = arq.suffix.replace(".", "") or "png"
                 return _img_b64(arq.read_bytes(), ext)
     except Exception:
-        LOGGER.exception("Não foi possível carregar um logo local.")
+        LOGGER.exception("NÃ£o foi possÃ­vel carregar um logo local.")
 
     return ""
 
@@ -742,10 +742,10 @@ def _navbar():
                 <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
                 <a href="?pagina=agenda" target="_top">Agenda</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
-                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
+                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oraÃ§Ã£o</a>
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
-                <a class="fm-btn-login" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
+                <a class="fm-btn-login" href="?pagina=login" target="_top">ðŸ”’ Acessar Sistema</a>
             </div>
         </div>
     </div>
@@ -756,12 +756,12 @@ def _footer():
     return """
     <div class="fm-footer">
         <div class="fm-footer-inner">
-            <div>FielMordomo © 2026 — Sistema de Gestão Financeira para Igrejas.</div>
+            <div>FielMordomo Â© 2026 â€” Sistema de GestÃ£o Financeira para Igrejas.</div>
             <div>
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a href="?pagina=agenda" target="_top">Agenda</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
-                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
+                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oraÃ§Ã£o</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
                 <a href="?pagina=termos" target="_top">Termos de Uso</a>
             </div>
@@ -774,19 +774,19 @@ def _home():
     return """
     <section class="fm-hero">
         <div class="fm-hero-text">
-            <div class="fm-eyebrow">✦ Gestão Financeira para Igrejas</div>
+            <div class="fm-eyebrow">âœ¦ GestÃ£o Financeira para Igrejas</div>
 
-            <h1>Gestão financeira simples, segura e organizada para Igrejas</h1>
+            <h1>GestÃ£o financeira simples, segura e organizada para Igrejas</h1>
 
             <p>
-                Controle dízimos, ofertas, campanhas, missões, despesas, comprovantes
-                e relatórios em uma única plataforma, com mais clareza para a tesouraria
-                e mais transparência para a liderança.
+                Controle dÃ­zimos, ofertas, campanhas, missÃµes, despesas, comprovantes
+                e relatÃ³rios em uma Ãºnica plataforma, com mais clareza para a tesouraria
+                e mais transparÃªncia para a lideranÃ§a.
             </p>
 
             <div class="fm-actions">
-                <a class="fm-primary" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
-                <a class="fm-secondary" href="#sobre">ⓘ Conheça o FielMordomo</a>
+                <a class="fm-primary" href="?pagina=login" target="_top">ðŸ”’ Acessar Sistema</a>
+                <a class="fm-secondary" href="#sobre">â“˜ ConheÃ§a o FielMordomo</a>
             </div>
         </div>
 
@@ -794,25 +794,25 @@ def _home():
             <div class="fm-dashboard-inner">
                 <div class="fm-sidebar">
                     <div class="fm-side-logo">FielMordomo</div>
-                    <div class="fm-side-item">▣ Dashboard</div>
-                    <div class="fm-side-item">◈ Contribuições</div>
-                    <div class="fm-side-item">◇ Despesas</div>
-                    <div class="fm-side-item">▤ Comprovantes</div>
-                    <div class="fm-side-item">▥ Relatórios</div>
-                    <div class="fm-side-item">⚙ Configurações</div>
+                    <div class="fm-side-item">â–£ Dashboard</div>
+                    <div class="fm-side-item">â—ˆ ContribuiÃ§Ãµes</div>
+                    <div class="fm-side-item">â—‡ Despesas</div>
+                    <div class="fm-side-item">â–¤ Comprovantes</div>
+                    <div class="fm-side-item">â–¥ RelatÃ³rios</div>
+                    <div class="fm-side-item">âš™ ConfiguraÃ§Ãµes</div>
                 </div>
 
                 <div class="fm-main-panel">
                     <div class="fm-panel-top">
                         <h3>Dashboard</h3>
-                        <small>Igreja Exemplo ⌄</small>
+                        <small>Igreja Exemplo âŒ„</small>
                     </div>
 
                     <div class="fm-kpis">
-                        <div class="fm-kpi"><small>Dízimos e Ofertas</small><strong>R$ 45.320,50</strong></div>
-                        <div class="fm-kpi"><small>Campanhas e Missões</small><strong>R$ 12.680,75</strong></div>
+                        <div class="fm-kpi"><small>DÃ­zimos e Ofertas</small><strong>R$ 45.320,50</strong></div>
+                        <div class="fm-kpi"><small>Campanhas e MissÃµes</small><strong>R$ 12.680,75</strong></div>
                         <div class="fm-kpi"><small>Despesas</small><strong>R$ 18.540,30</strong></div>
-                        <div class="fm-kpi"><small>Saldo do Período</small><strong>R$ 39.460,95</strong></div>
+                        <div class="fm-kpi"><small>Saldo do PerÃ­odo</small><strong>R$ 39.460,95</strong></div>
                     </div>
 
                     <div class="fm-charts">
@@ -831,14 +831,14 @@ def _home():
                         </div>
 
                         <div class="fm-chart-box">
-                            <div class="fm-chart-title">Distribuição das Receitas</div>
+                            <div class="fm-chart-title">DistribuiÃ§Ã£o das Receitas</div>
                             <div class="fm-donut"></div>
                         </div>
                     </div>
 
                     <div class="fm-table">
-                        <div class="fm-table-line"><strong>Data</strong><strong>Descrição</strong><strong>Categoria</strong><strong>Valor</strong></div>
-                        <div class="fm-table-line"><span>10/06</span><span>Dízimo - João Silva</span><span>Dízimos</span><span>R$ 250,00</span></div>
+                        <div class="fm-table-line"><strong>Data</strong><strong>DescriÃ§Ã£o</strong><strong>Categoria</strong><strong>Valor</strong></div>
+                        <div class="fm-table-line"><span>10/06</span><span>DÃ­zimo - JoÃ£o Silva</span><span>DÃ­zimos</span><span>R$ 250,00</span></div>
                         <div class="fm-table-line"><span>10/06</span><span>Oferta - Culto</span><span>Ofertas</span><span>R$ 180,00</span></div>
                         <div class="fm-table-line"><span>09/06</span><span>Conta de Luz</span><span>Despesa</span><span>R$ 320,00</span></div>
                     </div>
@@ -849,21 +849,21 @@ def _home():
 
     <section class="fm-cards">
         <div class="fm-card">
-            <div class="fm-icon">▤</div>
+            <div class="fm-icon">â–¤</div>
             <h3>Controle Financeiro</h3>
-            <p>Gerencie dízimos, ofertas, campanhas, missões e despesas com praticidade e confiança.</p>
+            <p>Gerencie dÃ­zimos, ofertas, campanhas, missÃµes e despesas com praticidade e confianÃ§a.</p>
         </div>
 
         <div class="fm-card">
-            <div class="fm-icon">▥</div>
-            <h3>Relatórios Claros</h3>
-            <p>Relatórios completos e visuais que facilitam a análise e a prestação de contas à liderança.</p>
+            <div class="fm-icon">â–¥</div>
+            <h3>RelatÃ³rios Claros</h3>
+            <p>RelatÃ³rios completos e visuais que facilitam a anÃ¡lise e a prestaÃ§Ã£o de contas Ã  lideranÃ§a.</p>
         </div>
 
         <div class="fm-card">
-            <div class="fm-icon">♢</div>
-            <h3>Segurança e Organização</h3>
-            <p>Dados protegidos, acessos controlados e informações organizadas para maior transparência.</p>
+            <div class="fm-icon">â™¢</div>
+            <h3>SeguranÃ§a e OrganizaÃ§Ã£o</h3>
+            <p>Dados protegidos, acessos controlados e informaÃ§Ãµes organizadas para maior transparÃªncia.</p>
         </div>
     </section>
 
@@ -872,25 +872,25 @@ def _home():
             <div>
                 <h2>Sobre o FielMordomo</h2>
                 <p>
-                    O FielMordomo é uma plataforma de gestão financeira desenvolvida para apoiar igrejas,
-                    congregações e ministérios na boa administração dos recursos confiados à sua responsabilidade.
+                    O FielMordomo Ã© uma plataforma de gestÃ£o financeira desenvolvida para apoiar igrejas,
+                    congregaÃ§Ãµes e ministÃ©rios na boa administraÃ§Ã£o dos recursos confiados Ã  sua responsabilidade.
                 </p>
                 <p>
                     O sistema auxilia tesourarias, secretarias, pastores e equipes administrativas no controle
-                    de lançamentos, emissão de comprovantes, acompanhamento de relatórios e organização das
-                    informações financeiras da igreja.
+                    de lanÃ§amentos, emissÃ£o de comprovantes, acompanhamento de relatÃ³rios e organizaÃ§Ã£o das
+                    informaÃ§Ãµes financeiras da igreja.
                 </p>
             </div>
 
             <div id="recursos">
                 <h2>Recursos principais</h2>
                 <div class="fm-list">
-                    <div><span class="fm-check">✓</span> Cadastro de membros e contribuintes</div>
-                    <div><span class="fm-check">✓</span> Controle de dízimos, ofertas, campanhas e missões</div>
-                    <div><span class="fm-check">✓</span> Registro de despesas e saídas</div>
-                    <div><span class="fm-check">✓</span> Emissão de comprovantes</div>
-                    <div><span class="fm-check">✓</span> Relatórios financeiros</div>
-                    <div><span class="fm-check">✓</span> Backup e recuperação de dados</div>
+                    <div><span class="fm-check">âœ“</span> Cadastro de membros e contribuintes</div>
+                    <div><span class="fm-check">âœ“</span> Controle de dÃ­zimos, ofertas, campanhas e missÃµes</div>
+                    <div><span class="fm-check">âœ“</span> Registro de despesas e saÃ­das</div>
+                    <div><span class="fm-check">âœ“</span> EmissÃ£o de comprovantes</div>
+                    <div><span class="fm-check">âœ“</span> RelatÃ³rios financeiros</div>
+                    <div><span class="fm-check">âœ“</span> Backup e recuperaÃ§Ã£o de dados</div>
                 </div>
             </div>
         </div>
@@ -899,14 +899,14 @@ def _home():
     <section class="fm-cta">
         <div class="fm-cta-inner">
             <div>
-                <h2>Pronto para organizar a gestão financeira da sua igreja?</h2>
+                <h2>Pronto para organizar a gestÃ£o financeira da sua igreja?</h2>
                 <p>
-                    Mais controle, mais transparência e mais tempo para o que realmente importa:
+                    Mais controle, mais transparÃªncia e mais tempo para o que realmente importa:
                     o Reino de Deus.
                 </p>
             </div>
 
-            <a class="fm-gold-btn" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
+            <a class="fm-gold-btn" href="?pagina=login" target="_top">ðŸ”’ Acessar Sistema</a>
         </div>
     </section>
     """
@@ -919,8 +919,8 @@ def _contato():
             <h1>Contato</h1>
 
             <p>
-                Para dúvidas, suporte, sugestões ou informações sobre o FielMordomo,
-                entre em contato pelos canais oficiais da administração do sistema.
+                Para dÃºvidas, suporte, sugestÃµes ou informaÃ§Ãµes sobre o FielMordomo,
+                entre em contato pelos canais oficiais da administraÃ§Ã£o do sistema.
             </p>
 
             <h2>Canais de atendimento</h2>
@@ -929,8 +929,8 @@ def _contato():
             <p><strong>Site:</strong> https://fielmordomo.com.br</p>
 
             <p>
-                As solicitações serão analisadas pela equipe responsável, especialmente em casos relacionados
-                a acesso, cadastro de igrejas, planos, backup, restauração de dados e orientações de uso.
+                As solicitaÃ§Ãµes serÃ£o analisadas pela equipe responsÃ¡vel, especialmente em casos relacionados
+                a acesso, cadastro de igrejas, planos, backup, restauraÃ§Ã£o de dados e orientaÃ§Ãµes de uso.
             </p>
         </div>
     </div>
@@ -944,46 +944,46 @@ def _privacidade():
             <h1>Pol&iacute;tica de Privacidade</h1>
 
             <p>
-                O FielMordomo respeita a privacidade dos usuários e das instituições cadastradas.
-                As informações inseridas no sistema são utilizadas para fins de gestão administrativa
+                O FielMordomo respeita a privacidade dos usuÃ¡rios e das instituiÃ§Ãµes cadastradas.
+                As informaÃ§Ãµes inseridas no sistema sÃ£o utilizadas para fins de gestÃ£o administrativa
                 e financeira da igreja cadastrada.
             </p>
 
             <h2>1. Dados coletados</h2>
             <p>
-                O sistema pode armazenar dados como nome da igreja, identificação da congregação,
-                membros, lançamentos financeiros, categorias, formas de pagamento, datas, valores
-                e demais informações necessárias à administração financeira.
+                O sistema pode armazenar dados como nome da igreja, identificaÃ§Ã£o da congregaÃ§Ã£o,
+                membros, lanÃ§amentos financeiros, categorias, formas de pagamento, datas, valores
+                e demais informaÃ§Ãµes necessÃ¡rias Ã  administraÃ§Ã£o financeira.
             </p>
 
-            <h2>2. Uso das informações</h2>
+            <h2>2. Uso das informaÃ§Ãµes</h2>
             <p>
-                Os dados são utilizados para geração de relatórios, controle financeiro, emissão de comprovantes,
-                acompanhamento de receitas e despesas, backup e organização administrativa.
+                Os dados sÃ£o utilizados para geraÃ§Ã£o de relatÃ³rios, controle financeiro, emissÃ£o de comprovantes,
+                acompanhamento de receitas e despesas, backup e organizaÃ§Ã£o administrativa.
             </p>
 
-            <h2>3. Segurança</h2>
+            <h2>3. SeguranÃ§a</h2>
             <p>
-                O acesso ao sistema é restrito a usuários autorizados. Recomenda-se que cada igreja mantenha
+                O acesso ao sistema Ã© restrito a usuÃ¡rios autorizados. Recomenda-se que cada igreja mantenha
                 suas credenciais protegidas e conceda acesso apenas a pessoas devidamente autorizadas.
             </p>
 
             <h2>4. Compartilhamento de dados</h2>
             <p>
-                O FielMordomo não tem por finalidade vender, divulgar ou compartilhar dados das igrejas
-                com terceiros para fins comerciais. As informações pertencem à instituição cadastrada.
+                O FielMordomo nÃ£o tem por finalidade vender, divulgar ou compartilhar dados das igrejas
+                com terceiros para fins comerciais. As informaÃ§Ãµes pertencem Ã  instituiÃ§Ã£o cadastrada.
             </p>
 
-            <h2>5. Backup e recuperação</h2>
+            <h2>5. Backup e recuperaÃ§Ã£o</h2>
             <p>
-                O sistema pode disponibilizar recursos de backup e restauração para proteger as informações
-                administrativas, conforme o plano ou configuração utilizada.
+                O sistema pode disponibilizar recursos de backup e restauraÃ§Ã£o para proteger as informaÃ§Ãµes
+                administrativas, conforme o plano ou configuraÃ§Ã£o utilizada.
             </p>
 
-            <h2>6. Atualizações</h2>
+            <h2>6. AtualizaÃ§Ãµes</h2>
             <p>
-                Esta política poderá ser atualizada sempre que houver melhorias no sistema, alterações legais
-                ou mudanças nas funcionalidades oferecidas.
+                Esta polÃ­tica poderÃ¡ ser atualizada sempre que houver melhorias no sistema, alteraÃ§Ãµes legais
+                ou mudanÃ§as nas funcionalidades oferecidas.
             </p>
         </div>
     </div>
@@ -997,44 +997,44 @@ def _termos():
             <h1>Termos de Uso</h1>
 
             <p>
-                Ao utilizar o FielMordomo, o usuário declara estar ciente de que o sistema é uma ferramenta
-                de apoio à gestão financeira e administrativa de igrejas, congregações e ministérios.
+                Ao utilizar o FielMordomo, o usuÃ¡rio declara estar ciente de que o sistema Ã© uma ferramenta
+                de apoio Ã  gestÃ£o financeira e administrativa de igrejas, congregaÃ§Ãµes e ministÃ©rios.
             </p>
 
             <h2>1. Responsabilidade pelo uso</h2>
             <p>
-                A igreja ou instituição cadastrada é responsável pelas informações inseridas, conferência dos
-                lançamentos, controle de usuários e validação dos relatórios gerados.
+                A igreja ou instituiÃ§Ã£o cadastrada Ã© responsÃ¡vel pelas informaÃ§Ãµes inseridas, conferÃªncia dos
+                lanÃ§amentos, controle de usuÃ¡rios e validaÃ§Ã£o dos relatÃ³rios gerados.
             </p>
 
             <h2>2. Acesso ao sistema</h2>
             <p>
-                O acesso deve ser feito apenas por pessoas autorizadas. Cada usuário deve preservar suas
+                O acesso deve ser feito apenas por pessoas autorizadas. Cada usuÃ¡rio deve preservar suas
                 credenciais e evitar compartilhamento indevido de login e senha.
             </p>
 
             <h2>3. Finalidade</h2>
             <p>
-                O FielMordomo foi desenvolvido para registrar receitas, despesas, dízimos, ofertas, campanhas,
-                missões, relatórios, comprovantes e demais informações relacionadas à administração financeira.
+                O FielMordomo foi desenvolvido para registrar receitas, despesas, dÃ­zimos, ofertas, campanhas,
+                missÃµes, relatÃ³rios, comprovantes e demais informaÃ§Ãµes relacionadas Ã  administraÃ§Ã£o financeira.
             </p>
 
-            <h2>4. Integridade das informações</h2>
+            <h2>4. Integridade das informaÃ§Ãµes</h2>
             <p>
-                A precisão dos dados depende do correto preenchimento pelos usuários. A conferência periódica
-                dos lançamentos é recomendada para manter a confiabilidade das informações.
+                A precisÃ£o dos dados depende do correto preenchimento pelos usuÃ¡rios. A conferÃªncia periÃ³dica
+                dos lanÃ§amentos Ã© recomendada para manter a confiabilidade das informaÃ§Ãµes.
             </p>
 
             <h2>5. Disponibilidade</h2>
             <p>
-                O sistema poderá passar por atualizações, manutenções ou ajustes técnicos, visando preservar
-                a segurança e estabilidade da aplicação.
+                O sistema poderÃ¡ passar por atualizaÃ§Ãµes, manutenÃ§Ãµes ou ajustes tÃ©cnicos, visando preservar
+                a seguranÃ§a e estabilidade da aplicaÃ§Ã£o.
             </p>
 
-            <h2>6. Aceitação</h2>
+            <h2>6. AceitaÃ§Ã£o</h2>
             <p>
-                O uso contínuo do sistema representa concordância com estes termos e com a política de
-                privacidade aplicável.
+                O uso contÃ­nuo do sistema representa concordÃ¢ncia com estes termos e com a polÃ­tica de
+                privacidade aplicÃ¡vel.
             </p>
         </div>
     </div>
@@ -1390,7 +1390,7 @@ def _cartaz_evento_html(slug, id_evento):
 
         cartaz = obter_evento_cartaz(slug, int(id_evento))
     except Exception:
-        LOGGER.exception("Não foi possível carregar o cartaz do evento.")
+        LOGGER.exception("NÃ£o foi possÃ­vel carregar o cartaz do evento.")
         return ""
     if not cartaz:
         return ""
@@ -1605,9 +1605,9 @@ def _render_agenda_publica():
             <div class="fm-public-hero">
                 <h1>Agenda da Igreja</h1>
                 <p>
-                    Consulte os próximos eventos públicos. Membros podem informar o CPF
-                    para visualizar também os eventos internos liberados para a membresia.
-                    Eventos restritos não são exibidos nesta página.
+                    Consulte os prÃ³ximos eventos pÃºblicos. Membros podem informar o CPF
+                    para visualizar tambÃ©m os eventos internos liberados para a membresia.
+                    Eventos restritos nÃ£o sÃ£o exibidos nesta pÃ¡gina.
                 </p>
             </div>
         </div>

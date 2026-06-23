@@ -274,8 +274,8 @@ def _totais_reunioes(reunioes, freq=None, visitantes=None):
 def _indicadores_grafico_resumo(reunioes, visitantes=None, lider=None):
     if reunioes.empty:
         return {
-            "Presença média (%)": 0.0,
-            "Ausência média (%)": 0.0,
+            "PresenÃ§a mÃ©dia (%)": 0.0,
+            "AusÃªncia mÃ©dia (%)": 0.0,
             "Visitantes": 0,
             "Ofertas": 0.0,
         }
@@ -302,8 +302,8 @@ def _indicadores_grafico_resumo(reunioes, visitantes=None, lider=None):
         ausencia_pct = 0.0
 
     return {
-        "Presença média (%)": round(presenca_pct, 1),
-        "Ausência média (%)": round(ausencia_pct, 1),
+        "PresenÃ§a mÃ©dia (%)": round(presenca_pct, 1),
+        "AusÃªncia mÃ©dia (%)": round(ausencia_pct, 1),
         "Visitantes": _contar_visitantes_periodo(visitantes, lider),
         "Ofertas": float(reunioes["ofertas"].fillna(0).sum()),
     }
@@ -549,11 +549,11 @@ def _render_matriculas(slug):
 
         with st.expander("Encerrar matricula", expanded=False):
             st.caption(
-                "Use esta opção para remover a matriculada das próximas chamadas "
-                "sem apagar o histórico de participação já registrado."
+                "Use esta opÃ§Ã£o para remover a matriculada das prÃ³ximas chamadas "
+                "sem apagar o histÃ³rico de participaÃ§Ã£o jÃ¡ registrado."
             )
             encerrar = st.selectbox(
-                "Matrícula ativa",
+                "MatrÃ­cula ativa",
                 ["Selecione"] + op_ativas,
                 key="orhafe_encerrar_matricula",
             )
@@ -573,18 +573,18 @@ def _render_matriculas(slug):
                     data_fim.isoformat(),
                 )
                 st.success(
-                    "Matrícula encerrada. O histórico foi preservado e ela "
-                    "não aparecerá nas próximas chamadas."
+                    "MatrÃ­cula encerrada. O histÃ³rico foi preservado e ela "
+                    "nÃ£o aparecerÃ¡ nas prÃ³ximas chamadas."
                 )
                 st.rerun()
 
         with st.expander("Excluir matricula sem historico", expanded=False):
             st.caption(
-                "A exclusão definitiva só deve ser usada para cadastro lançado por engano. "
-                "Se houver histórico, o sistema encerrará a matrícula em vez de apagar."
+                "A exclusÃ£o definitiva sÃ³ deve ser usada para cadastro lanÃ§ado por engano. "
+                "Se houver histÃ³rico, o sistema encerrarÃ¡ a matrÃ­cula em vez de apagar."
             )
             excluir = st.selectbox(
-                "Matrícula para excluir",
+                "MatrÃ­cula para excluir",
                 ["Selecione"] + op_ativas,
                 key="orhafe_excluir_matricula",
             )
@@ -598,15 +598,15 @@ def _render_matriculas(slug):
                     _hoje().isoformat(),
                 )
                 st.success(
-                    "Matrícula excluída."
+                    "MatrÃ­cula excluÃ­da."
                     if removida
-                    else "A matrícula possui histórico e foi encerrada, sem apagar registros anteriores."
+                    else "A matrÃ­cula possui histÃ³rico e foi encerrada, sem apagar registros anteriores."
                 )
                 st.rerun()
 
 
 def _render_chamada(slug):
-    st.markdown("### Chamada do Círculo de Oração")
+    st.markdown("### Chamada do CÃ­rculo de OraÃ§Ã£o")
     lideres = listar_orhafe_lideres(slug)
     if lideres.empty:
         st.warning("Cadastre ate 5 lideres na aba Configuracoes antes de registrar chamada.")
@@ -719,8 +719,8 @@ def _render_chamada(slug):
                 presencas_salvas[int(row["id_matricula"])] = bool(row["presente"])
 
     acao_presencas = st.radio(
-        "Presenças da lista de chamada",
-        ["Manter marcação atual", "Marcar todas", "Desmarcar todas"],
+        "PresenÃ§as da lista de chamada",
+        ["Manter marcaÃ§Ã£o atual", "Marcar todas", "Desmarcar todas"],
         horizontal=True,
         key=f"orhafe_acao_presencas_{data_reuniao.isoformat()}",
     )
@@ -819,7 +819,7 @@ def _render_chamada(slug):
 
 
 def _render_relatorios(slug):
-    st.markdown("### Relatórios do Círculo de Oração")
+    st.markdown("### RelatÃ³rios do CÃ­rculo de OraÃ§Ã£o")
     c1, c2 = st.columns(2)
     inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="orhafe_rel_ini", format="DD/MM/YYYY")
     fim = c2.date_input("Data final", value=_hoje(), key="orhafe_rel_fim", format="DD/MM/YYYY")
@@ -844,9 +844,9 @@ def _render_relatorios(slug):
         c5.metric("Matriculadas no periodo", totais["Matriculadas"])
         c6.metric("Total de ofertas", _moeda(totais["Ofertas"]))
 
-        st.markdown("#### Gráfico geral do Círculo de Oração")
+        st.markdown("#### GrÃ¡fico geral do CÃ­rculo de OraÃ§Ã£o")
         _grafico_totais_orhafe(
-            "Resumo geral do Círculo de Oração",
+            "Resumo geral do CÃ­rculo de OraÃ§Ã£o",
             _indicadores_grafico_resumo(reunioes, visitantes=visitantes),
         )
 
@@ -953,7 +953,7 @@ def _render_configuracoes(slug):
             observacoes = st.text_area("Observacoes", key="obs_coord_orhafe")
             if st.form_submit_button("Salvar coordenadora", type="primary"):
                 if len(coordenadoras[coordenadoras["ativa"] == 1]) >= 4:
-                    st.error("O Círculo de Oração deve manter no máximo 4 coordenadoras ativas.")
+                    st.error("O CÃ­rculo de OraÃ§Ã£o deve manter no mÃ¡ximo 4 coordenadoras ativas.")
                 elif modo_coord == "Cadastro de membros" and not id_cadastro_coord:
                     st.error("Selecione uma coordenadora no cadastro de membros.")
                 else:
@@ -1077,7 +1077,7 @@ def _render_configuracoes(slug):
             observacoes = st.text_area("Observacoes", key="obs_lider_orhafe")
             if st.form_submit_button("Salvar lider", type="primary"):
                 if len(lideres[lideres["ativo"] == 1]) >= 5:
-                    st.error("O Círculo de Oração deve manter no máximo 5 líderes ativas.")
+                    st.error("O CÃ­rculo de OraÃ§Ã£o deve manter no mÃ¡ximo 5 lÃ­deres ativas.")
                 elif modo_lider == "Cadastro de membros" and not id_cadastro_lider:
                     st.error("Selecione uma lider no cadastro de membros.")
                 else:
@@ -1156,10 +1156,10 @@ def _render_configuracoes(slug):
 
 
 def _render_secretarias(slug):
-    st.markdown("### Secretárias do Círculo de Oração")
+    st.markdown("### SecretÃ¡rias do CÃ­rculo de OraÃ§Ã£o")
     st.caption(
         "Secretaria de chamada acessa somente a chamada. "
-        "Secretaria geral acessa todo o módulo Círculo de Oração."
+        "Secretaria geral acessa todo o mÃ³dulo CÃ­rculo de OraÃ§Ã£o."
     )
     op_membros, df_membros = _membros_opcoes(slug)
     with st.expander("Cadastrar secretaria", expanded=False):
@@ -1223,7 +1223,7 @@ def _render_secretarias(slug):
 
     df = listar_orhafe_secretarias(slug)
     if df.empty:
-        st.info("Nenhuma secretária do Círculo de Oração cadastrada.")
+        st.info("Nenhuma secretÃ¡ria do CÃ­rculo de OraÃ§Ã£o cadastrada.")
         return
 
     exibir = df.copy()
@@ -1297,8 +1297,8 @@ def _render_secretarias(slug):
 
 
 def render():
-    st.subheader("Círculo de Oração")
-    st.caption("Gestão de matrículas, chamadas, visitantes, líderes e relatórios do ministério de oração.")
+    st.subheader("CÃ­rculo de OraÃ§Ã£o")
+    st.caption("GestÃ£o de matrÃ­culas, chamadas, visitantes, lÃ­deres e relatÃ³rios do ministÃ©rio de oraÃ§Ã£o.")
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessao invalida. Faca login novamente.")
@@ -1309,16 +1309,16 @@ def render():
     secretaria = st.session_state.get("secretaria_orhafe", {})
     modo = st.session_state.get("modo", "")
     if modo == "pastor_auxiliar":
-        st.info("Acesso de Pastor Auxiliar: somente relatórios do Círculo de Oração.")
+        st.info("Acesso de Pastor Auxiliar: somente relatÃ³rios do CÃ­rculo de OraÃ§Ã£o.")
         _render_relatorios(slug)
         return
     if modo == "secretaria_orhafe" and isinstance(secretaria, dict):
         perfil = secretaria.get("perfil", "chamada")
         if perfil == "chamada":
-            st.info("Acesso de secretária de chamada do Círculo de Oração.")
+            st.info("Acesso de secretÃ¡ria de chamada do CÃ­rculo de OraÃ§Ã£o.")
             _render_chamada(slug)
             return
-        st.info("Acesso de secretária geral do Círculo de Oração.")
+        st.info("Acesso de secretÃ¡ria geral do CÃ­rculo de OraÃ§Ã£o.")
 
     abas = [
         "Chamada",

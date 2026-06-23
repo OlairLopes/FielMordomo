@@ -15,21 +15,21 @@ from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
 VISIBILIDADES = ["Publico", "Membros", "Restrito"]
 SITUACOES = ["Programado", "Realizado", "Cancelado"]
 TIPOS_EVENTO = [
-    "Conscientização Missionária",
-    "Consagração",
+    "ConscientizaÃ§Ã£o MissionÃ¡ria",
+    "ConsagraÃ§Ã£o",
     "Culto de Ensino",
-    "Culto Ministério de Homens",
-    "Culto Ministério Família",
-    "Culto Ministério Infantil",
-    "Culto Ministério Jovens",
-    "Culto Ministério Missões",
-    "Culto Ministério Mulheres",
+    "Culto MinistÃ©rio de Homens",
+    "Culto MinistÃ©rio FamÃ­lia",
+    "Culto MinistÃ©rio Infantil",
+    "Culto MinistÃ©rio Jovens",
+    "Culto MinistÃ©rio MissÃµes",
+    "Culto MinistÃ©rio Mulheres",
     "Dia com Deus",
     "Encontro Unificado",
-    "Escola Bíblica",
+    "Escola BÃ­blica",
     "Fraternal",
     "Outros",
-    "Vigília",
+    "VigÃ­lia",
 ]
 
 
