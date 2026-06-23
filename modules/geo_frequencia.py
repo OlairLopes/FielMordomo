@@ -390,6 +390,46 @@ def _html_captura_localizacao(id_evento, id_cadastro):
     )
 
 
+def _html_captura_localizacao_massa(id_evento):
+    components.html(
+        f"""
+        <div style="font-family:Arial,sans-serif">
+          <button onclick="capturarGeoMassa()" style="
+            background:#0F6E56;color:white;border:0;border-radius:8px;
+            padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer">
+            Capturar local do evento para check-in em massa
+          </button>
+          <div id="geo_massa_msg" style="margin-top:8px;color:#475569;font-size:13px"></div>
+        </div>
+        <script>
+        function capturarGeoMassa() {{
+          const msg = document.getElementById("geo_massa_msg");
+          if (!navigator.geolocation) {{
+            msg.innerText = "Este navegador n\xe3o oferece geolocaliza\xe7\xe3o.";
+            return;
+          }}
+          msg.innerText = "Solicitando permiss\xe3o de localiza\xe7\xe3o...";
+          navigator.geolocation.getCurrentPosition(
+            function(pos) {{
+              const params = new URLSearchParams(window.parent.location.search);
+              params.set("geo_massa_id_evento", "{int(id_evento)}");
+              params.set("geo_massa_lat", pos.coords.latitude.toFixed(8));
+              params.set("geo_massa_lon", pos.coords.longitude.toFixed(8));
+              params.set("geo_massa_ts", Date.now().toString());
+              window.parent.location.search = params.toString();
+            }},
+            function(err) {{
+              msg.innerText = "N\xe3o foi poss\xedvel capturar a localiza\xe7\xe3o: " + err.message;
+            }},
+            {{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }}
+          );
+        }}
+        </script>
+        """,
+        height=84,
+    )
+
+
 def _processar_captura_query(slug):
     id_evento = _valor_query("geo_id_evento")
     id_cadastro = _valor_query("geo_id_cadastro")
@@ -847,6 +887,32 @@ def _render_checkin(slug):
         st.info("Nenhum membro ativo encontrado.")
         return
 
+    evento_massa_ref = str(int(evento["id_evento"]))
+    if st.session_state.get("geo_massa_evento_ref") != evento_massa_ref:
+        st.session_state["geo_massa_evento_ref"] = evento_massa_ref
+        st.session_state["geo_massa_lat"] = float(evento.get("latitude", 0) or 0)
+        st.session_state["geo_massa_lon"] = float(evento.get("longitude", 0) or 0)
+        st.session_state["geo_massa_lat_input"] = st.session_state["geo_massa_lat"]
+        st.session_state["geo_massa_lon_input"] = st.session_state["geo_massa_lon"]
+        st.session_state["geo_massa_membros_sel"] = []
+
+    id_massa = _valor_query("geo_massa_id_evento")
+    lat_massa = _valor_query("geo_massa_lat")
+    lon_massa = _valor_query("geo_massa_lon")
+    if id_massa and lat_massa and lon_massa and str(id_massa) == str(int(evento["id_evento"])):
+        try:
+            st.session_state["geo_massa_lat"] = float(lat_massa)
+            st.session_state["geo_massa_lon"] = float(lon_massa)
+            st.session_state["geo_massa_lat_input"] = float(lat_massa)
+            st.session_state["geo_massa_lon_input"] = float(lon_massa)
+            for chave in ["geo_massa_id_evento", "geo_massa_lat", "geo_massa_lon", "geo_massa_ts"]:
+                if chave in st.query_params:
+                    del st.query_params[chave]
+            st.success("Local do evento capturado para check-in em massa.")
+            st.rerun()
+        except ValueError:
+            pass
+
     mapa_membros = {}
     opcoes = []
     for _, row in membros.iterrows():
@@ -885,6 +951,108 @@ def _render_checkin(slug):
                 st.success("Registro salvo.")
             except Exception as exc:
                 st.error(f"N\xe3o foi poss\xedvel registrar: {exc}")
+
+    st.divider()
+    st.markdown("### Check-in em massa no local")
+    st.caption(
+        "Use quando a secretaria ou lideran\xe7a est\xe1 no local do evento. "
+        "O sistema captura a localiza\xe7\xe3o deste aparelho uma vez e registra os membros selecionados."
+    )
+
+    _html_captura_localizacao_massa(evento["id_evento"])
+
+    lat_padrao = float(st.session_state.get("geo_massa_lat", evento.get("latitude", 0)) or 0)
+    lon_padrao = float(st.session_state.get("geo_massa_lon", evento.get("longitude", 0)) or 0)
+    mlat, mlon, mdist = st.columns(3)
+    with mlat:
+        lat_massa_input = st.number_input(
+            "Latitude do check-in em massa",
+            value=lat_padrao,
+            format="%.8f",
+            key="geo_massa_lat_input",
+        )
+    with mlon:
+        lon_massa_input = st.number_input(
+            "Longitude do check-in em massa",
+            value=lon_padrao,
+            format="%.8f",
+            key="geo_massa_lon_input",
+        )
+    with mdist:
+        distancia_massa = _distancia_metros(
+            evento["latitude"],
+            evento["longitude"],
+            lat_massa_input,
+            lon_massa_input,
+        )
+        st.metric("Dist\xe2ncia do evento", f"{distancia_massa:.0f} m")
+
+    dentro_massa = distancia_massa <= float(evento.get("raio_metros", 30) or 30)
+    if dentro_massa:
+        st.success("A localiza\xe7\xe3o informada est\xe1 dentro do raio permitido do evento.")
+    else:
+        st.warning("A localiza\xe7\xe3o informada est\xe1 fora do raio permitido do evento.")
+
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("Selecionar todos os membros", use_container_width=True):
+            st.session_state["geo_massa_membros_sel"] = opcoes.copy()
+            st.rerun()
+    with b2:
+        if st.button("Limpar sele\xe7\xe3o em massa", use_container_width=True):
+            st.session_state["geo_massa_membros_sel"] = []
+            st.rerun()
+
+    selecionados = st.multiselect(
+        "Membros presentes no local",
+        opcoes,
+        key="geo_massa_membros_sel",
+    )
+
+    confirmar_massa = st.checkbox(
+        f"Confirmo o registro de {len(selecionados)} membro(s) selecionado(s)",
+        key=f"geo_conf_massa_{int(evento['id_evento'])}",
+    )
+
+    if st.button(
+        "Registrar check-in em massa",
+        type="primary",
+        use_container_width=True,
+        disabled=not confirmar_massa or not selecionados,
+    ):
+        habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
+        presente = bool(dentro_massa and habilitado)
+        status = (
+            "Presente por check-in em massa"
+            if presente
+            else "Check-in em massa fora do raio ou captura desabilitada"
+        )
+        registrados = 0
+        erros = []
+        for rotulo in selecionados:
+            membro_massa = mapa_membros.get(rotulo)
+            if not membro_massa:
+                continue
+            try:
+                registrar_geo_presenca(
+                    slug,
+                    evento["id_evento"],
+                    membro_massa["id_cadastro"],
+                    lat_massa_input,
+                    lon_massa_input,
+                    distancia_massa,
+                    dentro_massa,
+                    presente,
+                    status,
+                )
+                registrados += 1
+            except Exception as exc:
+                erros.append(f"{membro_massa.get('nome', rotulo)}: {exc}")
+
+        if registrados:
+            st.success(f"{registrados} check-in(s) registrados.")
+        if erros:
+            st.error("Alguns registros falharam: " + " | ".join(erros[:5]))
 
 
 def _render_frequencia(slug):
