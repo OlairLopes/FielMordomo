@@ -4329,6 +4329,7 @@ def _garantir_tabelas_geo_frequencia(conn):
             id_evento          INTEGER PRIMARY KEY AUTOINCREMENT,
             nome               TEXT NOT NULL,
             data               TEXT NOT NULL,
+            endereco           TEXT DEFAULT '',
             latitude           REAL NOT NULL DEFAULT 0,
             longitude          REAL NOT NULL DEFAULT 0,
             raio_metros        INTEGER NOT NULL DEFAULT 30,
@@ -4362,6 +4363,9 @@ def _garantir_tabelas_geo_frequencia(conn):
         CREATE INDEX IF NOT EXISTS idx_geo_presencas_evento
             ON geo_presencas(id_evento);
     """)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(geo_eventos)").fetchall()]
+    if "endereco" not in cols:
+        conn.execute("ALTER TABLE geo_eventos ADD COLUMN endereco TEXT DEFAULT ''")
 
 
 def salvar_geo_evento(
@@ -4370,6 +4374,7 @@ def salvar_geo_evento(
     data,
     latitude,
     longitude,
+    endereco="",
     raio_metros=30,
     captura_habilitada=False,
     ativo=True,
@@ -4397,6 +4402,7 @@ def salvar_geo_evento(
         dados = (
             nome,
             data,
+            sanitizar(endereco),
             latitude,
             longitude,
             raio_metros,
@@ -4409,7 +4415,7 @@ def salvar_geo_evento(
         if id_evento:
             conn.execute(
                 """UPDATE geo_eventos
-                   SET nome=?, data=?, latitude=?, longitude=?, raio_metros=?,
+                   SET nome=?, data=?, endereco=?, latitude=?, longitude=?, raio_metros=?,
                        captura_habilitada=?, ativo=?, mensagem_presentes=?,
                        mensagem_ausentes=?, observacoes=?,
                        atualizado_em=datetime('now')
@@ -4420,10 +4426,10 @@ def salvar_geo_evento(
 
         cur = conn.execute(
             """INSERT INTO geo_eventos
-               (nome, data, latitude, longitude, raio_metros,
+               (nome, data, endereco, latitude, longitude, raio_metros,
                 captura_habilitada, ativo, mensagem_presentes,
                 mensagem_ausentes, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             dados,
         )
         return cur.lastrowid
@@ -4437,7 +4443,7 @@ def listar_geo_eventos(slug, incluir_inativos=True):
         _garantir_tabelas_geo_frequencia(conn)
         filtro = "" if incluir_inativos else "WHERE ativo=1"
         return _read_sql_query_formatado(
-            f"""SELECT id_evento, nome, data, latitude, longitude, raio_metros,
+            f"""SELECT id_evento, nome, data, endereco, latitude, longitude, raio_metros,
                        captura_habilitada, ativo, mensagem_presentes,
                        mensagem_ausentes, observacoes, criado_em, atualizado_em
                 FROM geo_eventos

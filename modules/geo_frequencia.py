@@ -226,6 +226,68 @@ def _obter_coordenadas_de_texto_ou_link(texto):
     return None, link_expandido
 
 
+def _buscar_coordenadas_por_endereco(endereco):
+    endereco = str(endereco or "").strip()
+    if not endereco:
+        return None
+
+    url = (
+        "https://nominatim.openstreetmap.org/search?"
+        + urllib.parse.urlencode({
+            "q": endereco,
+            "format": "json",
+            "limit": "1",
+            "addressdetails": "1",
+        })
+    )
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "FielMordomo/1.0 contato@fielmordomo.com.br"},
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            dados = json.loads(resp.read().decode("utf-8"))
+        if not dados:
+            return None
+        item = dados[0]
+        display = str(item.get("display_name", endereco))
+        return float(item["lat"]), float(item["lon"]), display
+    except Exception:
+        return None
+
+
+def _buscar_endereco_por_coordenadas(latitude, longitude):
+    try:
+        lat = float(latitude)
+        lon = float(longitude)
+    except (TypeError, ValueError):
+        return ""
+
+    if lat == 0 and lon == 0:
+        return ""
+
+    url = (
+        "https://nominatim.openstreetmap.org/reverse?"
+        + urllib.parse.urlencode({
+            "lat": f"{lat:.8f}",
+            "lon": f"{lon:.8f}",
+            "format": "json",
+            "zoom": "18",
+            "addressdetails": "1",
+        })
+    )
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "FielMordomo/1.0 contato@fielmordomo.com.br"},
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            dados = json.loads(resp.read().decode("utf-8"))
+        return str(dados.get("display_name", "") or "")
+    except Exception:
+        return ""
+
+
 def _distancia_metros(lat1, lon1, lat2, lon2):
     raio_terra = 6371000
     lat1_rad = math.radians(float(lat1))
@@ -447,8 +509,10 @@ def _render_eventos(slug):
     evento_ref = str(evento_atual.get("id_evento", "novo"))
     if st.session_state.get("geo_evento_ref") != evento_ref:
         st.session_state["geo_evento_ref"] = evento_ref
+        st.session_state["geo_endereco_evento"] = str(evento_atual.get("endereco", "") or "")
         st.session_state["geo_lat_evento"] = float(evento_atual.get("latitude", 0) or 0)
         st.session_state["geo_lon_evento"] = float(evento_atual.get("longitude", 0) or 0)
+        st.session_state["geo_endereco_evento_input"] = st.session_state["geo_endereco_evento"]
         st.session_state["geo_lat_evento_input"] = st.session_state["geo_lat_evento"]
         st.session_state["geo_lon_evento_input"] = st.session_state["geo_lon_evento"]
 
@@ -461,6 +525,13 @@ def _render_eventos(slug):
             st.session_state["geo_lon_evento"] = float(lon_evento_query)
             st.session_state["geo_lat_evento_input"] = float(lat_evento_query)
             st.session_state["geo_lon_evento_input"] = float(lon_evento_query)
+            endereco_capturado = _buscar_endereco_por_coordenadas(
+                lat_evento_query,
+                lon_evento_query,
+            )
+            if endereco_capturado:
+                st.session_state["geo_endereco_evento"] = endereco_capturado
+                st.session_state["geo_endereco_evento_input"] = endereco_capturado
             for chave in ["geo_evento_lat", "geo_evento_lon", "geo_evento_ts"]:
                 if chave in st.query_params:
                     del st.query_params[chave]
@@ -475,6 +546,38 @@ def _render_eventos(slug):
         "e cole o link ou as coordenadas."
     )
     _html_captura_local_evento()
+
+    if "geo_endereco_evento_pendente" in st.session_state:
+        st.session_state["geo_endereco_evento_input"] = st.session_state.pop(
+            "geo_endereco_evento_pendente"
+        )
+
+    col_end_1, col_end_2 = st.columns([3, 1])
+    with col_end_1:
+        endereco_evento = st.text_input(
+            "Endere\xe7o do evento",
+            value=str(st.session_state.get("geo_endereco_evento", "") or ""),
+            key="geo_endereco_evento_input",
+            placeholder="Ex.: Assembleia de Deus Central, Mina\xe7u GO",
+        )
+    with col_end_2:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        buscar_endereco = st.button("Buscar coordenadas", use_container_width=True)
+
+    if buscar_endereco:
+        resultado = _buscar_coordenadas_por_endereco(endereco_evento)
+        if resultado:
+            lat_busca, lon_busca, endereco_formatado = resultado
+            st.session_state["geo_endereco_evento"] = endereco_formatado
+            st.session_state["geo_endereco_evento_pendente"] = endereco_formatado
+            st.session_state["geo_lat_evento"] = lat_busca
+            st.session_state["geo_lon_evento"] = lon_busca
+            st.session_state["geo_lat_evento_input"] = lat_busca
+            st.session_state["geo_lon_evento_input"] = lon_busca
+            st.success("Coordenadas encontradas pelo endere\xe7o.")
+            st.rerun()
+        else:
+            st.error("N\xe3o encontrei coordenadas para esse endere\xe7o. Tente complementar com cidade e estado.")
 
     busca_maps = st.text_input(
         "Buscar local no Google Maps",
@@ -511,8 +614,10 @@ def _render_eventos(slug):
             st.session_state["geo_lon_evento"] = coords[1]
             st.session_state["geo_lat_evento_input"] = coords[0]
             st.session_state["geo_lon_evento_input"] = coords[1]
-            if link_expandido:
-                st.session_state["geo_link_maps"] = link_expandido
+            endereco_maps = _buscar_endereco_por_coordenadas(coords[0], coords[1])
+            if endereco_maps:
+                st.session_state["geo_endereco_evento"] = endereco_maps
+                st.session_state["geo_endereco_evento_pendente"] = endereco_maps
             st.success("Coordenadas carregadas do Google Maps.")
             st.rerun()
         else:
@@ -600,6 +705,7 @@ def _render_eventos(slug):
                 id_evento=id_evento,
                 nome=nome,
                 data=data.isoformat(),
+                endereco=endereco_evento,
                 latitude=latitude,
                 longitude=longitude,
                 raio_metros=raio,
@@ -629,6 +735,7 @@ def _render_eventos(slug):
                         id_evento=evento_atual.get("id_evento"),
                         nome=evento_atual.get("nome", ""),
                         data=evento_atual.get("data", ""),
+                        endereco=evento_atual.get("endereco", ""),
                         latitude=evento_atual.get("latitude", 0),
                         longitude=evento_atual.get("longitude", 0),
                         raio_metros=evento_atual.get("raio_metros", 30),
@@ -673,12 +780,13 @@ def _render_eventos(slug):
         df_view["ativo"] = df_view["ativo"].map({1: "Sim", 0: "N\xe3o"})
         st.dataframe(
             df_view[[
-                "id_evento", "data", "nome", "latitude", "longitude",
+                "id_evento", "data", "nome", "endereco", "latitude", "longitude",
                 "raio_metros", "captura_habilitada", "ativo",
             ]].rename(columns={
                 "id_evento": "ID",
                 "data": "Data",
                 "nome": "Evento",
+                "endereco": "Endere\xe7o",
                 "latitude": "Latitude",
                 "longitude": "Longitude",
                 "raio_metros": "Raio (m)",
