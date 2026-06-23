@@ -1,4 +1,5 @@
 import datetime
+import html
 import math
 import re
 import urllib.parse
@@ -49,6 +50,22 @@ def _link_whatsapp(tel, mensagem):
     if not tel_limpo:
         return ""
     return f"https://wa.me/{tel_limpo}?text={urllib.parse.quote(mensagem)}"
+
+
+def _botao_abrir_google_maps(url, texto="Abrir no Google Maps"):
+    if not str(url or "").strip():
+        return
+
+    st.markdown(
+        (
+            f'<a href="{html.escape(str(url), quote=True)}" target="_blank" '
+            'style="display:inline-block;background:#0F6E56;color:white;'
+            'padding:9px 16px;border-radius:8px;text-decoration:none;'
+            'font-size:0.9rem;font-weight:700;margin:4px 0 10px 0">'
+            f'{html.escape(str(texto), quote=True)}</a>'
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def _extrair_coordenadas_google_maps(texto):
@@ -348,13 +365,13 @@ def _render_eventos(slug):
         busca_texto = str(busca_maps).strip()
         if busca_texto.lower().startswith(("http://", "https://")):
             link_busca = busca_texto
-            st.markdown(f"[Abrir link no Google Maps]({link_busca})")
+            _botao_abrir_google_maps(link_busca, "Abrir link no Google Maps")
         else:
             link_busca = (
                 "https://www.google.com/maps/search/?api=1&query="
                 + urllib.parse.quote_plus(busca_texto)
             )
-            st.markdown(f"[Abrir busca no Google Maps]({link_busca})")
+            _botao_abrir_google_maps(link_busca, "Abrir busca no Google Maps")
 
     col_maps_1, col_maps_2 = st.columns([3, 1])
     with col_maps_1:
