@@ -1,5 +1,5 @@
 """
-Modulo de aniversariantes — cards visuais, calendario, WhatsApp manual
+Modulo de aniversariantes â€” cards visuais, calendario, WhatsApp manual
 e envio automatico via WhatsApp Cloud API.
 """
 
@@ -26,9 +26,9 @@ MESES_PT = {
 DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # CSS
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _injetar_css():
     st.markdown("""
@@ -133,9 +133,9 @@ def _injetar_css():
     """, unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # TELEFONE / WHATSAPP
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _limpar_tel(tel):
     return "".join(c for c in str(tel) if c.isdigit())
@@ -170,12 +170,12 @@ def _tratamento_por_sexo(sexo):
     sexo_up = str(sexo).strip().upper()
 
     if sexo_up.startswith("M"):
-        return "irmão"
+        return "irmÃ£o"
 
     if sexo_up.startswith("F"):
-        return "irmã"
+        return "irmÃ£"
 
-    return "irmão(ã)"
+    return "irmÃ£o(Ã£)"
 
 
 def _montar_mensagem_aniversario(nome, idade, nome_igreja, sexo=""):
@@ -187,19 +187,19 @@ def _montar_mensagem_aniversario(nome, idade, nome_igreja, sexo=""):
 
     return (
         f"A paz do Senhor, {tratamento} {nome}! \n\n"
-        f"Neste dia especial, a família {identificador} se alegra por sua vida "
-        f"e deseja a você um feliz aniversário.\n\n"
-        f"Nossa oração é que Deus continue conduzindo seus passos, "
-        f"fortalecendo sua fé e concedendo saúde, paz e alegria.\n\n"
-        f"Parabéns por mais um ano de vida! \n\n"
+        f"Neste dia especial, a famÃ­lia {identificador} se alegra por sua vida "
+        f"e deseja a vocÃª um feliz aniversÃ¡rio.\n\n"
+        f"Nossa oraÃ§Ã£o Ã© que Deus continue conduzindo seus passos, "
+        f"fortalecendo sua fÃ© e concedendo saÃºde, paz e alegria.\n\n"
+        f"ParabÃ©ns por mais um ano de vida! \n\n"
 
         f"Pr. Olair Pereira Lopes.\n\n"
     )
 
 
-# ─────────────────────────────────────────────────────────────
-# CONFIGURAÇÃO WHATSAPP CLOUD API
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# CONFIGURAÃ‡ÃƒO WHATSAPP CLOUD API
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _config_whatsapp():
     """
@@ -244,10 +244,10 @@ def _enviar_whatsapp_texto_api(telefone, mensagem):
     numero = _normalizar_tel_brasil(telefone)
 
     if not numero:
-        return False, "Telefone inválido ou vazio."
+        return False, "Telefone invÃ¡lido ou vazio."
 
     if not cfg["access_token"] or not cfg["phone_number_id"]:
-        return False, "WhatsApp Cloud API não configurada no st.secrets."
+        return False, "WhatsApp Cloud API nÃ£o configurada no st.secrets."
 
     url = (
         f"https://graph.facebook.com/"
@@ -278,14 +278,14 @@ def _enviar_whatsapp_texto_api(telefone, mensagem):
         return False, f"Erro {resp.status_code}: {resp.text}"
 
     except requests.RequestException as e:
-        return False, f"Falha na requisição: {e}"
+        return False, f"Falha na requisiÃ§Ã£o: {e}"
 
 
 def _enviar_whatsapp_template_api(telefone, nome, idade, nome_igreja, sexo=""):
     """
-    Use esta função caso você tenha um template aprovado na Meta.
+    Use esta funÃ§Ã£o caso vocÃª tenha um template aprovado na Meta.
 
-    O template sugerido deve ter 5 variáveis no corpo, nesta ordem:
+    O template sugerido deve ter 5 variÃ¡veis no corpo, nesta ordem:
     {{1}} tratamento
     {{2}} nome
     {{3}} nome_igreja
@@ -294,18 +294,18 @@ def _enviar_whatsapp_template_api(telefone, nome, idade, nome_igreja, sexo=""):
 
     Exemplo de texto do template aprovado:
     A paz do Senhor, {{1}} {{2}}!
-    A família {{3}} deseja a você um feliz aniversário.
-    Parabéns pelos seus {{4}} {{5}} de vida!
+    A famÃ­lia {{3}} deseja a vocÃª um feliz aniversÃ¡rio.
+    ParabÃ©ns pelos seus {{4}} {{5}} de vida!
     """
 
     cfg = _config_whatsapp()
     numero = _normalizar_tel_brasil(telefone)
 
     if not numero:
-        return False, "Telefone inválido ou vazio."
+        return False, "Telefone invÃ¡lido ou vazio."
 
     if not cfg["access_token"] or not cfg["phone_number_id"]:
-        return False, "WhatsApp Cloud API não configurada no st.secrets."
+        return False, "WhatsApp Cloud API nÃ£o configurada no st.secrets."
 
     tratamento = _tratamento_por_sexo(sexo)
     ano_str = "anos" if idade != 1 else "ano"
@@ -353,7 +353,7 @@ def _enviar_whatsapp_template_api(telefone, nome, idade, nome_igreja, sexo=""):
         return False, f"Erro {resp.status_code}: {resp.text}"
 
     except requests.RequestException as e:
-        return False, f"Falha na requisição: {e}"
+        return False, f"Falha na requisiÃ§Ã£o: {e}"
 
 
 def _enviar_whatsapp_api(telefone, mensagem, nome, idade, nome_igreja, sexo=""):
@@ -374,9 +374,9 @@ def _enviar_whatsapp_api(telefone, mensagem, nome, idade, nome_igreja, sexo=""):
     )
 
 
-# ─────────────────────────────────────────────────────────────
-# CONTROLE PARA NÃO REENVIAR NO MESMO DIA
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# CONTROLE PARA NÃƒO REENVIAR NO MESMO DIA
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _pasta_controle_envios():
     pasta = os.path.join(os.getcwd(), ".controle_envios")
@@ -436,9 +436,9 @@ def _registrar_envio(slug, data_ref, telefone, nome):
     _salvar_controle_envios(slug, controle)
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # DADOS DOS ANIVERSARIANTES
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _preparar_df_aniv(df_cad):
     if df_cad.empty or "data_nascimento" not in df_cad.columns:
@@ -519,9 +519,9 @@ def _aniversariantes_hoje(df_aniv):
     ].sort_values("nome")
 
 
-# ─────────────────────────────────────────────────────────────
-# ENVIO AUTOMÁTICO
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ENVIO AUTOMÃTICO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _executar_envio_aniversariantes_hoje(df_hoje, nome_igreja, slug, forcar=False):
     hoje = datetime.date.today()
@@ -550,7 +550,7 @@ def _executar_envio_aniversariantes_hoje(df_hoje, nome_igreja, slug, forcar=Fals
                 "nome": nome,
                 "telefone": telefone,
                 "status": "ignorado",
-                "detalhe": "Cadastro sem telefone válido.",
+                "detalhe": "Cadastro sem telefone vÃ¡lido.",
             })
             continue
 
@@ -558,8 +558,8 @@ def _executar_envio_aniversariantes_hoje(df_hoje, nome_igreja, slug, forcar=Fals
             resultados.append({
                 "nome": nome,
                 "telefone": telefone,
-                "status": "já enviado",
-                "detalhe": "Mensagem já enviada hoje.",
+                "status": "jÃ¡ enviado",
+                "detalhe": "Mensagem jÃ¡ enviada hoje.",
             })
             continue
 
@@ -607,22 +607,22 @@ def _renderizar_resultados_envio(resultados):
 
     qtd_enviado = int((df_res["status"] == "enviado").sum())
     qtd_erro = int((df_res["status"] == "erro").sum())
-    qtd_ja = int((df_res["status"] == "já enviado").sum())
+    qtd_ja = int((df_res["status"] == "jÃ¡ enviado").sum())
     qtd_ign = int((df_res["status"] == "ignorado").sum())
 
     c1, c2, c3, c4 = st.columns(4)
 
     c1.metric("Enviados", qtd_enviado)
     c2.metric("Erros", qtd_erro)
-    c3.metric("Já enviados", qtd_ja)
+    c3.metric("JÃ¡ enviados", qtd_ja)
     c4.metric("Ignorados", qtd_ign)
 
     st.dataframe(df_res, use_container_width=True, hide_index=True)
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # CARD VISUAL
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _card_aniv(nome, data_str, idade, telefone, nome_igreja, sexo="", classe=""):
     inicial = (nome[0] if nome else "?").upper()
@@ -633,7 +633,7 @@ def _card_aniv(nome, data_str, idade, telefone, nome_igreja, sexo="", classe="")
         <div class="aniv-icone">{inicial}</div>
         <div class="aniv-info">
             <div class="aniv-nome">{nome}</div>
-            <div class="aniv-data">🎂 {data_str}</div>
+            <div class="aniv-data">ðŸŽ‚ {data_str}</div>
             <div class="aniv-idade">{idade} {ano_str}</div>
         </div>
     </div>
@@ -657,14 +657,14 @@ def _card_aniv(nome, data_str, idade, telefone, nome_igreja, sexo="", classe="")
                 f'style="display:inline-block;background:#25D366;color:white;'
                 f'padding:6px 14px;border-radius:6px;text-decoration:none;'
                 f'font-size:0.82rem;margin-bottom:14px">'
-                f'💬 Enviar parabéns pelo WhatsApp</a>',
+                f'ðŸ’¬ Enviar parabÃ©ns pelo WhatsApp</a>',
                 unsafe_allow_html=True,
             )
 
 
-# ─────────────────────────────────────────────────────────────
-# CALENDÁRIO
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# CALENDÃRIO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _renderizar_calendario(df_aniv, ano, mes):
     hoje = datetime.date.today()
@@ -701,7 +701,7 @@ def _renderizar_calendario(df_aniv, ano, mes):
                     classes.append("hoje")
 
                 marcador = (
-                    '<div class="cal-aniv-marcador">🎂</div>'
+                    '<div class="cal-aniv-marcador">ðŸŽ‚</div>'
                     if dia in dias_com_aniv else ""
                 )
 
@@ -717,9 +717,9 @@ def _renderizar_calendario(df_aniv, ano, mes):
     st.markdown(html, unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # RENDER PRINCIPAL
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def render():
     _injetar_css()
@@ -731,12 +731,12 @@ def render():
     df_cad = carregar_cadastros(slug)
     df_aniv = _preparar_df_aniv(df_cad)
 
-    st.subheader("🎂 Aniversariantes")
+    st.subheader("ðŸŽ‚ Aniversariantes")
     st.caption("Acompanhe os aniversariantes dos membros da igreja.")
 
     if df_aniv.empty:
         st.info("Nenhum membro com data de nascimento cadastrada ainda.")
-        st.caption("Para usar este módulo, cadastre a data de nascimento dos membros.")
+        st.caption("Para usar este mÃ³dulo, cadastre a data de nascimento dos membros.")
         return
 
     hoje = datetime.date.today()
@@ -744,7 +744,7 @@ def render():
 
     cfg_whats = _config_whatsapp()
 
-    # Envio automático ao abrir o módulo, se habilitado no secrets.
+    # Envio automÃ¡tico ao abrir o mÃ³dulo, se habilitado no secrets.
     if cfg_whats["auto_enviar"]:
         if _whatsapp_api_configurada():
             resultados_auto = _executar_envio_aniversariantes_hoje(
@@ -761,24 +761,24 @@ def render():
 
             if enviados:
                 st.toast(
-                    f"{len(enviados)} mensagem(ns) de aniversário enviada(s).",
-                    icon="🎂",
+                    f"{len(enviados)} mensagem(ns) de aniversÃ¡rio enviada(s).",
+                    icon="ðŸŽ‚",
                 )
         else:
             st.warning(
-                "O envio automático está habilitado, mas a WhatsApp Cloud API "
-                "não foi configurada no st.secrets."
+                "O envio automÃ¡tico estÃ¡ habilitado, mas a WhatsApp Cloud API "
+                "nÃ£o foi configurada no st.secrets."
             )
 
     aba_hoje, aba_semana, aba_mes, aba_cal, aba_envio = st.tabs([
         "Hoje",
         "Semana",
         "Mes",
-        "📅 Calendario",
-        "📲 Envio WhatsApp",
+        "ðŸ“… Calendario",
+        "ðŸ“² Envio WhatsApp",
     ])
 
-    # ── ABA: HOJE ────────────────────────────────────────────────────────
+    # â”€â”€ ABA: HOJE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     with aba_hoje:
         dias_pt = {
             0: "Segunda",
@@ -791,16 +791,16 @@ def render():
         }
 
         st.markdown(
-            f"**{hoje.strftime('%d/%m/%Y')}** — {dias_pt[hoje.weekday()]}"
+            f"**{hoje.strftime('%d/%m/%Y')}** â€” {dias_pt[hoje.weekday()]}"
         )
 
         if hoje_df.empty:
             st.markdown(
-                '<div class="aniv-vazio">Nenhum aniversariante hoje. 🌷</div>',
+                '<div class="aniv-vazio">Nenhum aniversariante hoje. ðŸŒ·</div>',
                 unsafe_allow_html=True,
             )
         else:
-            st.success(f"🎉 {len(hoje_df)} aniversariante(s) hoje!")
+            st.success(f"ðŸŽ‰ {len(hoje_df)} aniversariante(s) hoje!")
 
             for _, r in hoje_df.iterrows():
                 _card_aniv(
@@ -813,7 +813,7 @@ def render():
                     classe="hoje",
                 )
 
-    # ── ABA: SEMANA ──────────────────────────────────────────────────────
+    # â”€â”€ ABA: SEMANA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     with aba_semana:
         ini_sem = hoje - datetime.timedelta(days=hoje.weekday())
         fim_sem = ini_sem + datetime.timedelta(days=6)
@@ -846,7 +846,7 @@ def render():
                 unsafe_allow_html=True,
             )
         else:
-            st.info(f"🎈 {len(sem_df)} aniversariante(s) nesta semana")
+            st.info(f"ðŸŽˆ {len(sem_df)} aniversariante(s) nesta semana")
 
             for _, r in sem_df.iterrows():
                 eh_hoje = (
@@ -870,13 +870,13 @@ def render():
             df_exp.columns = ["Nome", "Data", "Idade", "Telefone"]
 
             st.download_button(
-                "📥 Exportar CSV da semana",
+                "ðŸ“¥ Exportar CSV da semana",
                 gerar_csv(df_exp),
                 f"aniversariantes_semana_{hoje.strftime('%Y%m%d')}.csv",
                 "text/csv",
             )
 
-    # ── ABA: MÊS ─────────────────────────────────────────────────────────
+    # â”€â”€ ABA: MÃŠS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     with aba_mes:
         st.markdown(f"Mes de **{MESES_PT[hoje.month]}/{hoje.year}**")
 
@@ -891,7 +891,7 @@ def render():
             )
         else:
             st.info(
-                f"🎊 {len(mes_df)} aniversariante(s) em {MESES_PT[hoje.month]}"
+                f"ðŸŽŠ {len(mes_df)} aniversariante(s) em {MESES_PT[hoje.month]}"
             )
 
             for _, r in mes_df.iterrows():
@@ -916,13 +916,13 @@ def render():
             df_exp.columns = ["Nome", "Data", "Idade", "Telefone"]
 
             st.download_button(
-                "📥 Exportar CSV do mes",
+                "ðŸ“¥ Exportar CSV do mes",
                 gerar_csv(df_exp),
                 f"aniversariantes_{MESES_PT[hoje.month]}_{hoje.year}.csv",
                 "text/csv",
             )
 
-    # ── ABA: CALENDÁRIO ──────────────────────────────────────────────────
+    # â”€â”€ ABA: CALENDÃRIO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     with aba_cal:
         c1, c2 = st.columns(2)
 
@@ -947,7 +947,7 @@ def render():
         _renderizar_calendario(df_aniv, int(ano_sel), int(mes_sel))
 
         st.markdown("")
-        st.caption("🎂 = dia com aniversariante  |  Vermelho = hoje")
+        st.caption("ðŸŽ‚ = dia com aniversariante  |  Vermelho = hoje")
 
         mes_sel_df = df_aniv[
             df_aniv["mes_aniv"] == int(mes_sel)
@@ -962,32 +962,32 @@ def render():
 
             st.dataframe(tabela, use_container_width=True, hide_index=True)
 
-    # ── ABA: ENVIO WHATSAPP ──────────────────────────────────────────────
+    # â”€â”€ ABA: ENVIO WHATSAPP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     with aba_envio:
-        st.markdown("### 📲 Envio automático de mensagens")
+        st.markdown("### ðŸ“² Envio automÃ¡tico de mensagens")
 
         st.caption(
             "Esta rotina envia mensagens aos aniversariantes do dia e registra "
-            "o envio para não repetir a mensagem no mesmo dia."
+            "o envio para nÃ£o repetir a mensagem no mesmo dia."
         )
 
         if cfg_whats["auto_enviar"]:
-            st.success("Envio automático habilitado no st.secrets.")
+            st.success("Envio automÃ¡tico habilitado no st.secrets.")
         else:
-            st.info("Envio automático desabilitado no st.secrets.")
+            st.info("Envio automÃ¡tico desabilitado no st.secrets.")
 
         if _whatsapp_api_configurada():
             st.success("WhatsApp Cloud API configurada.")
         else:
             st.warning(
-                "WhatsApp Cloud API ainda não configurada. "
+                "WhatsApp Cloud API ainda nÃ£o configurada. "
                 "Os links manuais continuam funcionando normalmente."
             )
 
         st.markdown("#### Aniversariantes de hoje")
 
         if hoje_df.empty:
-            st.info("Não há aniversariantes hoje.")
+            st.info("NÃ£o hÃ¡ aniversariantes hoje.")
         else:
             tabela_hoje = hoje_df[["nome", "aniv_str", "idade", "telefone"]].copy()
             tabela_hoje.columns = ["Nome", "Data", "Idade", "Telefone"]
@@ -1000,7 +1000,7 @@ def render():
 
             with col1:
                 enviar_agora = st.button(
-                    "📤 Enviar agora",
+                    "ðŸ“¤ Enviar agora",
                     type="primary",
                     use_container_width=True,
                     disabled=not _whatsapp_api_configurada(),
@@ -1008,7 +1008,7 @@ def render():
 
             with col2:
                 reenviar_forcado = st.button(
-                    "🔁 Reenviar mesmo se já enviado",
+                    "ðŸ” Reenviar mesmo se jÃ¡ enviado",
                     use_container_width=True,
                     disabled=not _whatsapp_api_configurada(),
                 )
@@ -1037,13 +1037,13 @@ def render():
 
         st.divider()
 
-        with st.expander("Como configurar o envio automático"):
+        with st.expander("Como configurar o envio automÃ¡tico"):
             st.markdown("""
 Crie ou atualize o arquivo:
 
 `.streamlit/secrets.toml`
 
-Com o seguinte conteúdo:
+Com o seguinte conteÃºdo:
 
 ```toml
 [whatsapp]
@@ -1067,9 +1067,9 @@ template_name = "feliz_aniversario"
 language_code = "pt_BR"
 ```
 
-Observações:
+ObservaÃ§Ãµes:
 
-- `auto_enviar = true` ativa o envio automático quando o módulo for aberto.
+- `auto_enviar = true` ativa o envio automÃ¡tico quando o mÃ³dulo for aberto.
 - `modo_envio = "text"` envia mensagem livre, quando permitido pela janela de conversa.
 - `modo_envio = "template"` usa modelo aprovado previamente na Meta.
 - O controle interno evita reenviar a mesma mensagem para o mesmo aniversariante no mesmo dia.

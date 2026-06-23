@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import html
 import urllib.parse
 from collections import defaultdict

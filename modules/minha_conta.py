@@ -52,7 +52,7 @@ MODULOS_LIBERAVEIS = {
 SITUACOES_ACESSO = ["Ativo", "Inativo", "Bloqueado"]
 MENSAGEM_ESCALA_EBD_PADRAO = """Paz do Senhor, {nome}!
 
-Voce esta escalado(a) para servir na Escola Bíblica.
+Voce esta escalado(a) para servir na Escola BÃ­blica.
 Data: {data}
 Classe: {classe}
 Funcao: {funcao}
@@ -208,7 +208,7 @@ def render():
         st.error("Sessao invalida. Faca login novamente.")
         return
 
-    st.markdown("### 🏛️ Dados da igreja")
+    st.markdown("### ðŸ›ï¸ Dados da igreja")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -230,7 +230,7 @@ def render():
     )
 
     st.divider()
-    st.markdown("### ⚙️ Configuracoes da igreja")
+    st.markdown("### âš™ï¸ Configuracoes da igreja")
     st.caption("Personalize criterios usados nos relatorios, dashboard e comprovantes.")
 
     try:
@@ -283,7 +283,7 @@ Pedido:
     idx_atual = OPCOES_DIAS.index(dias_atual)
 
     with st.form("form_config_igreja"):
-        st.markdown("**🙏 Dizimista ativo**")
+        st.markdown("**ðŸ™ Dizimista ativo**")
         st.caption(
             "Um membro e considerado dizimista ativo se contribuiu com dizimo "
             "nos ultimos N dias."
@@ -327,13 +327,13 @@ Pedido:
             format_func=lambda meses: f"{meses} mes(es)",
         )
 
-        st.markdown("**Mensagem da escala da Escola Bíblica**")
+        st.markdown("**Mensagem da escala da Escola BÃ­blica**")
         st.caption(
             "Use as variaveis {nome}, {data}, {classe}, {funcao} e {tema}. "
             "Elas serao preenchidas automaticamente ao gerar o aviso pelo WhatsApp."
         )
         mensagem_ebd_nova = st.text_area(
-            "Modelo da mensagem WhatsApp para professores da Escola Bíblica",
+            "Modelo da mensagem WhatsApp para professores da Escola BÃ­blica",
             value=str(mensagem_ebd_atual or MENSAGEM_ESCALA_EBD_PADRAO),
             height=180,
         )
@@ -802,12 +802,12 @@ Pedido:
         st.info("Nenhum Secretario Geral cadastrado.")
 
     st.divider()
-    st.markdown("### Recepção")
+    st.markdown("### RecepÃ§Ã£o")
     st.caption(
-        "Diáconos, diaconisas, auxiliares e cooperadoras ativos são incluídos "
-        "automaticamente. Usuário automático: nome completo sem acentos, em minúsculas "
-        "e com espaços convertidos em ponto. Exemplo: joao.da.silva. "
-        "PIN inicial: últimos 4 dígitos do CPF. Esse perfil acessa somente visitantes."
+        "DiÃ¡conos, diaconisas, auxiliares e cooperadoras ativos sÃ£o incluÃ­dos "
+        "automaticamente. UsuÃ¡rio automÃ¡tico: nome completo sem acentos, em minÃºsculas "
+        "e com espaÃ§os convertidos em ponto. Exemplo: joao.da.silva. "
+        "PIN inicial: Ãºltimos 4 dÃ­gitos do CPF. Esse perfil acessa somente visitantes."
     )
     try:
         recepcao_usuarios = listar_recepcao_usuarios(slug)
@@ -816,7 +816,7 @@ Pedido:
         recepcao_usuarios = None
         st.error("Nao foi possivel carregar os usuarios da recepcao.")
 
-    with st.expander("Cadastrar usuario da recepção", expanded=False):
+    with st.expander("Cadastrar usuario da recepÃ§Ã£o", expanded=False):
         with st.form("form_recepcao_usuario"):
             id_cadastro = None
             nome = ""
@@ -844,7 +844,7 @@ Pedido:
             senha = c4.text_input("PIN de 4 digitos", type="password", max_chars=4, key="senha_recepcao")
             email = st.text_input("E-mail", help="Opcional.", key="email_recepcao")
             observacoes = st.text_area("Observacoes", key="obs_recepcao")
-            if st.form_submit_button("Salvar recepção", type="primary"):
+            if st.form_submit_button("Salvar recepÃ§Ã£o", type="primary"):
                 try:
                     if not id_cadastro:
                         st.error("Selecione um membro para criar o acesso.")
@@ -860,7 +860,7 @@ Pedido:
                             situacao="Ativo",
                             observacoes=observacoes,
                         )
-                        st.success("Usuário da Recepção cadastrado.")
+                        st.success("UsuÃ¡rio da RecepÃ§Ã£o cadastrado.")
                         st.rerun()
                 except Exception as exc:
                     st.error(str(exc))
@@ -876,7 +876,7 @@ Pedido:
             for _, row in recepcao_usuarios.iterrows()
         }
         selecionado = st.selectbox(
-            "Editar usuario da recepção",
+            "Editar usuario da recepÃ§Ã£o",
             ["Selecione"] + list(op_recepcao.keys()),
         )
         if selecionado != "Selecione":
@@ -901,7 +901,7 @@ Pedido:
                 telefone = st.text_input("Telefone", value=row.get("telefone", ""))
                 email = st.text_input("E-mail", value=row.get("email", ""))
                 observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
-                if st.form_submit_button("Atualizar recepção", type="primary"):
+                if st.form_submit_button("Atualizar recepÃ§Ã£o", type="primary"):
                     try:
                         salvar_recepcao_usuario(
                             slug,
@@ -915,16 +915,16 @@ Pedido:
                             observacoes=observacoes,
                             id_recepcao=id_recepcao,
                         )
-                        st.success("Usuário da Recepção atualizado.")
+                        st.success("UsuÃ¡rio da RecepÃ§Ã£o atualizado.")
                         st.rerun()
                     except Exception as exc:
                         st.error(str(exc))
-            if st.button("Inativar usuario da recepção", key=f"inativar_recepcao_{id_recepcao}"):
+            if st.button("Inativar usuario da recepÃ§Ã£o", key=f"inativar_recepcao_{id_recepcao}"):
                 inativar_recepcao_usuario(slug, id_recepcao)
-                st.success("Usuário da Recepção inativado.")
+                st.success("UsuÃ¡rio da RecepÃ§Ã£o inativado.")
                 st.rerun()
     elif recepcao_usuarios is not None:
-        st.info("Nenhum usuário da Recepção cadastrado.")
+        st.info("Nenhum usuÃ¡rio da RecepÃ§Ã£o cadastrado.")
 
     _render_controle_acessos(slug)
 

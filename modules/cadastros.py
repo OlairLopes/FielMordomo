@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 import html
 import streamlit as st
 import pandas as pd

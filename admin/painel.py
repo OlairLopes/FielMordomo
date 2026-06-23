@@ -1,4 +1,4 @@
-"""Painel do super admin — gerencia igrejas, planos, senhas, logos, backup e restauracao."""
+"""Painel do super admin â€” gerencia igrejas, planos, senhas, logos, backup e restauracao."""
 
 import streamlit as st
 import pandas as pd
@@ -23,12 +23,12 @@ PLANOS = ["basico", "profissional", "premium"]
 
 
 def render():
-    st.title("FielMordomo — Painel Admin")
+    st.title("FielMordomo â€” Painel Admin")
     st.caption("Gerenciamento de igrejas e planos")
 
     aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs([
         "Igrejas", "Nova igreja", "Logos", "Subcategorias", "Backup", "Configuracoes",
-        "📊 Dashboard Geral"
+        "ðŸ“Š Dashboard Geral"
     ])
 
     with aba1:
@@ -212,7 +212,7 @@ def _criar_igreja():
 def _gerenciar_logos():
     st.subheader("Logos do sistema")
 
-    # ═══ LOGO PRINCIPAL DO SISTEMA ═══════════════════════════════════════
+    # â•â•â• LOGO PRINCIPAL DO SISTEMA â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     st.markdown("#### Logo principal do FielMordomo")
     st.caption("Aparece na tela de login e como fallback geral.")
 
@@ -244,7 +244,7 @@ def _gerenciar_logos():
 
     st.divider()
 
-    # ═══ LOGO DA SIDEBAR (SISTEMA) ═══════════════════════════════════════
+    # â•â•â• LOGO DA SIDEBAR (SISTEMA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     st.markdown("#### Logo da sidebar (sistema)")
     st.caption(
         "Logo padrao da barra lateral de menus. "
@@ -296,7 +296,7 @@ def _gerenciar_logos():
     idx = opcoes_ig.index(ig_sel)
     slug = str(df.iloc[idx]["slug"])
 
-    # ═══ LOGO PRINCIPAL DA IGREJA ════════════════════════════════════════
+    # â•â•â• LOGO PRINCIPAL DA IGREJA â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     st.markdown("##### Logo principal da igreja")
     st.caption("Aparece na home grande e como fallback da sidebar.")
 
@@ -330,7 +330,7 @@ def _gerenciar_logos():
 
     st.divider()
 
-    # ═══ LOGO DA SIDEBAR (IGREJA) ════════════════════════════════════════
+    # â•â•â• LOGO DA SIDEBAR (IGREJA) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     st.markdown("##### Logo da sidebar da igreja")
     st.caption(
         "Logo exibido na barra lateral apos o login desta igreja. "
@@ -387,14 +387,14 @@ def _gerenciar_subcategorias():
                     f"<div style='background:#f8f9fa;padding:10px 14px;"
                     f"border-radius:8px;margin-bottom:6px;"
                     f"border-left:3px solid #C62828'>"
-                    f"📂 {sub}</div>",
+                    f"ðŸ“‚ {sub}</div>",
                     unsafe_allow_html=True,
                 )
 
             with col_btn:
                 st.markdown("<div style='margin-top:6px'></div>", unsafe_allow_html=True)
                 if st.button(
-                    "🗑️",
+                    "ðŸ—‘ï¸",
                     key=f"del_sub_{sub}",
                     help=f"Excluir '{sub}'",
                     use_container_width=True,
@@ -438,8 +438,8 @@ def _backup_admin():
 
     st.subheader("Backup e Restauracao")
 
-    # ═══ GERAR BACKUP COMPLETO ═══════════════════════════════════════════
-    st.markdown("#### 📦 Gerar backup completo do sistema")
+    # â•â•â• GERAR BACKUP COMPLETO â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    st.markdown("#### ðŸ“¦ Gerar backup completo do sistema")
     st.caption(
         "Inclui: bancos de todas as igrejas, configuracoes do sistema, "
         "subcategorias, logos e o banco master (senhas, planos, super admin)."
@@ -464,14 +464,14 @@ def _backup_admin():
         buf = io.BytesIO()
 
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            # ── 1. MASTER.DB (senhas, planos, configs, subcategorias) ────
+            # â”€â”€ 1. MASTER.DB (senhas, planos, configs, subcategorias) â”€â”€â”€â”€
             try:
                 if MASTER_DB.exists():
                     zf.writestr("master.db", MASTER_DB.read_bytes())
             except Exception:
                 pass
 
-            # ── 2. LOGOS (sistema, igrejas, sidebar) ─────────────────────
+            # â”€â”€ 2. LOGOS (sistema, igrejas, sidebar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if LOGOS_DIR.exists():
                 for logo_file in LOGOS_DIR.glob("*"):
                     if logo_file.is_file():
@@ -483,7 +483,7 @@ def _backup_admin():
                         except Exception:
                             pass
 
-            # ── 3. BANCOS TENANT + CSVs por igreja ───────────────────────
+            # â”€â”€ 3. BANCOS TENANT + CSVs por igreja â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             for _, row in df_igrejas.iterrows():
                 slug = str(row["slug"])
 
@@ -528,9 +528,9 @@ def _backup_admin():
 
     if "backup_admin_dados" in st.session_state:
         tam_mb = len(st.session_state["backup_admin_dados"]) / (1024 * 1024)
-        st.success(f"✅ Backup pronto ({tam_mb:.2f} MB)")
+        st.success(f"âœ… Backup pronto ({tam_mb:.2f} MB)")
         st.download_button(
-            "📥 Baixar backup completo",
+            "ðŸ“¥ Baixar backup completo",
             data=st.session_state["backup_admin_dados"],
             file_name=st.session_state["backup_admin_nome"],
             mime="application/zip",
@@ -541,8 +541,8 @@ def _backup_admin():
 
     st.divider()
 
-    # ═══ RESTAURAR BACKUP ════════════════════════════════════════════════
-    st.markdown("#### ♻️ Restaurar backup completo")
+    # â•â•â• RESTAURAR BACKUP â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    st.markdown("#### â™»ï¸ Restaurar backup completo")
     st.caption(
         "Envie o arquivo ZIP de backup. O sistema restaurara tudo: "
         "tenants, master.db, logos e configuracoes. "
@@ -550,7 +550,7 @@ def _backup_admin():
     )
 
     st.warning(
-        "⚠️ **Atencao:** esta operacao sobrescreve dados atuais do sistema "
+        "âš ï¸ **Atencao:** esta operacao sobrescreve dados atuais do sistema "
         "(igrejas, senhas, planos, configuracoes, logos e subcategorias). "
         "Bancos atuais sao salvos automaticamente em `backups/` no servidor."
     )
@@ -568,14 +568,14 @@ def _backup_admin():
     if arquivo_zip:
         tam_mb_up = arquivo_zip.size / (1024 * 1024)
         st.info(
-            f"📦 Arquivo recebido: **{arquivo_zip.name}** ({tam_mb_up:.2f} MB)"
+            f"ðŸ“¦ Arquivo recebido: **{arquivo_zip.name}** ({tam_mb_up:.2f} MB)"
         )
 
         col_r1, col_r2 = st.columns([1, 3])
 
         with col_r1:
             confirmar_restauracao = st.button(
-                "✅ Restaurar agora",
+                "âœ… Restaurar agora",
                 type="primary",
                 key="btn_confirmar_restauracao",
                 use_container_width=True,
@@ -583,7 +583,7 @@ def _backup_admin():
 
         with col_r2:
             if st.button(
-                "❌ Cancelar",
+                "âŒ Cancelar",
                 key="btn_cancelar_restauracao",
                 use_container_width=True,
             ):
@@ -602,26 +602,26 @@ def _backup_admin():
             )
 
             if total_ok > 0:
-                st.success(f"✅ Restauracao concluida — {total_ok} item(ns) restaurado(s).")
+                st.success(f"âœ… Restauracao concluida â€” {total_ok} item(ns) restaurado(s).")
 
             # Master.db
             if resultado["master_restaurado"]:
                 st.markdown(
-                    "✅ **Banco master.db restaurado** — "
+                    "âœ… **Banco master.db restaurado** â€” "
                     "senhas, planos, subcategorias e configuracoes do sistema."
                 )
 
             # Logos
             if resultado["logos_restaurados"] > 0:
                 st.markdown(
-                    f"✅ **{resultado['logos_restaurados']} logo(s) restaurado(s)** — "
+                    f"âœ… **{resultado['logos_restaurados']} logo(s) restaurado(s)** â€” "
                     "sistema, igrejas e sidebar."
                 )
 
             # Tenants
             if resultado["sucesso_tenants"]:
                 with st.expander(
-                    f"✅ {len(resultado['sucesso_tenants'])} igreja(s) restaurada(s) — ver detalhes",
+                    f"âœ… {len(resultado['sucesso_tenants'])} igreja(s) restaurada(s) â€” ver detalhes",
                     expanded=False,
                 ):
                     for slug_r in resultado["sucesso_tenants"]:
@@ -630,7 +630,7 @@ def _backup_admin():
             # Igrejas recriadas (placeholder)
             if resultado["igrejas_recriadas"]:
                 st.info(
-                    f"ℹ️ **{len(resultado['igrejas_recriadas'])} igreja(s) recriada(s) no sistema:**"
+                    f"â„¹ï¸ **{len(resultado['igrejas_recriadas'])} igreja(s) recriada(s) no sistema:**"
                 )
                 with st.expander("Ver detalhes", expanded=False):
                     st.caption(
@@ -639,16 +639,16 @@ def _backup_admin():
                         "**fielmordomo2024**. Recomenda-se redefinir senha e plano."
                     )
                     for slug_r in resultado["igrejas_recriadas"]:
-                        st.markdown(f"- 🆕 `{slug_r}`")
+                        st.markdown(f"- ðŸ†• `{slug_r}`")
 
             # Erros
             if resultado["erros"]:
                 st.error(
-                    f"⚠️ **{len(resultado['erros'])} erro(s) durante a restauracao:**"
+                    f"âš ï¸ **{len(resultado['erros'])} erro(s) durante a restauracao:**"
                 )
                 with st.expander("Ver erros", expanded=True):
                     for erro in resultado["erros"]:
-                        st.markdown(f"- ❌ {erro}")
+                        st.markdown(f"- âŒ {erro}")
 
             if total_ok == 0 and not resultado["erros"]:
                 st.warning("Nenhum item restaurado. Verifique o arquivo ZIP.")

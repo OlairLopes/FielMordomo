@@ -1,4 +1,4 @@
-﻿"""
+"""
 Autenticação do FielMordomo.
 """
 

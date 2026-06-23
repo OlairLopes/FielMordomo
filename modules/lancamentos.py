@@ -180,7 +180,7 @@ def _ano_periodo_pdf_pix(texto):
 
 def _extrair_nome_pdf_pix(trecho):
     antes_valor = re.split(r"\s+R\$\s*[\d.]+,\d{2}", trecho, maxsplit=1)[0]
-    antes_valor = re.sub(r"\s+[•\u2022*]{3}\.\d{3}\.\d{3}-[•\u2022*]{2}.*$", "", antes_valor)
+    antes_valor = re.sub(r"\s+[â€¢\u2022*]{3}\.\d{3}\.\d{3}-[â€¢\u2022*]{2}.*$", "", antes_valor)
     antes_valor = re.sub(r"\s+\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}.*$", "", antes_valor)
     antes_valor = re.sub(r"^\d{2}\.\d{3}\.\d{3}\s+", "", antes_valor)
     return re.sub(r"\s+", " ", antes_valor).strip()
@@ -203,10 +203,10 @@ def _extrair_pdf_pix(arquivo):
     registros = []
     for linha in texto.splitlines():
         linha = re.sub(r"\s+", " ", linha).strip()
-        if not re.match(r"^\d{2}/[A-Za-zÀ-ÿ]{3}\b", linha):
+        if not re.match(r"^\d{2}/[A-Za-zÃ€-Ã¿]{3}\b", linha):
             continue
 
-        data_match = re.match(r"^(\d{2})/([A-Za-zÀ-ÿ]{3})\s+", linha)
+        data_match = re.match(r"^(\d{2})/([A-Za-zÃ€-Ã¿]{3})\s+", linha)
         tx_match = re.search(r"\b(E[A-Za-z0-9]{20,})\b\s+(.+)$", linha)
         valores = re.findall(r"R\$\s*([\d.]+,\d{2})", linha)
         if not data_match or not tx_match or len(valores) < 2:
@@ -1030,7 +1030,7 @@ def render():
                 )
             else:
                 st.caption(
-                    "⚠️ Nenhuma subcategoria de despesa cadastrada. "
+                    "âš ï¸ Nenhuma subcategoria de despesa cadastrada. "
                     "Peca ao administrador para adicionar."
                 )
 
@@ -1339,7 +1339,7 @@ def render():
                             rotulo_item += f" / {item['subcategoria']}"
                         st.write(f"**{rotulo_item}**")
                     with col2:
-                        st.write(item["descricao"] or "—")
+                        st.write(item["descricao"] or "â€”")
                     with col3:
                         st.write(formatar_moeda(item["valor"]))
                     with col4:
@@ -1431,7 +1431,7 @@ def render():
                     st.rerun()
     else:
         p_info_l = obter_plano(plano_igreja)
-        with st.expander("🔒 Lancamento em lote (apenas Profissional e Premium)", expanded=False):
+        with st.expander("ðŸ”’ Lancamento em lote (apenas Profissional e Premium)", expanded=False):
             st.warning(
                 f"O lancamento em lote esta disponivel apenas nos planos "
                 f"**Profissional** e **Premium**. Seu plano atual: **{p_info_l['nome']}**."

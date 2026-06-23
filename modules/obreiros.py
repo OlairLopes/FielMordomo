@@ -326,7 +326,7 @@ def _render_chamada(slug):
     ofertas = c2.number_input("Ofertas", min_value=0.0, step=1.0, value=ofertas_atual, key=f"obreiros_ofertas_{chave_data}")
     observacoes = st.text_area("Observacoes", value=observacoes_atual, key=f"obreiros_obs_{chave_data}")
     arquivo_ata = st.file_uploader(
-        "Ata da reunião",
+        "Ata da reuniÃ£o",
         type=["pdf", "doc", "docx", "png", "jpg", "jpeg"],
         help="Anexe a ata em PDF, Word ou imagem. Se a chamada ja tiver uma ata salva, ela sera mantida quando nenhum novo arquivo for enviado.",
         key=f"obreiros_ata_{chave_chamada}",
@@ -412,7 +412,7 @@ def _render_relatorios(slug):
                 ata = obter_obreiros_ata(slug, opcoes_ata[escolha_ata])
                 if ata:
                     st.download_button(
-                        "Baixar ata da reunião",
+                        "Baixar ata da reuniÃ£o",
                         data=ata["bytes"],
                         file_name=ata["nome"],
                         mime=ata["mime"],
@@ -429,7 +429,7 @@ def _render_relatorios(slug):
 
 
 def render():
-    st.subheader("Reunião de Obreiros")
+    st.subheader("ReuniÃ£o de Obreiros")
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessao invalida. Faca login novamente.")

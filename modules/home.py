@@ -49,7 +49,7 @@ def render():
         igreja = {}
     nome_igreja = _html(igreja.get("nome", "FielMordomo"))
 
-    # ── Logo grande centralizado ──────────────────────────────────────────
+    # â”€â”€ Logo grande centralizado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     logo_r = obter_logo_igreja(slug) or obter_logo_sistema()
 
     if logo_r:
@@ -92,7 +92,7 @@ def render():
 
     st.divider()
 
-    # ── KPIs do mes corrente ──────────────────────────────────────────────
+    # â”€â”€ KPIs do mes corrente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     df_lanc = carregar_lancamentos(slug)
     df_cad  = carregar_cadastros(slug)
 
@@ -155,7 +155,7 @@ def render():
 
     st.markdown(f"""
     <h4 style="color:#0F6E56;margin:18px 0 12px 0">
-        📊 Resumo de {mes_ano}
+        ðŸ“Š Resumo de {mes_ano}
     </h4>
     """, unsafe_allow_html=True)
 
@@ -213,7 +213,7 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Card do plano ─────────────────────────────────────────────────────
+    # â”€â”€ Card do plano â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     cor_plano = str(p_info.get("cor", "#0F6E56"))
     if not COR_HEX_RE.fullmatch(cor_plano):
         cor_plano = "#0F6E56"
@@ -235,10 +235,10 @@ def render():
                     {nome_plano}
                 </div>
                 <div style="font-size:0.85rem;opacity:0.9;margin-top:4px">
-                    Limite: {lim_txt} membros • {preco_plano}
+                    Limite: {lim_txt} membros â€¢ {preco_plano}
                 </div>
             </div>
-            <div style="font-size:2.6rem;opacity:0.5">⛪</div>
+            <div style="font-size:2.6rem;opacity:0.5">â›ª</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
