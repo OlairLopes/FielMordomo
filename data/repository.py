@@ -1,4 +1,4 @@
-﻿"""
+﻿﻿"""
 Camada de persistencia multi-tenant.
 """
 
@@ -4321,6 +4321,221 @@ def excluir_visitante_culto(slug, id_visitante):
             (int(id_visitante),),
         )
         return True
+
+
+def _garantir_tabelas_geo_frequencia(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS geo_eventos (
+            id_evento          INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome               TEXT NOT NULL,
+            data               TEXT NOT NULL,
+            latitude           REAL NOT NULL DEFAULT 0,
+            longitude          REAL NOT NULL DEFAULT 0,
+            raio_metros        INTEGER NOT NULL DEFAULT 30,
+            captura_habilitada INTEGER NOT NULL DEFAULT 0,
+            ativo              INTEGER NOT NULL DEFAULT 1,
+            mensagem_presentes TEXT DEFAULT '',
+            mensagem_ausentes  TEXT DEFAULT '',
+            observacoes        TEXT DEFAULT '',
+            criado_em          TEXT DEFAULT (datetime('now')),
+            atualizado_em      TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS geo_presencas (
+            id_presenca   INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_evento     INTEGER NOT NULL REFERENCES geo_eventos(id_evento) ON DELETE CASCADE,
+            id_cadastro   INTEGER NOT NULL REFERENCES cadastros(id_cadastro),
+            nome          TEXT NOT NULL,
+            telefone      TEXT DEFAULT '',
+            latitude      REAL NOT NULL DEFAULT 0,
+            longitude     REAL NOT NULL DEFAULT 0,
+            distancia_m   REAL NOT NULL DEFAULT 0,
+            dentro_raio   INTEGER NOT NULL DEFAULT 0,
+            presente      INTEGER NOT NULL DEFAULT 0,
+            status        TEXT DEFAULT '',
+            registrado_em TEXT DEFAULT (datetime('now')),
+            UNIQUE(id_evento, id_cadastro)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_geo_eventos_data
+            ON geo_eventos(data);
+        CREATE INDEX IF NOT EXISTS idx_geo_presencas_evento
+            ON geo_presencas(id_evento);
+    """)
+
+
+def salvar_geo_evento(
+    slug,
+    nome,
+    data,
+    latitude,
+    longitude,
+    raio_metros=30,
+    captura_habilitada=False,
+    ativo=True,
+    mensagem_presentes="",
+    mensagem_ausentes="",
+    observacoes="",
+    id_evento=None,
+):
+    nome = sanitizar(nome).strip()
+    data = str(data or "").strip()
+    if not nome:
+        raise ValueError("Informe o nome do evento.")
+    if not data:
+        raise ValueError("Informe a data do evento.")
+
+    latitude = float(latitude or 0)
+    longitude = float(longitude or 0)
+    raio_metros = max(1, int(raio_metros or 30))
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_geo_frequencia(conn)
+        dados = (
+            nome,
+            data,
+            latitude,
+            longitude,
+            raio_metros,
+            int(bool(captura_habilitada)),
+            int(bool(ativo)),
+            sanitizar(mensagem_presentes),
+            sanitizar(mensagem_ausentes),
+            sanitizar(observacoes),
+        )
+        if id_evento:
+            conn.execute(
+                """UPDATE geo_eventos
+                   SET nome=?, data=?, latitude=?, longitude=?, raio_metros=?,
+                       captura_habilitada=?, ativo=?, mensagem_presentes=?,
+                       mensagem_ausentes=?, observacoes=?,
+                       atualizado_em=datetime('now')
+                   WHERE id_evento=?""",
+                dados + (int(id_evento),),
+            )
+            return int(id_evento)
+
+        cur = conn.execute(
+            """INSERT INTO geo_eventos
+               (nome, data, latitude, longitude, raio_metros,
+                captura_habilitada, ativo, mensagem_presentes,
+                mensagem_ausentes, observacoes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return cur.lastrowid
+
+
+def listar_geo_eventos(slug, incluir_inativos=True):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_geo_frequencia(conn)
+        filtro = "" if incluir_inativos else "WHERE ativo=1"
+        return _read_sql_query_formatado(
+            f"""SELECT id_evento, nome, data, latitude, longitude, raio_metros,
+                       captura_habilitada, ativo, mensagem_presentes,
+                       mensagem_ausentes, observacoes, criado_em, atualizado_em
+                FROM geo_eventos
+                {filtro}
+                ORDER BY data DESC, id_evento DESC""",
+            conn,
+        )
+
+
+def obter_geo_evento(slug, id_evento):
+    try:
+        id_evento = int(id_evento)
+    except (TypeError, ValueError):
+        return None
+
+    eventos = listar_geo_eventos(slug, incluir_inativos=True)
+    if eventos.empty:
+        return None
+
+    filtro = eventos[eventos["id_evento"].astype(int) == id_evento]
+    if filtro.empty:
+        return None
+    return filtro.iloc[0].to_dict()
+
+
+def registrar_geo_presenca(
+    slug,
+    id_evento,
+    id_cadastro,
+    latitude,
+    longitude,
+    distancia_m,
+    dentro_raio,
+    presente,
+    status="",
+):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_geo_frequencia(conn)
+        cadastro = conn.execute(
+            """SELECT id_cadastro, nome, telefone
+               FROM cadastros
+               WHERE id_cadastro=?""",
+            (int(id_cadastro),),
+        ).fetchone()
+        if not cadastro:
+            raise ValueError("Membro nao encontrado no cadastro.")
+
+        dados = (
+            int(id_evento),
+            int(id_cadastro),
+            sanitizar(cadastro["nome"]),
+            formatar_telefone(cadastro["telefone"]),
+            float(latitude or 0),
+            float(longitude or 0),
+            float(distancia_m or 0),
+            int(bool(dentro_raio)),
+            int(bool(presente)),
+            sanitizar(status),
+        )
+        conn.execute(
+            """INSERT INTO geo_presencas
+               (id_evento, id_cadastro, nome, telefone, latitude, longitude,
+                distancia_m, dentro_raio, presente, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id_evento, id_cadastro) DO UPDATE SET
+                   nome=excluded.nome,
+                   telefone=excluded.telefone,
+                   latitude=excluded.latitude,
+                   longitude=excluded.longitude,
+                   distancia_m=excluded.distancia_m,
+                   dentro_raio=excluded.dentro_raio,
+                   presente=excluded.presente,
+                   status=excluded.status,
+                   registrado_em=datetime('now')""",
+            dados,
+        )
+        return True
+
+
+def listar_geo_presencas(slug, id_evento):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_geo_frequencia(conn)
+        return _read_sql_query_formatado(
+            """SELECT id_presenca, id_evento, id_cadastro, nome, telefone,
+                      latitude, longitude, distancia_m, dentro_raio,
+                      presente, status, registrado_em
+               FROM geo_presencas
+               WHERE id_evento=?
+               ORDER BY nome""",
+            conn,
+            params=(int(id_evento),),
+        )
 
 
 def salvar_horario_visita_pastoral(

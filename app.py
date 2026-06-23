@@ -1,4 +1,4 @@
-﻿"""
+﻿﻿"""
 FielMordomo - ponto de entrada da aplicação Streamlit.
 
 Mantém as rotas públicas separadas da área autenticada e carrega os módulos
@@ -45,6 +45,7 @@ PAGINAS_IGREJA = {
     "lancamentos": ("Lançamentos", "modules.lancamentos"),
     "relatorios": ("Relatórios", "modules.relatorios"),
     "dashboard": ("Dashboard", "modules.dashboard"),
+    "geo_frequencia": ("Monitoramento Geo", "modules.geo_frequencia"),
     "ebd": ("Escola Bíblica", "modules.ebd"),
     "gfc": ("GFC", "modules.gfc"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
