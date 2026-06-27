@@ -1,3 +1,25 @@
+"""
+Monitoramento por Localizacao - controle de presenca via geolocalizacao.
+
+Este modulo permite:
+- Cadastrar eventos com coordenadas geograficas e raio permitido
+- Capturar a localizacao do dispositivo (GPS) via streamlit-geolocation
+- Registrar presencas com calculo de distancia ate o ponto do evento
+- Enviar mensagens WhatsApp para presentes/ausentes
+- Check-in individual ou em massa
+
+REQUISITOS:
+    requirements.txt deve conter:
+        streamlit-geolocation>=0.0.10
+
+CORRECOES vs versao anterior:
+1. Substituido components.html + JS por streamlit-geolocation (mais robusto)
+2. Eliminado conflito de keys widget vs session_state
+3. Aplicado padrao de "version counter" para recriar widgets apos captura
+4. Validacoes adicionais (coordenadas 0,0 nao permitidas)
+5. Tratamento de erros melhorado em chamadas HTTP externas
+"""
+
 import datetime
 import html
 import math
@@ -8,7 +30,14 @@ import urllib.request
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+
+# Tentativa de importar a biblioteca de geolocalizacao
+try:
+    from streamlit_geolocation import streamlit_geolocation
+    GEO_LIB_OK = True
+except ImportError:
+    GEO_LIB_OK = False
+    streamlit_geolocation = None
 
 from data.repository import (
     carregar_cadastros,
@@ -23,11 +52,25 @@ from data.repository import (
 from utils.helpers import gerar_csv, slug_da_sessao
 
 
-TIPOS_SITUACAO = {
-    True: "Presente",
-    False: "Ausente",
-}
+# ─── Constantes ────────────────────────────────────────────────────────
+TIPOS_SITUACAO = {True: "Presente", False: "Ausente"}
+DEFAULT_RAIO_METROS = 30
+USER_AGENT = "FielMordomo/1.0 contato@fielmordomo.com.br"
+TIMEOUT_HTTP = 12
 
+MENSAGEM_PADRAO_PRESENTES = (
+    "Paz do Senhor, {nome}! Sua presenca foi registrada em {evento}, "
+    "no dia {data}. Deus abencoe."
+)
+MENSAGEM_PADRAO_AUSENTES = (
+    "Paz do Senhor, {nome}! Sentimos sua falta em {evento}, "
+    "no dia {data}. Deus abencoe."
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers de telefone e WhatsApp
+# ═══════════════════════════════════════════════════════════════════════
 
 def _limpar_tel(tel):
     return "".join(c for c in str(tel if tel is not None else "") if c.isdigit())
@@ -52,22 +95,6 @@ def _link_whatsapp(tel, mensagem):
     if not tel_limpo:
         return ""
     return f"https://wa.me/{tel_limpo}?text={urllib.parse.quote(mensagem)}"
-
-
-def _botao_abrir_google_maps(url, texto="Abrir no Google Maps"):
-    if not str(url or "").strip():
-        return
-
-    st.markdown(
-        (
-            f'<a href="{html.escape(str(url), quote=True)}" target="_blank" '
-            'style="display:inline-block;background:#0F6E56;color:white;'
-            'padding:9px 16px;border-radius:8px;text-decoration:none;'
-            'font-size:0.9rem;font-weight:700;margin:4px 0 10px 0">'
-            f'{html.escape(str(texto), quote=True)}</a>'
-        ),
-        unsafe_allow_html=True,
-    )
 
 
 def _config_whatsapp():
@@ -119,56 +146,54 @@ def _enviar_whatsapp_texto_api(telefone, mensagem):
 
     try:
         with urllib.request.urlopen(req, timeout=25) as resp:
-            if 200 <= resp.status < 300:
+            status = resp.status
+            corpo = resp.read().decode("utf-8", errors="ignore")
+            if 200 <= status < 300:
                 return True, "Mensagem enviada."
-            return False, f"Erro {resp.status}: {resp.read().decode('utf-8', errors='ignore')}"
+            return False, f"Erro HTTP {status}: {corpo[:200]}"
+    except urllib.error.HTTPError as exc:
+        try:
+            corpo_err = exc.read().decode("utf-8", errors="ignore")
+        except Exception:
+            corpo_err = ""
+        return False, f"Erro HTTP {exc.code}: {corpo_err[:200]}"
     except Exception as exc:
         return False, f"Falha no envio: {exc}"
 
 
-def _html_captura_local_evento():
-    components.html(
-        """
-        <div style="font-family:Arial,sans-serif">
-          <button onclick="capturarLocalEvento()" style="
-            background:#334155;color:white;border:0;border-radius:8px;
-            padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer">
-            Usar minha localiza\xe7\xe3o atual
-          </button>
-          <div id="geo_evento_msg" style="margin-top:8px;color:#475569;font-size:13px"></div>
-        </div>
-        <script>
-        function capturarLocalEvento() {
-          const msg = document.getElementById("geo_evento_msg");
-          if (!navigator.geolocation) {
-            msg.innerText = "Este navegador n\xe3o oferece geolocaliza\xe7\xe3o.";
-            return;
-          }
-          msg.innerText = "Solicitando permiss\xe3o de localiza\xe7\xe3o...";
-          navigator.geolocation.getCurrentPosition(
-            function(pos) {
-              const params = new URLSearchParams(window.parent.location.search);
-              params.set("geo_evento_lat", pos.coords.latitude.toFixed(8));
-              params.set("geo_evento_lon", pos.coords.longitude.toFixed(8));
-              params.set("geo_evento_ts", Date.now().toString());
-              window.parent.location.search = params.toString();
-            },
-            function(err) {
-              msg.innerText = "N\xe3o foi poss\xedvel capturar a localiza\xe7\xe3o: " + err.message;
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-          );
-        }
-        </script>
-        """,
-        height=84,
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers de geolocalizacao (Google Maps, Nominatim)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _botao_abrir_google_maps(url, texto="Abrir no Google Maps"):
+    if not str(url or "").strip():
+        return
+
+    st.markdown(
+        (
+            f'<a href="{html.escape(str(url), quote=True)}" target="_blank" '
+            'style="display:inline-block;background:#0F6E56;color:white;'
+            'padding:9px 16px;border-radius:8px;text-decoration:none;'
+            'font-size:0.9rem;font-weight:700;margin:4px 0 10px 0">'
+            f'{html.escape(str(texto), quote=True)}</a>'
+        ),
+        unsafe_allow_html=True,
     )
 
 
 def _extrair_coordenadas_google_maps(texto):
-    texto = urllib.parse.unquote(str(texto or "").strip())
-    if not texto:
+    texto_original = str(texto or "").strip()
+    if not texto_original:
         return None
+
+    # Tenta no formato original e tambem decoded
+    candidatos = [texto_original]
+    try:
+        decoded = urllib.parse.unquote(texto_original)
+        if decoded != texto_original:
+            candidatos.append(decoded)
+    except Exception:
+        pass
 
     padroes = [
         r"@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)",
@@ -177,15 +202,18 @@ def _extrair_coordenadas_google_maps(texto):
         r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$",
     ]
 
-    for padrao in padroes:
-        match = re.search(padrao, texto)
-        if not match:
-            continue
-
-        lat = float(match.group(1))
-        lon = float(match.group(2))
-        if -90 <= lat <= 90 and -180 <= lon <= 180:
-            return lat, lon
+    for cand in candidatos:
+        for padrao in padroes:
+            match = re.search(padrao, cand)
+            if not match:
+                continue
+            try:
+                lat = float(match.group(1))
+                lon = float(match.group(2))
+            except (ValueError, IndexError):
+                continue
+            if -90 <= lat <= 90 and -180 <= lon <= 180:
+                return lat, lon
 
     return None
 
@@ -227,6 +255,7 @@ def _obter_coordenadas_de_texto_ou_link(texto):
 
 
 def _buscar_coordenadas_por_endereco(endereco):
+    """Geocoding via Nominatim (OpenStreetMap). Retorna (lat, lon, display) ou None."""
     endereco = str(endereco or "").strip()
     if not endereco:
         return None
@@ -241,22 +270,27 @@ def _buscar_coordenadas_por_endereco(endereco):
         })
     )
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "FielMordomo/1.0 contato@fielmordomo.com.br"},
-        )
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_HTTP) as resp:
             dados = json.loads(resp.read().decode("utf-8"))
+
         if not dados:
             return None
+
         item = dados[0]
+        lat_str = item.get("lat")
+        lon_str = item.get("lon")
+        if lat_str is None or lon_str is None:
+            return None
+
         display = str(item.get("display_name", endereco))
-        return float(item["lat"]), float(item["lon"]), display
+        return float(lat_str), float(lon_str), display
     except Exception:
         return None
 
 
 def _buscar_endereco_por_coordenadas(latitude, longitude):
+    """Reverse geocoding via Nominatim. Retorna string vazia em caso de erro."""
     try:
         lat = float(latitude)
         lon = float(longitude)
@@ -277,11 +311,8 @@ def _buscar_endereco_por_coordenadas(latitude, longitude):
         })
     )
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "FielMordomo/1.0 contato@fielmordomo.com.br"},
-        )
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_HTTP) as resp:
             dados = json.loads(resp.read().decode("utf-8"))
         return str(dados.get("display_name", "") or "")
     except Exception:
@@ -289,19 +320,74 @@ def _buscar_endereco_por_coordenadas(latitude, longitude):
 
 
 def _distancia_metros(lat1, lon1, lat2, lon2):
-    raio_terra = 6371000
-    lat1_rad = math.radians(float(lat1))
-    lat2_rad = math.radians(float(lat2))
-    delta_lat = math.radians(float(lat2) - float(lat1))
-    delta_lon = math.radians(float(lon2) - float(lon1))
+    """Calcula distancia em metros usando formula de Haversine."""
+    try:
+        raio_terra = 6371000
+        lat1_rad = math.radians(float(lat1))
+        lat2_rad = math.radians(float(lat2))
+        delta_lat = math.radians(float(lat2) - float(lat1))
+        delta_lon = math.radians(float(lon2) - float(lon1))
 
-    a = (
-        math.sin(delta_lat / 2) ** 2
-        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
-    )
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return raio_terra * c
+        a = (
+            math.sin(delta_lat / 2) ** 2
+            + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+        )
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return raio_terra * c
+    except (TypeError, ValueError):
+        return float("inf")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers de captura via streamlit-geolocation
+# ═══════════════════════════════════════════════════════════════════════
+
+def _verificar_lib_geo():
+    """Avisa o usuario se a biblioteca nao esta instalada."""
+    if not GEO_LIB_OK:
+        st.error(
+            "⚠️ A biblioteca **streamlit-geolocation** nao esta instalada. "
+            "Adicione `streamlit-geolocation>=0.0.10` ao seu `requirements.txt` "
+            "e faca o redeploy."
+        )
+        return False
+    return True
+
+
+def _captura_geolocalizacao(key_prefix="captura"):
+    """
+    Captura a localizacao do dispositivo via streamlit-geolocation.
+
+    Retorna (lat, lon) ou None se ainda nao capturou.
+    O componente exibe um botao com icone de GPS automaticamente.
+    """
+    if not _verificar_lib_geo():
+        return None
+
+    try:
+        loc = streamlit_geolocation()
+    except Exception as exc:
+        st.error(f"Erro ao capturar localizacao: {exc}")
+        return None
+
+    if not loc:
+        return None
+
+    lat = loc.get("latitude")
+    lon = loc.get("longitude")
+
+    if lat is None or lon is None:
+        return None
+
+    try:
+        return float(lat), float(lon)
+    except (TypeError, ValueError):
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers de query params (para link de check-in via WhatsApp)
+# ═══════════════════════════════════════════════════════════════════════
 
 def _valor_query(chave, padrao=""):
     valor = st.query_params.get(chave, padrao)
@@ -311,10 +397,14 @@ def _valor_query(chave, padrao=""):
 
 
 def _limpar_query_geo():
-    for chave in ["geo_id_evento", "geo_id_cadastro", "geo_lat", "geo_lon", "geo_ts"]:
+    for chave in ["geo_id_evento", "geo_id_cadastro"]:
         if chave in st.query_params:
             del st.query_params[chave]
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers de dados (membros, eventos, frequencia)
+# ═══════════════════════════════════════════════════════════════════════
 
 def _membros_ativos(slug):
     df = carregar_cadastros(slug)
@@ -341,145 +431,13 @@ def _rotulo_evento(row):
     data_fmt = pd.to_datetime(row.get("data"), errors="coerce")
     data_txt = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else str(row.get("data", ""))
     status = "habilitado" if int(row.get("captura_habilitada", 0) or 0) else "desabilitado"
-    return f'{int(row["id_evento"])} - {data_txt} - {row["nome"]} ({status})'
+    ativo = "" if int(row.get("ativo", 1) or 1) else " - INATIVO"
+    return f'{int(row["id_evento"])} - {data_txt} - {row["nome"]} ({status}){ativo}'
 
 
 def _rotulo_membro(row):
     tel = row.get("telefone", "")
     return f'{int(row["id_cadastro"])} - {row["nome"]}' + (f" - {tel}" if tel else "")
-
-
-def _html_captura_localizacao(id_evento, id_cadastro):
-    components.html(
-        f"""
-        <div style="font-family:Arial,sans-serif">
-          <button onclick="capturarGeo()" style="
-            background:#0F6E56;color:white;border:0;border-radius:8px;
-            padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer">
-            Capturar minha localiza\xe7\xe3o
-          </button>
-          <div id="geo_msg" style="margin-top:8px;color:#475569;font-size:13px"></div>
-        </div>
-        <script>
-        function capturarGeo() {{
-          const msg = document.getElementById("geo_msg");
-          if (!navigator.geolocation) {{
-            msg.innerText = "Este navegador n\xe3o oferece geolocaliza\xe7\xe3o.";
-            return;
-          }}
-          msg.innerText = "Solicitando permiss\xe3o de localiza\xe7\xe3o...";
-          navigator.geolocation.getCurrentPosition(
-            function(pos) {{
-              const params = new URLSearchParams(window.parent.location.search);
-              params.set("geo_id_evento", "{int(id_evento)}");
-              params.set("geo_id_cadastro", "{int(id_cadastro)}");
-              params.set("geo_lat", pos.coords.latitude.toFixed(8));
-              params.set("geo_lon", pos.coords.longitude.toFixed(8));
-              params.set("geo_ts", Date.now().toString());
-              window.parent.location.search = params.toString();
-            }},
-            function(err) {{
-              msg.innerText = "N\xe3o foi poss\xedvel capturar a localiza\xe7\xe3o: " + err.message;
-            }},
-            {{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }}
-          );
-        }}
-        </script>
-        """,
-        height=82,
-    )
-
-
-def _html_captura_localizacao_massa(id_evento):
-    components.html(
-        f"""
-        <div style="font-family:Arial,sans-serif">
-          <button onclick="capturarGeoMassa()" style="
-            background:#0F6E56;color:white;border:0;border-radius:8px;
-            padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer">
-            Capturar local do evento para check-in em massa
-          </button>
-          <div id="geo_massa_msg" style="margin-top:8px;color:#475569;font-size:13px"></div>
-        </div>
-        <script>
-        function capturarGeoMassa() {{
-          const msg = document.getElementById("geo_massa_msg");
-          if (!navigator.geolocation) {{
-            msg.innerText = "Este navegador n\xe3o oferece geolocaliza\xe7\xe3o.";
-            return;
-          }}
-          msg.innerText = "Solicitando permiss\xe3o de localiza\xe7\xe3o...";
-          navigator.geolocation.getCurrentPosition(
-            function(pos) {{
-              const params = new URLSearchParams(window.parent.location.search);
-              params.set("geo_massa_id_evento", "{int(id_evento)}");
-              params.set("geo_massa_lat", pos.coords.latitude.toFixed(8));
-              params.set("geo_massa_lon", pos.coords.longitude.toFixed(8));
-              params.set("geo_massa_ts", Date.now().toString());
-              window.parent.location.search = params.toString();
-            }},
-            function(err) {{
-              msg.innerText = "N\xe3o foi poss\xedvel capturar a localiza\xe7\xe3o: " + err.message;
-            }},
-            {{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }}
-          );
-        }}
-        </script>
-        """,
-        height=84,
-    )
-
-
-def _processar_captura_query(slug):
-    id_evento = _valor_query("geo_id_evento")
-    id_cadastro = _valor_query("geo_id_cadastro")
-    lat = _valor_query("geo_lat")
-    lon = _valor_query("geo_lon")
-
-    if not (id_evento and id_cadastro and lat and lon):
-        return
-
-    evento = obter_geo_evento(slug, id_evento)
-    if not evento:
-        st.error("Evento de localiza\xe7\xe3o n\xe3o encontrado.")
-        _limpar_query_geo()
-        return
-
-    distancia = _distancia_metros(evento["latitude"], evento["longitude"], lat, lon)
-    dentro = distancia <= float(evento.get("raio_metros", 30) or 30)
-    habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
-    ativo = bool(int(evento.get("ativo", 0) or 0))
-    presente = dentro and habilitado and ativo
-
-    if not ativo:
-        status = "Evento inativo"
-    elif not habilitado:
-        status = "Captura desabilitada"
-    elif dentro:
-        status = "Presente por localiza\xe7\xe3o"
-    else:
-        status = "Fora do raio configurado"
-
-    try:
-        registrar_geo_presenca(
-            slug=slug,
-            id_evento=id_evento,
-            id_cadastro=id_cadastro,
-            latitude=lat,
-            longitude=lon,
-            distancia_m=distancia,
-            dentro_raio=dentro,
-            presente=presente,
-            status=status,
-        )
-        if presente:
-            st.success(f"Presen\xe7a registrada. Dist\xe2ncia aproximada: {distancia:.0f} m.")
-        else:
-            st.warning(f"Localiza\xe7\xe3o registrada como ausente. Motivo: {status}. Dist\xe2ncia: {distancia:.0f} m.")
-    except Exception as exc:
-        st.error(f"N\xe3o foi poss\xedvel registrar a presen\xe7a: {exc}")
-
-    _limpar_query_geo()
 
 
 def _montar_tabela_frequencia(slug, id_evento):
@@ -512,26 +470,64 @@ def _montar_tabela_frequencia(slug, id_evento):
 
 
 def _mensagem_padrao(evento, grupo):
-    data_fmt = pd.to_datetime(evento.get("data"), errors="coerce")
-    data_txt = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else str(evento.get("data", ""))
     if grupo == "Presentes":
         msg = str(evento.get("mensagem_presentes") or "").strip()
-        if msg:
-            return msg
-        return "Paz do Senhor, {nome}! Sua presen\xe7a foi registrada em {evento}, no dia {data}. Deus aben\xe7oe."
-
+        return msg if msg else MENSAGEM_PADRAO_PRESENTES
     msg = str(evento.get("mensagem_ausentes") or "").strip()
-    if msg:
-        return msg
-    return "Paz do Senhor, {nome}! Sentimos sua falta em {evento}, no dia {data}. Deus aben\xe7oe."
+    return msg if msg else MENSAGEM_PADRAO_AUSENTES
+
+
+def _calcular_resultado_presenca(evento, lat, lon):
+    """
+    Dado um evento e coordenadas capturadas, retorna:
+    (distancia_metros, dentro_raio, presente, status)
+    """
+    dist = _distancia_metros(evento["latitude"], evento["longitude"], lat, lon)
+    raio = float(evento.get("raio_metros", DEFAULT_RAIO_METROS) or DEFAULT_RAIO_METROS)
+    dentro = dist <= raio
+    habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
+    ativo = bool(int(evento.get("ativo", 1) or 1))
+    presente = dentro and habilitado and ativo
+
+    if not ativo:
+        status = "Evento inativo"
+    elif not habilitado:
+        status = "Captura desabilitada"
+    elif dentro:
+        status = "Presente por localizacao"
+    else:
+        status = "Fora do raio configurado"
+
+    return dist, dentro, presente, status
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Aba 1: Eventos (cadastro/edicao)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _init_estado_evento(evento_atual):
+    """Inicializa estado interno do form do evento."""
+    evento_id = str(evento_atual.get("id_evento", "novo"))
+
+    if st.session_state.get("evt_ref") != evento_id:
+        st.session_state["evt_ref"] = evento_id
+        st.session_state["evt_lat"] = float(evento_atual.get("latitude", 0) or 0)
+        st.session_state["evt_lon"] = float(evento_atual.get("longitude", 0) or 0)
+        st.session_state["evt_end"] = str(evento_atual.get("endereco", "") or "")
+        st.session_state["evt_ver"] = st.session_state.get("evt_ver", 0) + 1
 
 
 def _render_eventos(slug):
-    st.subheader("Evento e local de refer\xeancia")
-    st.caption("Cadastre o culto/reuni\xe3o, defina o ponto central e habilite a captura quando desejar.")
+    st.subheader("📅 Evento e local de referencia")
+    st.caption(
+        "Cadastre o culto/reuniao, defina o ponto central e habilite a captura "
+        "de localizacao quando for o momento."
+    )
 
     eventos = listar_geo_eventos(slug, incluir_inativos=True)
-    opcoes = ["Novo evento"]
+
+    # ─── Seletor de evento ──────────────────────────────────────────
+    opcoes = ["➕ Novo evento"]
     mapa_eventos = {}
     if not eventos.empty:
         for _, row in eventos.iterrows():
@@ -539,137 +535,143 @@ def _render_eventos(slug):
             opcoes.append(rotulo)
             mapa_eventos[rotulo] = row.to_dict()
 
-    escolhido = st.selectbox("Evento", opcoes, key="geo_evento_editar")
+    escolhido = st.selectbox("Evento", opcoes, key="evt_sel")
     evento_atual = mapa_eventos.get(escolhido, {})
 
+    _init_estado_evento(evento_atual)
+    ver = st.session_state["evt_ver"]
+
+    # ─── Captura de localizacao via GPS ────────────────────────────
+    st.markdown("#### 📍 Localizacao do evento")
+    st.caption(
+        "**Modo mais rapido:** estando no local do culto, clique no icone abaixo "
+        "para capturar a localizacao atual. Para local distante, use a busca por "
+        "endereco ou cole coordenadas do Google Maps."
+    )
+
+    col_geo, col_info = st.columns([1, 3])
+    with col_geo:
+        coord = _captura_geolocalizacao(key_prefix=f"evt_geo_{ver}")
+    with col_info:
+        st.caption("👆 Clique no icone para usar a localizacao atual deste dispositivo")
+
+    if coord:
+        lat_capt, lon_capt = coord
+        # Atualiza so se mudou - evita loop de rerun
+        if (
+            abs(st.session_state["evt_lat"] - lat_capt) > 1e-7
+            or abs(st.session_state["evt_lon"] - lon_capt) > 1e-7
+        ):
+            st.session_state["evt_lat"] = lat_capt
+            st.session_state["evt_lon"] = lon_capt
+            endereco_capt = _buscar_endereco_por_coordenadas(lat_capt, lon_capt)
+            if endereco_capt:
+                st.session_state["evt_end"] = endereco_capt
+            st.session_state["evt_ver"] += 1
+            st.success(f"✅ Localizacao capturada: {lat_capt:.6f}, {lon_capt:.6f}")
+            st.rerun()
+
+    # ─── Endereco + busca por endereco ──────────────────────────────
+    col_end_1, col_end_2 = st.columns([3, 1])
+    with col_end_1:
+        endereco_input = st.text_input(
+            "Endereco do evento",
+            value=st.session_state["evt_end"],
+            key=f"evt_end_v{ver}",
+            placeholder="Ex.: Assembleia de Deus Central, Minacu GO",
+        )
+    with col_end_2:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        buscar_endereco = st.button(
+            "🔍 Buscar coordenadas",
+            use_container_width=True,
+            key=f"btn_buscar_end_v{ver}",
+        )
+
+    # Sincroniza alteracoes do usuario com estado interno
+    if endereco_input != st.session_state["evt_end"]:
+        st.session_state["evt_end"] = endereco_input
+
+    if buscar_endereco:
+        if not endereco_input.strip():
+            st.warning("Informe um endereco para buscar.")
+        else:
+            with st.spinner("Buscando coordenadas..."):
+                resultado = _buscar_coordenadas_por_endereco(endereco_input)
+            if resultado:
+                lat_b, lon_b, end_b = resultado
+                st.session_state["evt_lat"] = lat_b
+                st.session_state["evt_lon"] = lon_b
+                st.session_state["evt_end"] = end_b
+                st.session_state["evt_ver"] += 1
+                st.success("✅ Coordenadas encontradas!")
+                st.rerun()
+            else:
+                st.error(
+                    "❌ Nao encontrei coordenadas. Tente complementar com cidade e estado."
+                )
+
+    # ─── Busca/link Google Maps ─────────────────────────────────────
+    with st.expander("🗺️ Buscar no Google Maps ou colar link/coordenadas"):
+        busca_maps = st.text_input(
+            "Buscar local no Google Maps",
+            key=f"busca_maps_v{ver}",
+            placeholder="Digite o nome do local, igreja ou endereco",
+        )
+        if busca_maps.strip():
+            if busca_maps.strip().lower().startswith(("http://", "https://")):
+                _botao_abrir_google_maps(busca_maps.strip(), "Abrir link no Google Maps")
+            else:
+                link_busca = (
+                    "https://www.google.com/maps/search/?api=1&query="
+                    + urllib.parse.quote_plus(busca_maps.strip())
+                )
+                _botao_abrir_google_maps(link_busca, "Abrir busca no Google Maps")
+
+        col_m_1, col_m_2 = st.columns([3, 1])
+        with col_m_1:
+            texto_maps = st.text_input(
+                "Cole o link ou as coordenadas",
+                key=f"link_maps_v{ver}",
+                placeholder="-13.533,-48.220 ou link completo do Google Maps",
+            )
+        with col_m_2:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            usar_maps = st.button(
+                "Usar coordenadas",
+                use_container_width=True,
+                key=f"btn_usar_maps_v{ver}",
+            )
+
+        if usar_maps:
+            if not texto_maps.strip():
+                st.warning("Cole um link ou coordenadas.")
+            else:
+                coords, link_exp = _obter_coordenadas_de_texto_ou_link(texto_maps)
+                if coords:
+                    lat_m, lon_m = coords
+                    st.session_state["evt_lat"] = lat_m
+                    st.session_state["evt_lon"] = lon_m
+                    end_m = _buscar_endereco_por_coordenadas(lat_m, lon_m)
+                    if end_m:
+                        st.session_state["evt_end"] = end_m
+                    st.session_state["evt_ver"] += 1
+                    st.success("✅ Coordenadas carregadas!")
+                    st.rerun()
+                else:
+                    st.error(
+                        "❌ Nao consegui encontrar coordenadas. Use o formato "
+                        "`lat,lon` (ex: -13.5,-48.2) ou um link completo do Google Maps."
+                    )
+                    if link_exp:
+                        st.caption(f"Link analisado: {link_exp}")
+
+    # ─── Formulario principal do evento ─────────────────────────────
     data_default = pd.to_datetime(evento_atual.get("data"), errors="coerce")
     if pd.isna(data_default):
         data_default = pd.Timestamp(datetime.date.today())
 
-    evento_ref = str(evento_atual.get("id_evento", "novo"))
-    if st.session_state.get("geo_evento_ref") != evento_ref:
-        st.session_state["geo_evento_ref"] = evento_ref
-        st.session_state["geo_endereco_evento"] = str(evento_atual.get("endereco", "") or "")
-        st.session_state["geo_lat_evento"] = float(evento_atual.get("latitude", 0) or 0)
-        st.session_state["geo_lon_evento"] = float(evento_atual.get("longitude", 0) or 0)
-        st.session_state["geo_endereco_evento_input"] = st.session_state["geo_endereco_evento"]
-        st.session_state["geo_lat_evento_input"] = st.session_state["geo_lat_evento"]
-        st.session_state["geo_lon_evento_input"] = st.session_state["geo_lon_evento"]
-
-    st.markdown("#### Localiza\xe7\xe3o do evento")
-    lat_evento_query = _valor_query("geo_evento_lat")
-    lon_evento_query = _valor_query("geo_evento_lon")
-    if lat_evento_query and lon_evento_query:
-        try:
-            st.session_state["geo_lat_evento"] = float(lat_evento_query)
-            st.session_state["geo_lon_evento"] = float(lon_evento_query)
-            st.session_state["geo_lat_evento_input"] = float(lat_evento_query)
-            st.session_state["geo_lon_evento_input"] = float(lon_evento_query)
-            endereco_capturado = _buscar_endereco_por_coordenadas(
-                lat_evento_query,
-                lon_evento_query,
-            )
-            if endereco_capturado:
-                st.session_state["geo_endereco_evento"] = endereco_capturado
-                st.session_state["geo_endereco_evento_input"] = endereco_capturado
-            for chave in ["geo_evento_lat", "geo_evento_lon", "geo_evento_ts"]:
-                if chave in st.query_params:
-                    del st.query_params[chave]
-            st.success("Localiza\xe7\xe3o atual carregada para o evento.")
-            st.rerun()
-        except ValueError:
-            pass
-
-    st.caption(
-        "Modo mais r\xe1pido: estando no local do culto, clique em "
-        "'Usar minha localiza\xe7\xe3o atual'. Para local distante, busque no Maps "
-        "e cole o link ou as coordenadas."
-    )
-    _html_captura_local_evento()
-
-    if "geo_endereco_evento_pendente" in st.session_state:
-        st.session_state["geo_endereco_evento_input"] = st.session_state.pop(
-            "geo_endereco_evento_pendente"
-        )
-
-    col_end_1, col_end_2 = st.columns([3, 1])
-    with col_end_1:
-        endereco_evento = st.text_input(
-            "Endere\xe7o do evento",
-            value=str(st.session_state.get("geo_endereco_evento", "") or ""),
-            key="geo_endereco_evento_input",
-            placeholder="Ex.: Assembleia de Deus Central, Mina\xe7u GO",
-        )
-    with col_end_2:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        buscar_endereco = st.button("Buscar coordenadas", use_container_width=True)
-
-    if buscar_endereco:
-        resultado = _buscar_coordenadas_por_endereco(endereco_evento)
-        if resultado:
-            lat_busca, lon_busca, endereco_formatado = resultado
-            st.session_state["geo_endereco_evento"] = endereco_formatado
-            st.session_state["geo_endereco_evento_pendente"] = endereco_formatado
-            st.session_state["geo_lat_evento"] = lat_busca
-            st.session_state["geo_lon_evento"] = lon_busca
-            st.session_state["geo_lat_evento_input"] = lat_busca
-            st.session_state["geo_lon_evento_input"] = lon_busca
-            st.success("Coordenadas encontradas pelo endere\xe7o.")
-            st.rerun()
-        else:
-            st.error("N\xe3o encontrei coordenadas para esse endere\xe7o. Tente complementar com cidade e estado.")
-
-    busca_maps = st.text_input(
-        "Buscar local no Google Maps",
-        key="geo_busca_maps",
-        placeholder="Digite o nome do local, igreja ou endere\xe7o",
-    )
-    if str(busca_maps or "").strip():
-        busca_texto = str(busca_maps).strip()
-        if busca_texto.lower().startswith(("http://", "https://")):
-            link_busca = busca_texto
-            _botao_abrir_google_maps(link_busca, "Abrir link no Google Maps")
-        else:
-            link_busca = (
-                "https://www.google.com/maps/search/?api=1&query="
-                + urllib.parse.quote_plus(busca_texto)
-            )
-            _botao_abrir_google_maps(link_busca, "Abrir busca no Google Maps")
-
-    col_maps_1, col_maps_2 = st.columns([3, 1])
-    with col_maps_1:
-        texto_maps = st.text_input(
-            "Cole aqui o link ou as coordenadas do Google Maps",
-            key="geo_link_maps",
-            placeholder="-13.533000, -48.220000 ou link completo do Google Maps",
-        )
-    with col_maps_2:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        usar_maps = st.button("Usar coordenadas", use_container_width=True)
-
-    if usar_maps:
-        coords, link_expandido = _obter_coordenadas_de_texto_ou_link(texto_maps)
-        if coords:
-            st.session_state["geo_lat_evento"] = coords[0]
-            st.session_state["geo_lon_evento"] = coords[1]
-            st.session_state["geo_lat_evento_input"] = coords[0]
-            st.session_state["geo_lon_evento_input"] = coords[1]
-            endereco_maps = _buscar_endereco_por_coordenadas(coords[0], coords[1])
-            if endereco_maps:
-                st.session_state["geo_endereco_evento"] = endereco_maps
-                st.session_state["geo_endereco_evento_pendente"] = endereco_maps
-            st.success("Coordenadas carregadas do Google Maps.")
-            st.rerun()
-        else:
-            st.error(
-                "N\xe3o consegui encontrar coordenadas nesse link/texto. "
-                "Abra o local no Google Maps, clique com o bot\xe3o direito no ponto do mapa "
-                "e copie latitude,longitude."
-            )
-            if link_expandido:
-                st.caption(f"Link expandido analisado: {link_expandido}")
-
-    with st.form("form_geo_evento"):
+    with st.form(f"form_evt_v{ver}"):
         c1, c2 = st.columns([2, 1])
         with c1:
             nome = st.text_input(
@@ -677,7 +679,7 @@ def _render_eventos(slug):
                 value=str(evento_atual.get("nome", "Culto") or "Culto"),
             )
         with c2:
-            data = st.date_input(
+            data_evt = st.date_input(
                 "Data",
                 value=data_default.date(),
                 format="DD/MM/YYYY",
@@ -686,31 +688,29 @@ def _render_eventos(slug):
         c3, c4, c5 = st.columns(3)
         with c3:
             latitude = st.number_input(
-                "Latitude do local",
-                value=float(st.session_state.get("geo_lat_evento", 0) or 0),
+                "Latitude",
+                value=float(st.session_state["evt_lat"]),
                 format="%.8f",
-                key="geo_lat_evento_input",
             )
         with c4:
             longitude = st.number_input(
-                "Longitude do local",
-                value=float(st.session_state.get("geo_lon_evento", 0) or 0),
+                "Longitude",
+                value=float(st.session_state["evt_lon"]),
                 format="%.8f",
-                key="geo_lon_evento_input",
             )
         with c5:
             raio = st.number_input(
-                "Raio permitido (metros)",
+                "Raio (metros)",
                 min_value=5,
                 max_value=1000,
-                value=int(evento_atual.get("raio_metros", 30) or 30),
+                value=int(evento_atual.get("raio_metros", DEFAULT_RAIO_METROS) or DEFAULT_RAIO_METROS),
                 step=5,
             )
 
         c6, c7 = st.columns(2)
         with c6:
             captura = st.checkbox(
-                "Habilitar captura de localiza\xe7\xe3o",
+                "Habilitar captura de localizacao",
                 value=bool(int(evento_atual.get("captura_habilitada", 0) or 0)),
             )
         with c7:
@@ -719,66 +719,87 @@ def _render_eventos(slug):
                 value=bool(int(evento_atual.get("ativo", 1) or 1)),
             )
 
-        mensagem_presentes = st.text_area(
-            "Mensagem padr\xe3o para presentes",
+        mensagem_p = st.text_area(
+            "Mensagem padrao para presentes",
             value=str(evento_atual.get("mensagem_presentes", "") or ""),
-            height=90,
+            height=80,
+            help="Use {nome}, {evento} e {data}. Deixe em branco para usar a mensagem padrao do sistema.",
         )
-        mensagem_ausentes = st.text_area(
-            "Mensagem padr\xe3o para ausentes",
+        mensagem_a = st.text_area(
+            "Mensagem padrao para ausentes",
             value=str(evento_atual.get("mensagem_ausentes", "") or ""),
-            height=90,
+            height=80,
+            help="Use {nome}, {evento} e {data}. Deixe em branco para usar a mensagem padrao do sistema.",
         )
         observacoes = st.text_area(
-            "Observa\xe7\xf5es",
+            "Observacoes",
             value=str(evento_atual.get("observacoes", "") or ""),
-            height=80,
+            height=60,
         )
 
-        salvar = st.form_submit_button("Salvar evento", type="primary")
+        # Validacao visual antes de salvar
+        if latitude == 0.0 and longitude == 0.0:
+            st.warning(
+                "⚠️ Latitude e longitude estao em 0,0. Capture a localizacao "
+                "ou informe coordenadas validas antes de salvar."
+            )
+
+        salvar = st.form_submit_button("💾 Salvar evento", type="primary")
 
     if salvar:
-        try:
-            id_evento = evento_atual.get("id_evento")
-            salvar_geo_evento(
-                slug=slug,
-                id_evento=id_evento,
-                nome=nome,
-                data=data.isoformat(),
-                endereco=endereco_evento,
-                latitude=latitude,
-                longitude=longitude,
-                raio_metros=raio,
-                captura_habilitada=captura,
-                ativo=ativo,
-                mensagem_presentes=mensagem_presentes,
-                mensagem_ausentes=mensagem_ausentes,
-                observacoes=observacoes,
-            )
-            st.success("Evento salvo com sucesso.")
-            st.rerun()
-        except Exception as exc:
-            st.error(f"N\xe3o foi poss\xedvel salvar o evento: {exc}")
+        if not nome.strip():
+            st.error("❌ Informe o nome do evento.")
+        elif latitude == 0.0 and longitude == 0.0:
+            st.error("❌ Informe coordenadas validas para o local do evento.")
+        else:
+            try:
+                salvar_geo_evento(
+                    slug=slug,
+                    id_evento=evento_atual.get("id_evento"),
+                    nome=nome,
+                    data=data_evt.isoformat(),
+                    endereco=st.session_state["evt_end"],
+                    latitude=latitude,
+                    longitude=longitude,
+                    raio_metros=raio,
+                    captura_habilitada=captura,
+                    ativo=ativo,
+                    mensagem_presentes=mensagem_p,
+                    mensagem_ausentes=mensagem_a,
+                    observacoes=observacoes,
+                )
+                st.success("✅ Evento salvo com sucesso!")
+                # Forca reset do estado para recarregar dados
+                st.session_state.pop("evt_ref", None)
+                st.rerun()
+            except Exception as exc:
+                st.error(f"❌ Erro ao salvar: {exc}")
 
+    # ─── Acoes (cancelar/excluir) ───────────────────────────────────
     if evento_atual.get("id_evento"):
-        st.markdown("#### Editar, cancelar ou excluir")
+        st.markdown("#### ⚙️ Cancelar ou excluir")
         st.caption(
-            "Cancelar mant\xe9m o evento no hist\xf3rico, mas desativa a captura. "
-            "Excluir remove o evento e os registros de presen\xe7a vinculados."
+            "**Cancelar:** mantem o evento no historico mas desativa a captura. "
+            "**Excluir:** remove permanentemente o evento e todos os registros de presenca."
         )
-        acao_c1, acao_c2 = st.columns(2)
-        with acao_c1:
-            if st.button("Cancelar/desativar evento", use_container_width=True):
+
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            if st.button(
+                "⏸️ Cancelar/desativar",
+                use_container_width=True,
+                key=f"btn_cancelar_{int(evento_atual['id_evento'])}",
+            ):
                 try:
                     salvar_geo_evento(
                         slug=slug,
-                        id_evento=evento_atual.get("id_evento"),
+                        id_evento=evento_atual["id_evento"],
                         nome=evento_atual.get("nome", ""),
                         data=evento_atual.get("data", ""),
                         endereco=evento_atual.get("endereco", ""),
                         latitude=evento_atual.get("latitude", 0),
                         longitude=evento_atual.get("longitude", 0),
-                        raio_metros=evento_atual.get("raio_metros", 30),
+                        raio_metros=evento_atual.get("raio_metros", DEFAULT_RAIO_METROS),
                         captura_habilitada=False,
                         ativo=False,
                         mensagem_presentes=evento_atual.get("mensagem_presentes", ""),
@@ -788,36 +809,42 @@ def _render_eventos(slug):
                             + "\nEvento cancelado/desativado."
                         ).strip(),
                     )
-                    st.success("Evento cancelado/desativado.")
+                    st.success("✅ Evento desativado.")
+                    st.session_state.pop("evt_ref", None)
                     st.rerun()
                 except Exception as exc:
-                    st.error(f"N\xe3o foi poss\xedvel cancelar o evento: {exc}")
+                    st.error(f"❌ Erro ao cancelar: {exc}")
 
-        with acao_c2:
-            confirmar_exclusao = st.checkbox(
-                "Confirmo que desejo excluir definitivamente",
-                key=f"geo_conf_excluir_{int(evento_atual['id_evento'])}",
+        with ac2:
+            confirmar = st.checkbox(
+                "Confirmo exclusao definitiva",
+                key=f"conf_excluir_{int(evento_atual['id_evento'])}",
             )
             if st.button(
-                "Excluir evento",
+                "🗑️ Excluir definitivamente",
                 use_container_width=True,
-                disabled=not confirmar_exclusao,
+                disabled=not confirmar,
+                key=f"btn_excluir_{int(evento_atual['id_evento'])}",
             ):
                 try:
                     excluir_geo_evento(slug, evento_atual["id_evento"])
-                    st.success("Evento exclu\xeddo.")
+                    st.success("✅ Evento excluido.")
+                    st.session_state.pop("evt_ref", None)
                     st.rerun()
                 except Exception as exc:
-                    st.error(f"N\xe3o foi poss\xedvel excluir o evento: {exc}")
+                    st.error(f"❌ Erro ao excluir: {exc}")
 
+    # ─── Tabela de eventos cadastrados ──────────────────────────────
     st.divider()
+    st.markdown("#### 📋 Eventos cadastrados")
+
     if eventos.empty:
         st.info("Nenhum evento cadastrado ainda.")
     else:
         df_view = eventos.copy()
         df_view["data"] = pd.to_datetime(df_view["data"], errors="coerce").dt.strftime("%d/%m/%Y")
-        df_view["captura_habilitada"] = df_view["captura_habilitada"].map({1: "Sim", 0: "N\xe3o"})
-        df_view["ativo"] = df_view["ativo"].map({1: "Sim", 0: "N\xe3o"})
+        df_view["captura_habilitada"] = df_view["captura_habilitada"].map({1: "Sim", 0: "Nao"})
+        df_view["ativo"] = df_view["ativo"].map({1: "Sim", 0: "Nao"})
         st.dataframe(
             df_view[[
                 "id_evento", "data", "nome", "endereco", "latitude", "longitude",
@@ -826,9 +853,9 @@ def _render_eventos(slug):
                 "id_evento": "ID",
                 "data": "Data",
                 "nome": "Evento",
-                "endereco": "Endere\xe7o",
-                "latitude": "Latitude",
-                "longitude": "Longitude",
+                "endereco": "Endereco",
+                "latitude": "Lat",
+                "longitude": "Lon",
                 "raio_metros": "Raio (m)",
                 "captura_habilitada": "Captura",
                 "ativo": "Ativo",
@@ -838,10 +865,14 @@ def _render_eventos(slug):
         )
 
 
-def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key="geo_evento"):
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers comuns para abas Check-in/Frequencia/Mensagens
+# ═══════════════════════════════════════════════════════════════════════
+
+def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key="sel_evt"):
     eventos = listar_geo_eventos(slug, incluir_inativos=not apenas_ativos)
     if eventos.empty:
-        st.info("Cadastre um evento primeiro.")
+        st.info("📭 Cadastre um evento primeiro na aba **Eventos**.")
         return None
 
     if apenas_ativos:
@@ -850,7 +881,7 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
         eventos = eventos[eventos["captura_habilitada"].astype(int) == 1]
 
     if eventos.empty:
-        st.warning("Nenhum evento dispon\xedvel para este filtro.")
+        st.warning("⚠️ Nenhum evento disponivel para este filtro.")
         return None
 
     mapa = {}
@@ -864,323 +895,301 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
     return mapa[escolhido]
 
 
-def _render_checkin(slug):
-    st.subheader("Check-in por localiza\xe7\xe3o")
-    st.caption("O navegador do celular pedir\xe1 permiss\xe3o para acessar a localiza\xe7\xe3o.")
+# ═══════════════════════════════════════════════════════════════════════
+# Aba 2: Check-in
+# ═══════════════════════════════════════════════════════════════════════
 
-    _processar_captura_query(slug)
+def _render_checkin(slug):
+    st.subheader("📲 Check-in por localizacao")
+    st.caption(
+        "O navegador do celular ira pedir permissao de localizacao. "
+        "Este recurso requer **HTTPS** (funciona em producao Streamlit Cloud)."
+    )
+
+    # Verifica parametros da URL (vindo de link enviado por WhatsApp)
+    id_evt_url = _valor_query("geo_id_evento")
+    id_cad_url = _valor_query("geo_id_cadastro")
 
     evento = _selecionar_evento(
         slug,
         apenas_ativos=True,
         apenas_habilitados=False,
-        key="geo_evento_checkin",
+        key="evt_checkin",
     )
     if not evento:
         return
 
     if not bool(int(evento.get("captura_habilitada", 0) or 0)):
-        st.warning("A captura de localiza\xe7\xe3o est\xe1 desabilitada para este evento.")
+        st.warning("⚠️ A captura de localizacao esta **desabilitada** para este evento.")
 
     membros = _membros_ativos(slug)
     if membros.empty:
         st.info("Nenhum membro ativo encontrado.")
         return
 
-    evento_massa_ref = str(int(evento["id_evento"]))
-    if st.session_state.get("geo_massa_evento_ref") != evento_massa_ref:
-        st.session_state["geo_massa_evento_ref"] = evento_massa_ref
-        st.session_state["geo_massa_lat"] = float(evento.get("latitude", 0) or 0)
-        st.session_state["geo_massa_lon"] = float(evento.get("longitude", 0) or 0)
-        st.session_state["geo_massa_lat_input"] = st.session_state["geo_massa_lat"]
-        st.session_state["geo_massa_lon_input"] = st.session_state["geo_massa_lon"]
-        st.session_state["geo_massa_membros_sel"] = []
+    # ─── Tabs: individual / em massa ────────────────────────────────
+    tab_ind, tab_massa = st.tabs(["👤 Individual", "👥 Em massa"])
 
-    id_massa = _valor_query("geo_massa_id_evento")
-    lat_massa = _valor_query("geo_massa_lat")
-    lon_massa = _valor_query("geo_massa_lon")
-    if id_massa and lat_massa and lon_massa and str(id_massa) == str(int(evento["id_evento"])):
-        try:
-            st.session_state["geo_massa_lat"] = float(lat_massa)
-            st.session_state["geo_massa_lon"] = float(lon_massa)
-            st.session_state["geo_massa_lat_input"] = float(lat_massa)
-            st.session_state["geo_massa_lon_input"] = float(lon_massa)
-            for chave in ["geo_massa_id_evento", "geo_massa_lat", "geo_massa_lon", "geo_massa_ts"]:
-                if chave in st.query_params:
-                    del st.query_params[chave]
-            st.success("Local do evento capturado para check-in em massa.")
-            st.rerun()
-        except ValueError:
-            pass
+    # ─── Aba INDIVIDUAL ─────────────────────────────────────────────
+    with tab_ind:
+        st.caption("Capture sua propria localizacao para registrar presenca.")
 
-    mapa_membros = {}
-    opcoes = []
-    for _, row in membros.iterrows():
-        rotulo = _rotulo_membro(row)
-        mapa_membros[rotulo] = row.to_dict()
-        opcoes.append(rotulo)
+        mapa_membros = {_rotulo_membro(row): row.to_dict() for _, row in membros.iterrows()}
+        opcoes_membros = list(mapa_membros.keys())
 
-    membro_label = st.selectbox("Membro", opcoes, key="geo_membro_checkin")
-    membro = mapa_membros[membro_label]
-    st.caption(f"Telefone no cadastro: {membro.get('telefone') or 'sem telefone'}")
+        # Pre-seleciona membro se veio da URL
+        index_pre = 0
+        if id_cad_url:
+            for i, rot in enumerate(opcoes_membros):
+                try:
+                    if str(mapa_membros[rot]["id_cadastro"]) == str(int(id_cad_url)):
+                        index_pre = i
+                        break
+                except (ValueError, KeyError):
+                    pass
 
-    _html_captura_localizacao(evento["id_evento"], membro["id_cadastro"])
-
-    with st.expander("Registrar localiza\xe7\xe3o manualmente"):
-        c1, c2 = st.columns(2)
-        lat = c1.number_input("Latitude", value=0.0, format="%.8f", key="geo_lat_manual")
-        lon = c2.number_input("Longitude", value=0.0, format="%.8f", key="geo_lon_manual")
-        if st.button("Registrar localiza\xe7\xe3o informada", type="primary"):
-            distancia = _distancia_metros(evento["latitude"], evento["longitude"], lat, lon)
-            dentro = distancia <= float(evento.get("raio_metros", 30) or 30)
-            habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
-            presente = dentro and habilitado
-            status = "Presente por localiza\xe7\xe3o" if presente else "Fora do raio ou captura desabilitada"
-            try:
-                registrar_geo_presenca(
-                    slug,
-                    evento["id_evento"],
-                    membro["id_cadastro"],
-                    lat,
-                    lon,
-                    distancia,
-                    dentro,
-                    presente,
-                    status,
-                )
-                st.success("Registro salvo.")
-            except Exception as exc:
-                st.error(f"N\xe3o foi poss\xedvel registrar: {exc}")
-
-    st.divider()
-    st.markdown("### Check-in em massa no local")
-    st.caption(
-        "Use quando a secretaria ou lideran\xe7a est\xe1 no local do evento. "
-        "O sistema captura a localiza\xe7\xe3o deste aparelho uma vez e registra os membros selecionados."
-    )
-
-    _html_captura_localizacao_massa(evento["id_evento"])
-
-    lat_padrao = float(st.session_state.get("geo_massa_lat", evento.get("latitude", 0)) or 0)
-    lon_padrao = float(st.session_state.get("geo_massa_lon", evento.get("longitude", 0)) or 0)
-    mlat, mlon, mdist = st.columns(3)
-    with mlat:
-        lat_massa_input = st.number_input(
-            "Latitude do check-in em massa",
-            value=lat_padrao,
-            format="%.8f",
-            key="geo_massa_lat_input",
+        membro_label = st.selectbox(
+            "Membro",
+            opcoes_membros,
+            index=index_pre,
+            key="checkin_membro",
         )
-    with mlon:
-        lon_massa_input = st.number_input(
-            "Longitude do check-in em massa",
-            value=lon_padrao,
-            format="%.8f",
-            key="geo_massa_lon_input",
-        )
-    with mdist:
-        distancia_massa = _distancia_metros(
-            evento["latitude"],
-            evento["longitude"],
-            lat_massa_input,
-            lon_massa_input,
-        )
-        st.metric("Dist\xe2ncia do evento", f"{distancia_massa:.0f} m")
+        membro = mapa_membros[membro_label]
+        st.caption(f"📞 Telefone no cadastro: {membro.get('telefone') or 'sem telefone'}")
 
-    dentro_massa = distancia_massa <= float(evento.get("raio_metros", 30) or 30)
-    if dentro_massa:
-        st.success("A localiza\xe7\xe3o informada est\xe1 dentro do raio permitido do evento.")
-    else:
-        st.warning("A localiza\xe7\xe3o informada est\xe1 fora do raio permitido do evento.")
+        # Captura geolocalizacao
+        st.markdown("##### Capture sua localizacao:")
+        coord = _captura_geolocalizacao(key_prefix=f"checkin_ind_{evento['id_evento']}_{membro['id_cadastro']}")
 
-    b1, b2 = st.columns(2)
-    with b1:
-        if st.button("Selecionar todos os membros", use_container_width=True):
-            st.session_state["geo_massa_membros_sel"] = opcoes.copy()
-            st.rerun()
-    with b2:
-        if st.button("Limpar sele\xe7\xe3o em massa", use_container_width=True):
-            st.session_state["geo_massa_membros_sel"] = []
-            st.rerun()
+        if coord:
+            lat_c, lon_c = coord
+            dist, dentro, presente_calc, status_calc = _calcular_resultado_presenca(
+                evento, lat_c, lon_c
+            )
 
-    selecionados = st.multiselect(
-        "Membros presentes no local",
-        opcoes,
-        key="geo_massa_membros_sel",
-    )
+            c_dist, c_status = st.columns(2)
+            c_dist.metric("Distancia ate o evento", f"{dist:.0f} m")
+            if dentro:
+                c_status.success(f"✅ Dentro do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m)")
+            else:
+                c_status.warning(f"⚠️ Fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m)")
 
-    confirmar_massa = st.checkbox(
-        f"Confirmo o registro de {len(selecionados)} membro(s) selecionado(s)",
-        key=f"geo_conf_massa_{int(evento['id_evento'])}",
-    )
+            st.caption(f"Status: {status_calc}")
 
-    if st.button(
-        "Registrar check-in em massa",
-        type="primary",
-        use_container_width=True,
-        disabled=not confirmar_massa or not selecionados,
-    ):
-        habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
-        presente = bool(dentro_massa and habilitado)
-        status = (
-            "Presente por check-in em massa"
-            if presente
-            else "Check-in em massa fora do raio ou captura desabilitada"
-        )
-        registrados = 0
-        erros = []
-        for rotulo in selecionados:
-            membro_massa = mapa_membros.get(rotulo)
-            if not membro_massa:
-                continue
-            try:
-                registrar_geo_presenca(
-                    slug,
-                    evento["id_evento"],
-                    membro_massa["id_cadastro"],
-                    lat_massa_input,
-                    lon_massa_input,
-                    distancia_massa,
-                    dentro_massa,
-                    presente,
-                    status,
-                )
-                registrados += 1
-            except Exception as exc:
-                erros.append(f"{membro_massa.get('nome', rotulo)}: {exc}")
+            if st.button(
+                "✅ Registrar presenca",
+                type="primary",
+                use_container_width=True,
+                key=f"btn_reg_ind_{evento['id_evento']}_{membro['id_cadastro']}",
+            ):
+                try:
+                    registrar_geo_presenca(
+                        slug=slug,
+                        id_evento=evento["id_evento"],
+                        id_cadastro=membro["id_cadastro"],
+                        latitude=lat_c,
+                        longitude=lon_c,
+                        distancia_m=dist,
+                        dentro_raio=dentro,
+                        presente=presente_calc,
+                        status=status_calc,
+                    )
+                    if presente_calc:
+                        st.success(f"✅ Presenca registrada para {membro['nome']}!")
+                    else:
+                        st.warning(f"⚠️ Registrado como ausente. Motivo: {status_calc}")
 
-        if registrados:
-            st.success(f"{registrados} check-in(s) registrados.")
-        if erros:
-            st.error("Alguns registros falharam: " + " | ".join(erros[:5]))
+                    # Limpa parametros da URL se foi via link
+                    if id_evt_url or id_cad_url:
+                        _limpar_query_geo()
+                except Exception as exc:
+                    st.error(f"❌ Erro ao registrar: {exc}")
 
-    st.divider()
-    st.markdown("### Solicitar autoriza\xe7\xe3o de localiza\xe7\xe3o")
-    st.caption(
-        "Envia uma mensagem para os membros abrirem o check-in no pr\xf3prio celular. "
-        "A permiss\xe3o de localiza\xe7\xe3o precisa ser autorizada individualmente por cada membro."
-    )
+        # Registro manual (fallback)
+        with st.expander("🛠️ Registrar localizacao manualmente"):
+            st.caption("Use somente se a captura automatica nao funcionar.")
+            cm1, cm2 = st.columns(2)
+            lat_m = cm1.number_input("Latitude", value=0.0, format="%.8f", key="manual_lat")
+            lon_m = cm2.number_input("Longitude", value=0.0, format="%.8f", key="manual_lon")
 
-    tabela_aut = _montar_tabela_frequencia(slug, evento["id_evento"])
-    grupo_aut = st.radio(
-        "Enviar solicita\xe7\xe3o para",
-        ["Todos os membros ativos", "Somente quem ainda n\xe3o fez check-in"],
-        horizontal=True,
-        key=f"geo_grupo_aut_{int(evento['id_evento'])}",
-    )
-    if grupo_aut == "Somente quem ainda n\xe3o fez check-in":
-        destinatarios_aut = tabela_aut[~tabela_aut["presente"]].copy()
-    else:
-        destinatarios_aut = tabela_aut.copy()
-
-    data_fmt_aut = pd.to_datetime(evento.get("data"), errors="coerce")
-    data_txt_aut = data_fmt_aut.strftime("%d/%m/%Y") if pd.notna(data_fmt_aut) else str(evento.get("data", ""))
-
-    link_checkin = st.text_input(
-        "Link para o membro abrir o check-in",
-        value="",
-        key=f"geo_link_checkin_{int(evento['id_evento'])}",
-        placeholder="Cole aqui o link da p\xe1gina de check-in, se houver",
-    )
-    modelo_aut = st.text_area(
-        "Mensagem de solicita\xe7\xe3o",
-        value=(
-            "Paz do Senhor, {nome}! Para registrar sua presen\xe7a em {evento}, "
-            "no dia {data}, abra o link abaixo pelo seu celular e autorize a localiza\xe7\xe3o:\n\n"
-            "{link}\n\n"
-            "Caso j\xe1 esteja no local, fa\xe7a o check-in assim que poss\xedvel."
-        ),
-        height=140,
-        key=f"geo_msg_aut_{int(evento['id_evento'])}",
-        help="Use {nome}, {evento}, {data} e {link}.",
-    )
-
-    linhas_aut = []
-    for _, row in destinatarios_aut.iterrows():
-        nome_aut = str(row.get("nome", "")).strip()
-        telefone_aut = str(row.get("telefone", "")).strip()
-        mensagem_aut = (
-            modelo_aut.replace("{nome}", nome_aut)
-            .replace("{evento}", str(evento.get("nome", "")))
-            .replace("{data}", data_txt_aut)
-            .replace("{link}", str(link_checkin or "").strip())
-        )
-        linhas_aut.append({
-            "Nome": nome_aut,
-            "Telefone": telefone_aut,
-            "Situa\xe7\xe3o": row.get("situacao", ""),
-            "Mensagem": mensagem_aut,
-            "Link WhatsApp": _link_whatsapp(telefone_aut, mensagem_aut),
-        })
-
-    df_aut = pd.DataFrame(linhas_aut)
-    st.caption(f"{len(df_aut)} destinat\xe1rio(s) selecionado(s).")
-    if not df_aut.empty:
-        st.dataframe(
-            df_aut[["Nome", "Telefone", "Situa\xe7\xe3o"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    qtd_validos_aut = (
-        int(df_aut["Telefone"].apply(_normalizar_tel_brasil).astype(bool).sum())
-        if not df_aut.empty
-        else 0
-    )
-    if _whatsapp_api_configurada():
-        st.success("WhatsApp Cloud API configurada para envio em massa.")
-    else:
-        st.warning(
-            "WhatsApp Cloud API n\xe3o configurada. Voc\xea ainda pode usar os links individuais abaixo."
-        )
-
-    confirmar_aut = st.checkbox(
-        f"Confirmo o envio da solicita\xe7\xe3o para {qtd_validos_aut} membro(s)",
-        key=f"geo_conf_aut_{int(evento['id_evento'])}",
-        disabled=not _whatsapp_api_configurada() or qtd_validos_aut == 0,
-    )
-
-    if st.button(
-        "Enviar solicita\xe7\xe3o em massa",
-        type="primary",
-        use_container_width=True,
-        disabled=not confirmar_aut,
-        key=f"geo_btn_aut_{int(evento['id_evento'])}",
-    ):
-        resultados_aut = []
-        barra_aut = st.progress(0)
-        with st.spinner("Enviando solicita\xe7\xf5es..."):
-            total_aut = max(1, len(df_aut))
-            for _, row in df_aut.iterrows():
-                ok, detalhe = _enviar_whatsapp_texto_api(row["Telefone"], row["Mensagem"])
-                resultados_aut.append({
-                    "Nome": row["Nome"],
-                    "Telefone": row["Telefone"],
-                    "Status": "Enviado" if ok else "Erro",
-                    "Detalhe": detalhe,
-                })
-                barra_aut.progress(min(1.0, len(resultados_aut) / total_aut))
-
-        df_result_aut = pd.DataFrame(resultados_aut)
-        enviados_aut = int((df_result_aut["Status"] == "Enviado").sum()) if not df_result_aut.empty else 0
-        erros_aut = int((df_result_aut["Status"] == "Erro").sum()) if not df_result_aut.empty else 0
-        st.success(f"Solicita\xe7\xf5es processadas. Enviadas: {enviados_aut}. Erros: {erros_aut}.")
-        st.dataframe(df_result_aut, use_container_width=True, hide_index=True)
-
-    with st.expander("Links individuais de solicita\xe7\xe3o"):
-        if df_aut.empty:
-            st.info("Nenhum destinat\xe1rio para este filtro.")
-        else:
-            for _, row in df_aut.iterrows():
-                if row["Link WhatsApp"]:
-                    st.markdown(f'[{row["Nome"]} - enviar solicita\xe7\xe3o]({row["Link WhatsApp"]})')
+            if st.button(
+                "Registrar manualmente",
+                key=f"btn_reg_manual_{evento['id_evento']}_{membro['id_cadastro']}",
+            ):
+                if lat_m == 0 and lon_m == 0:
+                    st.error("Informe coordenadas validas.")
                 else:
-                    st.caption(f"{row['Nome']} - sem telefone v\xe1lido no cadastro.")
+                    dist_m, dentro_m, presente_m, status_m = _calcular_resultado_presenca(
+                        evento, lat_m, lon_m
+                    )
+                    try:
+                        registrar_geo_presenca(
+                            slug=slug,
+                            id_evento=evento["id_evento"],
+                            id_cadastro=membro["id_cadastro"],
+                            latitude=lat_m,
+                            longitude=lon_m,
+                            distancia_m=dist_m,
+                            dentro_raio=dentro_m,
+                            presente=presente_m,
+                            status=status_m,
+                        )
+                        st.success("Registro salvo.")
+                    except Exception as exc:
+                        st.error(f"Erro: {exc}")
 
+    # ─── Aba EM MASSA ───────────────────────────────────────────────
+    with tab_massa:
+        st.caption(
+            "Use quando a secretaria/lideranca esta no local do evento. "
+            "Capture a localizacao deste aparelho uma vez e registre todos os membros presentes."
+        )
+
+        # Captura localizacao para o check-in em massa
+        st.markdown("##### 1️⃣ Capture o local atual:")
+        coord_massa = _captura_geolocalizacao(key_prefix=f"checkin_massa_{evento['id_evento']}")
+
+        # Estado para localizacao em massa
+        massa_key_lat = f"massa_lat_{evento['id_evento']}"
+        massa_key_lon = f"massa_lon_{evento['id_evento']}"
+
+        if coord_massa:
+            lat_m, lon_m = coord_massa
+            if (
+                abs(st.session_state.get(massa_key_lat, -999) - lat_m) > 1e-7
+                or abs(st.session_state.get(massa_key_lon, -999) - lon_m) > 1e-7
+            ):
+                st.session_state[massa_key_lat] = lat_m
+                st.session_state[massa_key_lon] = lon_m
+                st.success(f"✅ Localizacao capturada: {lat_m:.6f}, {lon_m:.6f}")
+                st.rerun()
+
+        lat_massa = st.session_state.get(massa_key_lat)
+        lon_massa = st.session_state.get(massa_key_lon)
+
+        if lat_massa is None or lon_massa is None:
+            st.info("👆 Capture sua localizacao acima antes de continuar.")
+            return
+
+        # Calcula distancia ate o evento
+        dist_massa, dentro_massa, _, _ = _calcular_resultado_presenca(
+            evento, lat_massa, lon_massa
+        )
+
+        col_d1, col_d2, col_d3 = st.columns(3)
+        col_d1.metric("Latitude", f"{lat_massa:.6f}")
+        col_d2.metric("Longitude", f"{lon_massa:.6f}")
+        col_d3.metric("Distancia", f"{dist_massa:.0f} m")
+
+        if dentro_massa:
+            st.success("✅ Voce esta dentro do raio do evento.")
+        else:
+            st.warning(
+                f"⚠️ Voce esta fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
+                "Membros registrados aqui serao marcados como ausentes."
+            )
+
+        # Selecao de membros
+        st.markdown("##### 2️⃣ Selecione os membros presentes:")
+
+        mapa_membros_massa = {_rotulo_membro(row): row.to_dict() for _, row in membros.iterrows()}
+        opcoes_massa = list(mapa_membros_massa.keys())
+
+        sel_key = f"sel_massa_{evento['id_evento']}"
+        if sel_key not in st.session_state:
+            st.session_state[sel_key] = []
+
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button(
+                "✓ Selecionar todos",
+                use_container_width=True,
+                key=f"btn_all_{evento['id_evento']}",
+            ):
+                st.session_state[sel_key] = opcoes_massa.copy()
+                st.rerun()
+        with b2:
+            if st.button(
+                "✗ Limpar selecao",
+                use_container_width=True,
+                key=f"btn_clear_{evento['id_evento']}",
+            ):
+                st.session_state[sel_key] = []
+                st.rerun()
+
+        selecionados = st.multiselect(
+            "Membros presentes no local",
+            opcoes_massa,
+            default=st.session_state[sel_key],
+            key=f"ms_{evento['id_evento']}",
+        )
+        # Sincroniza com estado
+        st.session_state[sel_key] = selecionados
+
+        confirmar_massa = st.checkbox(
+            f"Confirmo o registro de {len(selecionados)} membro(s) selecionado(s)",
+            key=f"conf_massa_{evento['id_evento']}",
+        )
+
+        if st.button(
+            "💾 Registrar check-in em massa",
+            type="primary",
+            use_container_width=True,
+            disabled=not confirmar_massa or not selecionados,
+            key=f"btn_reg_massa_{evento['id_evento']}",
+        ):
+            habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
+            ativo = bool(int(evento.get("ativo", 1) or 1))
+            presente = bool(dentro_massa and habilitado and ativo)
+
+            if not ativo:
+                status = "Evento inativo"
+            elif not habilitado:
+                status = "Captura desabilitada"
+            elif dentro_massa:
+                status = "Presente por check-in em massa"
+            else:
+                status = "Check-in em massa fora do raio"
+
+            registrados = 0
+            erros = []
+            with st.spinner(f"Registrando {len(selecionados)} membro(s)..."):
+                for rotulo in selecionados:
+                    membro_m = mapa_membros_massa.get(rotulo)
+                    if not membro_m:
+                        continue
+                    try:
+                        registrar_geo_presenca(
+                            slug=slug,
+                            id_evento=evento["id_evento"],
+                            id_cadastro=membro_m["id_cadastro"],
+                            latitude=lat_massa,
+                            longitude=lon_massa,
+                            distancia_m=dist_massa,
+                            dentro_raio=dentro_massa,
+                            presente=presente,
+                            status=status,
+                        )
+                        registrados += 1
+                    except Exception as exc:
+                        erros.append(f"{membro_m.get('nome', rotulo)}: {exc}")
+
+            if registrados:
+                st.success(f"✅ {registrados} check-in(s) registrados.")
+                st.session_state[sel_key] = []
+            if erros:
+                st.error(f"⚠️ {len(erros)} erro(s):")
+                for e in erros[:5]:
+                    st.caption(f"- {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Aba 3: Frequencia (presentes/ausentes)
+# ═══════════════════════════════════════════════════════════════════════
 
 def _render_frequencia(slug):
-    st.subheader("Presentes e ausentes")
-    evento = _selecionar_evento(slug, apenas_ativos=False, key="geo_evento_freq")
+    st.subheader("📊 Presentes e ausentes")
+    evento = _selecionar_evento(slug, apenas_ativos=False, key="evt_freq")
     if not evento:
         return
 
@@ -1193,16 +1202,19 @@ def _render_frequencia(slug):
     qtd_total = len(tabela)
     qtd_ausentes = qtd_total - qtd_presentes
 
-    c1, c2, c3 = st.columns(3)
+    pct_presenca = (qtd_presentes / qtd_total * 100) if qtd_total > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Membros ativos", qtd_total)
     c2.metric("Presentes", qtd_presentes)
     c3.metric("Ausentes", qtd_ausentes)
+    c4.metric("Presenca %", f"{pct_presenca:.1f}%")
 
     filtro = st.radio(
         "Filtro",
         ["Todos", "Presentes", "Ausentes"],
         horizontal=True,
-        key="geo_filtro_freq",
+        key="filtro_freq",
     )
 
     view = tabela.copy()
@@ -1215,28 +1227,34 @@ def _render_frequencia(slug):
     view = view.rename(columns={
         "nome": "Nome",
         "telefone": "Telefone",
-        "situacao": "Situa\xe7\xe3o",
-        "distancia_m": "Dist\xe2ncia (m)",
+        "situacao": "Situacao",
+        "distancia_m": "Distancia (m)",
         "status": "Status",
         "registrado_em": "Registrado em",
     })
 
     st.dataframe(
-        view[["Nome", "Telefone", "Situa\xe7\xe3o", "Dist\xe2ncia (m)", "Status", "Registrado em"]],
+        view[["Nome", "Telefone", "Situacao", "Distancia (m)", "Status", "Registrado em"]],
         use_container_width=True,
         hide_index=True,
     )
+
     st.download_button(
-        "Exportar CSV",
+        "📥 Exportar CSV",
         gerar_csv(view),
         f"frequencia_geo_{int(evento['id_evento'])}.csv",
         "text/csv",
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Aba 4: Mensagens
+# ═══════════════════════════════════════════════════════════════════════
+
 def _render_mensagens(slug):
-    st.subheader("Mensagens para presentes e ausentes")
-    evento = _selecionar_evento(slug, apenas_ativos=False, key="geo_evento_msg")
+    st.subheader("💬 Mensagens para presentes e ausentes")
+
+    evento = _selecionar_evento(slug, apenas_ativos=False, key="evt_msg")
     if not evento:
         return
 
@@ -1249,7 +1267,7 @@ def _render_mensagens(slug):
         "Enviar para",
         ["Ausentes", "Presentes", "Todos"],
         horizontal=True,
-        key="geo_grupo_msg",
+        key="grupo_msg",
     )
 
     if grupo == "Presentes":
@@ -1259,9 +1277,10 @@ def _render_mensagens(slug):
     else:
         destinatarios = tabela.copy()
 
+    modelo_grupo = grupo if grupo != "Todos" else "Ausentes"
     modelo = st.text_area(
         "Mensagem",
-        value=_mensagem_padrao(evento, grupo if grupo != "Todos" else "Ausentes"),
+        value=_mensagem_padrao(evento, modelo_grupo),
         height=130,
         help="Use {nome}, {evento} e {data} na mensagem.",
     )
@@ -1269,7 +1288,7 @@ def _render_mensagens(slug):
     data_fmt = pd.to_datetime(evento.get("data"), errors="coerce")
     data_txt = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else str(evento.get("data", ""))
 
-    st.caption(f"{len(destinatarios)} destinat\xe1rio(s) selecionado(s).")
+    st.caption(f"📤 {len(destinatarios)} destinatario(s) selecionado(s).")
 
     linhas = []
     for _, row in destinatarios.iterrows():
@@ -1284,54 +1303,64 @@ def _render_mensagens(slug):
         linhas.append({
             "Nome": nome,
             "Telefone": telefone,
-            "Situa\xe7\xe3o": row.get("situacao", ""),
+            "Situacao": row.get("situacao", ""),
             "Mensagem": mensagem,
             "Link WhatsApp": link,
         })
 
     df_msg = pd.DataFrame(linhas)
     st.dataframe(
-        df_msg[["Nome", "Telefone", "Situa\xe7\xe3o", "Mensagem"]],
+        df_msg[["Nome", "Telefone", "Situacao", "Mensagem"]] if not df_msg.empty else df_msg,
         use_container_width=True,
         hide_index=True,
     )
-    st.download_button(
-        "Exportar lista de mensagens",
-        gerar_csv(df_msg),
-        f"mensagens_geo_{grupo.lower()}.csv",
-        "text/csv",
-        use_container_width=True,
-    )
 
-    st.markdown("#### Envio em massa")
-    if _whatsapp_api_configurada():
-        st.success("WhatsApp Cloud API configurada. O envio em massa pode ser usado.")
-    else:
-        st.warning(
-            "WhatsApp Cloud API n\xe3o configurada. Para envio em massa com um clique, "
-            "configure `[whatsapp] access_token` e `phone_number_id` no st.secrets."
+    if not df_msg.empty:
+        st.download_button(
+            "📥 Exportar lista de mensagens",
+            gerar_csv(df_msg),
+            f"mensagens_geo_{grupo.lower()}.csv",
+            "text/csv",
+            use_container_width=True,
         )
 
-    qtd_validos = int(df_msg["Telefone"].apply(_normalizar_tel_brasil).astype(bool).sum()) if not df_msg.empty else 0
-    st.caption(f"{qtd_validos} telefone(s) v\xe1lido(s) para envio por API.")
+    # ─── Envio em massa ─────────────────────────────────────────────
+    st.markdown("#### 📨 Envio em massa")
+
+    if _whatsapp_api_configurada():
+        st.success("✅ WhatsApp Cloud API configurada.")
+    else:
+        st.warning(
+            "⚠️ WhatsApp Cloud API nao configurada. Configure "
+            "`[whatsapp] access_token` e `phone_number_id` no `st.secrets` "
+            "para envio em massa. Voce ainda pode usar os links individuais abaixo."
+        )
+
+    qtd_validos = (
+        int(df_msg["Telefone"].apply(_normalizar_tel_brasil).astype(bool).sum())
+        if not df_msg.empty
+        else 0
+    )
+    st.caption(f"📱 {qtd_validos} telefone(s) valido(s) para envio por API.")
 
     confirmar_envio = st.checkbox(
-        f"Confirmo o envio da mensagem para {qtd_validos} destinat\xe1rio(s) do grupo {grupo}",
-        key=f"geo_conf_envio_massa_{int(evento['id_evento'])}_{grupo}",
+        f"Confirmo o envio para {qtd_validos} destinatario(s) do grupo {grupo}",
+        key=f"conf_envio_{int(evento['id_evento'])}_{grupo}",
         disabled=not _whatsapp_api_configurada() or qtd_validos == 0,
     )
 
     if st.button(
-        "Enviar mensagem em massa",
+        "📤 Enviar mensagem em massa",
         type="primary",
         use_container_width=True,
         disabled=not confirmar_envio,
+        key=f"btn_envio_{int(evento['id_evento'])}_{grupo}",
     ):
         resultados = []
         barra = st.progress(0)
         with st.spinner("Enviando mensagens..."):
             total_envios = max(1, len(df_msg))
-            for idx, row in df_msg.iterrows():
+            for _, row in df_msg.iterrows():
                 ok, detalhe = _enviar_whatsapp_texto_api(row["Telefone"], row["Mensagem"])
                 resultados.append({
                     "Nome": row["Nome"],
@@ -1339,45 +1368,59 @@ def _render_mensagens(slug):
                     "Status": "Enviado" if ok else "Erro",
                     "Detalhe": detalhe,
                 })
-                barra.progress(min(1.0, (len(resultados)) / total_envios))
+                barra.progress(min(1.0, len(resultados) / total_envios))
 
         df_resultados = pd.DataFrame(resultados)
         enviados = int((df_resultados["Status"] == "Enviado").sum()) if not df_resultados.empty else 0
         erros = int((df_resultados["Status"] == "Erro").sum()) if not df_resultados.empty else 0
-        st.success(f"Envio conclu\xeddo. Enviados: {enviados}. Erros: {erros}.")
+        st.success(f"✅ Envio concluido. Enviados: {enviados}. Erros: {erros}.")
         st.dataframe(df_resultados, use_container_width=True, hide_index=True)
 
-    st.markdown("#### Links de envio")
+    # ─── Links individuais ──────────────────────────────────────────
+    st.markdown("#### 🔗 Links individuais")
     if df_msg.empty:
-        st.info("Nenhum destinat\xe1rio para este filtro.")
+        st.info("Nenhum destinatario para este filtro.")
     else:
         for _, row in df_msg.iterrows():
             if row["Link WhatsApp"]:
-                st.markdown(
-                    f'[{row["Nome"]} - enviar pelo WhatsApp]({row["Link WhatsApp"]})'
-                )
+                st.markdown(f'- [{row["Nome"]} - enviar pelo WhatsApp]({row["Link WhatsApp"]})')
             else:
-                st.caption(f"{row['Nome']} - sem telefone v\xe1lido no cadastro.")
+                st.caption(f"- {row['Nome']} - sem telefone valido")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# Funcao principal - renderiza o modulo completo
+# ═══════════════════════════════════════════════════════════════════════
 
 def render():
     slug = slug_da_sessao()
-    st.title("Monitoramento por Localiza\xe7\xe3o")
+
+    st.title("📍 Monitoramento por Localizacao")
     st.caption(
-        "Controle de presen\xe7a por georreferenciamento, usando o celular cadastrado "
-        "do membro e envio posterior de mensagens para presentes ou ausentes."
+        "Controle de presenca por georreferenciamento usando o GPS do celular. "
+        "Envio de mensagens automatizadas para presentes e ausentes."
     )
 
+    if not GEO_LIB_OK:
+        st.error(
+            "⚠️ **Biblioteca streamlit-geolocation nao instalada!**\n\n"
+            "Adicione a seguinte linha ao seu `requirements.txt`:\n\n"
+            "```\nstreamlit-geolocation>=0.0.10\n```\n\n"
+            "Depois faca o redeploy. Algumas funcoes deste modulo nao funcionarao "
+            "ate que a biblioteca seja instalada."
+        )
+
     st.info(
-        "A captura de localiza\xe7\xe3o depende da permiss\xe3o do navegador/celular. "
-        "Use esse recurso somente com ci\xeancia e consentimento dos participantes."
+        "💡 **Importante:** a captura de localizacao depende da permissao do "
+        "navegador/celular. Use este recurso somente com ciencia e consentimento "
+        "dos participantes (LGPD)."
     )
 
     aba_evento, aba_checkin, aba_freq, aba_msg = st.tabs([
-        "Eventos",
-        "Check-in",
-        "Presentes e ausentes",
-        "Mensagens",
+        "📅 Eventos",
+        "📲 Check-in",
+        "📊 Presentes e ausentes",
+        "💬 Mensagens",
     ])
 
     with aba_evento:
