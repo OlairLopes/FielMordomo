@@ -16,6 +16,7 @@ import html
 import math
 import re
 import json
+import sqlite3
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -40,6 +41,7 @@ from data.repository import (
     obter_geo_evento,
     registrar_geo_presenca,
     listar_geo_presencas,
+    _tenant_db,
 )
 from utils.helpers import gerar_csv, slug_da_sessao
 
@@ -58,6 +60,120 @@ MENSAGEM_PADRAO_AUSENTES = (
     "Paz do Senhor, {nome}! Sentimos sua falta em {evento}, "
     "no dia {data}. Deus abencoe."
 )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Migracao e gestao de horario do evento (colunas hora_inicio/hora_fim)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _garantir_colunas_horario(slug):
+    """
+    Garante que as colunas hora_inicio e hora_fim existam na tabela geo_eventos.
+    Executa apenas uma vez por sessao para evitar overhead.
+    """
+    cache_key = f"_geo_horario_migrado_{slug}"
+    if st.session_state.get(cache_key):
+        return
+
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute("PRAGMA table_info(geo_eventos)")
+            colunas = {row[1] for row in cursor.fetchall()}
+
+            if "hora_inicio" not in colunas:
+                conn.execute(
+                    "ALTER TABLE geo_eventos ADD COLUMN hora_inicio TEXT DEFAULT ''"
+                )
+            if "hora_fim" not in colunas:
+                conn.execute(
+                    "ALTER TABLE geo_eventos ADD COLUMN hora_fim TEXT DEFAULT ''"
+                )
+            conn.commit()
+
+        st.session_state[cache_key] = True
+    except Exception as exc:
+        st.warning(f"Aviso: nao consegui migrar tabela geo_eventos: {exc}")
+
+
+def _ler_horarios_eventos(slug):
+    """
+    Retorna dict {id_evento: (hora_inicio, hora_fim)} com os horarios
+    de todos os eventos do tenant.
+    """
+    _garantir_colunas_horario(slug)
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return {}
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                "SELECT id_evento, hora_inicio, hora_fim FROM geo_eventos"
+            )
+            return {
+                int(row[0]): (str(row[1] or ""), str(row[2] or ""))
+                for row in cursor.fetchall()
+            }
+    except Exception:
+        return {}
+
+
+def _salvar_horario_evento(slug, hora_inicio, hora_fim, id_evento=None, nome=None, data=None):
+    """
+    Salva hora_inicio e hora_fim para um evento.
+    Se id_evento for fornecido, atualiza por ID.
+    Caso contrario, atualiza o evento mais recente com aquele (nome, data).
+    """
+    _garantir_colunas_horario(slug)
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return
+
+        with sqlite3.connect(db_path) as conn:
+            if id_evento:
+                conn.execute(
+                    "UPDATE geo_eventos SET hora_inicio=?, hora_fim=? WHERE id_evento=?",
+                    (str(hora_inicio or ""), str(hora_fim or ""), int(id_evento)),
+                )
+            elif nome and data:
+                conn.execute(
+                    """UPDATE geo_eventos
+                       SET hora_inicio=?, hora_fim=?
+                       WHERE id_evento = (
+                           SELECT MAX(id_evento) FROM geo_eventos
+                           WHERE nome=? AND data=?
+                       )""",
+                    (str(hora_inicio or ""), str(hora_fim or ""), str(nome), str(data)),
+                )
+            conn.commit()
+    except Exception as exc:
+        st.warning(f"Aviso: nao consegui salvar horario: {exc}")
+
+
+def _str_to_time(s):
+    """Converte 'HH:MM' em datetime.time, ou None se invalido."""
+    try:
+        partes = str(s or "").strip().split(":")
+        if len(partes) >= 2:
+            return datetime.time(int(partes[0]), int(partes[1]))
+    except Exception:
+        pass
+    return None
+
+
+def _time_to_str(t):
+    """Converte datetime.time em 'HH:MM', ou string vazia se None."""
+    if not t:
+        return ""
+    try:
+        return t.strftime("%H:%M")
+    except Exception:
+        return ""
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -448,12 +564,24 @@ def _membros_ativos(slug):
     return membros[["id_cadastro", "nome", "telefone"]].sort_values("nome")
 
 
-def _rotulo_evento(row):
+def _rotulo_evento(row, horarios=None):
     data_fmt = pd.to_datetime(row.get("data"), errors="coerce")
     data_txt = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else str(row.get("data", ""))
+
+    # Adiciona hora de inicio ao rotulo se disponivel
+    hora_txt = ""
+    if horarios:
+        try:
+            id_evt = int(row["id_evento"])
+            hora_ini, _ = horarios.get(id_evt, ("", ""))
+            if hora_ini:
+                hora_txt = f" {hora_ini}"
+        except (TypeError, ValueError):
+            pass
+
     status = "habilitado" if int(row.get("captura_habilitada", 0) or 0) else "desabilitado"
     ativo = "" if int(row.get("ativo", 1) or 1) else " - INATIVO"
-    return f'{int(row["id_evento"])} - {data_txt} - {row["nome"]} ({status}){ativo}'
+    return f'{int(row["id_evento"])} - {data_txt}{hora_txt} - {row["nome"]} ({status}){ativo}'
 
 
 def _rotulo_membro(row):
@@ -522,7 +650,7 @@ def _calcular_resultado_presenca(evento, lat, lon):
 # Aba 1: Eventos
 # ═══════════════════════════════════════════════════════════════════════
 
-def _init_estado_evento(evento_atual):
+def _init_estado_evento(evento_atual, horarios=None):
     evento_id = str(evento_atual.get("id_evento", "novo"))
 
     if st.session_state.get("evt_ref") != evento_id:
@@ -530,6 +658,20 @@ def _init_estado_evento(evento_atual):
         st.session_state["evt_lat"] = float(evento_atual.get("latitude", 0) or 0)
         st.session_state["evt_lon"] = float(evento_atual.get("longitude", 0) or 0)
         st.session_state["evt_end"] = str(evento_atual.get("endereco", "") or "")
+
+        # Horarios: busca do dict horarios se disponivel
+        hora_ini_str, hora_fim_str = "", ""
+        if horarios and evento_atual.get("id_evento"):
+            try:
+                hora_ini_str, hora_fim_str = horarios.get(
+                    int(evento_atual["id_evento"]), ("", "")
+                )
+            except (TypeError, ValueError):
+                pass
+
+        st.session_state["evt_hora_ini"] = hora_ini_str
+        st.session_state["evt_hora_fim"] = hora_fim_str
+
         st.session_state["evt_ver"] = st.session_state.get("evt_ver", 0) + 1
 
 
@@ -540,20 +682,24 @@ def _render_eventos(slug):
         "de localizacao quando for o momento."
     )
 
+    # Garante que as colunas de horario existem e carrega os horarios
+    _garantir_colunas_horario(slug)
+    horarios = _ler_horarios_eventos(slug)
+
     eventos = listar_geo_eventos(slug, incluir_inativos=True)
 
     opcoes = ["➕ Novo evento"]
     mapa_eventos = {}
     if not eventos.empty:
         for _, row in eventos.iterrows():
-            rotulo = _rotulo_evento(row)
+            rotulo = _rotulo_evento(row, horarios)
             opcoes.append(rotulo)
             mapa_eventos[rotulo] = row.to_dict()
 
     escolhido = st.selectbox("Evento", opcoes, key="evt_sel")
     evento_atual = mapa_eventos.get(escolhido, {})
 
-    _init_estado_evento(evento_atual)
+    _init_estado_evento(evento_atual, horarios)
     ver = st.session_state["evt_ver"]
 
     # ─── Botao APLICAR localizacao capturada ────────────────────────
@@ -700,6 +846,25 @@ def _render_eventos(slug):
                 format="DD/MM/YYYY",
             )
 
+        # Horarios de inicio e fim
+        col_h1, col_h2 = st.columns(2)
+        with col_h1:
+            hora_ini_default = _str_to_time(st.session_state.get("evt_hora_ini")) or datetime.time(19, 30)
+            hora_inicio_form = st.time_input(
+                "🕐 Hora de inicio",
+                value=hora_ini_default,
+                step=datetime.timedelta(minutes=15),
+                help="Horario em que o evento comeca.",
+            )
+        with col_h2:
+            hora_fim_default = _str_to_time(st.session_state.get("evt_hora_fim")) or datetime.time(21, 0)
+            hora_fim_form = st.time_input(
+                "🕐 Hora de fim",
+                value=hora_fim_default,
+                step=datetime.timedelta(minutes=15),
+                help="Horario previsto de termino.",
+            )
+
         c3, c4, c5 = st.columns(3)
         with c3:
             latitude = st.number_input(
@@ -762,11 +927,15 @@ def _render_eventos(slug):
             st.error("❌ Informe o nome do evento.")
         elif latitude == 0.0 and longitude == 0.0:
             st.error("❌ Informe coordenadas validas.")
+        elif hora_inicio_form and hora_fim_form and hora_fim_form <= hora_inicio_form:
+            st.error("❌ A hora de fim deve ser maior que a hora de inicio.")
         else:
             try:
+                id_existente = evento_atual.get("id_evento")
+
                 salvar_geo_evento(
                     slug=slug,
-                    id_evento=evento_atual.get("id_evento"),
+                    id_evento=id_existente,
                     nome=nome,
                     data=data_evt.isoformat(),
                     endereco=st.session_state["evt_end"],
@@ -779,6 +948,21 @@ def _render_eventos(slug):
                     mensagem_ausentes=mensagem_a,
                     observacoes=observacoes,
                 )
+
+                # Salva os horarios separadamente (colunas adicionadas via migracao)
+                hora_ini_str = _time_to_str(hora_inicio_form)
+                hora_fim_str = _time_to_str(hora_fim_form)
+
+                if id_existente:
+                    _salvar_horario_evento(
+                        slug, hora_ini_str, hora_fim_str, id_evento=id_existente
+                    )
+                else:
+                    _salvar_horario_evento(
+                        slug, hora_ini_str, hora_fim_str,
+                        nome=nome, data=data_evt.isoformat(),
+                    )
+
                 st.success("✅ Evento salvo!")
                 st.session_state.pop("evt_ref", None)
                 st.rerun()
@@ -852,13 +1036,28 @@ def _render_eventos(slug):
         df_view["data"] = pd.to_datetime(df_view["data"], errors="coerce").dt.strftime("%d/%m/%Y")
         df_view["captura_habilitada"] = df_view["captura_habilitada"].map({1: "Sim", 0: "Nao"})
         df_view["ativo"] = df_view["ativo"].map({1: "Sim", 0: "Nao"})
+
+        # Adiciona coluna de horario combinando hora_inicio e hora_fim
+        def _formatar_horario(id_evt):
+            try:
+                ini, fim = horarios.get(int(id_evt), ("", ""))
+                if ini and fim:
+                    return f"{ini} - {fim}"
+                return ini or fim or "-"
+            except (TypeError, ValueError):
+                return "-"
+
+        df_view["horario"] = df_view["id_evento"].apply(_formatar_horario)
+
         st.dataframe(
             df_view[[
-                "id_evento", "data", "nome", "endereco", "latitude", "longitude",
-                "raio_metros", "captura_habilitada", "ativo",
+                "id_evento", "data", "horario", "nome", "endereco",
+                "latitude", "longitude", "raio_metros",
+                "captura_habilitada", "ativo",
             ]].rename(columns={
                 "id_evento": "ID",
                 "data": "Data",
+                "horario": "Horario",
                 "nome": "Evento",
                 "endereco": "Endereco",
                 "latitude": "Lat",
@@ -891,10 +1090,13 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
         st.warning("⚠️ Nenhum evento disponivel.")
         return None
 
+    # Le horarios para enriquecer os rotulos
+    horarios = _ler_horarios_eventos(slug)
+
     mapa = {}
     opcoes = []
     for _, row in eventos.iterrows():
-        rotulo = _rotulo_evento(row)
+        rotulo = _rotulo_evento(row, horarios)
         mapa[rotulo] = row.to_dict()
         opcoes.append(rotulo)
 
