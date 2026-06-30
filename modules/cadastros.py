@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import html
 import streamlit as st
 import pandas as pd
@@ -24,6 +24,10 @@ FUNCOES = [
 SEXO_OPC = ["Masculino", "Feminino", ""]
 TIPOS_CADASTRO = ["Membro", "Fornecedor"]
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers de formatacao
+# ═══════════════════════════════════════════════════════════════════════
 
 def _rotulo_tipo_cadastro(tipo):
     return "Fornecedor (empresa)" if tipo == "Fornecedor" else tipo
@@ -95,12 +99,8 @@ def _val(row, col):
 
 
 def _congregacao_da_sessao(slug, igreja):
-    """
-    Retorna o identificador/slug da igreja logada.
-    """
     if not isinstance(igreja, dict):
         igreja = {}
-
     return str(
         igreja.get("identificador")
         or igreja.get("slug")
@@ -122,6 +122,10 @@ def _campo_linha(rotulo, valor):
         '</div>'
     )
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# HTML do formulario para impressao (inalterado)
+# ═══════════════════════════════════════════════════════════════════════
 
 def _gerar_html_formulario_membro(row, igreja):
     igreja = igreja if isinstance(igreja, dict) else {}
@@ -148,125 +152,29 @@ def _gerar_html_formulario_membro(row, igreja):
 <title>Formulario de cadastro - {_html(_val(row, "nome"))}</title>
 <style>
 * {{ box-sizing: border-box; }}
-body {{
-    margin: 0;
-    padding: 18px;
-    background: #f3f4f6;
-    color: #111827;
-    font-family: Arial, Helvetica, sans-serif;
-}}
-.toolbar {{
-    text-align: center;
-    margin-bottom: 14px;
-}}
-.toolbar button {{
-    background: #0F6E56;
-    color: white;
-    border: 0;
-    border-radius: 8px;
-    padding: 10px 22px;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-}}
-.folha {{
-    width: 210mm;
-    min-height: 297mm;
-    margin: 0 auto;
-    background: white;
-    padding: 16mm;
-    border: 1px solid #d1d5db;
-}}
-.cabecalho {{
-    text-align: center;
-    border-bottom: 2px solid #111827;
-    padding-bottom: 10px;
-    margin-bottom: 16px;
-}}
-.igreja {{
-    font-size: 18px;
-    font-weight: 800;
-    text-transform: uppercase;
-}}
-.titulo {{
-    font-size: 15px;
-    font-weight: 700;
-    margin-top: 6px;
-}}
-.emitido {{
-    font-size: 11px;
-    color: #6b7280;
-    margin-top: 4px;
-}}
-.secao {{
-    margin-top: 16px;
-}}
-.secao h2 {{
-    font-size: 13px;
-    text-transform: uppercase;
-    border-bottom: 1px solid #9ca3af;
-    padding-bottom: 4px;
-    margin: 0 0 8px;
-}}
-.grid {{
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px 12px;
-}}
-.grid-3 {{
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px 12px;
-}}
-.campo {{
-    min-height: 42px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    padding: 6px 8px;
-}}
-.campo.full {{
-    grid-column: 1 / -1;
-}}
-.rotulo {{
-    font-size: 10px;
-    color: #6b7280;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}}
-.valor {{
-    font-size: 13px;
-    font-weight: 600;
-    min-height: 16px;
-    word-break: break-word;
-}}
-.observacoes {{
-    height: 80px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    padding: 8px;
-}}
-.assinaturas {{
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 32px;
-    margin-top: 42px;
-}}
-.assinatura {{
-    border-top: 1px solid #111827;
-    text-align: center;
-    padding-top: 6px;
-    font-size: 12px;
-}}
+body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }}
+.toolbar {{ text-align: center; margin-bottom: 14px; }}
+.toolbar button {{ background: #0F6E56; color: white; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; }}
+.folha {{ width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 16mm; border: 1px solid #d1d5db; }}
+.cabecalho {{ text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
+.igreja {{ font-size: 18px; font-weight: 800; text-transform: uppercase; }}
+.titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
+.emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
+.secao {{ margin-top: 16px; }}
+.secao h2 {{ font-size: 13px; text-transform: uppercase; border-bottom: 1px solid #9ca3af; padding-bottom: 4px; margin: 0 0 8px; }}
+.grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px; }}
+.grid-3 {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }}
+.campo {{ min-height: 42px; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; }}
+.campo.full {{ grid-column: 1 / -1; }}
+.rotulo {{ font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; }}
+.valor {{ font-size: 13px; font-weight: 600; min-height: 16px; word-break: break-word; }}
+.observacoes {{ height: 80px; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; }}
+.assinaturas {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; margin-top: 42px; }}
+.assinatura {{ border-top: 1px solid #111827; text-align: center; padding-top: 6px; font-size: 12px; }}
 @media print {{
     body {{ background: white; padding: 0; }}
     .toolbar {{ display: none !important; }}
-    .folha {{
-        width: 100%;
-        min-height: auto;
-        margin: 0;
-        border: 0;
-        padding: 12mm;
-    }}
+    .folha {{ width: 100%; min-height: auto; margin: 0; border: 0; padding: 12mm; }}
 }}
 </style>
 </head>
@@ -280,7 +188,6 @@ body {{
         <div class="titulo">Formulario de Cadastro de Membro</div>
         <div class="emitido">Emitido em {emitido}</div>
     </header>
-
     <section class="secao">
         <h2>Dados principais</h2>
         <div class="grid">
@@ -294,7 +201,6 @@ body {{
             {_campo_linha("Congregacao", _val(row, "congregacao"))}
         </div>
     </section>
-
     <section class="secao">
         <h2>Contato</h2>
         <div class="grid">
@@ -302,7 +208,6 @@ body {{
             {_campo_linha("CEP", cep)}
         </div>
     </section>
-
     <section class="secao">
         <h2>Endereco</h2>
         <div class="grid">
@@ -312,12 +217,10 @@ body {{
             {_campo_linha("Numero", _val(row, "numero"))}
         </div>
     </section>
-
     <section class="secao">
         <h2>Observacoes</h2>
         <div class="observacoes"></div>
     </section>
-
     <section class="assinaturas">
         <div class="assinatura">Assinatura do membro</div>
         <div class="assinatura">Responsavel pelo cadastro</div>
@@ -328,18 +231,608 @@ body {{
 """
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# MODAL: Novo cadastro
+# ═══════════════════════════════════════════════════════════════════════
+
+@st.dialog("➕ Novo cadastro", width="large")
+def modal_novo_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite):
+    """Modal para criar novo membro ou fornecedor."""
+
+    # Version counter para limpar widgets apos salvar
+    if "mnc_ver" not in st.session_state:
+        st.session_state["mnc_ver"] = 0
+    ver = st.session_state["mnc_ver"]
+
+    st.markdown("**Dados principais**")
+
+    tipo = st.selectbox(
+        "Tipo",
+        TIPOS_CADASTRO,
+        format_func=_rotulo_tipo_cadastro,
+        key=f"mnc_tipo_v{ver}",
+    )
+
+    if tipo == "Membro" and bloqueado:
+        st.error(
+            f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
+            f"**{p_info['nome']}**. Faca upgrade para "
+            f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
+        )
+        st.info("Entre em contato com o administrador para upgrade do plano.")
+        if st.button("Fechar", use_container_width=True, key=f"mnc_fechar_v{ver}"):
+            st.rerun()
+        return
+
+    nome = st.text_input("Nome completo", key=f"mnc_nome_v{ver}")
+
+    doc_label = "CPF *" if tipo == "Membro" else "CNPJ *"
+    doc_placeholder = "000.000.000-00" if tipo == "Membro" else "00.000.000/0000-00"
+    cpf = st.text_input(
+        doc_label,
+        placeholder=doc_placeholder,
+        help="Obrigatorio.",
+        key=f"mnc_cpf_v{ver}",
+    )
+
+    dt_nasc = st.date_input(
+        "Data de nascimento" if tipo == "Membro" else "Data de fundacao",
+        value=None,
+        format="DD/MM/YYYY",
+        key=f"mnc_dn_v{ver}",
+        min_value=datetime.date(1900, 1, 1),
+        max_value=datetime.date.today(),
+    )
+
+    if tipo == "Membro":
+        sexo = st.selectbox("Sexo", SEXO_OPC, key=f"mnc_sexo_v{ver}")
+        funcao = st.selectbox("Funcao", FUNCOES, key=f"mnc_funcao_v{ver}")
+    else:
+        sexo, funcao = "", ""
+
+    st.text_input(
+        "Congregacao",
+        value=congregacao_fixa,
+        disabled=True,
+        key=f"mnc_cong_v{ver}",
+        help="Definida automaticamente pelo identificador da igreja logada.",
+    )
+
+    sit = st.selectbox("Situacao", ["Ativo", "Inativo"], key=f"mnc_sit_v{ver}")
+
+    st.markdown("**Contato**")
+    telefone = st.text_input(
+        "Telefone / WhatsApp",
+        placeholder="(00) 00000-0000",
+        key=f"mnc_tel_v{ver}",
+    )
+
+    st.markdown("**Endereco**")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        logradouro = st.text_input(
+            "Rua / Avenida",
+            placeholder="Ex: Rua das Flores",
+            key=f"mnc_log_v{ver}",
+        )
+    with col2:
+        numero = st.text_input(
+            "Numero",
+            placeholder="123",
+            key=f"mnc_num_v{ver}",
+        )
+
+    bairro = st.text_input(
+        "Bairro",
+        placeholder="Ex: Setor Central",
+        key=f"mnc_bai_v{ver}",
+    )
+
+    col3, col4 = st.columns([2, 1])
+    with col3:
+        cidade = st.text_input("Cidade", value="Minacu", key=f"mnc_cid_v{ver}")
+    with col4:
+        cep = st.text_input("CEP", value="76450-000", key=f"mnc_cep_v{ver}")
+
+    st.divider()
+
+    c_salvar, c_cancelar = st.columns(2)
+    with c_salvar:
+        salvar = st.button(
+            "💾 Salvar",
+            type="primary",
+            use_container_width=True,
+            key=f"mnc_salvar_v{ver}",
+        )
+    with c_cancelar:
+        cancelar = st.button(
+            "Cancelar",
+            use_container_width=True,
+            key=f"mnc_cancelar_v{ver}",
+        )
+
+    if cancelar:
+        st.session_state["mnc_ver"] += 1
+        st.rerun()
+
+    if salvar:
+        dn_str = dt_nasc.isoformat() if dt_nasc else ""
+
+        c = Cadastro(
+            nome=nome,
+            tipo_cadastro=tipo,
+            funcao=funcao,
+            congregacao=congregacao_fixa,
+            cpf=cpf,
+            situacao=sit,
+            data_nascimento=dn_str,
+            sexo=sexo,
+            telefone=telefone,
+            logradouro=logradouro,
+            numero=numero,
+            bairro=bairro,
+            cidade=cidade,
+            cep=cep,
+        )
+
+        erros = c.validar()
+
+        doc_limpo = limpar_documento(cpf)
+        if doc_limpo and cpf_existe(slug, doc_limpo):
+            doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
+            erros.append(doc_tipo + " ja cadastrado.")
+
+        if erros:
+            for e in erros:
+                st.error(e)
+        else:
+            try:
+                inserir_cadastro(slug, c)
+            except LimiteMembrosExcedido as ex:
+                st.error(str(ex))
+            else:
+                _invalida(slug)
+                st.session_state["mnc_ver"] += 1
+                st.toast("✅ Cadastro salvo!")
+                st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODAL: Editar cadastro
+# ═══════════════════════════════════════════════════════════════════════
+
+@st.dialog("✏️ Editar cadastro", width="large")
+def modal_editar_cadastro(slug, sel, plano, p_info, congregacao_fixa, bloqueado):
+    """Modal para editar cadastro existente."""
+
+    id_sel = int(sel["id_cadastro"])
+    kp = f"medit_{id_sel}_"
+
+    st.markdown(f"**Editando:** {_val(sel, 'nome')} (ID #{id_sel})")
+    st.divider()
+
+    st.markdown("**Dados principais**")
+
+    tipo_atual = _val(sel, "tipo_cadastro") or "Membro"
+    tipo_edit = st.selectbox(
+        "Tipo",
+        TIPOS_CADASTRO,
+        format_func=_rotulo_tipo_cadastro,
+        index=TIPOS_CADASTRO.index(tipo_atual) if tipo_atual in TIPOS_CADASTRO else 0,
+        key=kp + "tipo",
+    )
+
+    nome_edit = st.text_input(
+        "Nome completo",
+        value=_val(sel, "nome"),
+        key=kp + "nome",
+    )
+
+    cpf_atual = _val(sel, "cpf")
+    doc_label_e = "CPF *" if tipo_edit == "Membro" else "CNPJ *"
+    doc_placeholder_e = "000.000.000-00" if tipo_edit == "Membro" else "00.000.000/0000-00"
+    cpf_edit = st.text_input(
+        doc_label_e,
+        value=_formatar_doc(cpf_atual, tipo_edit) if cpf_atual else "",
+        placeholder=doc_placeholder_e,
+        key=kp + "cpf",
+        help="Obrigatorio.",
+    )
+
+    dn_atual = _val(sel, "data_nascimento")
+    try:
+        dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
+    except Exception:
+        dn_value = None
+
+    dt_nasc_edit = st.date_input(
+        "Data de nascimento" if tipo_edit == "Membro" else "Data de fundacao",
+        value=dn_value,
+        format="DD/MM/YYYY",
+        key=kp + "dt_nasc",
+        min_value=datetime.date(1900, 1, 1),
+        max_value=datetime.date.today(),
+    )
+
+    if tipo_edit == "Membro":
+        sexo_atual = _val(sel, "sexo")
+        idx_sexo = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
+        sexo_edit = st.selectbox(
+            "Sexo",
+            SEXO_OPC,
+            index=idx_sexo,
+            key=kp + "sexo",
+        )
+
+        funcao_atual = _val(sel, "funcao")
+        funcao_edit = st.selectbox(
+            "Funcao",
+            FUNCOES,
+            index=FUNCOES.index(funcao_atual) if funcao_atual in FUNCOES else 0,
+            key=kp + "funcao",
+        )
+    else:
+        sexo_edit, funcao_edit = "", ""
+
+    cong_edit = _val(sel, "congregacao") or congregacao_fixa
+    st.text_input(
+        "Congregacao",
+        value=cong_edit,
+        disabled=True,
+        key=kp + "cong_fixo",
+        help="Definida automaticamente pelo identificador da igreja logada.",
+    )
+
+    sit_opc = ["Ativo", "Inativo"]
+    sit_edit = st.selectbox(
+        "Situacao",
+        sit_opc,
+        index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
+        key=kp + "sit",
+    )
+
+    st.markdown("**Contato**")
+    tel_atual = _val(sel, "telefone")
+    tel_edit = st.text_input(
+        "Telefone / WhatsApp",
+        value=_formatar_tel(tel_atual) if tel_atual else "",
+        placeholder="(00) 00000-0000",
+        key=kp + "tel",
+    )
+
+    st.markdown("**Endereco**")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        log_edit = st.text_input(
+            "Rua / Avenida",
+            value=_val(sel, "logradouro"),
+            key=kp + "log",
+        )
+    with col2:
+        num_edit = st.text_input(
+            "Numero",
+            value=_val(sel, "numero"),
+            key=kp + "num",
+        )
+
+    bai_edit = st.text_input(
+        "Bairro",
+        value=_val(sel, "bairro"),
+        key=kp + "bai",
+    )
+
+    col3, col4 = st.columns([2, 1])
+    with col3:
+        cid_edit = st.text_input(
+            "Cidade",
+            value=_val(sel, "cidade"),
+            key=kp + "cid",
+        )
+    with col4:
+        cep_atual = _val(sel, "cep")
+        cep_edit = st.text_input(
+            "CEP",
+            value=_formatar_cep(cep_atual) if cep_atual else "",
+            key=kp + "cep",
+        )
+
+    st.divider()
+
+    # Botoes
+    c_salvar, c_cancelar = st.columns(2)
+    with c_salvar:
+        salvar = st.button(
+            "💾 Salvar alteracoes",
+            type="primary",
+            use_container_width=True,
+            key=kp + "btn_salvar",
+        )
+    with c_cancelar:
+        cancelar = st.button(
+            "Cancelar",
+            use_container_width=True,
+            key=kp + "btn_cancelar",
+        )
+
+    if cancelar:
+        # Limpa todas as keys do modal
+        for k in list(st.session_state.keys()):
+            if k.startswith(kp):
+                st.session_state.pop(k, None)
+        st.rerun()
+
+    if salvar:
+        dn_edit_str = dt_nasc_edit.isoformat() if dt_nasc_edit else ""
+
+        c = Cadastro(
+            id_cadastro=id_sel,
+            nome=nome_edit,
+            tipo_cadastro=tipo_edit,
+            funcao=funcao_edit,
+            congregacao=cong_edit,
+            cpf=cpf_edit,
+            situacao=sit_edit,
+            data_nascimento=dn_edit_str,
+            sexo=sexo_edit,
+            telefone=tel_edit,
+            logradouro=log_edit,
+            numero=num_edit,
+            bairro=bai_edit,
+            cidade=cid_edit,
+            cep=cep_edit,
+        )
+
+        erros = c.validar()
+
+        doc_limpo_e = limpar_documento(cpf_edit)
+
+        # Verifica limite de membros se mudou tipo para Membro
+        if (
+            tipo_edit == "Membro"
+            and sel["tipo_cadastro"] != "Membro"
+            and bloqueado
+        ):
+            erros.append(
+                f"O plano {p_info['nome']} atingiu o limite de membros."
+            )
+
+        if doc_limpo_e and cpf_existe(slug, doc_limpo_e, id_excluir=id_sel):
+            doc_tipo_e = "CPF" if tipo_edit == "Membro" else "CNPJ"
+            erros.append(doc_tipo_e + " ja cadastrado em outro registro.")
+
+        if erros:
+            for e in erros:
+                st.error(e)
+        else:
+            try:
+                atualizar_cadastro(slug, c)
+            except LimiteMembrosExcedido as ex:
+                st.error(str(ex))
+            else:
+                _invalida(slug)
+                # Limpa keys do modal
+                for k in list(st.session_state.keys()):
+                    if k.startswith(kp) or k.startswith("_auth_"):
+                        st.session_state.pop(k, None)
+                st.toast("✅ Cadastro alterado!")
+                st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODAL: Visualizar cadastro (somente leitura)
+# ═══════════════════════════════════════════════════════════════════════
+
+@st.dialog("👁️ Visualizar cadastro", width="large")
+def modal_visualizar_cadastro(sel, igreja):
+    """Modal para visualizar dados do cadastro em modo leitura."""
+
+    nome = _val(sel, "nome") or "(sem nome)"
+    tipo = _val(sel, "tipo_cadastro") or "Membro"
+    id_sel = int(sel["id_cadastro"])
+    situacao = _val(sel, "situacao") or "Ativo"
+
+    # Header com nome + badge de tipo e situacao
+    cor_situacao = "#10B981" if situacao == "Ativo" else "#EF4444"
+    cor_tipo = "#3B82F6" if tipo == "Membro" else "#F59E0B"
+
+    st.markdown(
+        f"""
+        <div style="margin-bottom:16px;">
+            <div style="font-size:22px;font-weight:700;margin-bottom:6px;">{_html(nome)}</div>
+            <span style="background:{cor_tipo}22;color:{cor_tipo};padding:3px 10px;
+                         border-radius:12px;font-size:12px;font-weight:600;margin-right:6px;">
+                {_html(_rotulo_tipo_cadastro(tipo))}
+            </span>
+            <span style="background:{cor_situacao}22;color:{cor_situacao};padding:3px 10px;
+                         border-radius:12px;font-size:12px;font-weight:600;margin-right:6px;">
+                {_html(situacao)}
+            </span>
+            <span style="color:#6b7280;font-size:12px;">ID #{id_sel}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Tabs: Dados / Contato / Endereco
+    tab_dados, tab_contato, tab_endereco = st.tabs([
+        "📋 Dados principais",
+        "📞 Contato",
+        "🏠 Endereco",
+    ])
+
+    with tab_dados:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**CPF / CNPJ**")
+            doc = _formatar_doc(_val(sel, "cpf"), tipo)
+            st.code(doc if doc else "(nao informado)", language=None)
+
+            st.markdown("**Data de nascimento**")
+            st.code(_formatar_data(_val(sel, "data_nascimento")) or "(nao informado)", language=None)
+
+            st.markdown("**Funcao ministerial**")
+            st.code(_val(sel, "funcao") or "(nao informado)", language=None)
+
+        with c2:
+            st.markdown("**Sexo**")
+            st.code(_val(sel, "sexo") or "(nao informado)", language=None)
+
+            st.markdown("**Congregacao**")
+            st.code(_val(sel, "congregacao") or "(nao informado)", language=None)
+
+    with tab_contato:
+        st.markdown("**Telefone / WhatsApp**")
+        tel = _formatar_tel(_val(sel, "telefone"))
+        st.code(tel if tel else "(nao informado)", language=None)
+
+        # Link WhatsApp se houver telefone
+        tel_digitos = "".join(c for c in _val(sel, "telefone") if c.isdigit())
+        if tel_digitos:
+            if not tel_digitos.startswith("55"):
+                tel_digitos = "55" + tel_digitos
+            link_wa = f"https://wa.me/{tel_digitos}"
+            st.markdown(
+                f'<a href="{link_wa}" target="_blank" '
+                f'style="display:inline-block;background:#25D366;color:white;'
+                f'padding:8px 18px;border-radius:6px;text-decoration:none;'
+                f'font-weight:600;margin-top:8px;">'
+                f'💬 Abrir conversa no WhatsApp</a>',
+                unsafe_allow_html=True,
+            )
+
+    with tab_endereco:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**CEP**")
+            st.code(_formatar_cep(_val(sel, "cep")) or "(nao informado)", language=None)
+
+            st.markdown("**Rua / Avenida**")
+            st.code(_val(sel, "logradouro") or "(nao informado)", language=None)
+
+            st.markdown("**Numero**")
+            st.code(_val(sel, "numero") or "(nao informado)", language=None)
+
+        with c2:
+            st.markdown("**Bairro**")
+            st.code(_val(sel, "bairro") or "(nao informado)", language=None)
+
+            st.markdown("**Cidade**")
+            st.code(_val(sel, "cidade") or "(nao informado)", language=None)
+
+        # Botao para abrir no Google Maps
+        endereco_completo = ", ".join(filter(None, [
+            _val(sel, "logradouro"),
+            _val(sel, "numero"),
+            _val(sel, "bairro"),
+            _val(sel, "cidade"),
+        ]))
+        if endereco_completo.strip():
+            import urllib.parse
+            link_maps = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote_plus(endereco_completo)
+            st.markdown(
+                f'<a href="{link_maps}" target="_blank" '
+                f'style="display:inline-block;background:#0F6E56;color:white;'
+                f'padding:8px 18px;border-radius:6px;text-decoration:none;'
+                f'font-weight:600;margin-top:8px;">'
+                f'🗺️ Abrir no Google Maps</a>',
+                unsafe_allow_html=True,
+            )
+
+    st.divider()
+
+    if st.button("Fechar", use_container_width=True, key=f"mview_fechar_{id_sel}"):
+        st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MODAL: Excluir cadastro
+# ═══════════════════════════════════════════════════════════════════════
+
+@st.dialog("🗑️ Excluir cadastro", width="small")
+def modal_excluir_cadastro(slug, sel):
+    """Modal para confirmar exclusao do cadastro."""
+
+    id_sel = int(sel["id_cadastro"])
+    nome = _val(sel, "nome")
+    tipo = _val(sel, "tipo_cadastro")
+
+    # Verifica se esta em uso
+    em_uso = cadastro_em_uso(slug, id_sel)
+
+    if em_uso:
+        st.error(
+            f"❌ **Nao e possivel excluir.**\n\n"
+            f"O cadastro **{nome}** esta vinculado a lancamentos. "
+            f"Para excluir, primeiro remova ou altere todos os lancamentos vinculados."
+        )
+
+        if st.button("Fechar", use_container_width=True, key=f"mexc_fechar_{id_sel}"):
+            st.rerun()
+        return
+
+    st.warning(
+        f"⚠️ Voce esta prestes a excluir:\n\n"
+        f"**{nome}** ({_rotulo_tipo_cadastro(tipo)})\n\n"
+        f"Esta acao **nao pode ser desfeita**."
+    )
+
+    confirmar = st.checkbox(
+        f"Confirmo a exclusao de {nome}",
+        key=f"mexc_conf_{id_sel}",
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        excluir = st.button(
+            "🗑️ Excluir definitivamente",
+            type="primary",
+            use_container_width=True,
+            disabled=not confirmar,
+            key=f"mexc_excluir_{id_sel}",
+        )
+    with c2:
+        cancelar = st.button(
+            "Cancelar",
+            use_container_width=True,
+            key=f"mexc_cancelar_{id_sel}",
+        )
+
+    if cancelar:
+        st.session_state.pop(f"mexc_conf_{id_sel}", None)
+        st.rerun()
+
+    if excluir:
+        try:
+            excluir_cadastro(slug, id_sel)
+            _invalida(slug)
+            # Limpa keys
+            for k in list(st.session_state.keys()):
+                if (k.startswith("mexc_")
+                    or k.startswith("_auth_")
+                    or k == "sel_cad_acao"):
+                    st.session_state.pop(k, None)
+            st.toast(f"✅ Cadastro de {nome} excluido!")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"❌ Erro ao excluir: {exc}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Funcao principal: render()
+# ═══════════════════════════════════════════════════════════════════════
+
 def render():
     slug = slug_da_sessao()
     st.subheader("Membros e fornecedores")
     df = _get(slug)
 
     igreja = st.session_state.get("igreja", {})
-    plano  = igreja.get("plano", "basico")
+    plano = igreja.get("plano", "basico")
     p_info = obter_plano(plano)
 
-    # Congregacao FIXA = identificador/slug da igreja logada
     congregacao_fixa = _congregacao_da_sessao(slug, igreja)
 
+    # ─── Pre-cadastros pendentes (mantido como expander) ────────────
     with st.expander("Pre-cadastros pendentes", expanded=False):
         try:
             pre = listar_pre_cadastros_membros(slug, "Pendente")
@@ -399,13 +892,14 @@ def render():
                         st.success("Pre-cadastro marcado como duplicado.")
                         st.rerun()
 
+    # ─── Barra de progresso de membros ──────────────────────────────
     if not df.empty and "tipo_cadastro" in df.columns:
         tipos = df["tipo_cadastro"].fillna("").astype(str).str.strip().str.upper()
         qtd_membros = len(df[tipos == "MEMBRO"])
     else:
         qtd_membros = 0
 
-    limite    = p_info["limite_membros"]
+    limite = p_info["limite_membros"]
     bloqueado = not pode_cadastrar_membro(plano, qtd_membros)
 
     if limite:
@@ -423,144 +917,18 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
-    # â”€â”€ Novo cadastro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    with st.expander("Novo cadastro", expanded=False):
+    # ─── BOTAO PRINCIPAL: Novo cadastro ─────────────────────────────
+    if st.button(
+        "➕ Novo cadastro",
+        type="primary",
+        use_container_width=True,
+        key="btn_abrir_novo",
+    ):
+        modal_novo_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite)
 
-        # >>> TIPO FORA DO FORM <<< - atualiza dinamicamente os outros campos
-        st.markdown("**Dados principais**")
-        if st.session_state.get("novo_tipo") not in TIPOS_CADASTRO:
-            st.session_state.pop("novo_tipo", None)
-        tipo = st.selectbox(
-            "Tipo",
-            TIPOS_CADASTRO,
-            format_func=_rotulo_tipo_cadastro,
-            key="novo_tipo",
-        )
-
-        if tipo == "Membro" and bloqueado:
-            st.error(
-                f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
-                f"**{p_info['nome']}**. Faca upgrade para "
-                f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
-            )
-            st.info("Entre em contato com o administrador para upgrade do plano.")
-        else:
-            # Form com os demais campos
-            with st.form("form_novo_cad", clear_on_submit=True):
-                nome = st.text_input("Nome completo")
-
-                doc_label       = "CPF *" if tipo == "Membro" else "CNPJ *"
-                doc_placeholder = "000.000.000-00" if tipo == "Membro" else "00.000.000/0000-00"
-
-                cpf = st.text_input(
-                    doc_label,
-                    placeholder=doc_placeholder,
-                    help="Obrigatorio."
-                )
-
-                dt_nasc = st.date_input(
-                    "Data de nascimento" if tipo == "Membro" else "Data de fundacao",
-                    value=None,
-                    format="DD/MM/YYYY",
-                    key="novo_dt_nasc",
-                    min_value=datetime.date(1900, 1, 1),
-                    max_value=datetime.date.today(),
-                )
-
-                if tipo == "Membro":
-                    sexo   = st.selectbox("Sexo", SEXO_OPC, key="novo_sexo")
-                    funcao = st.selectbox("Funcao", FUNCOES, key="novo_funcao")
-                else:
-                    sexo, funcao = "", ""
-
-                cong = congregacao_fixa
-
-                st.text_input(
-                    "Congregacao",
-                    value=congregacao_fixa,
-                    disabled=True,
-                    key="novo_cong_fixo",
-                    help="Definida automaticamente pelo identificador da igreja logada."
-                )
-
-                sit = st.selectbox("Situacao", ["Ativo", "Inativo"])
-
-                st.markdown("**Contato**")
-                telefone = st.text_input(
-                    "Telefone / WhatsApp",
-                    placeholder="(00) 00000-0000"
-                )
-
-                st.markdown("**Endereco**")
-                col1, col2 = st.columns([3, 1])
-
-                with col1:
-                    logradouro = st.text_input(
-                        "Rua / Avenida",
-                        placeholder="Ex: Rua das Flores"
-                    )
-
-                with col2:
-                    numero = st.text_input(
-                        "Numero",
-                        placeholder="123"
-                    )
-
-                bairro = st.text_input("Bairro", placeholder="Ex: Setor Central")
-
-                col3, col4 = st.columns([2, 1])
-
-                with col3:
-                    cidade = st.text_input("Cidade", value="Minacu")
-
-                with col4:
-                    cep = st.text_input("CEP", value="76450-000")
-
-                if st.form_submit_button("Salvar", type="primary"):
-                    dn_str = dt_nasc.isoformat() if dt_nasc else ""
-
-                    c = Cadastro(
-                        nome=nome,
-                        tipo_cadastro=tipo,
-                        funcao=funcao,
-                        congregacao=cong,
-                        cpf=cpf,
-                        situacao=sit,
-                        data_nascimento=dn_str,
-                        sexo=sexo,
-                        telefone=telefone,
-                        logradouro=logradouro,
-                        numero=numero,
-                        bairro=bairro,
-                        cidade=cidade,
-                        cep=cep,
-                    )
-
-                    erros = c.validar()
-
-                    doc_limpo = limpar_documento(cpf)
-
-                    if doc_limpo and cpf_existe(slug, doc_limpo):
-                        doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
-                        erros.append(doc_tipo + " ja cadastrado.")
-
-                    if erros:
-                        for e in erros:
-                            st.error(e)
-                    else:
-                        try:
-                            inserir_cadastro(slug, c)
-                        except LimiteMembrosExcedido as ex:
-                            st.error(str(ex))
-                        else:
-                            _invalida(slug)
-                            st.toast("Cadastro salvo!")
-                            st.rerun()
-
-    # â”€â”€ Tabela â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ─── Tabela de cadastros ────────────────────────────────────────
     total = len(df)
-
-    with st.expander(f"Ver cadastros ({total} registros)", expanded=False):
+    with st.expander(f"📋 Ver cadastros ({total} registros)", expanded=False):
         if df.empty:
             st.info("Nenhum cadastro ainda.")
         else:
@@ -589,22 +957,63 @@ def render():
             df_view["cep"] = df_view["cep"].apply(
                 lambda x: _formatar_cep(str(x)) if str(x).strip() else ""
             )
-
             df_view["telefone"] = df_view["telefone"].apply(
                 lambda x: _formatar_tel(str(x)) if str(x).strip() else ""
             )
-
             df_view["data_nascimento"] = df_view["data_nascimento"].apply(
                 lambda x: _formatar_data(str(x)) if str(x).strip() else ""
             )
 
-            # Renomeia coluna para "Documento" (mais generico)
             df_view = df_view.rename(columns={"cpf": "documento"})
-
             st.dataframe(df_view, use_container_width=True)
 
-    # â”€â”€ Editar / Excluir â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    with st.expander("Imprimir formulario de cadastro de membro", expanded=False):
+    # ─── Acoes em cadastros existentes (Visualizar/Editar/Excluir) ──
+    if not df.empty:
+        st.divider()
+        st.markdown("### 🎯 Acoes em cadastro existente")
+
+        df_r = df.reset_index(drop=True)
+        df_r["rotulo"] = df_r.apply(
+            lambda r: f'{int(r["id_cadastro"])} | {r["tipo_cadastro"]} | {r["nome"]} | {r["situacao"]}',
+            axis=1,
+        )
+
+        rotulo = st.selectbox(
+            "Selecione um cadastro",
+            df_r["rotulo"].tolist(),
+            key="sel_cad_acao",
+        )
+
+        sel = df_r[df_r["rotulo"] == rotulo].iloc[0]
+
+        c_view, c_edit, c_del = st.columns(3)
+
+        with c_view:
+            if st.button(
+                "👁️ Visualizar",
+                use_container_width=True,
+                key="btn_abrir_view",
+            ):
+                modal_visualizar_cadastro(sel, igreja)
+
+        with c_edit:
+            if st.button(
+                "✏️ Editar",
+                use_container_width=True,
+                key="btn_abrir_edit",
+            ):
+                modal_editar_cadastro(slug, sel, plano, p_info, congregacao_fixa, bloqueado)
+
+        with c_del:
+            if st.button(
+                "🗑️ Excluir",
+                use_container_width=True,
+                key="btn_abrir_del",
+            ):
+                modal_excluir_cadastro(slug, sel)
+
+    # ─── Imprimir formulario (mantido como expander) ────────────────
+    with st.expander("🖨️ Imprimir formulario de cadastro de membro", expanded=False):
         tipo_formulario = st.radio(
             "Tipo de formulario",
             ["Em branco", "Preenchido com dados de um membro"],
@@ -675,256 +1084,3 @@ def render():
                     mime="text/html",
                     use_container_width=True,
                 )
-
-    with st.expander("Editar ou excluir cadastro", expanded=False):
-        if df.empty:
-            st.info("Nenhum cadastro ainda.")
-            return
-
-        df_r = df.reset_index(drop=True)
-
-        df_r["rotulo"] = df_r.apply(
-            lambda r: f'{int(r["id_cadastro"])} | {r["tipo_cadastro"]} | {r["nome"]} | {r["situacao"]}',
-            axis=1,
-        )
-
-        rotulo = st.selectbox(
-            "Selecione",
-            df_r["rotulo"].tolist(),
-            key="sel_cad_edit"
-        )
-
-        sel    = df_r[df_r["rotulo"] == rotulo].iloc[0]
-        id_sel = int(sel["id_cadastro"])
-
-        # CHAVE DINAMICA - quando muda a selecao, todos os widgets sao recriados
-        kp = f"_edit_cad_{id_sel}_"
-
-        st.markdown("**Dados principais**")
-
-        tipo_opc = TIPOS_CADASTRO
-
-        tipo_edit = st.selectbox(
-            "Tipo",
-            tipo_opc,
-            format_func=_rotulo_tipo_cadastro,
-            index=tipo_opc.index(sel["tipo_cadastro"])
-            if sel["tipo_cadastro"] in tipo_opc else 0,
-            key=kp + "tipo"
-        )
-
-        nome_edit = st.text_input(
-            "Nome completo",
-            value=_val(sel, "nome"),
-            key=kp + "nome"
-        )
-
-        cpf_atual         = _val(sel, "cpf")
-        doc_label_e       = "CPF *" if tipo_edit == "Membro" else "CNPJ *"
-        doc_placeholder_e = "000.000.000-00" if tipo_edit == "Membro" else "00.000.000/0000-00"
-
-        cpf_edit = st.text_input(
-            doc_label_e,
-            value=_formatar_doc(cpf_atual, tipo_edit) if cpf_atual else "",
-            placeholder=doc_placeholder_e,
-            key=kp + "cpf",
-            help="Obrigatorio.",
-        )
-
-        dn_atual = _val(sel, "data_nascimento")
-
-        try:
-            dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
-        except Exception:
-            dn_value = None
-
-        dt_nasc_edit = st.date_input(
-            "Data de nascimento" if tipo_edit == "Membro" else "Data de fundacao",
-            value=dn_value,
-            format="DD/MM/YYYY",
-            key=kp + "dt_nasc",
-            min_value=datetime.date(1900, 1, 1),
-            max_value=datetime.date.today(),
-        )
-
-        if tipo_edit == "Membro":
-            sexo_atual = _val(sel, "sexo")
-            idx_sexo   = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
-
-            sexo_edit = st.selectbox(
-                "Sexo",
-                SEXO_OPC,
-                index=idx_sexo,
-                key=kp + "sexo"
-            )
-
-            funcao_atual = _val(sel, "funcao")
-
-            funcao_edit = st.selectbox(
-                "Funcao",
-                FUNCOES,
-                index=FUNCOES.index(funcao_atual)
-                if funcao_atual in FUNCOES else 0,
-                key=kp + "funcao"
-            )
-        else:
-            sexo_edit, funcao_edit = "", ""
-
-        cong_edit = _val(sel, "congregacao") or congregacao_fixa
-
-        st.text_input(
-            "Congregacao",
-            value=cong_edit,
-            disabled=True,
-            key=kp + "cong_fixo",
-            help="Definida automaticamente pelo identificador da igreja logada."
-        )
-
-        sit_opc = ["Ativo", "Inativo"]
-
-        sit_edit = st.selectbox(
-            "Situacao",
-            sit_opc,
-            index=sit_opc.index(sel["situacao"])
-            if sel["situacao"] in sit_opc else 0,
-            key=kp + "sit"
-        )
-
-        st.markdown("**Contato**")
-
-        tel_atual = _val(sel, "telefone")
-
-        tel_edit = st.text_input(
-            "Telefone / WhatsApp",
-            value=_formatar_tel(tel_atual) if tel_atual else "",
-            placeholder="(00) 00000-0000",
-            key=kp + "tel"
-        )
-
-        st.markdown("**Endereco**")
-
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            log_edit = st.text_input(
-                "Rua / Avenida",
-                value=_val(sel, "logradouro"),
-                key=kp + "log"
-            )
-
-        with col2:
-            num_edit = st.text_input(
-                "Numero",
-                value=_val(sel, "numero"),
-                key=kp + "num"
-            )
-
-        bai_edit = st.text_input(
-            "Bairro",
-            value=_val(sel, "bairro"),
-            key=kp + "bai"
-        )
-
-        col3, col4 = st.columns([2, 1])
-
-        with col3:
-            cid_edit = st.text_input(
-                "Cidade",
-                value=_val(sel, "cidade"),
-                key=kp + "cid"
-            )
-
-        with col4:
-            cep_atual = _val(sel, "cep")
-            cep_edit = st.text_input(
-                "CEP",
-                value=_formatar_cep(cep_atual) if cep_atual else "",
-                key=kp + "cep"
-            )
-
-        st.divider()
-
-        c1, c2 = st.columns(2)
-
-        with c1:
-            st.caption("Editar cadastro")
-
-            if solicitar_autorizacao("salvar_cad", "editar"):
-                dn_edit_str = dt_nasc_edit.isoformat() if dt_nasc_edit else ""
-
-                c = Cadastro(
-                    id_cadastro=id_sel,
-                    nome=nome_edit,
-                    tipo_cadastro=tipo_edit,
-                    funcao=funcao_edit,
-                    congregacao=cong_edit,
-                    cpf=cpf_edit,
-                    situacao=sit_edit,
-                    data_nascimento=dn_edit_str,
-                    sexo=sexo_edit,
-                    telefone=tel_edit,
-                    logradouro=log_edit,
-                    numero=num_edit,
-                    bairro=bai_edit,
-                    cidade=cid_edit,
-                    cep=cep_edit,
-                )
-
-                erros = c.validar()
-
-                doc_limpo_e = limpar_documento(cpf_edit)
-
-                if (
-                    tipo_edit == "Membro"
-                    and sel["tipo_cadastro"] != "Membro"
-                    and bloqueado
-                ):
-                    erros.append(
-                        f"O plano {p_info['nome']} atingiu o limite de membros."
-                    )
-
-                if doc_limpo_e and cpf_existe(slug, doc_limpo_e, id_excluir=id_sel):
-                    doc_tipo_e = "CPF" if tipo_edit == "Membro" else "CNPJ"
-                    erros.append(doc_tipo_e + " ja cadastrado em outro registro.")
-
-                if erros:
-                    for e in erros:
-                        st.error(e)
-                else:
-                    try:
-                        atualizar_cadastro(slug, c)
-                    except LimiteMembrosExcedido as ex:
-                        st.error(str(ex))
-                    else:
-                        _invalida(slug)
-
-                        for k in list(st.session_state.keys()):
-                            if k.startswith("_auth_") or k.startswith("_edit_cad_"):
-                                st.session_state.pop(k, None)
-
-                        st.toast("Cadastro alterado!")
-                        st.rerun()
-
-        with c2:
-            st.caption("Excluir cadastro")
-
-            if solicitar_autorizacao("excluir_cad", "excluir"):
-                if cadastro_em_uso(slug, id_sel):
-                    st.error("Cadastro vinculado a lancamento. Nao e possivel excluir.")
-                else:
-                    if confirmar_exclusao("del_cad_final", "Confirmar exclusao"):
-                        excluir_cadastro(slug, id_sel)
-                        _invalida(slug)
-
-                        for k in list(st.session_state.keys()):
-                            if (
-                                k.startswith("_auth_")
-                                or k.startswith("_del_")
-                                or k.startswith("_edit_cad_")
-                                or k == "sel_cad_edit"
-                            ):
-                                st.session_state.pop(k, None)
-
-                        st.toast("Excluido.")
-                        st.rerun()
-
