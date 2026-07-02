@@ -1,8 +1,11 @@
-"""
+﻿"""
 FielMordomo - ponto de entrada da aplicação Streamlit.
 
 Mantém as rotas públicas separadas da área autenticada e carrega os módulos
 internos sob demanda para isolar falhas de telas secundarias.
+
+MODIFICADO: adiciona bypass de login para acesso via link de auto-checkin
+(?ck=<slug>_<token>).
 """
 
 import base64
@@ -87,6 +90,17 @@ PAGINAS_LIBERAVEIS = {
     for chave, valor in PAGINAS_IGREJA.items()
     if chave not in {"home", "backup", "minha_conta", "tesoureiros"}
 }
+
+# ═══════════════════════════════════════════════════════════════════════
+# NOVO: Modulos onde procurar a implementacao de auto-checkin.
+# Tenta cada um em ordem, ate encontrar. O nome oficial e geo_frequencia
+# (registrado em PAGINAS_IGREJA); monitoramento_geo e mantido como
+# fallback legado.
+# ═══════════════════════════════════════════════════════════════════════
+MODULOS_AUTO_CHECKIN = (
+    "modules.geo_frequencia",
+    "modules.monitoramento_geo",
+)
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -193,6 +207,134 @@ def _bloquear_acesso_fora_do_dominio_oficial():
     )
     st.stop()
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# NOVO: Deteccao e renderizacao do auto-checkin via link personalizado
+# ═══════════════════════════════════════════════════════════════════════
+
+def _rota_auto_checkin():
+    """
+    Retorna (slug, token) se a URL contem ?ck=<slug>_<token>, senao None.
+
+    O parametro ck permite acesso publico direto a pagina de auto-checkin,
+    sem exigir login. O slug identifica o tenant e o token e verificado
+    contra a tabela geo_checkin_tokens (uso unico).
+    """
+    valor = st.query_params.get("ck", "")
+    if isinstance(valor, list):
+        valor = valor[0] if valor else ""
+    valor = str(valor or "").strip()
+
+    if not valor or "_" not in valor:
+        return None
+
+    partes = valor.split("_", 1)
+    if len(partes) != 2:
+        return None
+
+    slug = str(partes[0] or "").strip().lower()
+    token = str(partes[1] or "").strip()
+
+    # Validacoes basicas de sanidade
+    if not slug or not token:
+        return None
+    # Slug e alfanumerico + hifens/underscores
+    if not all(c.isalnum() or c in "-_" for c in slug):
+        return None
+    # Token e hex
+    if not all(c in "0123456789abcdefABCDEF" for c in token):
+        return None
+    if len(token) < 8 or len(token) > 64:
+        return None
+
+    return slug, token
+
+
+def _importar_modulo_checkin():
+    """
+    Importa o modulo de auto-checkin, tentando os nomes conhecidos.
+    Retorna o modulo ou None se nao encontrado.
+    """
+    for nome in MODULOS_AUTO_CHECKIN:
+        try:
+            return _importar(nome)
+        except ImportError:
+            continue
+        except Exception:
+            LOGGER.exception("Erro ao importar %s.", nome)
+            continue
+    return None
+
+
+def _renderizar_auto_checkin():
+    """
+    Renderiza a pagina de auto-checkin publica (sem login).
+
+    Aplica um layout minimalista:
+    - Sem sidebar
+    - Sem menu de navegacao
+    - Container centralizado e compacto (adequado para mobile)
+
+    O modulo de destino le o parametro ?ck= diretamente do query_params
+    e faz sua propria logica de renderizacao.
+    """
+    # CSS minimalista para link publico (sem sidebar, layout centrado)
+    st.markdown(
+        """
+        <meta name="google" content="notranslate">
+        <meta name="translate" content="no">
+        <style>
+        header[data-testid="stHeader"] { display: none !important; }
+        section[data-testid="stSidebar"] { display: none !important; }
+        [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+        #MainMenu, footer { display: none !important; }
+        .block-container {
+            padding-top: 1.5rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            max-width: 720px !important;
+            margin: 0 auto !important;
+        }
+        html, body, .stApp { background: #F9FAFB; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    modulo = _importar_modulo_checkin()
+
+    if modulo is None:
+        st.error(
+            "⚠️ Modulo de auto-checkin nao encontrado no servidor. "
+            "Contate o administrador do sistema."
+        )
+        st.markdown(
+            f'<p style="text-align:center;margin-top:20px;">'
+            f'<a href="{DOMINIO_OFICIAL}" style="color:#0F6E56;">Voltar para o site</a>'
+            f'</p>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    try:
+        modulo.render()
+    except Exception as ex:
+        LOGGER.exception("Falha ao renderizar auto-checkin.")
+        st.error(
+            "❌ Nao foi possivel processar o link de check-in. "
+            f"(Erro: {type(ex).__name__})"
+        )
+        st.markdown(
+            f'<p style="text-align:center;margin-top:20px;">'
+            f'<a href="{DOMINIO_OFICIAL}" style="color:#0F6E56;">Voltar para o site</a>'
+            f'</p>',
+            unsafe_allow_html=True,
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Rotas publicas normais (institucional / login)
+# ═══════════════════════════════════════════════════════════════════════
 
 def _pagina_publica_atual():
     pagina = st.query_params.get("pagina", "inicio")
@@ -815,6 +957,16 @@ def _renderizar_secretario_geral():
 
 def main():
     _bloquear_acesso_fora_do_dominio_oficial()
+
+    # ═══════════════════════════════════════════════════════════════════
+    # NOVO: Bypass de login para link de auto-checkin (?ck=<slug>_<token>)
+    # Este bloco DEVE vir antes de _resolver_rota_publica e do login,
+    # para permitir acesso publico direto a pagina de check-in.
+    # ═══════════════════════════════════════════════════════════════════
+    if _rota_auto_checkin():
+        _renderizar_auto_checkin()
+        st.stop()
+
     _resolver_rota_publica()
     auth = _auth()
     _validar_contrato_auth(auth)
@@ -848,4 +1000,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

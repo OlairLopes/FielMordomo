@@ -20,6 +20,7 @@ import sqlite3
 import urllib.parse
 import urllib.request
 import urllib.error
+import uuid
 
 import pandas as pd
 import streamlit as st
@@ -68,8 +69,15 @@ MENSAGEM_PADRAO_AUSENTES = (
 
 def _garantir_colunas_horario(slug):
     """
-    Garante que as colunas hora_inicio e hora_fim existam na tabela geo_eventos.
-    Executa apenas uma vez por sessao para evitar overhead.
+    Garante que as colunas de horario/temporais existam na tabela geo_eventos.
+    Cria:
+        - hora_inicio (TEXT)        - Hora de inicio HH:MM
+        - hora_fim (TEXT)            - Hora de fim HH:MM
+        - tolerancia_atraso_min (INTEGER, padrao 15)  - Tolerancia de atraso
+        - janela_antes_min (INTEGER, padrao 30)        - Janela de check-in ANTES
+        - janela_depois_min (INTEGER, padrao 30)       - Janela de check-in DEPOIS
+        - mensagem_lembrete (TEXT)                     - Mensagem do lembrete WhatsApp
+    Executa apenas uma vez por sessao.
     """
     cache_key = f"_geo_horario_migrado_{slug}"
     if st.session_state.get(cache_key):
@@ -84,14 +92,20 @@ def _garantir_colunas_horario(slug):
             cursor = conn.execute("PRAGMA table_info(geo_eventos)")
             colunas = {row[1] for row in cursor.fetchall()}
 
-            if "hora_inicio" not in colunas:
-                conn.execute(
-                    "ALTER TABLE geo_eventos ADD COLUMN hora_inicio TEXT DEFAULT ''"
-                )
-            if "hora_fim" not in colunas:
-                conn.execute(
-                    "ALTER TABLE geo_eventos ADD COLUMN hora_fim TEXT DEFAULT ''"
-                )
+            migracoes = [
+                ("hora_inicio", "TEXT DEFAULT ''"),
+                ("hora_fim", "TEXT DEFAULT ''"),
+                ("tolerancia_atraso_min", "INTEGER DEFAULT 15"),
+                ("janela_antes_min", "INTEGER DEFAULT 30"),
+                ("janela_depois_min", "INTEGER DEFAULT 30"),
+                ("mensagem_lembrete", "TEXT DEFAULT ''"),
+            ]
+
+            for nome_col, tipo_col in migracoes:
+                if nome_col not in colunas:
+                    conn.execute(
+                        f"ALTER TABLE geo_eventos ADD COLUMN {nome_col} {tipo_col}"
+                    )
             conn.commit()
 
         st.session_state[cache_key] = True
@@ -101,8 +115,7 @@ def _garantir_colunas_horario(slug):
 
 def _ler_horarios_eventos(slug):
     """
-    Retorna dict {id_evento: (hora_inicio, hora_fim)} com os horarios
-    de todos os eventos do tenant.
+    Retorna dict {id_evento: (hora_inicio, hora_fim)} para uso em rotulos.
     """
     _garantir_colunas_horario(slug)
     try:
@@ -122,11 +135,60 @@ def _ler_horarios_eventos(slug):
         return {}
 
 
-def _salvar_horario_evento(slug, hora_inicio, hora_fim, id_evento=None, nome=None, data=None):
+def _ler_config_evento(slug, id_evento):
     """
-    Salva hora_inicio e hora_fim para um evento.
-    Se id_evento for fornecido, atualiza por ID.
-    Caso contrario, atualiza o evento mais recente com aquele (nome, data).
+    Retorna dict com TODAS as configuracoes temporais de um evento:
+        hora_inicio, hora_fim, tolerancia_atraso_min,
+        janela_antes_min, janela_depois_min, mensagem_lembrete
+    """
+    _garantir_colunas_horario(slug)
+
+    config_padrao = {
+        "hora_inicio": "",
+        "hora_fim": "",
+        "tolerancia_atraso_min": 15,
+        "janela_antes_min": 30,
+        "janela_depois_min": 30,
+        "mensagem_lembrete": "",
+    }
+
+    if not id_evento:
+        return config_padrao
+
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return config_padrao
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                """SELECT hora_inicio, hora_fim, tolerancia_atraso_min,
+                          janela_antes_min, janela_depois_min, mensagem_lembrete
+                   FROM geo_eventos WHERE id_evento=?""",
+                (int(id_evento),),
+            )
+            row = cursor.fetchone()
+            if row:
+                return {
+                    "hora_inicio": str(row[0] or ""),
+                    "hora_fim": str(row[1] or ""),
+                    "tolerancia_atraso_min": int(row[2] or 15),
+                    "janela_antes_min": int(row[3] or 30),
+                    "janela_depois_min": int(row[4] or 30),
+                    "mensagem_lembrete": str(row[5] or ""),
+                }
+    except Exception:
+        pass
+
+    return config_padrao
+
+
+def _salvar_horario_evento(slug, hora_inicio, hora_fim, id_evento=None, nome=None, data=None,
+                            tolerancia_atraso_min=15, janela_antes_min=30,
+                            janela_depois_min=30, mensagem_lembrete=""):
+    """
+    Salva TODAS as configuracoes temporais de um evento.
+    Se id_evento fornecido, atualiza por ID. Senao, busca por (nome, data).
     """
     _garantir_colunas_horario(slug)
     try:
@@ -134,25 +196,38 @@ def _salvar_horario_evento(slug, hora_inicio, hora_fim, id_evento=None, nome=Non
         if not db_path.exists():
             return
 
+        valores = (
+            str(hora_inicio or ""),
+            str(hora_fim or ""),
+            int(tolerancia_atraso_min or 15),
+            int(janela_antes_min or 30),
+            int(janela_depois_min or 30),
+            str(mensagem_lembrete or ""),
+        )
+
         with sqlite3.connect(db_path) as conn:
             if id_evento:
                 conn.execute(
-                    "UPDATE geo_eventos SET hora_inicio=?, hora_fim=? WHERE id_evento=?",
-                    (str(hora_inicio or ""), str(hora_fim or ""), int(id_evento)),
+                    """UPDATE geo_eventos
+                       SET hora_inicio=?, hora_fim=?, tolerancia_atraso_min=?,
+                           janela_antes_min=?, janela_depois_min=?, mensagem_lembrete=?
+                       WHERE id_evento=?""",
+                    valores + (int(id_evento),),
                 )
             elif nome and data:
                 conn.execute(
                     """UPDATE geo_eventos
-                       SET hora_inicio=?, hora_fim=?
+                       SET hora_inicio=?, hora_fim=?, tolerancia_atraso_min=?,
+                           janela_antes_min=?, janela_depois_min=?, mensagem_lembrete=?
                        WHERE id_evento = (
                            SELECT MAX(id_evento) FROM geo_eventos
                            WHERE nome=? AND data=?
                        )""",
-                    (str(hora_inicio or ""), str(hora_fim or ""), str(nome), str(data)),
+                    valores + (str(nome), str(data)),
                 )
             conn.commit()
     except Exception as exc:
-        st.warning(f"Aviso: nao consegui salvar horario: {exc}")
+        st.warning(f"Aviso: nao consegui salvar configuracoes temporais: {exc}")
 
 
 def _str_to_time(s):
@@ -174,6 +249,330 @@ def _time_to_str(t):
         return t.strftime("%H:%M")
     except Exception:
         return ""
+
+
+# ─── Fuso horario do Brasil (UTC-3) ─────────────────────────────────────
+TZ_BRASILIA = datetime.timezone(datetime.timedelta(hours=-3))
+
+
+def _agora_brasil():
+    """Retorna datetime atual no fuso de Brasilia (UTC-3)."""
+    return datetime.datetime.now(TZ_BRASILIA)
+
+
+def _formatar_delta(delta, formato="{}"):
+    """
+    Formata timedelta como string amigavel: '2h 15min', '45min', '3 dias'.
+    formato deve conter um {} onde a duracao sera inserida.
+    """
+    total_seg = int(abs(delta.total_seconds()))
+
+    dias = total_seg // 86400
+    horas = (total_seg % 86400) // 3600
+    minutos = (total_seg % 3600) // 60
+
+    if dias > 0:
+        if horas > 0:
+            return formato.format(f"{dias} dia(s) e {horas}h")
+        return formato.format(f"{dias} dia(s)")
+    elif horas > 0:
+        if minutos > 0:
+            return formato.format(f"{horas}h {minutos}min")
+        return formato.format(f"{horas}h")
+    else:
+        return formato.format(f"{max(minutos, 1)}min")
+
+
+def _calcular_status_temporal_evento(evento, config_temporal=None):
+    """
+    Retorna (status, descricao) baseado no horario atual vs horario do evento.
+
+    status: 'antes', 'em_andamento', 'encerrado', 'sem_horario'
+    descricao: string amigavel ('Faltam 2h 15min', 'Em andamento ha 30min', etc)
+    """
+    data_str = evento.get("data")
+    if config_temporal is None:
+        config_temporal = {}
+
+    hora_ini = config_temporal.get("hora_inicio") or ""
+    hora_fim = config_temporal.get("hora_fim") or ""
+
+    if not data_str or not hora_ini:
+        return "sem_horario", "Horario nao definido"
+
+    try:
+        if isinstance(data_str, str):
+            data_evt = datetime.date.fromisoformat(data_str[:10])
+        else:
+            data_evt = data_str
+
+        h_ini = _str_to_time(hora_ini)
+        h_fim = _str_to_time(hora_fim) if hora_fim else None
+
+        if not h_ini:
+            return "sem_horario", "Hora de inicio invalida"
+
+        dt_ini = datetime.datetime.combine(data_evt, h_ini, tzinfo=TZ_BRASILIA)
+        if h_fim:
+            dt_fim = datetime.datetime.combine(data_evt, h_fim, tzinfo=TZ_BRASILIA)
+        else:
+            dt_fim = dt_ini + datetime.timedelta(hours=2)
+
+        agora = _agora_brasil()
+
+        if agora < dt_ini:
+            delta = dt_ini - agora
+            return "antes", _formatar_delta(delta, "Falta(m) {}")
+        elif agora > dt_fim:
+            delta = agora - dt_fim
+            return "encerrado", _formatar_delta(delta, "Encerrou ha {}")
+        else:
+            delta = agora - dt_ini
+            return "em_andamento", _formatar_delta(delta, "Em andamento (iniciou ha {})")
+    except Exception:
+        return "sem_horario", "Erro ao calcular tempo"
+
+
+def _esta_dentro_janela_checkin(evento, config_temporal=None):
+    """
+    Verifica se o horario atual permite check-in.
+    Janela = [hora_inicio - janela_antes, hora_fim + janela_depois]
+
+    Retorna (permitido, motivo).
+    """
+    if config_temporal is None:
+        config_temporal = {}
+
+    data_str = evento.get("data")
+    hora_ini = config_temporal.get("hora_inicio") or ""
+    hora_fim = config_temporal.get("hora_fim") or ""
+    janela_antes = int(config_temporal.get("janela_antes_min") or 30)
+    janela_depois = int(config_temporal.get("janela_depois_min") or 30)
+
+    # Sem horario definido = sempre permite (compatibilidade)
+    if not data_str or not hora_ini:
+        return True, "Sem horario definido - check-in livre"
+
+    try:
+        if isinstance(data_str, str):
+            data_evt = datetime.date.fromisoformat(data_str[:10])
+        else:
+            data_evt = data_str
+
+        h_ini = _str_to_time(hora_ini)
+        h_fim = _str_to_time(hora_fim) if hora_fim else None
+
+        if not h_ini:
+            return True, "Hora invalida - check-in livre"
+
+        dt_ini = datetime.datetime.combine(data_evt, h_ini, tzinfo=TZ_BRASILIA)
+        if h_fim:
+            dt_fim = datetime.datetime.combine(data_evt, h_fim, tzinfo=TZ_BRASILIA)
+        else:
+            dt_fim = dt_ini + datetime.timedelta(hours=2)
+
+        janela_inicio = dt_ini - datetime.timedelta(minutes=janela_antes)
+        janela_final = dt_fim + datetime.timedelta(minutes=janela_depois)
+
+        agora = _agora_brasil()
+
+        if agora < janela_inicio:
+            delta = janela_inicio - agora
+            return False, (
+                f"Check-in abrira em {_formatar_delta(delta)} "
+                f"(a partir de {janela_inicio.strftime('%H:%M')})"
+            )
+        if agora > janela_final:
+            return False, (
+                f"Check-in encerrou as {janela_final.strftime('%H:%M')}"
+            )
+
+        return True, "Check-in disponivel"
+    except Exception as exc:
+        return True, f"Erro ao verificar horario - check-in livre ({exc})"
+
+
+def _esta_atrasado(evento, config_temporal=None):
+    """
+    Retorna True se o horario atual e depois de (hora_inicio + tolerancia).
+    """
+    if config_temporal is None:
+        config_temporal = {}
+
+    data_str = evento.get("data")
+    hora_ini = config_temporal.get("hora_inicio") or ""
+    tolerancia = int(config_temporal.get("tolerancia_atraso_min") or 15)
+
+    if not data_str or not hora_ini:
+        return False
+
+    try:
+        if isinstance(data_str, str):
+            data_evt = datetime.date.fromisoformat(data_str[:10])
+        else:
+            data_evt = data_str
+
+        h_ini = _str_to_time(hora_ini)
+        if not h_ini:
+            return False
+
+        dt_ini = datetime.datetime.combine(data_evt, h_ini, tzinfo=TZ_BRASILIA)
+        limite_atraso = dt_ini + datetime.timedelta(minutes=tolerancia)
+
+        return _agora_brasil() > limite_atraso
+    except Exception:
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Auto-checkin via link WhatsApp - Sistema de tokens
+# ═══════════════════════════════════════════════════════════════════════
+
+def _garantir_tabela_tokens(slug):
+    """Cria tabela geo_checkin_tokens se nao existir. Executa 1x por sessao."""
+    cache_key = f"_geo_tokens_migrado_{slug}"
+    if st.session_state.get(cache_key):
+        return
+
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return
+
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS geo_checkin_tokens (
+                    token TEXT PRIMARY KEY,
+                    id_evento INTEGER NOT NULL,
+                    id_cadastro INTEGER NOT NULL,
+                    criado_em TEXT NOT NULL,
+                    usado INTEGER DEFAULT 0,
+                    usado_em TEXT,
+                    resultado TEXT
+                )
+            """)
+            conn.commit()
+
+        st.session_state[cache_key] = True
+    except Exception as exc:
+        st.warning(f"Aviso na migracao de tokens: {exc}")
+
+
+def _gerar_tokens_checkin(slug, id_evento, ids_membros):
+    """
+    Gera tokens de check-in para uma lista de membros.
+    Reutiliza tokens nao usados quando existem.
+    Retorna dict {id_cadastro: token}.
+    """
+    _garantir_tabela_tokens(slug)
+    tokens = {}
+
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return tokens
+
+        agora = _agora_brasil().isoformat()
+
+        with sqlite3.connect(db_path) as conn:
+            for id_cadastro in ids_membros:
+                # Verifica se ja existe token nao usado para (evento, membro)
+                cursor = conn.execute(
+                    """SELECT token FROM geo_checkin_tokens
+                       WHERE id_evento=? AND id_cadastro=? AND usado=0
+                       ORDER BY criado_em DESC LIMIT 1""",
+                    (int(id_evento), int(id_cadastro)),
+                )
+                row = cursor.fetchone()
+
+                if row:
+                    tokens[int(id_cadastro)] = row[0]
+                else:
+                    # Gera novo token (12 chars hex)
+                    novo_token = uuid.uuid4().hex[:12]
+                    conn.execute(
+                        """INSERT INTO geo_checkin_tokens
+                           (token, id_evento, id_cadastro, criado_em)
+                           VALUES (?, ?, ?, ?)""",
+                        (novo_token, int(id_evento), int(id_cadastro), agora),
+                    )
+                    tokens[int(id_cadastro)] = novo_token
+            conn.commit()
+    except Exception as exc:
+        st.error(f"Erro ao gerar tokens: {exc}")
+
+    return tokens
+
+
+def _ler_token_checkin(slug, token):
+    """Retorna dict com dados do token, ou None se invalido."""
+    _garantir_tabela_tokens(slug)
+
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return None
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                """SELECT id_evento, id_cadastro, criado_em, usado, usado_em, resultado
+                   FROM geo_checkin_tokens WHERE token=?""",
+                (str(token),),
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                return None
+
+            return {
+                "token": token,
+                "id_evento": int(row[0]),
+                "id_cadastro": int(row[1]),
+                "criado_em": row[2],
+                "usado": bool(row[3]),
+                "usado_em": row[4],
+                "resultado": row[5],
+            }
+    except Exception:
+        return None
+
+
+def _marcar_token_usado(slug, token, resultado):
+    """Marca token como usado com o resultado do check-in."""
+    _garantir_tabela_tokens(slug)
+    try:
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return
+
+        agora = _agora_brasil().isoformat()
+
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """UPDATE geo_checkin_tokens
+                   SET usado=1, usado_em=?, resultado=?
+                   WHERE token=?""",
+                (agora, str(resultado), str(token)),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+
+def _url_checkin(slug, token):
+    """
+    Constroi a URL de check-in personalizada.
+    Formato: https://fielmordomo.com.br/?ck=<slug>_<token>
+    """
+    try:
+        base = str(st.secrets.get("app", {}).get("url", "")).strip().rstrip("/")
+    except Exception:
+        base = ""
+
+    if not base:
+        base = "https://fielmordomo.com.br"
+
+    return f"{base}/?ck={slug}_{token}"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -626,31 +1025,51 @@ def _mensagem_padrao(evento, grupo):
     return msg if msg else MENSAGEM_PADRAO_AUSENTES
 
 
-def _calcular_resultado_presenca(evento, lat, lon):
+def _calcular_resultado_presenca(evento, lat, lon, config_temporal=None):
+    """
+    Calcula resultado do check-in considerando:
+    - Distancia geografica vs raio
+    - Janela de tempo permitida
+    - Tolerancia de atraso
+    - Captura habilitada e evento ativo
+
+    Retorna tupla:
+        (distancia_m, dentro_raio, presente, status, dentro_janela, atrasado)
+    """
     dist = _distancia_metros(evento["latitude"], evento["longitude"], lat, lon)
     raio = float(evento.get("raio_metros", DEFAULT_RAIO_METROS) or DEFAULT_RAIO_METROS)
     dentro = dist <= raio
     habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
     ativo = bool(int(evento.get("ativo", 1) or 1))
-    presente = dentro and habilitado and ativo
+
+    # Verifica janela e atraso usando config temporal
+    dentro_janela, motivo_janela = _esta_dentro_janela_checkin(evento, config_temporal)
+    atrasado = _esta_atrasado(evento, config_temporal)
+
+    # Presente = todas as condicoes OK
+    presente = dentro and habilitado and ativo and dentro_janela
 
     if not ativo:
         status = "Evento inativo"
     elif not habilitado:
         status = "Captura desabilitada"
-    elif dentro:
-        status = "Presente por localizacao"
-    else:
+    elif not dentro_janela:
+        status = f"Fora do horario: {motivo_janela}"
+    elif not dentro:
         status = "Fora do raio configurado"
+    elif atrasado:
+        status = "Presente (chegou atrasado)"
+    else:
+        status = "Presente por localizacao"
 
-    return dist, dentro, presente, status
+    return dist, dentro, presente, status, dentro_janela, atrasado
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Aba 1: Eventos
 # ═══════════════════════════════════════════════════════════════════════
 
-def _init_estado_evento(evento_atual, horarios=None):
+def _init_estado_evento(evento_atual, config_temporal=None):
     evento_id = str(evento_atual.get("id_evento", "novo"))
 
     if st.session_state.get("evt_ref") != evento_id:
@@ -659,18 +1078,16 @@ def _init_estado_evento(evento_atual, horarios=None):
         st.session_state["evt_lon"] = float(evento_atual.get("longitude", 0) or 0)
         st.session_state["evt_end"] = str(evento_atual.get("endereco", "") or "")
 
-        # Horarios: busca do dict horarios se disponivel
-        hora_ini_str, hora_fim_str = "", ""
-        if horarios and evento_atual.get("id_evento"):
-            try:
-                hora_ini_str, hora_fim_str = horarios.get(
-                    int(evento_atual["id_evento"]), ("", "")
-                )
-            except (TypeError, ValueError):
-                pass
+        # Configuracoes temporais (novas)
+        if config_temporal is None:
+            config_temporal = {}
 
-        st.session_state["evt_hora_ini"] = hora_ini_str
-        st.session_state["evt_hora_fim"] = hora_fim_str
+        st.session_state["evt_hora_ini"] = config_temporal.get("hora_inicio", "")
+        st.session_state["evt_hora_fim"] = config_temporal.get("hora_fim", "")
+        st.session_state["evt_tolerancia"] = int(config_temporal.get("tolerancia_atraso_min") or 15)
+        st.session_state["evt_janela_antes"] = int(config_temporal.get("janela_antes_min") or 30)
+        st.session_state["evt_janela_depois"] = int(config_temporal.get("janela_depois_min") or 30)
+        st.session_state["evt_msg_lembrete"] = str(config_temporal.get("mensagem_lembrete") or "")
 
         st.session_state["evt_ver"] = st.session_state.get("evt_ver", 0) + 1
 
@@ -682,7 +1099,7 @@ def _render_eventos(slug):
         "de localizacao quando for o momento."
     )
 
-    # Garante que as colunas de horario existem e carrega os horarios
+    # Garante que as colunas existem e carrega os horarios (para rotulos)
     _garantir_colunas_horario(slug)
     horarios = _ler_horarios_eventos(slug)
 
@@ -699,7 +1116,10 @@ def _render_eventos(slug):
     escolhido = st.selectbox("Evento", opcoes, key="evt_sel")
     evento_atual = mapa_eventos.get(escolhido, {})
 
-    _init_estado_evento(evento_atual, horarios)
+    # Le configuracao temporal completa do evento atual
+    config_temporal = _ler_config_evento(slug, evento_atual.get("id_evento"))
+
+    _init_estado_evento(evento_atual, config_temporal)
     ver = st.session_state["evt_ver"]
 
     # ─── Botao APLICAR localizacao capturada ────────────────────────
@@ -865,6 +1285,54 @@ def _render_eventos(slug):
                 help="Horario previsto de termino.",
             )
 
+        # Configuracoes avancadas (tolerancia, janela, lembrete)
+        st.markdown("##### ⏱️ Regras de tempo")
+        st.caption(
+            "Estas regras controlam quando o check-in fica disponivel e quando "
+            "marcar membros como 'atrasados'."
+        )
+
+        col_t1, col_t2, col_t3 = st.columns(3)
+        with col_t1:
+            tolerancia_form = st.number_input(
+                "🟡 Tolerancia atraso (min)",
+                min_value=0, max_value=120,
+                value=int(st.session_state.get("evt_tolerancia", 15) or 15),
+                step=5,
+                help="Quem chegar depois disso sera marcado como 'atrasado'.",
+            )
+        with col_t2:
+            janela_antes_form = st.number_input(
+                "⏰ Abrir check-in (min antes)",
+                min_value=0, max_value=240,
+                value=int(st.session_state.get("evt_janela_antes", 30) or 30),
+                step=5,
+                help="Quantos minutos ANTES da hora de inicio o check-in abre.",
+            )
+        with col_t3:
+            janela_depois_form = st.number_input(
+                "⏳ Fechar check-in (min depois)",
+                min_value=0, max_value=240,
+                value=int(st.session_state.get("evt_janela_depois", 30) or 30),
+                step=5,
+                help="Quantos minutos DEPOIS da hora de fim o check-in fecha.",
+            )
+
+        # Mensagem de lembrete
+        msg_lembrete_default = st.session_state.get("evt_msg_lembrete") or ""
+        if not msg_lembrete_default.strip():
+            msg_lembrete_default = (
+                "Paz do Senhor, {nome}! Lembramos que {evento} sera hoje "
+                "as {hora_ini}. Te esperamos!"
+            )
+
+        mensagem_lembrete_form = st.text_area(
+            "📨 Mensagem de lembrete (WhatsApp)",
+            value=msg_lembrete_default,
+            height=80,
+            help="Variaveis disponiveis: {nome}, {evento}, {data}, {hora_ini}, {hora_fim}",
+        )
+
         c3, c4, c5 = st.columns(3)
         with c3:
             latitude = st.number_input(
@@ -949,18 +1417,27 @@ def _render_eventos(slug):
                     observacoes=observacoes,
                 )
 
-                # Salva os horarios separadamente (colunas adicionadas via migracao)
+                # Salva os horarios e configuracoes temporais
                 hora_ini_str = _time_to_str(hora_inicio_form)
                 hora_fim_str = _time_to_str(hora_fim_form)
 
                 if id_existente:
                     _salvar_horario_evento(
-                        slug, hora_ini_str, hora_fim_str, id_evento=id_existente
+                        slug, hora_ini_str, hora_fim_str,
+                        id_evento=id_existente,
+                        tolerancia_atraso_min=tolerancia_form,
+                        janela_antes_min=janela_antes_form,
+                        janela_depois_min=janela_depois_form,
+                        mensagem_lembrete=mensagem_lembrete_form,
                     )
                 else:
                     _salvar_horario_evento(
                         slug, hora_ini_str, hora_fim_str,
                         nome=nome, data=data_evt.isoformat(),
+                        tolerancia_atraso_min=tolerancia_form,
+                        janela_antes_min=janela_antes_form,
+                        janela_depois_min=janela_depois_form,
+                        mensagem_lembrete=mensagem_lembrete_form,
                     )
 
                 st.success("✅ Evento salvo!")
@@ -1127,6 +1604,28 @@ def _render_checkin(slug):
     if not evento:
         return
 
+    # ─── Le configuracao temporal e mostra card de status do evento ─
+    config_temporal = _ler_config_evento(slug, evento.get("id_evento"))
+    status_temporal, descricao_temporal = _calcular_status_temporal_evento(evento, config_temporal)
+    dentro_janela, motivo_janela = _esta_dentro_janela_checkin(evento, config_temporal)
+
+    # Card de status temporal
+    if status_temporal == "antes":
+        st.info(f"⏰ **{descricao_temporal}** para o evento comecar.")
+    elif status_temporal == "em_andamento":
+        st.success(f"🟢 **Evento em andamento** ({descricao_temporal.split('iniciou')[1].strip().rstrip(')') if 'iniciou' in descricao_temporal else descricao_temporal}).")
+    elif status_temporal == "encerrado":
+        st.warning(f"🔴 **Evento encerrado** ({descricao_temporal}).")
+    else:
+        st.caption("ℹ️ Este evento nao tem horario definido.")
+
+    # Status da janela de check-in
+    if dentro_janela:
+        if status_temporal != "sem_horario":
+            st.success(f"✅ **Check-in disponivel.** {motivo_janela}")
+    else:
+        st.error(f"🚫 **Check-in nao disponivel:** {motivo_janela}")
+
     if not bool(int(evento.get("captura_habilitada", 0) or 0)):
         st.warning("⚠️ A captura esta **desabilitada** para este evento.")
 
@@ -1172,8 +1671,8 @@ def _render_checkin(slug):
             )
         else:
             lat_c, lon_c = coord_global
-            dist, dentro, presente_calc, status_calc = _calcular_resultado_presenca(
-                evento, lat_c, lon_c
+            dist, dentro, presente_calc, status_calc, _, atrasado_calc = _calcular_resultado_presenca(
+                evento, lat_c, lon_c, config_temporal
             )
 
             c_dist, c_status = st.columns(2)
@@ -1183,12 +1682,28 @@ def _render_checkin(slug):
             else:
                 c_status.warning(f"⚠️ Fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m)")
 
+            # Aviso de atraso
+            if atrasado_calc and dentro and dentro_janela:
+                st.warning(f"⏰ **Atencao:** voce chegou apos a tolerancia de "
+                          f"{config_temporal.get('tolerancia_atraso_min', 15)} min. "
+                          f"Sera marcado como 'atrasado'.")
+
             st.caption(f"Status: {status_calc}")
+
+            # Botao de registro - bloqueado se fora da janela
+            bloqueado = not dentro_janela
+
+            if bloqueado:
+                st.error(
+                    "🚫 **Check-in bloqueado:** voce esta fora da janela permitida. "
+                    f"Motivo: {motivo_janela}"
+                )
 
             if st.button(
                 "✅ Registrar minha presenca",
                 type="primary",
                 use_container_width=True,
+                disabled=bloqueado,
                 key=f"btn_reg_ind_{evento['id_evento']}_{membro['id_cadastro']}",
             ):
                 try:
@@ -1204,7 +1719,13 @@ def _render_checkin(slug):
                         status=status_calc,
                     )
                     if presente_calc:
-                        st.success(f"✅ Presenca registrada para {membro['nome']}!")
+                        if atrasado_calc:
+                            st.success(
+                                f"✅ Presenca registrada para {membro['nome']} "
+                                f"(chegou atrasado)."
+                            )
+                        else:
+                            st.success(f"✅ Presenca registrada para {membro['nome']}!")
                     else:
                         st.warning(f"⚠️ Registrado como ausente. Motivo: {status_calc}")
 
@@ -1226,8 +1747,8 @@ def _render_checkin(slug):
                 if lat_m == 0 and lon_m == 0:
                     st.error("Informe coordenadas validas.")
                 else:
-                    dist_m, dentro_m, presente_m, status_m = _calcular_resultado_presenca(
-                        evento, lat_m, lon_m
+                    dist_m, dentro_m, presente_m, status_m, _, _ = _calcular_resultado_presenca(
+                        evento, lat_m, lon_m, config_temporal
                     )
                     try:
                         registrar_geo_presenca(
@@ -1260,8 +1781,8 @@ def _render_checkin(slug):
             return
 
         lat_massa, lon_massa = coord_global
-        dist_massa, dentro_massa, _, _ = _calcular_resultado_presenca(
-            evento, lat_massa, lon_massa
+        dist_massa, dentro_massa, _, _, _, atrasado_massa = _calcular_resultado_presenca(
+            evento, lat_massa, lon_massa, config_temporal
         )
 
         col_d1, col_d2, col_d3 = st.columns(3)
@@ -1275,6 +1796,18 @@ def _render_checkin(slug):
             st.warning(
                 f"⚠️ Voce esta fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
                 "Registros serao marcados como ausentes."
+            )
+
+        if atrasado_massa and dentro_massa and dentro_janela:
+            st.warning(
+                f"⏰ Os membros serao marcados como 'chegaram atrasados' "
+                f"(tolerancia de {config_temporal.get('tolerancia_atraso_min', 15)} min)."
+            )
+
+        if not dentro_janela:
+            st.error(
+                f"🚫 **Check-in em massa bloqueado:** fora da janela permitida. "
+                f"{motivo_janela}"
             )
 
         st.markdown("##### Selecione os membros presentes:")
@@ -1321,21 +1854,25 @@ def _render_checkin(slug):
             "💾 Registrar check-in em massa",
             type="primary",
             use_container_width=True,
-            disabled=not confirmar_massa or not selecionados,
+            disabled=not confirmar_massa or not selecionados or not dentro_janela,
             key=f"btn_reg_massa_{evento['id_evento']}",
         ):
             habilitado = bool(int(evento.get("captura_habilitada", 0) or 0))
             ativo = bool(int(evento.get("ativo", 1) or 1))
-            presente = bool(dentro_massa and habilitado and ativo)
+            presente = bool(dentro_massa and habilitado and ativo and dentro_janela)
 
             if not ativo:
                 status = "Evento inativo"
             elif not habilitado:
                 status = "Captura desabilitada"
-            elif dentro_massa:
-                status = "Presente por check-in em massa"
-            else:
+            elif not dentro_janela:
+                status = f"Fora do horario: {motivo_janela}"
+            elif not dentro_massa:
                 status = "Check-in em massa fora do raio"
+            elif atrasado_massa:
+                status = "Presente em massa (chegou atrasado)"
+            else:
+                status = "Presente por check-in em massa"
 
             registrados = 0
             erros = []
@@ -1367,6 +1904,176 @@ def _render_checkin(slug):
                 st.error(f"⚠️ {len(erros)} erro(s):")
                 for e in erros[:5]:
                     st.caption(f"- {e}")
+
+    # ═══════════════════════════════════════════════════════════════
+    # AUTO-CHECKIN VIA LINK WHATSAPP (fora dos tabs individual/massa)
+    # ═══════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("### 🔗 Auto-checkin via link personalizado")
+    st.caption(
+        "Envie via WhatsApp um link personalizado para cada membro. "
+        "Ao clicar, o membro autoriza o GPS e a presenca e registrada automaticamente. "
+        "Cada link e unico e pode ser usado apenas uma vez."
+    )
+
+    _garantir_tabela_tokens(slug)
+
+    id_evento_atual = int(evento["id_evento"])
+    tokens_key = f"geo_tokens_{id_evento_atual}"
+
+    # Botao GERAR LINKS
+    col_g1, col_g2 = st.columns([1, 2])
+
+    with col_g1:
+        gerar_links = st.button(
+            "🔗 Gerar links",
+            use_container_width=True,
+            key=f"btn_gerar_links_{id_evento_atual}",
+            help="Gera um link unico de check-in para cada membro ativo.",
+        )
+
+    with col_g2:
+        tokens_ja_gerados = st.session_state.get(tokens_key, {})
+        if tokens_ja_gerados:
+            st.info(f"✅ {len(tokens_ja_gerados)} link(s) gerado(s) para este evento.")
+
+    if gerar_links:
+        ids_membros = [int(row["id_cadastro"]) for _, row in membros.iterrows()]
+        with st.spinner(f"Gerando {len(ids_membros)} links..."):
+            tokens_novos = _gerar_tokens_checkin(slug, id_evento_atual, ids_membros)
+            st.session_state[tokens_key] = tokens_novos
+        st.success(f"✅ {len(tokens_novos)} links gerados com sucesso!")
+        st.rerun()
+
+    # Se ha tokens gerados, mostra opcoes de envio
+    if tokens_ja_gerados:
+        st.markdown("#### 📤 Enviar links via WhatsApp")
+
+        # Le config temporal para mensagem
+        config_temporal = _ler_config_evento(slug, id_evento_atual)
+        hora_ini_txt = config_temporal.get("hora_inicio") or ""
+        hora_fim_txt = config_temporal.get("hora_fim") or ""
+
+        data_evt_fmt = pd.to_datetime(evento.get("data"), errors="coerce")
+        data_evt_txt = data_evt_fmt.strftime("%d/%m/%Y") if pd.notna(data_evt_fmt) else str(evento.get("data", ""))
+
+        # Mensagem padrao para envio
+        msg_padrao_link = (
+            "Paz do Senhor, {nome}!\n\n"
+            "Evento: {evento}\n"
+            "Data: {data}"
+            + (f" as {hora_ini_txt}" if hora_ini_txt else "")
+            + ".\n\n"
+            "Para registrar sua presenca automaticamente ao chegar, "
+            "clique no link abaixo:\n\n"
+            "{link}\n\n"
+            "Ao chegar no local, clique no link, autorize o GPS e "
+            "sua presenca sera registrada automaticamente."
+        )
+
+        modelo_link = st.text_area(
+            "Mensagem",
+            value=msg_padrao_link,
+            height=170,
+            key=f"msg_link_{id_evento_atual}",
+            help="Use {nome}, {evento}, {data}, {link} na mensagem.",
+        )
+
+        # Constroi lista de destinatarios com telefones validos
+        linhas_envio = []
+        for _, row in membros.iterrows():
+            id_cad = int(row["id_cadastro"])
+            nome = str(row.get("nome", "")).strip()
+            telefone = str(row.get("telefone", "")).strip()
+
+            token = tokens_ja_gerados.get(id_cad)
+            if not token:
+                continue
+
+            link_personalizado = _url_checkin(slug, token)
+
+            mensagem = (
+                modelo_link
+                .replace("{nome}", nome)
+                .replace("{evento}", str(evento.get("nome", "")))
+                .replace("{data}", data_evt_txt)
+                .replace("{link}", link_personalizado)
+            )
+
+            link_wa = _link_whatsapp(telefone, mensagem)
+
+            linhas_envio.append({
+                "Nome": nome,
+                "Telefone": telefone,
+                "Link check-in": link_personalizado,
+                "Mensagem": mensagem,
+                "Link WhatsApp": link_wa,
+                "id_cadastro": id_cad,
+            })
+
+        df_envio = pd.DataFrame(linhas_envio)
+
+        if df_envio.empty:
+            st.warning("Nenhum destinatario com telefone valido.")
+        else:
+            qtd_validos_link = int(df_envio["Telefone"].apply(_normalizar_tel_brasil).astype(bool).sum())
+            st.caption(f"📱 {qtd_validos_link} telefone(s) valido(s) de {len(df_envio)} destinatarios.")
+
+            # Preview
+            with st.expander(f"👁️ Visualizar destinatarios ({len(df_envio)})"):
+                st.dataframe(
+                    df_envio[["Nome", "Telefone", "Link check-in"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            # Envio em massa via API
+            if _whatsapp_api_configurada():
+                st.success("✅ WhatsApp Cloud API configurada.")
+            else:
+                st.warning("⚠️ WhatsApp Cloud API nao configurada. Use os links individuais abaixo.")
+
+            confirmar_envio_links = st.checkbox(
+                f"Confirmo o envio de links para {qtd_validos_link} membro(s)",
+                key=f"conf_envio_link_{id_evento_atual}",
+                disabled=not _whatsapp_api_configurada() or qtd_validos_link == 0,
+            )
+
+            if st.button(
+                "📤 Enviar links via WhatsApp",
+                type="primary",
+                use_container_width=True,
+                disabled=not confirmar_envio_links,
+                key=f"btn_envio_links_{id_evento_atual}",
+            ):
+                resultados = []
+                barra = st.progress(0)
+                with st.spinner("Enviando links..."):
+                    total = max(1, len(df_envio))
+                    for _, row in df_envio.iterrows():
+                        ok, detalhe = _enviar_whatsapp_texto_api(row["Telefone"], row["Mensagem"])
+                        resultados.append({
+                            "Nome": row["Nome"],
+                            "Telefone": row["Telefone"],
+                            "Status": "Enviado" if ok else "Erro",
+                            "Detalhe": detalhe,
+                        })
+                        barra.progress(min(1.0, len(resultados) / total))
+
+                df_res = pd.DataFrame(resultados)
+                enviados = int((df_res["Status"] == "Enviado").sum()) if not df_res.empty else 0
+                erros = int((df_res["Status"] == "Erro").sum()) if not df_res.empty else 0
+                st.success(f"✅ Envio concluido. Enviados: {enviados}. Erros: {erros}.")
+                st.dataframe(df_res, use_container_width=True, hide_index=True)
+
+            # Links individuais
+            with st.expander("🔗 Links individuais (para copiar/enviar manualmente)"):
+                for _, row in df_envio.iterrows():
+                    st.markdown(f"**{row['Nome']}**")
+                    st.code(row["Link check-in"], language=None)
+                    if row["Link WhatsApp"]:
+                        st.markdown(f"[💬 Enviar via WhatsApp para {row['Nome']}]({row['Link WhatsApp']})")
+                    st.markdown("---")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1443,6 +2150,9 @@ def _render_mensagens(slug):
     if not evento:
         return
 
+    # Le configuracao temporal (para lembrete)
+    config_temporal = _ler_config_evento(slug, evento.get("id_evento"))
+
     tabela = _montar_tabela_frequencia(slug, evento["id_evento"])
     if tabela.empty:
         st.info("Nenhum membro ativo encontrado.")
@@ -1450,28 +2160,42 @@ def _render_mensagens(slug):
 
     grupo = st.radio(
         "Enviar para",
-        ["Ausentes", "Presentes", "Todos"],
+        ["Ausentes", "Presentes", "Todos", "🔔 Lembrete (todos os ativos)"],
         horizontal=True,
         key="grupo_msg",
     )
+
+    eh_lembrete = grupo.startswith("🔔")
 
     if grupo == "Presentes":
         destinatarios = tabela[tabela["presente"]].copy()
     elif grupo == "Ausentes":
         destinatarios = tabela[~tabela["presente"]].copy()
     else:
+        # Todos ou Lembrete = todos os membros ativos
         destinatarios = tabela.copy()
 
-    modelo_grupo = grupo if grupo != "Todos" else "Ausentes"
+    # Mensagem padrao depende do grupo
+    if eh_lembrete:
+        msg_default = config_temporal.get("mensagem_lembrete") or (
+            "Paz do Senhor, {nome}! Lembramos que {evento} sera hoje "
+            "as {hora_ini}. Te esperamos!"
+        )
+    else:
+        modelo_grupo = grupo if grupo != "Todos" else "Ausentes"
+        msg_default = _mensagem_padrao(evento, modelo_grupo)
+
     modelo = st.text_area(
         "Mensagem",
-        value=_mensagem_padrao(evento, modelo_grupo),
+        value=msg_default,
         height=130,
-        help="Use {nome}, {evento}, {data}.",
+        help="Use {nome}, {evento}, {data}, {hora_ini}, {hora_fim}.",
     )
 
     data_fmt = pd.to_datetime(evento.get("data"), errors="coerce")
     data_txt = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else str(evento.get("data", ""))
+    hora_ini_txt = config_temporal.get("hora_inicio") or ""
+    hora_fim_txt = config_temporal.get("hora_fim") or ""
 
     st.caption(f"📤 {len(destinatarios)} destinatario(s) selecionado(s).")
 
@@ -1480,9 +2204,12 @@ def _render_mensagens(slug):
         nome = str(row.get("nome", "")).strip()
         telefone = str(row.get("telefone", "")).strip()
         mensagem = (
-            modelo.replace("{nome}", nome)
+            modelo
+            .replace("{nome}", nome)
             .replace("{evento}", str(evento.get("nome", "")))
             .replace("{data}", data_txt)
+            .replace("{hora_ini}", hora_ini_txt)
+            .replace("{hora_fim}", hora_fim_txt)
         )
         link = _link_whatsapp(telefone, mensagem)
         linhas.append({
@@ -1503,7 +2230,7 @@ def _render_mensagens(slug):
         st.download_button(
             "📥 Exportar lista",
             gerar_csv(df_msg),
-            f"mensagens_geo_{grupo.lower()}.csv",
+            f"mensagens_geo_{grupo.lower().replace('🔔 ', '')}.csv",
             "text/csv",
             use_container_width=True,
         )
@@ -1569,10 +2296,228 @@ def _render_mensagens(slug):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Auto-checkin via link personalizado (chamado via ?ck=slug_token)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _render_auto_checkin_via_link(slug, token):
+    """
+    Renderiza a tela de auto-checkin via link personalizado.
+    Chamada quando a URL contem ?ck=<slug>_<token>.
+    """
+
+    # Cabecalho minimalista
+    st.markdown(
+        """
+        <div style='text-align:center;padding:20px 0;background:linear-gradient(135deg,#0F6E56 0%,#10B981 100%);
+                    border-radius:12px;color:white;margin-bottom:20px;'>
+            <h1 style='margin:0;font-size:26px;'>📍 Registro de Presenca</h1>
+            <p style='margin:6px 0 0;font-size:13px;opacity:0.9;'>Check-in automatico via GPS</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Valida token
+    dados_token = _ler_token_checkin(slug, token)
+
+    if not dados_token:
+        st.error(
+            "❌ **Link invalido ou expirado.**\n\n"
+            "Verifique se o link recebido esta completo. "
+            "Se o problema persistir, solicite um novo link."
+        )
+        return
+
+    # Token ja usado?
+    if dados_token["usado"]:
+        st.warning(
+            f"ℹ️ **Este link ja foi utilizado.**\n\n"
+            f"Sua presenca ja foi registrada em: {dados_token['usado_em']}\n\n"
+            f"Resultado: {dados_token.get('resultado', 'presenca registrada')}"
+        )
+        return
+
+    # Busca info do evento
+    try:
+        evento = obter_geo_evento(slug, dados_token["id_evento"])
+    except Exception as exc:
+        st.error(f"❌ Erro ao carregar evento: {exc}")
+        return
+
+    if not evento:
+        st.error("❌ Evento nao encontrado no sistema.")
+        return
+
+    # Busca info do membro
+    try:
+        membros_df = carregar_cadastros(slug)
+    except Exception as exc:
+        st.error(f"❌ Erro ao carregar cadastros: {exc}")
+        return
+
+    if membros_df.empty:
+        st.error("❌ Nenhum cadastro encontrado.")
+        return
+
+    membros_df["id_cadastro"] = pd.to_numeric(membros_df["id_cadastro"], errors="coerce")
+    membro_filtro = membros_df[membros_df["id_cadastro"] == dados_token["id_cadastro"]]
+
+    if membro_filtro.empty:
+        st.error("❌ Membro nao encontrado no cadastro.")
+        return
+
+    membro = membro_filtro.iloc[0]
+    nome_membro = str(membro.get("nome", "Membro")).strip()
+
+    # Le config temporal
+    config_temporal = _ler_config_evento(slug, dados_token["id_evento"])
+
+    # Card com info do membro e evento
+    data_evt = pd.to_datetime(evento.get("data"), errors="coerce")
+    data_txt = data_evt.strftime("%d/%m/%Y") if pd.notna(data_evt) else str(evento.get("data", ""))
+
+    hora_ini = config_temporal.get("hora_inicio", "")
+    hora_fim = config_temporal.get("hora_fim", "")
+    horario_txt = ""
+    if hora_ini and hora_fim:
+        horario_txt = f" das {hora_ini} as {hora_fim}"
+    elif hora_ini:
+        horario_txt = f" as {hora_ini}"
+
+    st.markdown(
+        f"""
+        <div style='background:#F0FDF4;border:2px solid #10B981;border-radius:10px;
+                    padding:16px;margin-bottom:20px;'>
+            <div style='font-size:14px;color:#059669;margin-bottom:6px;'>👋 Ola,</div>
+            <div style='font-size:22px;font-weight:700;color:#064E3B;margin-bottom:12px;'>
+                {html.escape(nome_membro)}
+            </div>
+            <div style='font-size:14px;color:#065F46;'>
+                📅 <strong>{html.escape(str(evento.get('nome', 'Evento')))}</strong><br>
+                🗓️ {data_txt}{horario_txt}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Status temporal do evento
+    status_temporal, descricao_temporal = _calcular_status_temporal_evento(evento, config_temporal)
+    dentro_janela, motivo_janela = _esta_dentro_janela_checkin(evento, config_temporal)
+
+    if status_temporal == "antes":
+        st.info(f"⏰ {descricao_temporal} para o evento comecar.")
+    elif status_temporal == "em_andamento":
+        st.success(f"🟢 Evento em andamento.")
+    elif status_temporal == "encerrado":
+        st.warning(f"🔴 {descricao_temporal}.")
+
+    if not dentro_janela:
+        st.error(
+            f"🚫 **Check-in nao disponivel no momento.**\n\n{motivo_janela}\n\n"
+            "Volte no horario correto para registrar sua presenca."
+        )
+        return
+
+    # Instrucao clara
+    st.markdown("### 📍 Autorize sua localizacao")
+    st.caption(
+        "Clique no icone abaixo e autorize seu navegador a acessar a localizacao. "
+        "Sua presenca sera registrada automaticamente."
+    )
+
+    if not GEO_LIB_OK:
+        st.error("Biblioteca de geolocalizacao nao instalada.")
+        return
+
+    # Captura GPS
+    try:
+        loc = streamlit_geolocation()
+    except Exception as exc:
+        st.error(f"Erro na captura: {exc}")
+        return
+
+    if not loc or loc.get("latitude") is None or loc.get("longitude") is None:
+        st.caption("⬆️ Aguardando captura da localizacao...")
+        return
+
+    try:
+        lat = float(loc["latitude"])
+        lon = float(loc["longitude"])
+    except (TypeError, ValueError):
+        st.error("Coordenadas invalidas capturadas.")
+        return
+
+    # Calcula presenca
+    dist, dentro, presente, status, dentro_janela_final, atrasado = _calcular_resultado_presenca(
+        evento, lat, lon, config_temporal
+    )
+
+    st.markdown("---")
+
+    # Registra presenca
+    try:
+        registrar_geo_presenca(
+            slug=slug,
+            id_evento=dados_token["id_evento"],
+            id_cadastro=dados_token["id_cadastro"],
+            latitude=lat,
+            longitude=lon,
+            distancia_m=dist,
+            dentro_raio=dentro,
+            presente=presente,
+            status=status,
+        )
+        _marcar_token_usado(slug, token, status)
+    except Exception as exc:
+        st.error(f"❌ Erro ao registrar presenca: {exc}")
+        return
+
+    # Mostra resultado
+    if presente:
+        st.balloons()
+        if atrasado:
+            st.success(
+                f"✅ **PRESENCA REGISTRADA!**\n\n"
+                f"👤 {nome_membro}\n\n"
+                f"📍 Distancia: {dist:.0f} m\n\n"
+                f"⏰ Voce chegou apos a tolerancia (marcado como atrasado)."
+            )
+        else:
+            st.success(
+                f"✅ **PRESENCA REGISTRADA!**\n\n"
+                f"👤 {nome_membro}\n\n"
+                f"📍 Distancia: {dist:.0f} m\n\n"
+                f"🎉 Bem-vindo(a) ao evento!"
+            )
+    else:
+        raio = int(evento.get("raio_metros", DEFAULT_RAIO_METROS))
+        st.warning(
+            f"⚠️ **Voce esta fora do raio do evento.**\n\n"
+            f"📍 Distancia: {dist:.0f} m (raio permitido: {raio} m)\n\n"
+            f"Sua localizacao foi registrada como ausente. "
+            f"Aproxime-se do local e o secretariado podera te marcar presente manualmente."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Funcao principal
 # ═══════════════════════════════════════════════════════════════════════
 
 def render():
+    # ═══ DETECCAO DE AUTO-CHECKIN VIA LINK PERSONALIZADO ═══
+    # Se a URL contem ?ck=<slug>_<token>, exibe a tela de auto-checkin
+    # em vez do fluxo normal do modulo.
+    param_ck = _valor_query("ck")
+    if param_ck and "_" in param_ck:
+        # Separa slug e token
+        partes = param_ck.split("_", 1)
+        if len(partes) == 2 and partes[0] and partes[1]:
+            slug_url = partes[0]
+            token = partes[1]
+            _render_auto_checkin_via_link(slug_url, token)
+            return  # NAO renderiza o fluxo normal
+
     slug = slug_da_sessao()
 
     st.title("📍 Monitoramento por Localizacao")
