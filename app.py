@@ -50,7 +50,7 @@ PAGINAS_IGREJA = {
     "dashboard": ("Dashboard", "modules.dashboard"),
     "geo_frequencia": ("Monitoramento Geo", "modules.geo_frequencia"),
     "ebd": ("Escola Bíblica", "modules.ebd"),
-    "gfc": ("GFC", "modules.gfc"),
+    "gfc": ("Grupos Familiares", "modules.gfc"),
     "orhafe": ("Círculo de Oração", "modules.orhafe"),
     "obreiros": ("Reunião de Obreiros", "modules.obreiros"),
     "eventos": ("Agenda", "modules.eventos"),
@@ -90,6 +90,40 @@ PAGINAS_LIBERAVEIS = {
     for chave, valor in PAGINAS_IGREJA.items()
     if chave not in {"home", "backup", "minha_conta", "tesoureiros"}
 }
+
+# ═══════════════════════════════════════════════════════════════════════
+# NOVO: Icones e agrupamento visual do menu lateral
+# ═══════════════════════════════════════════════════════════════════════
+
+ICONES_MENU = {
+    "home": "🏠",
+    "cadastros": "👥",
+    "lancamentos": "💰",
+    "relatorios": "📈",
+    "dashboard": "📊",
+    "geo_frequencia": "📍",
+    "ebd": "📚",
+    "gfc": "👨‍👩‍👧",
+    "orhafe": "🙏",
+    "obreiros": "⛪",
+    "eventos": "📅",
+    "visitantes": "🤝",
+    "pedidos_oracao": "🕊️",
+    "tesoureiros": "💼",
+    "aniversariantes": "🎂",
+    "backup": "💾",
+    "minha_conta": "👤",
+}
+
+# Agrupamento visual da sidebar da igreja (ordem controlada)
+# Cada tupla: (titulo_grupo, cor_do_grupo, lista_de_chaves)
+GRUPOS_MENU_IGREJA = [
+    ("Financeiro", "#10B981", ["lancamentos", "dashboard", "relatorios", "tesoureiros"]),
+    ("Cadastros", "#3B82F6", ["cadastros", "visitantes", "aniversariantes"]),
+    ("Ministerio", "#8B5CF6", ["ebd", "gfc", "orhafe", "obreiros", "pedidos_oracao"]),
+    ("Eventos", "#F59E0B", ["eventos", "geo_frequencia"]),
+    ("Sistema", "#6B7280", ["backup", "minha_conta"]),
+]
 
 # ═══════════════════════════════════════════════════════════════════════
 # NOVO: Modulos onde procurar a implementacao de auto-checkin.
@@ -370,9 +404,18 @@ def _paginas_ordenadas(paginas):
     return sorted(paginas.items(), key=_chave_ordenacao_menu)
 
 
+def _rotulo_menu(chave, rotulo):
+    """Concatena icone + rotulo. Icone vem de ICONES_MENU."""
+    icone = ICONES_MENU.get(chave, "")
+    return f"{icone}  {rotulo}" if icone else rotulo
+
+
 def _botao_inicio_sidebar(key, pagina_destino):
+    # Icone da pagina destino (fallback casa se nao encontrado)
+    icone = ICONES_MENU.get(pagina_destino, "🏠")
+    rotulo_inicio = f"{icone}  Inicio"
     if st.button(
-        "Início",
+        rotulo_inicio,
         key=key,
         use_container_width=True,
         type="primary" if st.session_state.get("pagina") == pagina_destino else "secondary",
@@ -431,6 +474,17 @@ def _injetar_css():
         section[data-testid="stSidebar"] .stButton button[kind="primary"] div,
         section[data-testid="stSidebar"] .stButton button[kind="primary"] span {
             text-align:left!important;text-transform:uppercase!important}
+        .sidebar-grupo {
+            font-size:.68rem!important;
+            color:rgba(212,175,55,.72)!important;
+            text-transform:uppercase!important;
+            letter-spacing:.14em!important;
+            font-weight:700!important;
+            margin:16px 4px 6px 8px!important;
+            padding:4px 0 4px 10px!important;
+            border-left:3px solid var(--grupo-cor, rgba(212,175,55,.5))!important;
+            line-height:1.2!important}
+        .sidebar-grupo-espaco {height:4px}
         .sidebar-logo {text-align:center;padding:10px 0 16px;border-bottom:1px solid rgba(212,175,55,.35);
             margin-bottom:14px}
         .sidebar-logo img {max-width:140px;max-height:90px;object-fit:contain}
@@ -440,6 +494,20 @@ def _injetar_css():
         .sidebar-info .plano {font-size:.68rem;color:rgba(255,255,255,.65)!important;margin-top:2px}
         .block-container {padding-top:3.5rem!important;padding-left:2rem!important;
             padding-right:2rem!important;max-width:100%!important}
+        /* Responsivo mobile */
+        @media (max-width: 768px) {
+            section[data-testid="stSidebar"] .stButton button {
+                font-size:.78rem!important;
+                padding:9px 12px!important;
+                letter-spacing:.03em!important}
+            .sidebar-grupo {
+                font-size:.62rem!important;
+                margin:12px 2px 4px 6px!important;
+                letter-spacing:.10em!important}
+            .sidebar-logo img {max-width:110px;max-height:70px}
+            .sidebar-info {font-size:.72rem}
+            .block-container {padding-left:1rem!important;padding-right:1rem!important}
+        }
         </style>
         <script>
         (function () {
@@ -529,20 +597,75 @@ def _sidebar_igreja(pagina_atual, igreja):
             "</div>",
             unsafe_allow_html=True,
         )
-        _botao_inicio_sidebar("sb_inicio_igreja", "home")
-        for chave, (rotulo, _) in _paginas_ordenadas({
-            k: v for k, v in PAGINAS_IGREJA.items() if k != "home"
-        }):
-            if st.button(
-                rotulo,
-                key=f"sb_{chave}",
-                use_container_width=True,
-                type="primary" if pagina_atual == chave else "secondary",
-            ):
-                st.session_state["pagina"] = chave
-                st.rerun()
+
+        # Botao "Inicio" destacado no topo
+        if st.button(
+            _rotulo_menu("home", "Inicio"),
+            key="sb_inicio_igreja",
+            use_container_width=True,
+            type="primary" if pagina_atual == "home" else "secondary",
+        ):
+            st.session_state["pagina"] = "home"
+            st.rerun()
+
+        # Renderiza cada grupo com seu titulo colorido
+        chaves_ja_renderizadas = {"home"}
+        for titulo_grupo, cor_grupo, chaves in GRUPOS_MENU_IGREJA:
+            # Filtra apenas as chaves que existem em PAGINAS_IGREJA
+            chaves_validas = [c for c in chaves if c in PAGINAS_IGREJA]
+            if not chaves_validas:
+                continue
+
+            # Titulo do grupo com cor especifica
+            st.markdown(
+                f'<div class="sidebar-grupo" style="--grupo-cor:{cor_grupo}">'
+                f'{_esc(titulo_grupo)}</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Ordena alfabeticamente dentro do grupo
+            chaves_ordenadas = sorted(
+                chaves_validas,
+                key=lambda c: _chave_ordenacao_menu((c, PAGINAS_IGREJA[c])),
+            )
+
+            for chave in chaves_ordenadas:
+                rotulo, _ = PAGINAS_IGREJA[chave]
+                chaves_ja_renderizadas.add(chave)
+                if st.button(
+                    _rotulo_menu(chave, rotulo),
+                    key=f"sb_{chave}",
+                    use_container_width=True,
+                    type="primary" if pagina_atual == chave else "secondary",
+                ):
+                    st.session_state["pagina"] = chave
+                    st.rerun()
+
+        # Renderiza qualquer chave "orfa" que nao esteja em nenhum grupo
+        # (fallback para compatibilidade com futuros modulos)
+        chaves_orfas = [
+            c for c in PAGINAS_IGREJA.keys() if c not in chaves_ja_renderizadas
+        ]
+        if chaves_orfas:
+            st.markdown(
+                '<div class="sidebar-grupo" style="--grupo-cor:#D4AF37">Outros</div>',
+                unsafe_allow_html=True,
+            )
+            for chave in sorted(chaves_orfas, key=lambda c: _chave_ordenacao_menu(
+                (c, PAGINAS_IGREJA[c])
+            )):
+                rotulo, _ = PAGINAS_IGREJA[chave]
+                if st.button(
+                    _rotulo_menu(chave, rotulo),
+                    key=f"sb_orfa_{chave}",
+                    use_container_width=True,
+                    type="primary" if pagina_atual == chave else "secondary",
+                ):
+                    st.session_state["pagina"] = chave
+                    st.rerun()
+
         st.divider()
-        if st.button("Sair", key="sb_sair", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair", use_container_width=True):
             _auth().logout()
 
 
@@ -554,9 +677,9 @@ def _sidebar_admin():
             '<div class="plano">Painel do sistema</div></div>',
             unsafe_allow_html=True,
         )
-        st.button("Início", key="sb_inicio_admin", use_container_width=True, type="primary")
+        st.button("🏠  Inicio", key="sb_inicio_admin", use_container_width=True, type="primary")
         st.divider()
-        if st.button("Sair", key="sb_sair_admin", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_admin", use_container_width=True):
             _auth().logout()
 
 
@@ -576,7 +699,7 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
             if chave == "lancamentos":
                 continue
             if st.button(
-                rotulo,
+                _rotulo_menu(chave, rotulo),
                 key=f"sb_tesoureiro_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
@@ -584,7 +707,7 @@ def _sidebar_tesoureiro(pagina_atual, igreja, tesoureiro):
                 st.session_state["pagina"] = chave
                 st.rerun()
         st.divider()
-        if st.button("Sair", key="sb_sair_tesoureiro", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_tesoureiro", use_container_width=True):
             _auth().logout()
 
 
@@ -606,7 +729,7 @@ def _sidebar_secretario_ebd(pagina_atual, igreja, secretario):
             if chave == "ebd":
                 continue
             if st.button(
-                rotulo,
+                _rotulo_menu(chave, rotulo),
                 key=f"sb_secretario_ebd_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
@@ -614,7 +737,7 @@ def _sidebar_secretario_ebd(pagina_atual, igreja, secretario):
                 st.session_state["pagina"] = chave
                 st.rerun()
         st.divider()
-        if st.button("Sair", key="sb_sair_secretario_ebd", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_secretario_ebd", use_container_width=True):
             _auth().logout()
 
 
@@ -635,7 +758,7 @@ def _sidebar_secretaria_orhafe(pagina_atual, igreja, secretaria):
             if chave == "orhafe":
                 continue
             if st.button(
-                rotulo,
+                _rotulo_menu(chave, rotulo),
                 key=f"sb_secretaria_orhafe_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
@@ -643,7 +766,7 @@ def _sidebar_secretaria_orhafe(pagina_atual, igreja, secretaria):
                 st.session_state["pagina"] = chave
                 st.rerun()
         st.divider()
-        if st.button("Sair", key="sb_sair_secretaria_orhafe", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_secretaria_orhafe", use_container_width=True):
             _auth().logout()
 
 
@@ -653,8 +776,8 @@ def _sidebar_secretaria_gfc(pagina_atual, igreja, secretaria):
         _render_logo_sidebar(igreja.get("slug", ""))
         st.markdown(
             '<div class="sidebar-info">'
-            f'<b>{_esc(secretaria.get("nome", "Secretaria GFC"))}</b>'
-            f'<div class="plano">{_esc(perfil)} - GFC</div>'
+            f'<b>{_esc(secretaria.get("nome", "Secretaria de Grupos Familiares"))}</b>'
+            f'<div class="plano">{_esc(perfil)} - Grupos Familiares</div>'
             "</div>",
             unsafe_allow_html=True,
         )
@@ -664,7 +787,7 @@ def _sidebar_secretaria_gfc(pagina_atual, igreja, secretaria):
             if chave == "gfc":
                 continue
             if st.button(
-                rotulo,
+                _rotulo_menu(chave, rotulo),
                 key=f"sb_secretaria_gfc_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
@@ -672,7 +795,7 @@ def _sidebar_secretaria_gfc(pagina_atual, igreja, secretaria):
                 st.session_state["pagina"] = chave
                 st.rerun()
         st.divider()
-        if st.button("Sair", key="sb_sair_secretaria_gfc", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_secretaria_gfc", use_container_width=True):
             _auth().logout()
 
 
@@ -692,7 +815,7 @@ def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
             if chave == "visitantes":
                 continue
             if st.button(
-                rotulo,
+                _rotulo_menu(chave, rotulo),
                 key=f"sb_pastor_auxiliar_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
@@ -700,7 +823,7 @@ def _sidebar_pastor_auxiliar(pagina_atual, igreja, pastor):
                 st.session_state["pagina"] = chave
                 st.rerun()
         st.divider()
-        if st.button("Sair", key="sb_sair_pastor_auxiliar", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_pastor_auxiliar", use_container_width=True):
             _auth().logout()
 
 
@@ -720,7 +843,7 @@ def _sidebar_recepcao(pagina_atual, igreja, recepcao):
             if chave == "visitantes":
                 continue
             if st.button(
-                rotulo,
+                _rotulo_menu(chave, rotulo),
                 key=f"sb_recepcao_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
@@ -728,7 +851,7 @@ def _sidebar_recepcao(pagina_atual, igreja, recepcao):
                 st.session_state["pagina"] = chave
                 st.rerun()
         st.divider()
-        if st.button("Sair", key="sb_sair_recepcao", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_recepcao", use_container_width=True):
             _auth().logout()
 
 
@@ -748,7 +871,7 @@ def _sidebar_secretario_geral(pagina_atual, igreja, secretario):
             if chave == "cadastros":
                 continue
             if st.button(
-                rotulo,
+                _rotulo_menu(chave, rotulo),
                 key=f"sb_secretario_geral_{chave}",
                 use_container_width=True,
                 type="primary" if pagina_atual == chave else "secondary",
@@ -756,7 +879,7 @@ def _sidebar_secretario_geral(pagina_atual, igreja, secretario):
                 st.session_state["pagina"] = chave
                 st.rerun()
         st.divider()
-        if st.button("Sair", key="sb_sair_secretario_geral", use_container_width=True):
+        if st.button("🚪  Sair", key="sb_sair_secretario_geral", use_container_width=True):
             _auth().logout()
 
 
@@ -885,7 +1008,7 @@ def _renderizar_secretaria_gfc():
     try:
         _importar(caminho_modulo).render()
     except Exception as ex:
-        LOGGER.exception("Falha ao carregar GFC para secretaria.")
+        LOGGER.exception("Falha ao carregar Grupos Familiares para secretaria.")
         st.error(
             "Nao foi possivel carregar esta pagina. "
             f"Tipo do erro: {type(ex).__name__}. Consulte o log do sistema."
