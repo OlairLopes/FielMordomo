@@ -412,13 +412,25 @@ def _injetar_css():
         section[data-testid="stSidebar"] * {color:white!important}
         section[data-testid="stSidebar"] .stButton button {width:100%;background:transparent!important;
             border:none!important;color:rgba(255,255,255,.92)!important;text-align:left!important;
-            padding:10px 14px!important;font-size:.95rem!important;border-radius:8px!important;
-            margin-bottom:2px!important;transition:.2s}
+            padding:10px 14px!important;font-size:.85rem!important;font-weight:600!important;
+            letter-spacing:.05em!important;text-transform:uppercase!important;
+            border-radius:8px!important;margin-bottom:2px!important;transition:.2s;
+            justify-content:flex-start!important;display:flex!important}
+        section[data-testid="stSidebar"] .stButton button p,
+        section[data-testid="stSidebar"] .stButton button div,
+        section[data-testid="stSidebar"] .stButton button span {
+            text-align:left!important;text-transform:uppercase!important;
+            letter-spacing:.05em!important;width:100%!important}
         section[data-testid="stSidebar"] .stButton button:hover {background:rgba(212,175,55,.18)!important;
             color:#D4AF37!important}
         section[data-testid="stSidebar"] .stButton button[kind="primary"] {
-            background:rgba(212,175,55,.25)!important;color:#D4AF37!important;font-weight:700!important;
-            border-left:3px solid #D4AF37!important}
+            background:rgba(212,175,55,.25)!important;color:#D4AF37!important;font-weight:800!important;
+            border-left:3px solid #D4AF37!important;text-align:left!important;
+            justify-content:flex-start!important}
+        section[data-testid="stSidebar"] .stButton button[kind="primary"] p,
+        section[data-testid="stSidebar"] .stButton button[kind="primary"] div,
+        section[data-testid="stSidebar"] .stButton button[kind="primary"] span {
+            text-align:left!important;text-transform:uppercase!important}
         .sidebar-logo {text-align:center;padding:10px 0 16px;border-bottom:1px solid rgba(212,175,55,.35);
             margin-bottom:14px}
         .sidebar-logo img {max-width:140px;max-height:90px;object-fit:contain}
