@@ -1,9 +1,14 @@
 import datetime
 import html
+import logging
+import urllib.parse
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+LOGGER = logging.getLogger(__name__)
 
 from data.repository import (
     DIAS_DIZIMISTA_ATIVO_DEFAULT,
@@ -227,7 +232,482 @@ def _layout_grafico(altura=380, margem=None, **extras):
     return layout
 
 
-def _secao_dashboard(titulo, subtitulo):
+# ═══════════════════════════════════════════════════════════════════════
+# NOVOS HELPERS DE ANALISE (Onda 1, 2 e 3)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _totais_dizimo(df_periodo):
+    """Retorna total, quantidade de dizimistas unicos e quantidade de lancamentos."""
+    dizimos = df_periodo[
+        (df_periodo["tipo_norm"] == "ENTRADA")
+        & (df_periodo["categoria_norm"] == "DIZIMO")
+    ]
+    total = float(dizimos["valor"].sum())
+    dizimistas = int(dizimos["id_cadastro"].dropna().nunique())
+    lancamentos = int(len(dizimos))
+    return total, dizimistas, lancamentos
+
+
+def _ticket_medio_arrecadacao(df_periodo, membros):
+    """
+    Calcula ticket medio, potencial e gap de arrecadacao de dizimo.
+    """
+    total_dizimo, dizimistas, _ = _totais_dizimo(df_periodo)
+    n_membros = len(membros)
+    ticket_medio = total_dizimo / dizimistas if dizimistas > 0 else 0.0
+    potencial = ticket_medio * n_membros if n_membros > 0 else 0.0
+    gap = max(potencial - total_dizimo, 0.0)
+    percentual_arrecadado = (total_dizimo / potencial * 100) if potencial > 0 else 0.0
+    return {
+        "total_dizimo": total_dizimo,
+        "dizimistas": dizimistas,
+        "ticket_medio": ticket_medio,
+        "potencial": potencial,
+        "gap": gap,
+        "percentual_arrecadado": percentual_arrecadado,
+        "membros_ativos": n_membros,
+    }
+
+
+def _mesmo_mes_ano_anterior(df, mes_ref):
+    """Retorna DataFrame filtrado para o mesmo mes do ano anterior."""
+    mes_ano_anterior = pd.Period(f"{mes_ref.year - 1}-{mes_ref.month:02d}", freq="M")
+    return df[df["mes_periodo"] == mes_ano_anterior].copy()
+
+
+def _identificar_churn(df, mes_ref, membros, dias_referencia=90):
+    """
+    Identifica dizimistas em churn: contribuiram nos ultimos N dias
+    mas nao contribuiram no mes de referencia.
+    """
+    dizimos_ref = df[
+        (df["tipo_norm"] == "ENTRADA")
+        & (df["categoria_norm"] == "DIZIMO")
+        & (df["mes_periodo"] == mes_ref)
+    ]
+    ids_contribuiram_no_mes = set(dizimos_ref["id_cadastro"].dropna().astype(int))
+
+    fim_mes_ref = mes_ref.start_time.date()
+    inicio_periodo = fim_mes_ref - datetime.timedelta(days=dias_referencia)
+    fim_periodo = fim_mes_ref - datetime.timedelta(days=1)
+
+    dizimos_historico = df[
+        (df["tipo_norm"] == "ENTRADA")
+        & (df["categoria_norm"] == "DIZIMO")
+        & (df["data"] >= pd.Timestamp(inicio_periodo))
+        & (df["data"] <= pd.Timestamp(fim_periodo))
+    ]
+
+    if dizimos_historico.empty:
+        return {"quantidade": 0, "lista": [], "impacto_estimado": 0.0,
+                "dias_referencia": dias_referencia}
+
+    stats = dizimos_historico.groupby("id_cadastro")["valor"].agg(["mean", "count"])
+    stats = stats[stats["count"] >= 2]
+
+    ids_regulares = set(stats.index.astype(int))
+    ids_em_churn = ids_regulares - ids_contribuiram_no_mes
+
+    if not ids_em_churn:
+        return {"quantidade": 0, "lista": [], "impacto_estimado": 0.0,
+                "dias_referencia": dias_referencia}
+
+    membros_dict = membros.set_index("id_cadastro").to_dict("index")
+    lista = []
+    impacto_total = 0.0
+    for id_membro in ids_em_churn:
+        media = float(stats.loc[id_membro, "mean"])
+        impacto_total += media
+        info = membros_dict.get(id_membro, {})
+        lista.append({
+            "ID": id_membro,
+            "Nome": info.get("nome", "(sem cadastro ativo)"),
+            "Telefone": info.get("telefone", ""),
+            "Media mensal": media,
+            "Media mensal formatada": formatar_moeda(media),
+            "Contribuicoes no periodo": int(stats.loc[id_membro, "count"]),
+        })
+    lista.sort(key=lambda x: -x["Media mensal"])
+
+    return {
+        "quantidade": len(ids_em_churn),
+        "lista": lista,
+        "impacto_estimado": impacto_total,
+        "dias_referencia": dias_referencia,
+    }
+
+
+def _curva_abc_dizimistas(df_periodo, membros):
+    """
+    Classifica dizimistas em curva ABC (Pareto).
+    """
+    dizimos = df_periodo[
+        (df_periodo["tipo_norm"] == "ENTRADA")
+        & (df_periodo["categoria_norm"] == "DIZIMO")
+        & df_periodo["id_cadastro"].notna()
+    ]
+    if dizimos.empty:
+        return None
+
+    por_membro = (
+        dizimos.groupby("id_cadastro", as_index=False)["valor"].sum()
+        .sort_values("valor", ascending=False)
+    )
+    total = float(por_membro["valor"].sum())
+    if total <= 0:
+        return None
+
+    por_membro["percentual"] = por_membro["valor"] / total * 100
+    por_membro["acumulado"] = por_membro["percentual"].cumsum()
+
+    def _classificar(acumulado):
+        if acumulado <= 80:
+            return "A"
+        elif acumulado <= 95:
+            return "B"
+        return "C"
+
+    por_membro["classe"] = por_membro["acumulado"].apply(_classificar)
+    membros_dict = membros.set_index("id_cadastro")["nome"].to_dict()
+    por_membro["nome"] = por_membro["id_cadastro"].map(
+        lambda x: membros_dict.get(int(x), "(sem cadastro ativo)")
+    )
+
+    resumo_classes = por_membro.groupby("classe", as_index=False).agg(
+        quantidade=("id_cadastro", "count"),
+        valor=("valor", "sum"),
+    )
+    resumo_classes["percentual_valor"] = resumo_classes["valor"] / total * 100
+    resumo_classes["percentual_membros"] = (
+        resumo_classes["quantidade"] / len(por_membro) * 100
+    )
+
+    classe_a = por_membro[por_membro["classe"] == "A"]
+    pct_a = len(classe_a) / len(por_membro) * 100 if len(por_membro) else 0
+
+    return {
+        "por_membro": por_membro,
+        "resumo_classes": resumo_classes,
+        "total": total,
+        "n_dizimistas": len(por_membro),
+        "pct_dizimistas_top_a": pct_a,
+        "pct_valor_top_a": float(classe_a["valor"].sum() / total * 100) if len(classe_a) else 0,
+    }
+
+
+def _score_saude_financeira(df, mes_ref, saude_info, qualidade, membros):
+    """
+    Score 0-100 combinando 5 dimensoes ponderadas.
+    """
+    # 1. Cobertura reserva (30 pontos)
+    cobertura = saude_info.get("cobertura")
+    if cobertura is None:
+        score_cobertura = 30
+    else:
+        score_cobertura = min(30, max(0, (cobertura / 3) * 30))
+
+    # 2. Saldo YTD positivo (25 pontos)
+    ate_ref = df[df["mes_periodo"] <= mes_ref]
+    saldo_ytd = _totais(ate_ref)[2]
+    total_ytd = _totais(ate_ref)[0]
+    if total_ytd <= 0:
+        score_saldo = 0
+    else:
+        margem = saldo_ytd / total_ytd
+        score_saldo = max(0, min(25, 12.5 + margem * 62.5))
+
+    # 3. Variacao das entradas (20 pontos)
+    serie = _serie_mensal(df, mes_ref, quantidade=3)
+    if len(serie) >= 3:
+        entradas = serie["entradas"].tolist()
+        media_anterior = (entradas[0] + entradas[1]) / 2
+        atual = entradas[-1]
+        if media_anterior > 0:
+            variacao = (atual - media_anterior) / media_anterior
+            score_variacao = max(0, min(20, 10 + variacao * 50))
+        else:
+            score_variacao = 10
+    else:
+        score_variacao = 10
+
+    # 4. % dizimistas (15 pontos)
+    _, _, pct_diz = _participacao_dizimistas(df[df["mes_periodo"] == mes_ref], membros)
+    score_dizimistas = min(15, (pct_diz / 80) * 15)
+
+    # 5. Qualidade dados (10 pontos)
+    total_pendencias = sum(qualidade.values())
+    if total_pendencias == 0:
+        score_qualidade = 10
+    else:
+        score_qualidade = max(0, 10 - (total_pendencias / 10))
+
+    score_total = (
+        score_cobertura + score_saldo + score_variacao
+        + score_dizimistas + score_qualidade
+    )
+
+    if score_total >= 75:
+        classificacao = "excelente"
+        emoji = "🟢"
+    elif score_total >= 50:
+        classificacao = "atencao"
+        emoji = "🟡"
+    else:
+        classificacao = "critico"
+        emoji = "🔴"
+
+    return {
+        "score_total": round(score_total, 1),
+        "classificacao": classificacao,
+        "emoji": emoji,
+        "componentes": {
+            "Cobertura de reserva": round(score_cobertura, 1),
+            "Saldo YTD": round(score_saldo, 1),
+            "Variacao de entradas": round(score_variacao, 1),
+            "Participacao dizimistas": round(score_dizimistas, 1),
+            "Qualidade dos dados": round(score_qualidade, 1),
+        },
+        "maximos": {
+            "Cobertura de reserva": 30,
+            "Saldo YTD": 25,
+            "Variacao de entradas": 20,
+            "Participacao dizimistas": 15,
+            "Qualidade dos dados": 10,
+        },
+    }
+
+
+def _gerar_insight_textual(df, mes_ref, membros, saude_info, ticket_info, score):
+    """
+    Gera paragrafo curto de resumo executivo do mes.
+    """
+    ent, sai, saldo = _totais(df[df["mes_periodo"] == mes_ref])
+    ent_ant, _, _ = _totais(df[df["mes_periodo"] == (mes_ref - 1)])
+    variacao_ent = ((ent - ent_ant) / ent_ant * 100) if ent_ant > 0 else 0
+
+    dizimo_mes, _, _ = _totais_dizimo(df[df["mes_periodo"] == mes_ref])
+    pct_dizimo = (dizimo_mes / ent * 100) if ent > 0 else 0
+
+    qtd_diz, qtd_membros, pct_diz = _participacao_dizimistas(
+        df[df["mes_periodo"] == mes_ref], membros
+    )
+
+    frases = []
+    mes_str = _mes_label(mes_ref)
+    if variacao_ent >= 0:
+        frases.append(
+            f"Em **{mes_str}**, as entradas totalizaram **{formatar_moeda(ent)}**, "
+            f"variacao de **{variacao_ent:+.1f}%** vs mes anterior."
+        )
+    else:
+        frases.append(
+            f"⚠️ Em **{mes_str}**, as entradas foram de **{formatar_moeda(ent)}** — "
+            f"queda de **{abs(variacao_ent):.1f}%** vs mes anterior."
+        )
+
+    if pct_dizimo > 0:
+        frases.append(
+            f"O dizimo representa **{pct_dizimo:.1f}%** das entradas do mes."
+        )
+
+    if qtd_membros > 0:
+        frases.append(
+            f"**{qtd_diz} de {qtd_membros}** membros ativos contribuiram ({pct_diz:.1f}%)."
+        )
+
+    cobertura = saude_info.get("cobertura")
+    if cobertura is not None:
+        frases.append(
+            f"A reserva cobre **{cobertura:.1f} meses** de despesa media."
+        )
+
+    if ticket_info["gap"] > 0 and ticket_info["dizimistas"] > 0:
+        frases.append(
+            f"O gap para arrecadacao potencial e de **{formatar_moeda(ticket_info['gap'])}**."
+        )
+
+    frases.append(
+        f"Score de saude financeira: **{score['score_total']:.0f}/100** "
+        f"({score['emoji']} {score['classificacao']})."
+    )
+
+    return " ".join(frases)
+
+
+def _sazonalidade_mensal(df):
+    """
+    Media de entradas/saidas por mes calendario (jan-dez).
+    """
+    if df.empty:
+        return pd.DataFrame(columns=["mes_num", "mes_nome", "entradas_media", "saidas_media"])
+
+    df_c = df.copy()
+    df_c["ano"] = df_c["data"].dt.year
+    df_c["mes_num"] = df_c["data"].dt.month
+
+    mensal = df_c.groupby(["ano", "mes_num", "tipo_norm"], as_index=False)["valor"].sum()
+
+    linhas = []
+    for mes_num in range(1, 13):
+        entradas_medias = mensal[
+            (mensal["mes_num"] == mes_num) & (mensal["tipo_norm"] == "ENTRADA")
+        ]["valor"]
+        saidas_medias = mensal[
+            (mensal["mes_num"] == mes_num) & (mensal["tipo_norm"] == "SAIDA")
+        ]["valor"]
+        linhas.append({
+            "mes_num": mes_num,
+            "mes_nome": MESES_PT[mes_num],
+            "entradas_media": float(entradas_medias.mean()) if not entradas_medias.empty else 0.0,
+            "saidas_media": float(saidas_medias.mean()) if not saidas_medias.empty else 0.0,
+            "anos_com_dados": int(len(entradas_medias)),
+        })
+    return pd.DataFrame(linhas)
+
+
+def _previsao_regressao_linear(df, mes_ref, horizonte=3):
+    """
+    Previsao simples via regressao linear dos ultimos 12 meses.
+    """
+    serie = _serie_mensal(df, mes_ref, quantidade=12)
+    if len(serie) < 3:
+        return None
+
+    x = np.arange(len(serie))
+
+    y_ent = serie["entradas"].values
+    coef_ent = np.polyfit(x, y_ent, 1)
+    intercepto_ent = coef_ent[1]
+    inclinacao_ent = coef_ent[0]
+
+    y_sai = serie["saidas"].values
+    coef_sai = np.polyfit(x, y_sai, 1)
+    intercepto_sai = coef_sai[1]
+    inclinacao_sai = coef_sai[0]
+
+    residuo_ent = y_ent - (inclinacao_ent * x + intercepto_ent)
+    erro_ent = float(np.std(residuo_ent)) if len(residuo_ent) > 1 else 0
+
+    residuo_sai = y_sai - (inclinacao_sai * x + intercepto_sai)
+    erro_sai = float(np.std(residuo_sai)) if len(residuo_sai) > 1 else 0
+
+    previsoes = []
+    for i in range(1, horizonte + 1):
+        pos_futura = len(serie) + i - 1
+        mes_futuro = mes_ref + i
+        ent_prev = max(0, inclinacao_ent * pos_futura + intercepto_ent)
+        sai_prev = max(0, inclinacao_sai * pos_futura + intercepto_sai)
+        previsoes.append({
+            "mes": mes_futuro,
+            "rotulo": _mes_label(mes_futuro),
+            "entradas_previstas": ent_prev,
+            "entradas_min": max(0, ent_prev - erro_ent),
+            "entradas_max": ent_prev + erro_ent,
+            "saidas_previstas": sai_prev,
+            "saidas_min": max(0, sai_prev - erro_sai),
+            "saidas_max": sai_prev + erro_sai,
+            "saldo_previsto": ent_prev - sai_prev,
+        })
+    return pd.DataFrame(previsoes)
+
+
+def _cruzar_com_frequencia_geo(slug, membros, dizimos_periodo, inicio, fim):
+    """
+    Cruza dados de frequencia (Monitoramento Geo) com contribuicao.
+    Retorna None se tabela nao existir.
+    """
+    try:
+        from data.repository import _tenant_db
+        import sqlite3
+
+        db_path = _tenant_db(slug)
+        if not db_path.exists():
+            return None
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute("""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='geo_presencas'
+            """)
+            if not cursor.fetchone():
+                return None
+
+            df_presencas = pd.read_sql_query(
+                """SELECT id_cadastro, data, presente
+                   FROM geo_presencas
+                   WHERE data >= ? AND data <= ?""",
+                conn,
+                params=(inicio.isoformat(), fim.isoformat()),
+            )
+
+        if df_presencas.empty:
+            return None
+
+        # Conta presencas por membro
+        presencas_por_membro = df_presencas[df_presencas["presente"] == 1].groupby(
+            "id_cadastro"
+        ).size().to_dict()
+        contribuicoes_por_membro = dizimos_periodo.groupby(
+            "id_cadastro"
+        ).size().to_dict()
+
+        linhas = []
+        for _, membro in membros.iterrows():
+            id_m = int(membro["id_cadastro"])
+            presencas = int(presencas_por_membro.get(id_m, 0))
+            contribuicoes = int(contribuicoes_por_membro.get(id_m, 0))
+            if presencas == 0 and contribuicoes == 0:
+                classe = "ausente_total"
+            elif presencas > 0 and contribuicoes == 0:
+                classe = "presente_sem_contribuir"
+            elif presencas == 0 and contribuicoes > 0:
+                classe = "contribui_sem_presenca"
+            else:
+                classe = "engajado"
+            linhas.append({
+                "id_cadastro": id_m,
+                "nome": membro["nome"],
+                "presencas": presencas,
+                "contribuicoes": contribuicoes,
+                "classe": classe,
+            })
+
+        return pd.DataFrame(linhas)
+    except Exception as exc:
+        LOGGER.warning("Nao foi possivel cruzar dados de geo_frequencia: %s", exc)
+        return None
+
+
+def _mensagem_agradecimento_dizimista(nome_igreja, nome_membro, mes_str):
+    return (
+        f"Paz do Senhor, {nome_membro}! "
+        f"Somos gratos pela sua fidelidade em {mes_str}. "
+        f"Que Deus continue abencoando sua vida e familia. "
+        f"Equipe {nome_igreja}."
+    )
+
+
+def _mensagem_acompanhamento_afastado(nome_igreja, nome_membro):
+    return (
+        f"Paz do Senhor, {nome_membro}! "
+        f"Sentimos sua falta em nossa comunidade. "
+        f"Estamos disponiveis se precisar conversar ou orar. "
+        f"Equipe pastoral {nome_igreja}."
+    )
+
+
+def _link_whatsapp_padrao(tel, mensagem):
+    """Gera link wa.me com telefone normalizado."""
+    tel_limpo = "".join(c for c in str(tel or "") if c.isdigit())
+    if not tel_limpo:
+        return ""
+    while tel_limpo.startswith("0"):
+        tel_limpo = tel_limpo[1:]
+    if not tel_limpo.startswith("55"):
+        tel_limpo = "55" + tel_limpo
+    if len(tel_limpo) not in (12, 13):
+        return ""
+    return f"https://wa.me/{tel_limpo}?text={urllib.parse.quote(mensagem)}"
     st.markdown(
         f'<div class="dash-section"><strong>{_escape(titulo)}</strong>'
         f'<span>{_escape(subtitulo)}</span></div>',
@@ -678,6 +1158,143 @@ def _injetar_css():
         color:#CBD5E1;font-size:.86rem;margin:8px 0;padding:12px 15px; }
     .saude-alerta.critico { border-color:#DC2626; }
     .saude-alerta.atencao { border-color:#F59E0B; }
+
+    /* ═══ Insight textual no topo ═══ */
+    .insight-topo {
+        background:linear-gradient(135deg,#1E293B 0%,#334155 100%);
+        border:1px solid #475569;border-left:5px solid #D4AF37;
+        border-radius:12px;padding:18px 22px;margin:14px 0 20px;
+        color:#F1F5F9;font-size:.94rem;line-height:1.55;
+        box-shadow:0 6px 16px rgba(0,0,0,.2);
+    }
+    .insight-topo strong { color:#FCD34D; }
+
+    /* ═══ Score de saude 0-100 ═══ */
+    .score-card {
+        background:#1E293B;border:1px solid #334155;border-radius:14px;
+        padding:22px;text-align:center;position:relative;overflow:hidden;
+    }
+    .score-card .valor { font-size:3.4rem;font-weight:800;line-height:1; }
+    .score-card .barra { color:#94A3B8;font-size:.72rem;text-transform:uppercase;
+        letter-spacing:.08em;margin-top:6px; }
+    .score-card .classificacao { font-size:1rem;font-weight:700;margin-top:6px;
+        text-transform:uppercase;letter-spacing:.06em; }
+    .score-card.excelente .valor,.score-card.excelente .classificacao { color:#10B981; }
+    .score-card.atencao .valor,.score-card.atencao .classificacao { color:#F59E0B; }
+    .score-card.critico .valor,.score-card.critico .classificacao { color:#EF4444; }
+
+    .score-componentes { margin-top:12px; }
+    .score-comp-linha { display:flex;justify-content:space-between;align-items:center;
+        margin:6px 0;font-size:.8rem;color:#CBD5E1; }
+    .score-comp-linha .barra-bg { background:#334155;border-radius:4px;
+        height:6px;margin-left:12px;overflow:hidden;flex:1;max-width:60%; }
+    .score-comp-linha .barra-fg { background:#10B981;height:100%;border-radius:4px; }
+
+    /* ═══ Churn alert ═══ */
+    .churn-alert {
+        background:#7F1D1D;border:1px solid #B91C1C;border-radius:12px;
+        color:#FEE2E2;padding:16px 20px;margin:12px 0;
+        display:flex;align-items:center;gap:14px;
+    }
+    .churn-alert .icone { font-size:2rem; }
+    .churn-alert .conteudo strong { display:block;font-size:1rem;margin-bottom:2px; }
+    .churn-alert .conteudo span { font-size:.85rem;color:#FCA5A5; }
+
+    /* ═══ Curva ABC (Pareto) ═══ */
+    .abc-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0; }
+    .abc-card {
+        background:#1E293B;border-left:4px solid;border-radius:8px;padding:14px;
+    }
+    .abc-card.classe-A { border-color:#DC2626; }
+    .abc-card.classe-B { border-color:#F59E0B; }
+    .abc-card.classe-C { border-color:#10B981; }
+    .abc-card .titulo { font-size:1.2rem;font-weight:800;margin-bottom:8px; }
+    .abc-card.classe-A .titulo { color:#F87171; }
+    .abc-card.classe-B .titulo { color:#FBBF24; }
+    .abc-card.classe-C .titulo { color:#34D399; }
+    .abc-card .stat { color:#F1F5F9;font-size:.9rem;margin:3px 0; }
+    .abc-card .stat strong { font-size:1.05rem; }
+    .abc-card .sub { color:#94A3B8;font-size:.72rem; }
+    .abc-insight {
+        background:#1E293B;border-left:4px solid #D4AF37;border-radius:8px;
+        padding:12px 16px;margin:10px 0;color:#F1F5F9;font-size:.88rem;
+    }
+
+    /* ═══ Metas com barra de progresso ═══ */
+    .meta-card {
+        background:#1E293B;border:1px solid #334155;border-radius:12px;
+        padding:16px 18px;margin:10px 0;
+    }
+    .meta-card .cabecalho { display:flex;justify-content:space-between;
+        margin-bottom:8px;color:#CBD5E1; }
+    .meta-card .cabecalho strong { color:#F1F5F9; }
+    .meta-progresso {
+        background:#334155;border-radius:6px;height:12px;overflow:hidden;
+        position:relative;
+    }
+    .meta-progresso-barra {
+        background:linear-gradient(90deg,#10B981,#34D399);
+        height:100%;border-radius:6px;transition:width .3s;
+    }
+    .meta-progresso-barra.parcial {
+        background:linear-gradient(90deg,#F59E0B,#FBBF24);
+    }
+    .meta-progresso-barra.baixa {
+        background:linear-gradient(90deg,#DC2626,#F87171);
+    }
+    .meta-card .rodape { color:#94A3B8;font-size:.75rem;margin-top:6px; }
+
+    /* ═══ Heatmap sazonalidade ═══ */
+    .heatmap-grid {
+        display:grid;grid-template-columns:repeat(6,1fr);gap:8px;
+        margin:12px 0;
+    }
+    .heatmap-mes {
+        background:#1E293B;border:1px solid #334155;border-radius:8px;
+        padding:10px 8px;text-align:center;transition:transform .15s;
+    }
+    .heatmap-mes:hover { transform:scale(1.03); }
+    .heatmap-mes .nome { color:#CBD5E1;font-size:.72rem;
+        text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px; }
+    .heatmap-mes .valor { color:#F1F5F9;font-size:.9rem;font-weight:700; }
+    .heatmap-mes .info { color:#94A3B8;font-size:.65rem;margin-top:2px; }
+
+    /* ═══ Previsao ═══ */
+    .previsao-tabela {
+        background:#1E293B;border:1px solid #334155;border-radius:10px;
+        overflow:hidden;margin:12px 0;
+    }
+    .previsao-tabela .linha {
+        display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
+        padding:10px 14px;border-bottom:1px solid #334155;color:#CBD5E1;
+        font-size:.86rem;align-items:center;
+    }
+    .previsao-tabela .linha:last-child { border-bottom:none; }
+    .previsao-tabela .linha.header {
+        background:#334155;color:#F1F5F9;font-weight:700;
+        font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;
+    }
+    .previsao-tabela .saldo-positivo { color:#34D399;font-weight:600; }
+    .previsao-tabela .saldo-negativo { color:#F87171;font-weight:600; }
+
+    /* ═══ Botoes de acao rapida ═══ */
+    .acao-rapida-info {
+        background:#1E3A5F;border:1px solid #2563EB;border-radius:10px;
+        color:#DBEAFE;padding:12px 16px;margin:10px 0;font-size:.85rem;
+    }
+    .acao-rapida-info strong { color:#93C5FD; }
+
+    /* ═══ Cruzamento com geo ═══ */
+    .geo-classe-card {
+        background:#1E293B;border:1px solid #334155;border-radius:10px;
+        padding:14px;text-align:center;
+    }
+    .geo-classe-card .qtd { font-size:2rem;font-weight:800;color:#F1F5F9; }
+    .geo-classe-card .rotulo { color:#CBD5E1;font-size:.78rem;margin-top:2px; }
+    .geo-classe-card.engajado .qtd { color:#10B981; }
+    .geo-classe-card.presente_sem_contribuir .qtd { color:#F59E0B; }
+    .geo-classe-card.contribui_sem_presenca .qtd { color:#3B82F6; }
+    .geo-classe-card.ausente_total .qtd { color:#EF4444; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -714,6 +1331,536 @@ def _autorizacao_pastoral(slug):
     return False
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# NOVAS FUNCOES DE RENDERIZACAO (Onda 1, 2 e 3)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _render_insight_topo(insight_texto):
+    """Renderiza o insight textual no topo da Visao Executiva."""
+    # Converter markdown ** para HTML
+    texto_html = insight_texto.replace("**", "___SEP___")
+    partes = texto_html.split("___SEP___")
+    resultado = ""
+    for i, parte in enumerate(partes):
+        parte_esc = _escape(parte)
+        if i % 2 == 1:
+            resultado += f"<strong>{parte_esc}</strong>"
+        else:
+            resultado += parte_esc
+    st.markdown(
+        f'<div class="insight-topo">💡 {resultado}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_ticket_medio_gap(ticket_info):
+    """Renderiza cards com ticket medio, potencial e gap."""
+    t1, t2, t3 = st.columns(3)
+    with t1:
+        _card(
+            "Ticket medio dizimo",
+            formatar_moeda(ticket_info["ticket_medio"]),
+            f"{ticket_info['dizimistas']} dizimista(s) no mes",
+        )
+    with t2:
+        _card(
+            "Arrecadacao potencial",
+            formatar_moeda(ticket_info["potencial"]),
+            f"Ticket medio x {ticket_info['membros_ativos']} membros ativos",
+        )
+    with t3:
+        cor_gap = "#EF4444" if ticket_info["gap"] > ticket_info["total_dizimo"] else "#F59E0B"
+        st.markdown(
+            f'<div class="dash-card"><div class="dash-label">Gap de arrecadacao</div>'
+            f'<div class="dash-value" style="color:{cor_gap}">{_escape(formatar_moeda(ticket_info["gap"]))}</div>'
+            f'<div class="dash-note">{ticket_info["percentual_arrecadado"]:.1f}% do potencial alcancado</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_score_saude(score):
+    """Renderiza o score de saude financeira 0-100 com decomposicao."""
+    classe = score["classificacao"]
+    componentes_html = ""
+    for nome, valor in score["componentes"].items():
+        maximo = score["maximos"][nome]
+        pct = (valor / maximo * 100) if maximo > 0 else 0
+        componentes_html += (
+            f'<div class="score-comp-linha">'
+            f'<span>{_escape(nome)}</span>'
+            f'<span>{valor:.1f} / {maximo}</span>'
+            f'<div class="barra-bg"><div class="barra-fg" style="width:{pct:.0f}%"></div></div>'
+            f'</div>'
+        )
+    st.markdown(
+        f'<div class="score-card {classe}">'
+        f'<div class="valor">{score["emoji"]} {score["score_total"]:.0f}<span style="font-size:1.2rem;color:#94A3B8">/100</span></div>'
+        f'<div class="barra">Score de saude financeira</div>'
+        f'<div class="classificacao">{_escape(score["classificacao"])}</div>'
+        f'<div class="score-componentes">{componentes_html}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_churn_alerta(churn_info, slug, igreja):
+    """Renderiza alerta e lista de dizimistas em churn."""
+    if churn_info["quantidade"] == 0:
+        st.success(
+            f"✅ Nenhum dizimista regular parou de contribuir nos ultimos "
+            f"{churn_info['dias_referencia']} dias."
+        )
+        return
+
+    st.markdown(
+        f'<div class="churn-alert">'
+        f'<div class="icone">⚠️</div>'
+        f'<div class="conteudo">'
+        f'<strong>{churn_info["quantidade"]} dizimista(s) regular(es) pararam de contribuir</strong>'
+        f'<span>Impacto estimado: {formatar_moeda(churn_info["impacto_estimado"])} por mes '
+        f'(analise dos ultimos {churn_info["dias_referencia"]} dias)</span>'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander(f"Ver {churn_info['quantidade']} dizimista(s) em churn", expanded=False):
+        for item in churn_info["lista"]:
+            col_info, col_wa = st.columns([3, 1])
+            with col_info:
+                st.markdown(
+                    f"**{_escape(item['Nome'])}** — Media {item['Media mensal formatada']} "
+                    f"({item['Contribuicoes no periodo']} contribuicoes anteriores)"
+                )
+            with col_wa:
+                if item["Telefone"]:
+                    nome_igreja = igreja.get("nome", "Igreja")
+                    msg = _mensagem_acompanhamento_afastado(nome_igreja, item["Nome"])
+                    link = _link_whatsapp_padrao(item["Telefone"], msg)
+                    if link:
+                        st.markdown(
+                            f'<a href="{_escape(link)}" target="_blank" '
+                            f'style="background:#25D366;color:white;padding:6px 12px;'
+                            f'border-radius:6px;text-decoration:none;font-size:.78rem;'
+                            f'font-weight:600;display:inline-block;">📱 WhatsApp</a>',
+                            unsafe_allow_html=True,
+                        )
+
+
+def _render_curva_abc(abc_info):
+    """Renderiza a curva ABC (Pareto) dos dizimistas."""
+    if abc_info is None:
+        st.info("Sem dados suficientes para calcular a curva ABC de dizimistas.")
+        return
+
+    resumo = abc_info["resumo_classes"]
+
+    # Insight principal
+    st.markdown(
+        f'<div class="abc-insight">'
+        f'💡 <strong>{abc_info["pct_dizimistas_top_a"]:.1f}% dos dizimistas '
+        f'(Classe A) respondem por {abc_info["pct_valor_top_a"]:.1f}% da arrecadacao.</strong> '
+        f'Uma queda concentrada neste grupo teria impacto financeiro proporcional.'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Grid de 3 cards A/B/C
+    cards_html = '<div class="abc-grid">'
+    descricoes = {
+        "A": "Contribuintes principais (top ~80% do valor)",
+        "B": "Contribuintes intermediarios (proximos 15%)",
+        "C": "Contribuintes eventuais (ultimos 5%)",
+    }
+    for classe in ["A", "B", "C"]:
+        linha = resumo[resumo["classe"] == classe]
+        if linha.empty:
+            qtd, valor, pct_v, pct_m = 0, 0, 0, 0
+        else:
+            qtd = int(linha["quantidade"].iloc[0])
+            valor = float(linha["valor"].iloc[0])
+            pct_v = float(linha["percentual_valor"].iloc[0])
+            pct_m = float(linha["percentual_membros"].iloc[0])
+        cards_html += (
+            f'<div class="abc-card classe-{classe}">'
+            f'<div class="titulo">Classe {classe}</div>'
+            f'<div class="stat"><strong>{qtd}</strong> dizimista(s)</div>'
+            f'<div class="stat">{_escape(formatar_moeda(valor))}</div>'
+            f'<div class="stat">{pct_v:.1f}% do valor | {pct_m:.1f}% dos dizimistas</div>'
+            f'<div class="sub">{_escape(descricoes[classe])}</div>'
+            f'</div>'
+        )
+    cards_html += '</div>'
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+    with st.expander("Ver detalhamento por membro", expanded=False):
+        tabela = abc_info["por_membro"][["nome", "classe", "valor", "percentual", "acumulado"]].copy()
+        tabela.columns = ["Membro", "Classe", "Total contribuido", "% do valor", "Acumulado %"]
+        tabela["Total contribuido"] = tabela["Total contribuido"].apply(formatar_moeda)
+        tabela["% do valor"] = tabela["% do valor"].apply(lambda x: f"{x:.2f}%")
+        tabela["Acumulado %"] = tabela["Acumulado %"].apply(lambda x: f"{x:.2f}%")
+        st.dataframe(tabela, use_container_width=True, hide_index=True)
+
+
+def _render_metas_arrecadacao(slug, ent_atual, dizimo_atual):
+    """Renderiza barra de progresso das metas de arrecadacao."""
+    try:
+        meta_arrecadacao = _numero_config(
+            obter_config_igreja(slug, "meta_arrecadacao_mensal", "0"), 0
+        )
+        meta_dizimo = _numero_config(
+            obter_config_igreja(slug, "meta_dizimo_mensal", "0"), 0
+        )
+    except Exception:
+        meta_arrecadacao, meta_dizimo = 0.0, 0.0
+
+    if meta_arrecadacao <= 0 and meta_dizimo <= 0:
+        st.info(
+            "Configure metas mensais em **Minha conta > Configuracoes** para "
+            "acompanhar o progresso da arrecadacao. Campos: `meta_arrecadacao_mensal` e `meta_dizimo_mensal`."
+        )
+        return
+
+    if meta_arrecadacao > 0:
+        pct = (ent_atual / meta_arrecadacao * 100) if meta_arrecadacao > 0 else 0
+        pct_clip = min(pct, 100)
+        classe = "" if pct >= 95 else "parcial" if pct >= 60 else "baixa"
+        st.markdown(
+            f'<div class="meta-card">'
+            f'<div class="cabecalho">'
+            f'<span>Meta de arrecadacao total</span>'
+            f'<strong>{formatar_moeda(ent_atual)} / {formatar_moeda(meta_arrecadacao)}</strong>'
+            f'</div>'
+            f'<div class="meta-progresso"><div class="meta-progresso-barra {classe}" '
+            f'style="width:{pct_clip:.1f}%"></div></div>'
+            f'<div class="rodape">{pct:.1f}% da meta atingida</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    if meta_dizimo > 0:
+        pct = (dizimo_atual / meta_dizimo * 100) if meta_dizimo > 0 else 0
+        pct_clip = min(pct, 100)
+        classe = "" if pct >= 95 else "parcial" if pct >= 60 else "baixa"
+        st.markdown(
+            f'<div class="meta-card">'
+            f'<div class="cabecalho">'
+            f'<span>Meta de dizimo</span>'
+            f'<strong>{formatar_moeda(dizimo_atual)} / {formatar_moeda(meta_dizimo)}</strong>'
+            f'</div>'
+            f'<div class="meta-progresso"><div class="meta-progresso-barra {classe}" '
+            f'style="width:{pct_clip:.1f}%"></div></div>'
+            f'<div class="rodape">{pct:.1f}% da meta atingida</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_heatmap_sazonalidade(df):
+    """Renderiza o heatmap de sazonalidade mensal (jan-dez)."""
+    sazonalidade = _sazonalidade_mensal(df)
+    if sazonalidade.empty or sazonalidade["anos_com_dados"].sum() == 0:
+        st.info("Sem dados historicos suficientes para analise sazonal.")
+        return
+
+    max_ent = sazonalidade["entradas_media"].max()
+    if max_ent <= 0:
+        st.info("Sem entradas historicas para analise sazonal.")
+        return
+
+    grid = '<div class="heatmap-grid">'
+    for _, row in sazonalidade.iterrows():
+        intensidade = row["entradas_media"] / max_ent if max_ent > 0 else 0
+        # Cor de fundo baseada na intensidade (verde escuro -> claro)
+        alpha = 0.15 + (intensidade * 0.5)
+        cor_fundo = f"rgba(16,185,129,{alpha})"
+        grid += (
+            f'<div class="heatmap-mes" style="background:{cor_fundo}">'
+            f'<div class="nome">{_escape(row["mes_nome"])}</div>'
+            f'<div class="valor">{_escape(formatar_moeda(row["entradas_media"]))}</div>'
+            f'<div class="info">{int(row["anos_com_dados"])} ano(s)</div>'
+            f'</div>'
+        )
+    grid += '</div>'
+    st.markdown(grid, unsafe_allow_html=True)
+
+    # Insight sobre o melhor mes
+    if len(sazonalidade[sazonalidade["anos_com_dados"] > 0]) >= 3:
+        top = sazonalidade.nlargest(1, "entradas_media").iloc[0]
+        media_geral = sazonalidade[sazonalidade["anos_com_dados"] > 0]["entradas_media"].mean()
+        if media_geral > 0:
+            variacao = (top["entradas_media"] - media_geral) / media_geral * 100
+            st.caption(
+                f"💡 O mes historicamente mais forte e **{top['mes_nome']}** "
+                f"({formatar_moeda(top['entradas_media'])}), {variacao:+.1f}% em relacao "
+                f"a media anual."
+            )
+
+
+def _render_previsao(df, mes_ref):
+    """Renderiza previsao dos proximos 3 meses via regressao linear."""
+    previsao = _previsao_regressao_linear(df, mes_ref, horizonte=3)
+    if previsao is None:
+        st.info(
+            "Sao necessarios pelo menos 3 meses de dados para gerar previsao. "
+            "A previsao usa regressao linear simples sobre os ultimos 12 meses."
+        )
+        return
+
+    linhas_html = (
+        '<div class="previsao-tabela">'
+        '<div class="linha header">'
+        '<div>Mes</div><div>Entradas previstas</div>'
+        '<div>Saidas previstas</div><div>Saldo previsto</div>'
+        '</div>'
+    )
+    for _, row in previsao.iterrows():
+        classe_saldo = "saldo-positivo" if row["saldo_previsto"] >= 0 else "saldo-negativo"
+        linhas_html += (
+            f'<div class="linha">'
+            f'<div><strong>{_escape(row["rotulo"])}</strong></div>'
+            f'<div>{_escape(formatar_moeda(row["entradas_previstas"]))}</div>'
+            f'<div>{_escape(formatar_moeda(row["saidas_previstas"]))}</div>'
+            f'<div class="{classe_saldo}">{_escape(formatar_moeda(row["saldo_previsto"]))}</div>'
+            f'</div>'
+        )
+    linhas_html += '</div>'
+    st.markdown(linhas_html, unsafe_allow_html=True)
+
+    st.caption(
+        "⚠️ Previsao baseada em regressao linear dos ultimos 12 meses. "
+        "Nao considera eventos excepcionais (campanhas, feriados, sazonalidade). "
+        "Use como orientacao complementar, nao como fato consumado."
+    )
+
+
+def _render_cruzamento_geo(df_cruzamento):
+    """Renderiza cruzamento de frequencia geo x contribuicao."""
+    if df_cruzamento is None or df_cruzamento.empty:
+        st.info(
+            "Cruzamento de dados nao disponivel. "
+            "Requer registros no modulo Monitoramento Geo no periodo selecionado."
+        )
+        return
+
+    classes_labels = {
+        "engajado": ("✅ Engajados", "Presente + contribuindo"),
+        "presente_sem_contribuir": ("⚠️ Presentes sem contribuir", "Frequenta mas nao dizima"),
+        "contribui_sem_presenca": ("📱 Contribuem a distancia", "Dizima mas nao esta presente"),
+        "ausente_total": ("❌ Ausentes totais", "Nem presente nem contribuindo"),
+    }
+
+    cols = st.columns(4)
+    for col, (chave, (rotulo, descricao)) in zip(cols, classes_labels.items()):
+        qtd = int((df_cruzamento["classe"] == chave).sum())
+        with col:
+            st.markdown(
+                f'<div class="geo-classe-card {chave}">'
+                f'<div class="qtd">{qtd}</div>'
+                f'<div class="rotulo">{_escape(rotulo)}</div>'
+                f'<div class="rotulo" style="font-size:.68rem;color:#94A3B8">{_escape(descricao)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    with st.expander("Ver detalhamento por classe", expanded=False):
+        classe_filtro = st.selectbox(
+            "Filtrar por classe",
+            ["Todas"] + list(classes_labels.keys()),
+            format_func=lambda x: "Todas" if x == "Todas" else classes_labels[x][0],
+            key="geo_classe_filtro",
+        )
+        tabela = df_cruzamento.copy()
+        if classe_filtro != "Todas":
+            tabela = tabela[tabela["classe"] == classe_filtro]
+        tabela["classe"] = tabela["classe"].map(lambda c: classes_labels.get(c, (c,))[0])
+        tabela = tabela.rename(columns={
+            "nome": "Membro", "presencas": "Presencas",
+            "contribuicoes": "Contribuicoes", "classe": "Classe",
+        })
+        st.dataframe(
+            tabela[["Membro", "Presencas", "Contribuicoes", "Classe"]],
+            use_container_width=True, hide_index=True,
+        )
+
+
+def _render_botoes_acao_rapida(abc_info, membros, igreja, mes_ref, slug):
+    """Renderiza botoes de acao rapida: agradecimento a dizimistas classe A."""
+    if abc_info is None:
+        return
+
+    st.markdown(
+        '<div class="acao-rapida-info">'
+        '<strong>💬 Acao rapida:</strong> Envie mensagens de agradecimento aos '
+        'dizimistas Classe A (principais contribuintes do periodo) '
+        'ou de acompanhamento aos afastados.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    classe_a = abc_info["por_membro"][abc_info["por_membro"]["classe"] == "A"]
+    if classe_a.empty:
+        st.caption("Sem dizimistas Classe A no periodo.")
+        return
+
+    # Enriquece com telefones
+    telefones_dict = membros.set_index("id_cadastro")["telefone"].to_dict()
+    classe_a = classe_a.copy()
+    classe_a["telefone"] = classe_a["id_cadastro"].map(
+        lambda x: telefones_dict.get(int(x), "")
+    )
+
+    with_tel = classe_a[classe_a["telefone"].astype(str).str.len() > 0]
+    without_tel = classe_a[classe_a["telefone"].astype(str).str.len() == 0]
+
+    if not with_tel.empty:
+        st.markdown(f"**Dizimistas Classe A com telefone:** {len(with_tel)}")
+        with st.expander(f"Ver {len(with_tel)} membro(s)", expanded=False):
+            nome_igreja = igreja.get("nome", "Igreja")
+            mes_str = _mes_label(mes_ref)
+            for _, row in with_tel.iterrows():
+                col_info, col_wa = st.columns([3, 1])
+                with col_info:
+                    st.markdown(
+                        f"**{_escape(row['nome'])}** — {_escape(formatar_moeda(row['valor']))} "
+                        f"({row['percentual']:.1f}% do valor)"
+                    )
+                with col_wa:
+                    msg = _mensagem_agradecimento_dizimista(nome_igreja, row["nome"], mes_str)
+                    link = _link_whatsapp_padrao(row["telefone"], msg)
+                    if link:
+                        st.markdown(
+                            f'<a href="{_escape(link)}" target="_blank" '
+                            f'style="background:#25D366;color:white;padding:6px 12px;'
+                            f'border-radius:6px;text-decoration:none;font-size:.78rem;'
+                            f'font-weight:600;display:inline-block;">📱 Agradecer</a>',
+                            unsafe_allow_html=True,
+                        )
+
+    if not without_tel.empty:
+        st.caption(
+            f"⚠️ {len(without_tel)} dizimista(s) Classe A sem telefone cadastrado. "
+            "Atualize os cadastros para enviar mensagens automaticas."
+        )
+
+
+def _gerar_html_relatorio_executivo(
+    igreja, slug, mes_ref, ent, sai, saldo,
+    ticket_info, score, saude_info, insight_texto,
+):
+    """Gera HTML de relatorio executivo pronto para impressao."""
+    nome_igreja = _escape(igreja.get("nome", "Igreja"))
+    mes_str = _mes_label(mes_ref)
+    data_emissao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    # Componentes do score
+    comps_html = ""
+    for nome, valor in score["componentes"].items():
+        maximo = score["maximos"][nome]
+        pct = (valor / maximo * 100) if maximo > 0 else 0
+        comps_html += (
+            f'<tr><td>{_escape(nome)}</td>'
+            f'<td style="text-align:right">{valor:.1f} / {maximo}</td>'
+            f'<td style="text-align:right">{pct:.0f}%</td></tr>'
+        )
+
+    insight_html = insight_texto.replace("**", "").replace("⚠️", "")
+    insight_html = _escape(insight_html)
+
+    cor_score = "#10B981" if score["classificacao"] == "excelente" \
+        else "#F59E0B" if score["classificacao"] == "atencao" else "#EF4444"
+
+    return f"""
+<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<title>Relatorio Executivo - {mes_str}</title>
+<style>
+* {{ box-sizing:border-box;margin:0;padding:0; }}
+body {{ font-family:Arial,sans-serif;background:#f0f0f0;padding:20px;color:#111; }}
+.relatorio {{ background:white;max-width:800px;margin:0 auto;padding:32px;
+    box-shadow:0 4px 12px rgba(0,0,0,.1);border-radius:8px; }}
+h1 {{ font-size:20px;margin-bottom:4px;color:#1E293B; }}
+h2 {{ font-size:14px;color:#64748B;font-weight:normal;margin-bottom:20px; }}
+h3 {{ font-size:15px;color:#334155;margin:22px 0 8px;border-bottom:2px solid #E2E8F0;
+    padding-bottom:6px; }}
+.grade-kpi {{ display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0; }}
+.kpi {{ background:#F8FAFC;border:1px solid #E2E8F0;padding:12px;border-radius:6px; }}
+.kpi .rotulo {{ font-size:10px;color:#64748B;text-transform:uppercase;letter-spacing:.05em; }}
+.kpi .valor {{ font-size:16px;font-weight:700;color:#1E293B;margin-top:4px; }}
+.insight {{ background:#FEF3C7;border-left:4px solid #D4AF37;padding:14px 18px;
+    border-radius:6px;margin:12px 0;font-size:12px;line-height:1.6; }}
+.score-box {{ text-align:center;padding:20px;border:2px solid {cor_score};
+    border-radius:8px;margin:14px 0; }}
+.score-box .num {{ font-size:36px;font-weight:800;color:{cor_score}; }}
+.score-box .cls {{ font-size:12px;color:#64748B;text-transform:uppercase;
+    letter-spacing:.05em;margin-top:4px; }}
+table {{ width:100%;border-collapse:collapse;margin:8px 0;font-size:12px; }}
+th {{ background:#F1F5F9;color:#1E293B;text-align:left;padding:8px;border-bottom:1px solid #E2E8F0; }}
+td {{ padding:6px 8px;border-bottom:1px solid #F1F5F9;color:#334155; }}
+.rodape {{ text-align:center;color:#64748B;font-size:10px;margin-top:22px;
+    padding-top:14px;border-top:1px solid #E2E8F0; }}
+.btn-imprimir {{ background:#0F6E56;color:white;border:none;padding:10px 24px;
+    border-radius:6px;font-size:13px;cursor:pointer;font-weight:600; }}
+@media print {{
+    body {{ background:white;padding:0; }}
+    .relatorio {{ box-shadow:none; }}
+    .btn-imprimir {{ display:none; }}
+}}
+</style></head>
+<body>
+<div style="text-align:center;margin-bottom:12px">
+<button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+</div>
+
+<div class="relatorio">
+<h1>{nome_igreja}</h1>
+<h2>Relatorio Executivo — {_escape(mes_str)} | Emitido em {_escape(data_emissao)}</h2>
+
+<div class="insight">💡 {insight_html}</div>
+
+<h3>Indicadores do Mes</h3>
+<div class="grade-kpi">
+    <div class="kpi"><div class="rotulo">Entradas</div><div class="valor">{_escape(formatar_moeda(ent))}</div></div>
+    <div class="kpi"><div class="rotulo">Saidas</div><div class="valor">{_escape(formatar_moeda(sai))}</div></div>
+    <div class="kpi"><div class="rotulo">Saldo</div><div class="valor">{_escape(formatar_moeda(saldo))}</div></div>
+    <div class="kpi"><div class="rotulo">Dizimistas</div><div class="valor">{ticket_info["dizimistas"]}</div></div>
+</div>
+
+<h3>Score de Saude Financeira</h3>
+<div class="score-box">
+    <div class="num">{score["score_total"]:.0f}<span style="font-size:16px;color:#64748B">/100</span></div>
+    <div class="cls">{score["emoji"]} {_escape(score["classificacao"])}</div>
+</div>
+
+<table>
+<thead><tr><th>Componente</th><th style="text-align:right">Pontos</th><th style="text-align:right">%</th></tr></thead>
+<tbody>{comps_html}</tbody>
+</table>
+
+<h3>Ticket Medio e Potencial</h3>
+<table>
+<tr><td>Ticket medio de dizimo</td><td style="text-align:right">{_escape(formatar_moeda(ticket_info["ticket_medio"]))}</td></tr>
+<tr><td>Arrecadacao potencial (se 100% dos membros dizimasse)</td><td style="text-align:right">{_escape(formatar_moeda(ticket_info["potencial"]))}</td></tr>
+<tr><td>Gap para o potencial</td><td style="text-align:right">{_escape(formatar_moeda(ticket_info["gap"]))}</td></tr>
+<tr><td>% do potencial arrecadado</td><td style="text-align:right">{ticket_info["percentual_arrecadado"]:.1f}%</td></tr>
+</table>
+
+<h3>Saude e Reserva</h3>
+<table>
+<tr><td>Cobertura da reserva</td><td style="text-align:right">{f"{saude_info['cobertura']:.1f} meses" if saude_info.get('cobertura') is not None else "Sem despesas"}</td></tr>
+<tr><td>Despesa media mensal</td><td style="text-align:right">{_escape(formatar_moeda(saude_info["media_saidas"]))}</td></tr>
+<tr><td>Resultado medio mensal</td><td style="text-align:right">{_escape(formatar_moeda(saude_info["resultado_medio"]))}</td></tr>
+<tr><td>Saldo acumulado</td><td style="text-align:right">{_escape(formatar_moeda(saude_info["saldo_acumulado"]))}</td></tr>
+</table>
+
+<div class="rodape">
+    FielMordomo — Sistema de Gestao Financeira para Igrejas<br>
+    Este relatorio nao substitui conciliacao bancaria nem planejamento orcamentario formal.
+</div>
+</div>
+</body></html>"""
+
+
 def render():
     _injetar_css()
     slug = slug_da_sessao()
@@ -731,6 +1878,7 @@ def render():
         return
 
     membros = _membros_ativos(cad)
+    igreja = st.session_state.get("igreja", {})
     meses = sorted(df["mes_periodo"].dropna().unique(), reverse=True)
     mes_ref = st.selectbox(
         "Mes de referencia",
@@ -746,6 +1894,26 @@ def render():
     qtd_diz, membros_n, pct_diz = _participacao_dizimistas(ref, membros)
     (ent_ytd, sai_ytd, saldo_ytd), (ent_ytd_ant, _, _) = _comparativo_ytd(df, mes_ref.year, mes_ref.month)
 
+    # ═══ Comparativo mesmo mes ano anterior ═══
+    mesmo_mes_ano_ant = _mesmo_mes_ano_anterior(df, mes_ref)
+    ent_mma, sai_mma, saldo_mma = _totais(mesmo_mes_ano_ant)
+
+    # ═══ Calculos para novos indicadores ═══
+    reserva = _numero_config(
+        obter_config_igreja(slug, "reserva_financeira_disponivel", "0")
+    )
+    meta_reserva = int(_numero_config(
+        obter_config_igreja(slug, "meta_reserva_meses", "3"), 3
+    ))
+    if meta_reserva < 1:
+        meta_reserva = 3
+    saude_info = _indicadores_saude(df, mes_ref, reserva, meta_reserva)
+    ticket_info = _ticket_medio_arrecadacao(ref, membros)
+    score = _score_saude_financeira(df, mes_ref, saude_info, qualidade, membros)
+    insight_texto = _gerar_insight_textual(df, mes_ref, membros, saude_info, ticket_info, score)
+
+    dizimo_mes, _, _ = _totais_dizimo(ref)
+
     st.markdown("## Dashboard Financeiro")
     st.caption("Visao executiva para decisao, conferencia e acompanhamento de tendencias.")
     dashboard_restrito = st.session_state.get("modo") == "pastor_auxiliar"
@@ -754,12 +1922,53 @@ def render():
             "Acesso de Pastor Auxiliar: as areas Saude Financeira, Qualidade "
             "e Acompanhamento Pastoral nao estao disponiveis neste perfil."
         )
+
+    # ═══ NOVO: Botao de exportacao executiva no topo ═══
+    if not dashboard_restrito:
+        col_btn_exp, _ = st.columns([1, 3])
+        with col_btn_exp:
+            if st.button("📄 Exportar relatorio executivo", key=_sk("btn_export_exec", slug),
+                         use_container_width=True):
+                html_relatorio = _gerar_html_relatorio_executivo(
+                    igreja, slug, mes_ref, ent, sai, saldo,
+                    ticket_info, score, saude_info, insight_texto,
+                )
+                st.session_state[_sk("html_export", slug)] = html_relatorio
+
+        if _sk("html_export", slug) in st.session_state:
+            st.download_button(
+                "⬇️ Baixar relatorio (HTML - abra no navegador e imprima como PDF)",
+                data=st.session_state[_sk("html_export", slug)],
+                file_name=f"relatorio_executivo_{mes_ref}.html",
+                mime="text/html",
+                key=_sk("dl_export", slug),
+            )
+
     _legenda_cores()
+
+    # ═══ NOVO: Insight textual automatico ═══
+    _render_insight_topo(insight_texto)
+
+    # ═══ KPIs principais com COMPARATIVO ANO ANTERIOR ═══
     c1, c2, c3, c4 = st.columns(4)
-    with c1: _card("Entradas", formatar_moeda(ent), f"{_variacao(ent, ent_ant)} vs mes anterior")
-    with c2: _card("Saidas", formatar_moeda(sai), f"{_variacao(sai, sai_ant)} vs mes anterior")
-    with c3: _card("Saldo", formatar_moeda(saldo), f"{_variacao(saldo, saldo_ant)} vs mes anterior")
-    with c4: _card("Participacao dizimistas ativos", f"{pct_diz:.1f}%", f"{qtd_diz} de {membros_n} membros ativos")
+    with c1:
+        nota_ent = f"{_variacao(ent, ent_ant)} vs mes ant."
+        if ent_mma > 0:
+            nota_ent += f" | {_variacao(ent, ent_mma)} vs mesmo mes ano ant."
+        _card("Entradas", formatar_moeda(ent), nota_ent)
+    with c2:
+        nota_sai = f"{_variacao(sai, sai_ant)} vs mes ant."
+        if sai_mma > 0:
+            nota_sai += f" | {_variacao(sai, sai_mma)} vs mesmo mes ano ant."
+        _card("Saidas", formatar_moeda(sai), nota_sai)
+    with c3:
+        nota_saldo = f"{_variacao(saldo, saldo_ant)} vs mes ant."
+        if saldo_mma != 0:
+            nota_saldo += f" | {_variacao(saldo, saldo_mma)} vs mesmo mes ano ant."
+        _card("Saldo", formatar_moeda(saldo), nota_saldo)
+    with c4:
+        _card("Participacao dizimistas ativos", f"{pct_diz:.1f}%",
+              f"{qtd_diz} de {membros_n} membros ativos")
 
     a1, a2, a3 = st.columns(3)
     with a1: _card("Entradas YTD", formatar_moeda(ent_ytd), f"{_variacao(ent_ytd, ent_ytd_ant)} vs mesmo periodo anterior")
@@ -772,6 +1981,13 @@ def render():
     ])
 
     with tab_visao:
+        # ═══ NOVO: Ticket medio, potencial e gap ═══
+        _secao_dashboard(
+            "Ticket medio e potencial de arrecadacao",
+            "Analise do valor medio por dizimista e do potencial de arrecadacao vs realizado.",
+        )
+        _render_ticket_medio_gap(ticket_info)
+
         _secao_dashboard(
             "Evolucao financeira",
             "Entradas, saidas e saldo acumulado mes a mes nos ultimos 12 meses.",
@@ -839,11 +2055,51 @@ def render():
                 config=CONFIG_PLOTLY,
             )
 
+        # ═══ NOVO: Heatmap de sazonalidade ═══
+        _secao_dashboard(
+            "Sazonalidade mensal",
+            "Media historica de entradas por mes calendario. Cor mais intensa = arrecadacao mais alta.",
+        )
+        _render_heatmap_sazonalidade(df)
+
     with tab_saude:
         if dashboard_restrito:
             st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
         else:
+            # ═══ NOVO: Score de saude 0-100 no TOPO ═══
+            _secao_dashboard(
+                "Score de saude financeira",
+                "Indice unico 0-100 combinando cobertura de reserva, saldo YTD, "
+                "variacao de entradas, participacao dizimistas e qualidade dos dados.",
+            )
+            _render_score_saude(score)
+
+            # ═══ NOVO: Metas de arrecadacao ═══
+            _secao_dashboard(
+                "Metas de arrecadacao",
+                "Progresso do mes em relacao as metas configuradas em Minha Conta.",
+            )
+            _render_metas_arrecadacao(slug, ent, dizimo_mes)
+
+            # Saude financeira original
             _render_saude_financeira(df, mes_ref, slug)
+
+            # ═══ NOVO: Alerta de churn de dizimistas ═══
+            _secao_dashboard(
+                "Alerta de churn (dizimistas afastando-se)",
+                "Membros que contribuiram nos ultimos 90 dias mas nao contribuiram "
+                "no mes de referencia. Impacto financeiro estimado.",
+            )
+            churn_info = _identificar_churn(df, mes_ref, membros, dias_referencia=90)
+            _render_churn_alerta(churn_info, slug, igreja)
+
+            # ═══ NOVO: Previsao proximos 3 meses ═══
+            _secao_dashboard(
+                "Previsao (proximos 3 meses)",
+                "Estimativa via regressao linear dos ultimos 12 meses. "
+                "Use como orientacao complementar.",
+            )
+            _render_previsao(df, mes_ref)
 
     with tab_despesas:
         saidas = ref[ref["tipo_norm"] == "SAIDA"].copy()
@@ -873,7 +2129,71 @@ def render():
             )
             st.dataframe(_tabela_monetaria(resumo), use_container_width=True, hide_index=True)
 
-    with tab_receitas:
+            # ═══ NOVO: Analise temporal de despesas por subcategoria ═══
+            _secao_dashboard(
+                "Evolucao temporal por subcategoria",
+                "Despesas por subcategoria ao longo dos ultimos 6 meses. "
+                "Ajuda a identificar categorias com crescimento anormal.",
+            )
+            saidas_temporal = df[
+                (df["tipo_norm"] == "SAIDA")
+                & (df["mes_periodo"] <= mes_ref)
+                & (df["mes_periodo"] >= (mes_ref - 5))
+            ].copy()
+            saidas_temporal["subcategoria"] = _texto(saidas_temporal["subcategoria"]).replace("", "Sem subcategoria")
+
+            if saidas_temporal.empty:
+                st.info("Sem despesas nos ultimos 6 meses para analise temporal.")
+            else:
+                # Top 5 subcategorias por valor total
+                top5_subs = (
+                    saidas_temporal.groupby("subcategoria")["valor"].sum()
+                    .nlargest(5).index.tolist()
+                )
+                saidas_top = saidas_temporal[saidas_temporal["subcategoria"].isin(top5_subs)]
+                pivot = saidas_top.pivot_table(
+                    index="mes_periodo", columns="subcategoria",
+                    values="valor", aggfunc="sum",
+                ).fillna(0).sort_index()
+
+                fig_temporal = go.Figure()
+                for i, col in enumerate(pivot.columns):
+                    fig_temporal.add_trace(go.Scatter(
+                        name=col,
+                        x=[_mes_label(m) for m in pivot.index],
+                        y=pivot[col],
+                        mode="lines+markers",
+                        stackgroup="one",
+                        line=dict(color=PALETA[i % len(PALETA)], width=2),
+                    ))
+                fig_temporal.update_layout(**_layout_grafico(
+                    altura=380,
+                    margem=dict(t=50, b=40, l=20, r=20),
+                    showlegend=True,
+                    legend=dict(orientation="h", y=-.20, x=0),
+                    xaxis=dict(fixedrange=True, gridcolor="#334155"),
+                    yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
+                ))
+                st.plotly_chart(fig_temporal, use_container_width=True, config=CONFIG_PLOTLY)
+
+                # Ranking de subcategorias com maior crescimento
+                if len(pivot) >= 2:
+                    ult_mes = pivot.iloc[-1]
+                    penult_mes = pivot.iloc[-2]
+                    diff = ult_mes - penult_mes
+                    crescimento = pd.DataFrame({
+                        "Subcategoria": diff.index,
+                        "Variacao (R$)": diff.values,
+                        "Valor atual": ult_mes.values,
+                    })
+                    crescimento = crescimento[crescimento["Variacao (R$)"] > 0].sort_values(
+                        "Variacao (R$)", ascending=False
+                    ).head(3)
+                    if not crescimento.empty:
+                        st.markdown("**Top 3 subcategorias que mais cresceram vs mes anterior:**")
+                        crescimento["Variacao (R$)"] = crescimento["Variacao (R$)"].apply(formatar_moeda)
+                        crescimento["Valor atual"] = crescimento["Valor atual"].apply(formatar_moeda)
+                        st.dataframe(crescimento, use_container_width=True, hide_index=True)
         entradas = ref[ref["tipo_norm"] == "ENTRADA"]
         resumo = entradas.groupby("categoria", as_index=False)["valor"].sum().sort_values("valor", ascending=False)
         resumo = resumo.rename(columns={"categoria": "Categoria", "valor": "Valor"})
@@ -1131,6 +2451,33 @@ def render():
                     yaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
                 ))
                 st.plotly_chart(fig_funcoes, use_container_width=True, config=CONFIG_PLOTLY)
+
+            # ═══ NOVO: Curva ABC (Pareto) de dizimistas ═══
+            _secao_dashboard(
+                "Curva ABC de dizimistas (Pareto)",
+                "Classificacao de dizimistas por concentracao de arrecadacao. "
+                "Ajuda a identificar dependencia de poucos contribuintes.",
+            )
+            abc_info = _curva_abc_dizimistas(dizimos_periodo, membros)
+            _render_curva_abc(abc_info)
+
+            # ═══ NOVO: Botoes de acao rapida ═══
+            _secao_dashboard(
+                "Acoes rapidas via WhatsApp",
+                "Envio de mensagens padronizadas de agradecimento aos principais dizimistas.",
+            )
+            _render_botoes_acao_rapida(abc_info, membros, igreja, mes_ref, slug)
+
+            # ═══ NOVO: Cruzamento com Monitoramento Geo ═══
+            _secao_dashboard(
+                "Cruzamento com Monitoramento Geo (frequencia x contribuicao)",
+                "Cruza dados de presenca no Monitoramento Geo com contribuicoes de dizimo. "
+                "Ajuda a identificar padroes de engajamento.",
+            )
+            df_cruzamento = _cruzar_com_frequencia_geo(
+                slug, membros, dizimos_periodo, inicio_pastoral, fim_pastoral,
+            )
+            _render_cruzamento_geo(df_cruzamento)
 
             _secao_dashboard(
                 "Membros que requerem acompanhamento",
