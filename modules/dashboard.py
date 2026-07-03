@@ -708,6 +708,14 @@ def _link_whatsapp_padrao(tel, mensagem):
     if len(tel_limpo) not in (12, 13):
         return ""
     return f"https://wa.me/{tel_limpo}?text={urllib.parse.quote(mensagem)}"
+
+
+def _secao_dashboard(titulo, subtitulo):
+    st.markdown(
+        f'<div class="dash-section"><strong>{_escape(titulo)}</strong>'
+        f'<span>{_escape(subtitulo)}</span></div>',
+        unsafe_allow_html=True,
+    )
     st.markdown(
         f'<div class="dash-section"><strong>{_escape(titulo)}</strong>'
         f'<span>{_escape(subtitulo)}</span></div>',
