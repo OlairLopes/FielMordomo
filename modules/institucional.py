@@ -1949,16 +1949,16 @@ def _render_agenda_publica():
         <style>
             .fm-public-shell {
                 max-width: 1040px;
-                margin: 24px auto 28px;
+                margin: 8px auto 28px;
                 padding: 0 18px;
             }
             .fm-public-hero {
                 background: #FFFFFF;
                 border: 1px solid #E5E7EB;
-                border-radius: 22px;
-                padding: 28px 30px;
+                border-radius: 12px;
+                padding: 18px 24px;
                 box-shadow: 0 18px 45px rgba(6, 27, 68, .08);
-                margin-bottom: 18px;
+                margin-bottom: 10px;
             }
             .fm-public-hero h1 {
                 color: #061B44;
@@ -2242,7 +2242,15 @@ def render_institucional():
                     margin-right: auto !important;
                 }
                 div[data-testid="stVerticalBlock"] {
-                    gap: .75rem !important;
+                    gap: .25rem !important;
+                }
+                div[data-testid="stForm"] {
+                    margin-top: 0 !important;
+                    margin-bottom: 8px !important;
+                }
+                main .block-container > div:first-child {
+                    margin-top: 0 !important;
+                    padding-top: 0 !important;
                 }
             </style>
             """,
@@ -2289,9 +2297,15 @@ def render_institucional():
                 }
                 div[data-testid="stForm"] {
                     box-sizing: border-box !important;
+                    margin-top: 0 !important;
+                    margin-bottom: 8px !important;
                 }
                 div[data-testid="stVerticalBlock"] {
-                    gap: .75rem !important;
+                    gap: .25rem !important;
+                }
+                main .block-container > div:first-child {
+                    margin-top: 0 !important;
+                    padding-top: 0 !important;
                 }
             </style>
             """,
