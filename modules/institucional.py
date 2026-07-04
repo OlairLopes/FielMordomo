@@ -2212,13 +2212,12 @@ def render_institucional():
         st.markdown(
             _html_sem_indentacao(
                 _css_base()
-                + '<div class="fm-page fm-page-update notranslate" translate="no" lang="pt-BR">'
                 + _navbar()
             ),
             unsafe_allow_html=True,
         )
         _render_atualizar_cadastro_publico()
-        st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
+        st.markdown(_html_sem_indentacao(_footer()), unsafe_allow_html=True)
         return
 
     if _pagina_atual() == "pedidos-oracao":
@@ -2259,7 +2258,6 @@ def render_institucional():
         st.markdown(
             _html_sem_indentacao(
                 _css_base()
-                + '<div class="fm-page fm-page-update notranslate" translate="no" lang="pt-BR">'
                 + _navbar()
             ),
             unsafe_allow_html=True,
@@ -2267,7 +2265,7 @@ def render_institucional():
         from modules.pedidos_oracao import render_publico
 
         render_publico()
-        st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
+        st.markdown(_html_sem_indentacao(_footer()), unsafe_allow_html=True)
         return
 
     if _pagina_atual() == "agenda":
@@ -2314,13 +2312,12 @@ def render_institucional():
         st.markdown(
             _html_sem_indentacao(
                 _css_base()
-                + '<div class="fm-page fm-page-update notranslate" translate="no" lang="pt-BR">'
                 + _navbar()
             ),
             unsafe_allow_html=True,
         )
         _render_agenda_publica()
-        st.markdown(_html_sem_indentacao(_footer() + "</div>"), unsafe_allow_html=True)
+        st.markdown(_html_sem_indentacao(_footer()), unsafe_allow_html=True)
         return
 
     html_final = (
