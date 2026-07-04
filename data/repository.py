@@ -1,4 +1,4 @@
-﻿"""
+"""
 Camada de persistencia multi-tenant.
 """
 
@@ -35,7 +35,17 @@ USUARIO_EBD_RE = USUARIO_TESOUREIRO_RE
 HASH_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 LIMITES_MEMBROS_PLANO = {"basico": 50, "profissional": 250, "premium": None}
 CATEGORIAS_ENTRADA = {
-    "Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD",
+    "Campanha",
+    "Dizimo",
+    "Missao",
+    "Oferta",
+    "Oferta Culto Missões",
+    "Oferta Culto Jovens",
+    "Oferta Culto Senhoras",
+    "Oferta Culto Senhores",
+    "Oferta Escola Bíblica",
+    "Oferta Culto Infantil",
+    "Revista EBD",
     "Saldo ano anterior",
 }
 FORMAS_PAGAMENTO = {
