@@ -2255,7 +2255,7 @@ def render():
                 fig_temporal.update_layout(**_layout_grafico(
                     altura=380,
                     margem=dict(t=50, b=40, l=20, r=20),
-                    barmode="stack",
+                    barmode="group",
                     showlegend=True,
                     legend=dict(orientation="h", y=-.20, x=0),
                     xaxis=dict(fixedrange=True, gridcolor="#334155"),
