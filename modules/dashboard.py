@@ -2193,17 +2193,16 @@ def render():
 
                 fig_temporal = go.Figure()
                 for i, col in enumerate(pivot.columns):
-                    fig_temporal.add_trace(go.Scatter(
+                    fig_temporal.add_trace(go.Bar(
                         name=col,
                         x=[_mes_label(m) for m in pivot.index],
                         y=pivot[col],
-                        mode="lines+markers",
-                        stackgroup="one",
-                        line=dict(color=PALETA[i % len(PALETA)], width=2),
+                        marker_color=PALETA[i % len(PALETA)],
                     ))
                 fig_temporal.update_layout(**_layout_grafico(
                     altura=380,
                     margem=dict(t=50, b=40, l=20, r=20),
+                    barmode="stack",
                     showlegend=True,
                     legend=dict(orientation="h", y=-.20, x=0),
                     xaxis=dict(fixedrange=True, gridcolor="#334155"),
