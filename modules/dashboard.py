@@ -2080,6 +2080,12 @@ def render():
             "top center" if i % 2 == 0 else "bottom center"
             for i in range(len(serie))
         ]
+        # Cor do texto do saldo: verde-folha escuro quando positivo,
+        # vermelho quando negativo.
+        cor_texto_saldo = [
+            "#166534" if v >= 0 else "#DC2626"
+            for v in serie["saldo"]
+        ]
         fig = go.Figure([
             go.Bar(
                 name="Entradas",
@@ -2107,24 +2113,23 @@ def render():
                 line=dict(color=CORES["saldo"], width=3),
                 text=[formatar_moeda(v) for v in serie["saldo"]],
                 textposition=posicoes_saldo,
-                textfont=dict(size=9, color=CORES["saldo"]),
+                textfont=dict(size=9, color=cor_texto_saldo),
             ),
         ])
         fig.update_layout(**_layout_grafico(
             altura=430,
-            margem=dict(t=55, b=40, l=20, r=20),
+            margem=dict(t=25, b=40, l=20, r=20),
             barmode="group",
-            showlegend=True,
+            showlegend=False,
             xaxis=dict(fixedrange=True, gridcolor="#334155"),
             yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
-            legend=dict(orientation="h", y=1.12, x=0),
         ))
         st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
         st.markdown(
             '<div class="dash-legenda">'
             f'<span><i style="background:{CORES["entrada"]}"></i>Verde: Receita</span>'
             f'<span><i style="background:{CORES["saida"]}"></i>Laranja: Saidas</span>'
-            f'<span><i style="background:{CORES["saldo"]}"></i>Azul: Saldo</span>'
+            f'<span><i style="background:{CORES["saldo"]}"></i>Azul: Saldo (texto verde = positivo, vermelho = negativo)</span>'
             '</div>',
             unsafe_allow_html=True,
         )
