@@ -26,7 +26,17 @@ from utils.helpers import (
 from utils.planos import tem_lancamento_lote, obter_plano, proximo_plano
 
 CATEGORIAS_ENTRADA = [
-    "Campanha", "Dizimo", "Missao", "Oferta", "Revista EBD",
+    "Campanha",
+    "Dizimo",
+    "Missao",
+    "Oferta",
+    "Oferta Culto Missões",
+    "Oferta Culto Jovens",
+    "Oferta Culto Senhoras",
+    "Oferta Culto Senhores",
+    "Oferta Escola Bíblica",
+    "Oferta Culto Infantil",
+    "Revista EBD",
     "Saldo ano anterior",
 ]
 FORMAS_PAGAMENTO = [
