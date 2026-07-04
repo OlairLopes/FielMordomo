@@ -2074,6 +2074,12 @@ def render():
             "Entradas, saidas e saldo acumulado mes a mes nos ultimos 12 meses.",
         )
         serie = _serie_mensal(df, mes_ref)
+        # Posicoes alternadas (acima/abaixo) para o texto do saldo, reduzindo
+        # sobreposicao com os rotulos das barras de entradas/saidas.
+        posicoes_saldo = [
+            "top center" if i % 2 == 0 else "bottom center"
+            for i in range(len(serie))
+        ]
         fig = go.Figure([
             go.Bar(
                 name="Entradas",
@@ -2100,7 +2106,7 @@ def render():
                 mode="lines+markers+text",
                 line=dict(color=CORES["saldo"], width=3),
                 text=[formatar_moeda(v) for v in serie["saldo"]],
-                textposition="top center",
+                textposition=posicoes_saldo,
                 textfont=dict(size=9, color=CORES["saldo"]),
             ),
         ])
@@ -2114,6 +2120,14 @@ def render():
             legend=dict(orientation="h", y=1.12, x=0),
         ))
         st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+        st.markdown(
+            '<div class="dash-legenda">'
+            f'<span><i style="background:{CORES["entrada"]}"></i>Verde: Receita</span>'
+            f'<span><i style="background:{CORES["saida"]}"></i>Laranja: Saidas</span>'
+            f'<span><i style="background:{CORES["saldo"]}"></i>Azul: Saldo</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
         _secao_dashboard(
             "Composicao do periodo",
