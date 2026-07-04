@@ -2056,8 +2056,8 @@ def render():
     with a2: _card("Saidas YTD", formatar_moeda(sai_ytd))
     with a3: _card("Saldo YTD", formatar_moeda(saldo_ytd))
 
-    tab_visao, tab_saude, tab_despesas, tab_receitas, tab_qualidade, tab_pastoral = st.tabs([
-        "Visao Executiva", "Saude Financeira", "Despesas", "Receitas", "Qualidade",
+    tab_visao, tab_despesas, tab_receitas, tab_pastoral = st.tabs([
+        "Visao Executiva", "Despesas", "Receitas",
         "Acompanhamento Pastoral",
     ])
 
@@ -2097,8 +2097,11 @@ def render():
                 name="Saldo",
                 x=serie["rotulo"],
                 y=serie["saldo"],
-                mode="lines+markers",
+                mode="lines+markers+text",
                 line=dict(color=CORES["saldo"], width=3),
+                text=[formatar_moeda(v) for v in serie["saldo"]],
+                textposition="top center",
+                textfont=dict(size=9, color=CORES["saldo"]),
             ),
         ])
         fig.update_layout(**_layout_grafico(
@@ -2142,52 +2145,6 @@ def render():
             "Media historica de entradas por mes calendario. Cor mais intensa = arrecadacao mais alta.",
         )
         _render_heatmap_sazonalidade(df)
-
-    with tab_saude:
-        if dashboard_restrito:
-            st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
-        else:
-            # ═══ NOVO: Score de saude 0-100 no TOPO ═══
-            _secao_dashboard(
-                "Score de saude financeira",
-                "Indice unico 0-100 combinando cobertura de reserva, saldo YTD, "
-                "variacao de entradas, participacao dizimistas e qualidade dos dados.",
-            )
-            _render_score_saude(score)
-
-            # ═══ NOVO: Metas de arrecadacao ═══
-            _secao_dashboard(
-                "Metas de arrecadacao",
-                "Progresso do periodo selecionado em relacao as metas mensais configuradas em Minha Conta.",
-            )
-            dias_periodo_metas = (fim_mes - inicio_mes).days + 1
-            if dias_periodo_metas < 25 or dias_periodo_metas > 35:
-                st.caption(
-                    f"⚠️ O periodo selecionado tem {dias_periodo_metas} dia(s). "
-                    "As metas cadastradas sao mensais; para comparacao mais precisa, "
-                    "selecione um periodo de aproximadamente um mes."
-                )
-            _render_metas_arrecadacao(slug, ent, dizimo_mes)
-
-            # Saude financeira original
-            _render_saude_financeira(df, mes_ref, slug)
-
-            # ═══ NOVO: Alerta de churn de dizimistas ═══
-            _secao_dashboard(
-                "Alerta de churn (dizimistas afastando-se)",
-                "Membros que contribuiram nos ultimos 90 dias mas nao contribuiram "
-                "no mes de referencia. Impacto financeiro estimado.",
-            )
-            churn_info = _identificar_churn(df, mes_ref, membros, dias_referencia=90)
-            _render_churn_alerta(churn_info, slug, igreja)
-
-            # ═══ NOVO: Previsao proximos 3 meses ═══
-            _secao_dashboard(
-                "Previsao (proximos 3 meses)",
-                "Estimativa via regressao linear dos ultimos 12 meses. "
-                "Use como orientacao complementar.",
-            )
-            _render_previsao(df, mes_ref)
 
     with tab_despesas:
         saidas = ref[ref["tipo_norm"] == "SAIDA"].copy()
@@ -2309,73 +2266,6 @@ def render():
             )
             st.dataframe(_tabela_monetaria(resumo), use_container_width=True, hide_index=True)
 
-    with tab_qualidade:
-        if dashboard_restrito:
-            st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
-            return
-        _secao_dashboard(
-            "Qualidade dos dados",
-            "Pendencias que precisam ser corrigidas para manter os indicadores confiaveis.",
-        )
-        q1, q2, q3, q4 = st.columns(4)
-        q1.metric("Datas invalidas", qualidade["datas_invalidas"])
-        q2.metric("Valores invalidos", qualidade["valores_invalidos"])
-        q3.metric("Sem vinculo", qualidade["sem_vinculo"])
-        q4.metric("Despesas sem subcategoria", qualidade["despesas_sem_subcategoria"])
-        pendencias = pd.DataFrame({
-            "Pendencia": [
-                "Datas invalidas",
-                "Valores invalidos",
-                "Valores nao positivos",
-                "Sem vinculo",
-                "Despesas sem subcategoria",
-            ],
-            "Quantidade": [
-                qualidade["datas_invalidas"],
-                qualidade["valores_invalidos"],
-                qualidade["valores_nao_positivos"],
-                qualidade["sem_vinculo"],
-                qualidade["despesas_sem_subcategoria"],
-            ],
-        })
-        pendencias["Status"] = pendencias["Quantidade"].apply(
-            lambda qtd: "Pendente" if qtd else "OK"
-        )
-        pendencias["Acao sugerida"] = [
-            "Corrigir ou excluir lancamentos com data ausente/invalida.",
-            "Corrigir valores que nao foram reconhecidos como numero.",
-            "Revisar lancamentos com valor zerado ou negativo.",
-            "Vincular lancamentos a membro ou fornecedor quando aplicavel.",
-            "Classificar despesas em uma subcategoria.",
-        ]
-        if pendencias["Quantidade"].sum():
-            fig_qualidade = go.Figure(go.Bar(
-                name="Pendencias",
-                x=pendencias["Quantidade"],
-                y=pendencias["Pendencia"],
-                orientation="h",
-                marker_color=CORES["alerta"],
-                text=pendencias["Quantidade"],
-                textposition="outside",
-                textfont=dict(size=11, color="#CBD5E1"),
-            ))
-            fig_qualidade.update_layout(**_layout_grafico(
-                altura=340,
-                showlegend=False,
-                xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
-                yaxis=dict(fixedrange=True, showgrid=False),
-            ))
-            st.plotly_chart(fig_qualidade, use_container_width=True, config=CONFIG_PLOTLY)
-        else:
-            st.success("Nenhuma pendencia identificada nos dados.")
-        st.markdown("#### Tabela de pendencias")
-        st.dataframe(
-            pendencias[["Pendencia", "Quantidade", "Status", "Acao sugerida"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-        st.caption("Registros invalidos sao excluidos dos KPIs ate serem corrigidos.")
-
     with tab_pastoral:
         if dashboard_restrito:
             st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
@@ -2385,6 +2275,110 @@ def render():
             "Acesse somente quando necessario e nao compartilhe exportacoes sem autorizacao."
         )
         if _autorizacao_pastoral(slug):
+            # ═══ Saude financeira (transferido da antiga aba Saude Financeira) ═══
+            _secao_dashboard(
+                "Score de saude financeira",
+                "Indice unico 0-100 combinando cobertura de reserva, saldo YTD, "
+                "variacao de entradas, participacao dizimistas e qualidade dos dados.",
+            )
+            _render_score_saude(score)
+
+            _secao_dashboard(
+                "Metas de arrecadacao",
+                "Progresso do periodo selecionado em relacao as metas mensais configuradas em Minha Conta.",
+            )
+            dias_periodo_metas = (fim_mes - inicio_mes).days + 1
+            if dias_periodo_metas < 25 or dias_periodo_metas > 35:
+                st.caption(
+                    f"⚠️ O periodo selecionado tem {dias_periodo_metas} dia(s). "
+                    "As metas cadastradas sao mensais; para comparacao mais precisa, "
+                    "selecione um periodo de aproximadamente um mes."
+                )
+            _render_metas_arrecadacao(slug, ent, dizimo_mes)
+
+            _render_saude_financeira(df, mes_ref, slug)
+
+            _secao_dashboard(
+                "Alerta de churn (dizimistas afastando-se)",
+                "Membros que contribuiram nos ultimos 90 dias mas nao contribuiram "
+                "no mes de referencia. Impacto financeiro estimado.",
+            )
+            churn_info = _identificar_churn(df, mes_ref, membros, dias_referencia=90)
+            _render_churn_alerta(churn_info, slug, igreja)
+
+            _secao_dashboard(
+                "Previsao (proximos 3 meses)",
+                "Estimativa via regressao linear dos ultimos 12 meses. "
+                "Use como orientacao complementar.",
+            )
+            _render_previsao(df, mes_ref)
+
+            # ═══ Qualidade dos dados (transferido da antiga aba Qualidade) ═══
+            _secao_dashboard(
+                "Qualidade dos dados",
+                "Pendencias que precisam ser corrigidas para manter os indicadores confiaveis.",
+            )
+            q1, q2, q3, q4 = st.columns(4)
+            q1.metric("Datas invalidas", qualidade["datas_invalidas"])
+            q2.metric("Valores invalidos", qualidade["valores_invalidos"])
+            q3.metric("Sem vinculo", qualidade["sem_vinculo"])
+            q4.metric("Despesas sem subcategoria", qualidade["despesas_sem_subcategoria"])
+            pendencias = pd.DataFrame({
+                "Pendencia": [
+                    "Datas invalidas",
+                    "Valores invalidos",
+                    "Valores nao positivos",
+                    "Sem vinculo",
+                    "Despesas sem subcategoria",
+                ],
+                "Quantidade": [
+                    qualidade["datas_invalidas"],
+                    qualidade["valores_invalidos"],
+                    qualidade["valores_nao_positivos"],
+                    qualidade["sem_vinculo"],
+                    qualidade["despesas_sem_subcategoria"],
+                ],
+            })
+            pendencias["Status"] = pendencias["Quantidade"].apply(
+                lambda qtd: "Pendente" if qtd else "OK"
+            )
+            pendencias["Acao sugerida"] = [
+                "Corrigir ou excluir lancamentos com data ausente/invalida.",
+                "Corrigir valores que nao foram reconhecidos como numero.",
+                "Revisar lancamentos com valor zerado ou negativo.",
+                "Vincular lancamentos a membro ou fornecedor quando aplicavel.",
+                "Classificar despesas em uma subcategoria.",
+            ]
+            if pendencias["Quantidade"].sum():
+                fig_qualidade = go.Figure(go.Bar(
+                    name="Pendencias",
+                    x=pendencias["Quantidade"],
+                    y=pendencias["Pendencia"],
+                    orientation="h",
+                    marker_color=CORES["alerta"],
+                    text=pendencias["Quantidade"],
+                    textposition="outside",
+                    textfont=dict(size=11, color="#CBD5E1"),
+                ))
+                fig_qualidade.update_layout(**_layout_grafico(
+                    altura=340,
+                    showlegend=False,
+                    xaxis=dict(fixedrange=True, showgrid=False, showticklabels=False),
+                    yaxis=dict(fixedrange=True, showgrid=False),
+                ))
+                st.plotly_chart(fig_qualidade, use_container_width=True, config=CONFIG_PLOTLY)
+            else:
+                st.success("Nenhuma pendencia identificada nos dados.")
+            st.markdown("#### Tabela de pendencias")
+            st.dataframe(
+                pendencias[["Pendencia", "Quantidade", "Status", "Acao sugerida"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+            st.caption("Registros invalidos sao excluidos dos KPIs ate serem corrigidos.")
+
+            st.divider()
+
             dias_ativo = DIAS_DIZIMISTA_ATIVO_DEFAULT
             try:
                 dias_ativo = int(obter_config_igreja(slug, "dias_dizimista_ativo", str(dias_ativo)))
