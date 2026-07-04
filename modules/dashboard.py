@@ -1101,10 +1101,37 @@ def _injetar_css():
     <style>
     .stApp { background-color:#0F172A; }
     h1,h2,h3,h4 { color:#F1F5F9 !important; }
-    .dash-card { background:#1E293B;border:1px solid #334155;border-radius:12px;padding:16px;height:100%; }
+    .dash-card { background:#1E293B;border:1px solid #334155;border-radius:12px;padding:16px;
+        height:100%;display:flex;flex-direction:column;justify-content:space-between;
+        min-height:112px;box-sizing:border-box; }
     .dash-label { color:#94A3B8;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em; }
     .dash-value { color:#F8FAFC;font-size:1.45rem;font-weight:700;margin-top:5px; }
     .dash-note { color:#CBD5E1;font-size:.76rem;margin-top:5px; }
+
+    /* ═══ Grade uniforme: cards com mesma altura e espacamento consistente ═══ */
+    div[data-testid="stHorizontalBlock"] {
+        gap:16px !important;
+        margin-bottom:16px;
+        align-items:stretch !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        display:flex !important;
+        flex:1 1 0 !important;
+        min-width:0;
+    }
+    div[data-testid="column"] > div {
+        width:100%;
+        display:flex;
+        flex-direction:column;
+    }
+    div[data-testid="column"] [data-testid="stVerticalBlockBorderWrapper"],
+    div[data-testid="column"] [data-testid="stVerticalBlock"] {
+        height:100%;
+    }
+    @media (max-width:640px) {
+        div[data-testid="stHorizontalBlock"] { gap:10px !important;margin-bottom:10px; }
+        .dash-card { min-height:96px;padding:12px; }
+    }
     .stPlotlyChart, [data-testid="stPlotlyChart"] {
         background:#1E293B;
         border:1px solid #334155;
@@ -2202,6 +2229,8 @@ def render():
                         crescimento["Variacao (R$)"] = crescimento["Variacao (R$)"].apply(formatar_moeda)
                         crescimento["Valor atual"] = crescimento["Valor atual"].apply(formatar_moeda)
                         st.dataframe(crescimento, use_container_width=True, hide_index=True)
+
+    with tab_receitas:
         entradas = ref[ref["tipo_norm"] == "ENTRADA"]
         resumo = entradas.groupby("categoria", as_index=False)["valor"].sum().sort_values("valor", ascending=False)
         resumo = resumo.rename(columns={"categoria": "Categoria", "valor": "Valor"})
