@@ -477,37 +477,44 @@ def _score_saude_financeira(df, mes_ref, saude_info, qualidade, membros):
     }
 
 
-def _gerar_insight_textual(df, mes_ref, membros, saude_info, ticket_info, score):
+def _rotulo_periodo(inicio, fim):
+    """Formata o periodo para exibicao textual (ex: '01/07 a 15/07/2026')."""
+    if inicio == fim:
+        return inicio.strftime("%d/%m/%Y")
+    if inicio.year == fim.year and inicio.month == fim.month:
+        return f"{inicio.strftime('%d')} a {fim.strftime('%d/%m/%Y')}"
+    return f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
+
+
+def _gerar_insight_textual(
+    inicio, fim, ent, ent_ant, ref, membros, saude_info, ticket_info, score,
+):
     """
-    Gera paragrafo curto de resumo executivo do mes.
+    Gera paragrafo curto de resumo executivo do periodo selecionado.
     """
-    ent, sai, saldo = _totais(df[df["mes_periodo"] == mes_ref])
-    ent_ant, _, _ = _totais(df[df["mes_periodo"] == (mes_ref - 1)])
     variacao_ent = ((ent - ent_ant) / ent_ant * 100) if ent_ant > 0 else 0
 
-    dizimo_mes, _, _ = _totais_dizimo(df[df["mes_periodo"] == mes_ref])
-    pct_dizimo = (dizimo_mes / ent * 100) if ent > 0 else 0
+    dizimo_periodo, _, _ = _totais_dizimo(ref)
+    pct_dizimo = (dizimo_periodo / ent * 100) if ent > 0 else 0
 
-    qtd_diz, qtd_membros, pct_diz = _participacao_dizimistas(
-        df[df["mes_periodo"] == mes_ref], membros
-    )
+    qtd_diz, qtd_membros, pct_diz = _participacao_dizimistas(ref, membros)
 
     frases = []
-    mes_str = _mes_label(mes_ref)
+    periodo_str = _rotulo_periodo(inicio, fim)
     if variacao_ent >= 0:
         frases.append(
-            f"Em **{mes_str}**, as entradas totalizaram **{formatar_moeda(ent)}**, "
-            f"variacao de **{variacao_ent:+.1f}%** vs mes anterior."
+            f"No periodo **{periodo_str}**, as entradas totalizaram **{formatar_moeda(ent)}**, "
+            f"variacao de **{variacao_ent:+.1f}%** vs periodo anterior equivalente."
         )
     else:
         frases.append(
-            f"⚠️ Em **{mes_str}**, as entradas foram de **{formatar_moeda(ent)}** — "
-            f"queda de **{abs(variacao_ent):.1f}%** vs mes anterior."
+            f"⚠️ No periodo **{periodo_str}**, as entradas foram de **{formatar_moeda(ent)}** — "
+            f"queda de **{abs(variacao_ent):.1f}%** vs periodo anterior equivalente."
         )
 
     if pct_dizimo > 0:
         frases.append(
-            f"O dizimo representa **{pct_dizimo:.1f}%** das entradas do mes."
+            f"O dizimo representa **{pct_dizimo:.1f}%** das entradas do periodo."
         )
 
     if qtd_membros > 0:
@@ -1774,12 +1781,12 @@ def _render_botoes_acao_rapida(abc_info, membros, igreja, mes_ref, slug):
 
 
 def _gerar_html_relatorio_executivo(
-    igreja, slug, mes_ref, ent, sai, saldo,
+    igreja, slug, inicio, fim, ent, sai, saldo,
     ticket_info, score, saude_info, insight_texto,
 ):
     """Gera HTML de relatorio executivo pronto para impressao."""
     nome_igreja = _escape(igreja.get("nome", "Igreja"))
-    mes_str = _mes_label(mes_ref)
+    periodo_str = _rotulo_periodo(inicio, fim)
     data_emissao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
 
     # Componentes do score
@@ -1803,7 +1810,7 @@ def _gerar_html_relatorio_executivo(
 <!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Relatorio Executivo - {mes_str}</title>
+<title>Relatorio Executivo - {periodo_str}</title>
 <style>
 * {{ box-sizing:border-box;margin:0;padding:0; }}
 body {{ font-family:Arial,sans-serif;background:#f0f0f0;padding:20px;color:#111; }}
@@ -1844,7 +1851,7 @@ td {{ padding:6px 8px;border-bottom:1px solid #F1F5F9;color:#334155; }}
 
 <div class="relatorio">
 <h1>{nome_igreja}</h1>
-<h2>Relatorio Executivo — {_escape(mes_str)} | Emitido em {_escape(data_emissao)}</h2>
+<h2>Relatorio Executivo — {_escape(periodo_str)} | Emitido em {_escape(data_emissao)}</h2>
 
 <div class="insight">💡 {insight_html}</div>
 
@@ -1909,24 +1916,66 @@ def render():
 
     membros = _membros_ativos(cad)
     igreja = st.session_state.get("igreja", {})
-    meses = sorted(df["mes_periodo"].dropna().unique(), reverse=True)
-    mes_ref = st.selectbox(
-        "Mes de referencia",
-        meses,
-        format_func=_mes_label,
-        key=_sk("mes_ref", slug),
-    )
-    inicio_mes, fim_mes = mes_ref.start_time.date(), mes_ref.end_time.date()
-    anterior = mes_ref - 1
-    ref, comp = _periodo(df, inicio_mes, fim_mes), df[df["mes_periodo"] == anterior]
+
+    # ═══ NOVO: Selecao de periodo (data inicial / data final) ═══
+    # Substitui o antigo seletor de "mes de referencia" por um intervalo
+    # livre de datas, mais flexivel para analises fora do mes calendario.
+    data_min = df["data"].min().date()
+    data_max = df["data"].max().date()
+    hoje = datetime.date.today()
+    fim_padrao = min(hoje, data_max)
+    inicio_padrao = max(fim_padrao.replace(day=1), data_min)
+
+    col_pi, col_pf = st.columns(2)
+    with col_pi:
+        inicio_mes = st.date_input(
+            "Periodo - de",
+            value=inicio_padrao,
+            min_value=data_min,
+            max_value=data_max,
+            format="DD/MM/YYYY",
+            key=_sk("periodo_inicio", slug),
+        )
+    with col_pf:
+        fim_mes = st.date_input(
+            "Periodo - ate",
+            value=fim_padrao,
+            min_value=data_min,
+            max_value=data_max,
+            format="DD/MM/YYYY",
+            key=_sk("periodo_fim", slug),
+        )
+    if inicio_mes > fim_mes:
+        st.error("A data inicial nao pode ser posterior a data final.")
+        inicio_mes, fim_mes = fim_mes, inicio_mes
+
+    # Periodo de comparacao imediatamente anterior, com a mesma duracao
+    dias_periodo = (fim_mes - inicio_mes).days + 1
+    inicio_anterior = inicio_mes - datetime.timedelta(days=dias_periodo)
+    fim_anterior = inicio_mes - datetime.timedelta(days=1)
+
+    # mes_ref (Period) e usado pelas analises de tendencia mensal
+    # (evolucao 12 meses, score de saude, sazonalidade, previsao, YTD),
+    # que continuam calculadas com base no mes final do periodo escolhido.
+    mes_ref = pd.Period(fim_mes, freq="M")
+
+    ref = _periodo(df, inicio_mes, fim_mes)
+    comp = _periodo(df, inicio_anterior, fim_anterior)
     ent, sai, saldo = _totais(ref)
     ent_ant, sai_ant, saldo_ant = _totais(comp)
     qtd_diz, membros_n, pct_diz = _participacao_dizimistas(ref, membros)
     (ent_ytd, sai_ytd, saldo_ytd), (ent_ytd_ant, _, _) = _comparativo_ytd(df, mes_ref.year, mes_ref.month)
 
-    # ═══ Comparativo mesmo mes ano anterior ═══
-    mesmo_mes_ano_ant = _mesmo_mes_ano_anterior(df, mes_ref)
-    ent_mma, sai_mma, saldo_mma = _totais(mesmo_mes_ano_ant)
+    # ═══ Comparativo mesmo periodo do ano anterior ═══
+    try:
+        inicio_ano_ant = inicio_mes.replace(year=inicio_mes.year - 1)
+        fim_ano_ant = fim_mes.replace(year=fim_mes.year - 1)
+    except ValueError:
+        # Trata 29/02 em ano nao bissexto
+        inicio_ano_ant = inicio_mes - datetime.timedelta(days=365)
+        fim_ano_ant = fim_mes - datetime.timedelta(days=365)
+    mesmo_periodo_ano_ant = _periodo(df, inicio_ano_ant, fim_ano_ant)
+    ent_mma, sai_mma, saldo_mma = _totais(mesmo_periodo_ano_ant)
 
     # ═══ Calculos para novos indicadores ═══
     reserva = _numero_config(
@@ -1940,7 +1989,9 @@ def render():
     saude_info = _indicadores_saude(df, mes_ref, reserva, meta_reserva)
     ticket_info = _ticket_medio_arrecadacao(ref, membros)
     score = _score_saude_financeira(df, mes_ref, saude_info, qualidade, membros)
-    insight_texto = _gerar_insight_textual(df, mes_ref, membros, saude_info, ticket_info, score)
+    insight_texto = _gerar_insight_textual(
+        inicio_mes, fim_mes, ent, ent_ant, ref, membros, saude_info, ticket_info, score,
+    )
 
     dizimo_mes, _, _ = _totais_dizimo(ref)
 
@@ -1960,7 +2011,7 @@ def render():
             if st.button("📄 Exportar relatorio executivo", key=_sk("btn_export_exec", slug),
                          use_container_width=True):
                 html_relatorio = _gerar_html_relatorio_executivo(
-                    igreja, slug, mes_ref, ent, sai, saldo,
+                    igreja, slug, inicio_mes, fim_mes, ent, sai, saldo,
                     ticket_info, score, saude_info, insight_texto,
                 )
                 st.session_state[_sk("html_export", slug)] = html_relatorio
@@ -1969,7 +2020,7 @@ def render():
             st.download_button(
                 "⬇️ Baixar relatorio (HTML - abra no navegador e imprima como PDF)",
                 data=st.session_state[_sk("html_export", slug)],
-                file_name=f"relatorio_executivo_{mes_ref}.html",
+                file_name=f"relatorio_executivo_{inicio_mes:%Y%m%d}_{fim_mes:%Y%m%d}.html",
                 mime="text/html",
                 key=_sk("dl_export", slug),
             )
@@ -2062,7 +2113,7 @@ def render():
         st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
         _secao_dashboard(
-            "Composicao do mes",
+            "Composicao do periodo",
             "Leitura rapida da relacao entre recursos recebidos e despesas realizadas.",
         )
         composicao = pd.DataFrame({
@@ -2078,7 +2129,7 @@ def render():
                     [CORES["entrada"], CORES["saida"]],
                     "Composicao",
                     valor_central=saldo,
-                    label_central="Saldo do mes",
+                    label_central="Saldo do periodo",
                     cor_central=CORES["entrada"] if saldo >= 0 else CORES["saida"],
                 ),
                 use_container_width=True,
@@ -2107,8 +2158,15 @@ def render():
             # ═══ NOVO: Metas de arrecadacao ═══
             _secao_dashboard(
                 "Metas de arrecadacao",
-                "Progresso do mes em relacao as metas configuradas em Minha Conta.",
+                "Progresso do periodo selecionado em relacao as metas mensais configuradas em Minha Conta.",
             )
+            dias_periodo_metas = (fim_mes - inicio_mes).days + 1
+            if dias_periodo_metas < 25 or dias_periodo_metas > 35:
+                st.caption(
+                    f"⚠️ O periodo selecionado tem {dias_periodo_metas} dia(s). "
+                    "As metas cadastradas sao mensais; para comparacao mais precisa, "
+                    "selecione um periodo de aproximadamente um mes."
+                )
             _render_metas_arrecadacao(slug, ent, dizimo_mes)
 
             # Saude financeira original
@@ -2138,10 +2196,10 @@ def render():
         resumo = resumo.rename(columns={"subcategoria": "Subcategoria", "valor": "Valor"})
         _secao_dashboard(
             "Distribuicao das despesas",
-            "Participacao de cada subcategoria no total de saidas do mes selecionado.",
+            "Participacao de cada subcategoria no total de saidas do periodo selecionado.",
         )
         if resumo.empty:
-            st.info("Nao ha despesas no mes selecionado.")
+            st.info("Nao ha despesas no periodo selecionado.")
         else:
             st.plotly_chart(
                 _grafico_rosca(resumo, "Subcategoria", "Valor", PALETA, "Despesas"),
@@ -2230,10 +2288,10 @@ def render():
         resumo = resumo.rename(columns={"categoria": "Categoria", "valor": "Valor"})
         _secao_dashboard(
             "Distribuicao das receitas",
-            "Participacao de cada categoria no total de entradas do mes selecionado.",
+            "Participacao de cada categoria no total de entradas do periodo selecionado.",
         )
         if resumo.empty:
-            st.info("Nao ha receitas no mes selecionado.")
+            st.info("Nao ha receitas no periodo selecionado.")
         else:
             st.plotly_chart(
                 _grafico_rosca(resumo, "Categoria", "Valor", PALETA, "Receitas"),
@@ -2690,9 +2748,9 @@ def render():
 
     st.divider()
     st.download_button(
-        "Exportar dados do mes",
+        "Exportar dados do periodo",
         gerar_csv(ref),
-        f"dashboard_{mes_ref}.csv",
+        f"dashboard_{inicio_mes:%Y%m%d}_{fim_mes:%Y%m%d}.csv",
         "text/csv",
         key=_sk("csv_mes", slug),
     )
