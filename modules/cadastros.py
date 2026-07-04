@@ -1,5 +1,7 @@
 ﻿import datetime
 import html
+import sqlite3
+
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
@@ -23,6 +25,44 @@ FUNCOES = [
 
 SEXO_OPC = ["Masculino", "Feminino", ""]
 TIPOS_CADASTRO = ["Membro", "Fornecedor"]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Historico do membro - tipos de ocorrencia padronizados
+# Formato: (codigo, rotulo, categoria)  -> categoria: Entrada | Saida | Normal
+# ═══════════════════════════════════════════════════════════════════════
+TIPOS_HISTORICO = [
+    (1, "Conversão", "Entrada"),
+    (2, "Batismo nas Águas", "Entrada"),
+    (3, "Batismo com o Espírito Santo", "Normal"),
+    (4, "Consagrado a Diácono", "Normal"),
+    (5, "Consagrado a Presbítero", "Normal"),
+    (6, "Consagrado a Evangelista", "Normal"),
+    (7, "Consagrado a Pastor", "Normal"),
+    (8, "Consagrado a Bispo", "Normal"),
+    (9, "Ordenação Ministerial", "Normal"),
+    (10, "Casamento", "Normal"),
+    (11, "Dedicação de Filho(a)", "Normal"),
+    (12, "Excluído por Disciplina", "Saída"),
+    (13, "Reconciliado", "Entrada"),
+    (14, "Falecimento", "Saída"),
+    (15, "Desligamento a Pedido", "Saída"),
+    (16, "Mudança de Função Ministerial", "Normal"),
+    (17, "Separado para Auxiliar na Obra", "Normal"),
+    (18, "Separado para Obreiro", "Normal"),
+    (19, "Licenciado Ministerialmente", "Normal"),
+    (20, "Afastado Temporariamente", "Saída"),
+    (21, "Retorno de Afastamento", "Entrada"),
+    (30, "Transferência Recebida de Outra Igreja", "Entrada"),
+    (31, "Transferências entre Congregações", "Normal"),
+    (32, "Transferência Enviada para Outra Igreja", "Saída"),
+    (99, "Outro (especificar na observação)", "Normal"),
+]
+
+CATEGORIA_COR = {
+    "Entrada": "#10B981",
+    "Saída": "#EF4444",
+    "Normal": "#3B82F6",
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -107,6 +147,107 @@ def _congregacao_da_sessao(slug, igreja):
         or slug
         or ""
     ).strip()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Historico do membro: acesso ao banco (tabela historico_membros)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _tenant_db_path(slug):
+    """Import defensivo de _tenant_db (nome interno do repository).
+    Isola o restante do modulo de uma eventual mudanca de assinatura."""
+    from data.repository import _tenant_db
+    return _tenant_db(slug)
+
+
+def _garantir_tabela_historico(slug):
+    """Cria a tabela historico_membros se ainda nao existir (auto-migracao).
+    Cacheia por sessao para evitar checagem repetida a cada rerun."""
+    flag = f"_hist_membro_tabela_ok_{slug}"
+    if st.session_state.get(flag):
+        return
+    try:
+        db_path = _tenant_db_path(slug)
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS historico_membros (
+                    id_historico INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id_cadastro INTEGER NOT NULL,
+                    data_ocorrencia TEXT NOT NULL,
+                    codigo_tipo INTEGER,
+                    ocorrencia TEXT NOT NULL,
+                    categoria TEXT,
+                    localidade TEXT,
+                    observacao TEXT,
+                    criado_em TEXT
+                )
+            """)
+            conn.commit()
+        st.session_state[flag] = True
+    except Exception:
+        pass
+
+
+def _listar_historico(slug, id_cadastro):
+    """Retorna DataFrame com o historico do membro, mais recente primeiro."""
+    _garantir_tabela_historico(slug)
+    try:
+        db_path = _tenant_db_path(slug)
+        with sqlite3.connect(db_path) as conn:
+            df = pd.read_sql_query(
+                """SELECT id_historico, data_ocorrencia, codigo_tipo,
+                          ocorrencia, categoria, localidade, observacao
+                   FROM historico_membros
+                   WHERE id_cadastro = ?
+                   ORDER BY data_ocorrencia DESC, id_historico DESC""",
+                conn,
+                params=(int(id_cadastro),),
+            )
+        return df
+    except Exception:
+        return pd.DataFrame(columns=[
+            "id_historico", "data_ocorrencia", "codigo_tipo",
+            "ocorrencia", "categoria", "localidade", "observacao",
+        ])
+
+
+def _inserir_historico(slug, id_cadastro, data_ocorrencia, codigo_tipo,
+                        ocorrencia, categoria, localidade, observacao):
+    _garantir_tabela_historico(slug)
+    db_path = _tenant_db_path(slug)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """INSERT INTO historico_membros
+               (id_cadastro, data_ocorrencia, codigo_tipo, ocorrencia,
+                categoria, localidade, observacao, criado_em)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                int(id_cadastro),
+                data_ocorrencia,
+                codigo_tipo,
+                ocorrencia,
+                categoria,
+                localidade,
+                observacao,
+                datetime.datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
+        conn.commit()
+
+
+def _excluir_historico(slug, id_historico):
+    _garantir_tabela_historico(slug)
+    db_path = _tenant_db_path(slug)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "DELETE FROM historico_membros WHERE id_historico = ?",
+            (int(id_historico),),
+        )
+        conn.commit()
+
+
+def _rotulo_tipo_historico(codigo, ocorrencia, categoria):
+    return f"{codigo} - {ocorrencia} - {categoria}"
 
 
 def _html(valor):
@@ -626,6 +767,7 @@ def modal_editar_cadastro(slug, sel, plano, p_info, congregacao_fixa, bloqueado)
 def modal_visualizar_cadastro(sel, igreja):
     """Modal para visualizar dados do cadastro em modo leitura."""
 
+    slug = slug_da_sessao()
     nome = _val(sel, "nome") or "(sem nome)"
     tipo = _val(sel, "tipo_cadastro") or "Membro"
     id_sel = int(sel["id_cadastro"])
@@ -653,12 +795,14 @@ def modal_visualizar_cadastro(sel, igreja):
         unsafe_allow_html=True,
     )
 
-    # Tabs: Dados / Contato / Endereco
-    tab_dados, tab_contato, tab_endereco = st.tabs([
-        "📋 Dados principais",
-        "📞 Contato",
-        "🏠 Endereco",
-    ])
+    # Tabs: Dados / Contato / Endereco / (Historico - apenas para Membro)
+    rotulos_tabs = ["📋 Dados principais", "📞 Contato", "🏠 Endereco"]
+    if tipo == "Membro":
+        rotulos_tabs.append("🕰️ Historico")
+        tab_dados, tab_contato, tab_endereco, tab_historico = st.tabs(rotulos_tabs)
+    else:
+        tab_dados, tab_contato, tab_endereco = st.tabs(rotulos_tabs)
+        tab_historico = None
 
     with tab_dados:
         c1, c2 = st.columns(2)
@@ -737,6 +881,153 @@ def modal_visualizar_cadastro(sel, igreja):
                 f'🗺️ Abrir no Google Maps</a>',
                 unsafe_allow_html=True,
             )
+
+    if tab_historico is not None:
+        with tab_historico:
+            st.caption(
+                "Registre os marcos e movimentacoes do membro na igreja: conversao, "
+                "batismo, consagracoes, transferencias, desligamentos, etc."
+            )
+
+            # ─── Formulario para adicionar nova ocorrencia ───────────────
+            with st.expander("➕ Adicionar ocorrencia", expanded=False):
+                opcoes_tipo = {
+                    _rotulo_tipo_historico(codigo, ocorrencia, categoria): (codigo, ocorrencia, categoria)
+                    for codigo, ocorrencia, categoria in TIPOS_HISTORICO
+                }
+                col_data, col_tipo = st.columns([1, 2])
+                with col_data:
+                    data_hist = st.date_input(
+                        "Data",
+                        value=datetime.date.today(),
+                        format="DD/MM/YYYY",
+                        key=f"mhist_data_{id_sel}",
+                    )
+                with col_tipo:
+                    escolha_tipo = st.selectbox(
+                        "Tipo de ocorrencia",
+                        list(opcoes_tipo.keys()),
+                        key=f"mhist_tipo_{id_sel}",
+                    )
+                codigo_sel, ocorrencia_sel, categoria_sel = opcoes_tipo[escolha_tipo]
+
+                localidade_padrao = _val(sel, "congregacao")
+                localidade_hist = st.text_input(
+                    "Localidade / Congregacao",
+                    value=localidade_padrao,
+                    key=f"mhist_local_{id_sel}",
+                    help="Congregacao ou igreja relacionada a esta ocorrencia.",
+                )
+                observacao_hist = st.text_area(
+                    "Observacao (opcional)",
+                    key=f"mhist_obs_{id_sel}",
+                    height=80,
+                )
+
+                if st.button(
+                    "💾 Salvar ocorrencia",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"mhist_salvar_{id_sel}",
+                ):
+                    try:
+                        _inserir_historico(
+                            slug=slug,
+                            id_cadastro=id_sel,
+                            data_ocorrencia=data_hist.isoformat(),
+                            codigo_tipo=codigo_sel,
+                            ocorrencia=ocorrencia_sel,
+                            categoria=categoria_sel,
+                            localidade=localidade_hist,
+                            observacao=observacao_hist,
+                        )
+                    except Exception as exc:
+                        st.error(f"Nao foi possivel salvar a ocorrencia: {exc}")
+                    else:
+                        st.toast("✅ Ocorrencia registrada!")
+                        st.rerun()
+
+            st.divider()
+
+            # ─── Tabela de historico existente ───────────────────────────
+            df_hist = _listar_historico(slug, id_sel)
+
+            if df_hist.empty:
+                st.info("Nenhuma ocorrencia registrada ainda para este membro.")
+            else:
+                for _, linha in df_hist.iterrows():
+                    categoria_h = linha.get("categoria") or "Normal"
+                    cor_cat = CATEGORIA_COR.get(categoria_h, "#3B82F6")
+                    data_fmt = _formatar_data(linha.get("data_ocorrencia", ""))
+                    ocorrencia_txt = linha.get("ocorrencia", "") or ""
+                    localidade_txt = linha.get("localidade", "") or "(nao informado)"
+                    observacao_txt = linha.get("observacao", "") or ""
+                    id_hist = int(linha["id_historico"])
+
+                    col_txt, col_del = st.columns([9, 1])
+                    with col_txt:
+                        obs_html = (
+                            f'<div style="color:#6b7280;font-size:12px;margin-top:3px;">'
+                            f'{_html(observacao_txt)}</div>'
+                            if observacao_txt else ""
+                        )
+                        st.markdown(
+                            f"""
+                            <div style="padding:10px 12px;border-left:3px solid {cor_cat};
+                                        background:{cor_cat}10;border-radius:6px;margin-bottom:8px;">
+                                <div style="display:flex;justify-content:space-between;flex-wrap:wrap;">
+                                    <strong style="font-size:13px;">{_html(data_fmt)}</strong>
+                                    <span style="background:{cor_cat}22;color:{cor_cat};
+                                                 padding:1px 8px;border-radius:10px;font-size:11px;
+                                                 font-weight:600;">{_html(categoria_h)}</span>
+                                </div>
+                                <div style="margin-top:4px;font-size:13px;">{_html(ocorrencia_txt)}</div>
+                                <div style="color:#6b7280;font-size:12px;margin-top:2px;">
+                                    📍 {_html(localidade_txt)}
+                                </div>
+                                {obs_html}
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    with col_del:
+                        if st.button(
+                            "🗑️",
+                            key=f"mhist_del_{id_hist}",
+                            help="Excluir esta ocorrencia",
+                        ):
+                            st.session_state[f"mhist_confirmar_del_{id_hist}"] = True
+                            st.rerun()
+
+                    if st.session_state.get(f"mhist_confirmar_del_{id_hist}"):
+                        st.warning(
+                            f"Confirma a exclusao da ocorrencia "
+                            f"**{ocorrencia_txt}** de {data_fmt}?"
+                        )
+                        cc1, cc2 = st.columns(2)
+                        with cc1:
+                            if st.button(
+                                "Sim, excluir",
+                                type="primary",
+                                use_container_width=True,
+                                key=f"mhist_del_sim_{id_hist}",
+                            ):
+                                try:
+                                    _excluir_historico(slug, id_hist)
+                                except Exception as exc:
+                                    st.error(f"Nao foi possivel excluir: {exc}")
+                                else:
+                                    st.session_state.pop(f"mhist_confirmar_del_{id_hist}", None)
+                                    st.toast("Ocorrencia excluida.")
+                                    st.rerun()
+                        with cc2:
+                            if st.button(
+                                "Cancelar",
+                                use_container_width=True,
+                                key=f"mhist_del_nao_{id_hist}",
+                            ):
+                                st.session_state.pop(f"mhist_confirmar_del_{id_hist}", None)
+                                st.rerun()
 
     st.divider()
 
