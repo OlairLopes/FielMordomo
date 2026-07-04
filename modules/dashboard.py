@@ -716,11 +716,6 @@ def _secao_dashboard(titulo, subtitulo):
         f'<span>{_escape(subtitulo)}</span></div>',
         unsafe_allow_html=True,
     )
-    st.markdown(
-        f'<div class="dash-section"><strong>{_escape(titulo)}</strong>'
-        f'<span>{_escape(subtitulo)}</span></div>',
-        unsafe_allow_html=True,
-    )
 
 
 def _legenda_cores():
