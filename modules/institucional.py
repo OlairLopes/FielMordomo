@@ -2198,7 +2198,7 @@ def render_institucional():
                 }
                 div[data-testid="stForm"] {
                     max-width: 920px;
-                    margin: 0 auto 8px auto !important;
+                    margin: 16px auto 8px auto !important;
                     padding: 0 24px !important;
                 }
                 div[data-testid="stAlert"] {
