@@ -1090,12 +1090,12 @@ def _render_atualizar_cadastro_publico():
         """
         <div class="fm-update-page">
           <div class="fm-update-card">
-            <h1>Atualizacao de cadastro</h1>
+            <h1>Atualização de cadastro</h1>
             <p>
-              Informe os dados de identificacao para localizar seu cadastro.
-              O CPF e a data de nascimento sao usados apenas para confirmar sua identidade.
-              Caso seu cadastro ainda nao exista, voce podera enviar um pre-cadastro
-              para analise da secretaria da igreja.
+              Informe os dados de identificação para localizar seu cadastro.
+              O CPF e a data de nascimento são usados apenas para confirmar sua identidade.
+              Caso seu cadastro ainda não exista, você poderá enviar um pré-cadastro
+              para análise da secretaria da igreja.
             </p>
           </div>
         </div>
@@ -1597,7 +1597,7 @@ def _css_base():
         .fm-simple-card h1 {{ margin: 0 0 18px; color: var(--fm-navy); font-size: 2.25rem; letter-spacing: 0; }}
         .fm-simple-card h2 {{ margin: 28px 0 10px; color: var(--fm-navy); font-size: 1.08rem; }}
         .fm-simple-card p {{ color: var(--fm-muted); line-height: 1.72; }}
-        .fm-update-page {{ padding: 42px 24px 8px; }}
+        .fm-update-page {{ padding: 12px 24px 2px; }}
         .fm-update-card {{ width: min(920px,100%); margin: 0 auto; }}
         .fm-update-card h1 {{ margin: 0 0 10px; color: var(--fm-navy); font-size: 2.15rem; letter-spacing: 0; }}
         .fm-update-card p {{ max-width: 760px; margin: 0; color: var(--fm-muted); line-height: 1.65; }}
@@ -1643,7 +1643,7 @@ def _css_base():
             .fm-footer a {{ display: inline-block; margin: 7px 13px 0 0; }}
             .fm-simple-page {{ padding: 32px 16px; }}
             .fm-simple-card {{ padding: 24px 20px; }}
-            .fm-update-page {{ padding: 30px 18px 6px; }}
+            .fm-update-page {{ padding: 10px 18px 2px; }}
         }}
     </style>
     """
@@ -2198,7 +2198,7 @@ def render_institucional():
                 }
                 div[data-testid="stForm"] {
                     max-width: 920px;
-                    margin: 10px auto 12px auto !important;
+                    margin: 0 auto 8px auto !important;
                     padding: 0 24px !important;
                 }
                 div[data-testid="stAlert"] {
