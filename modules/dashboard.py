@@ -725,14 +725,13 @@ def _secao_dashboard(titulo, subtitulo):
     )
 
 
-def _legenda_cores():
-    itens = [
-        ("Entradas", CORES["entrada"]),
-        ("Saidas e despesas", CORES["saida"]),
-        ("Saldo e dizimos", CORES["saldo"]),
-        ("Funcoes", CORES["funcao"]),
-        ("Alertas", CORES["alerta"]),
-    ]
+def _render_legenda(itens):
+    """
+    Legenda de cores customizada (HTML/CSS com flex-wrap), renderizada abaixo
+    do grafico. Diferente do legend nativo do Plotly - que fica preso a area
+    de altura fixa do grafico e pode cortar/sobrepor texto quando ha muitos
+    itens ou nomes longos - esta legenda ocupa o fluxo normal da pagina.
+    """
     legenda = ['<div class="dash-legenda">']
     for titulo, cor in itens:
         legenda.append(
@@ -740,6 +739,16 @@ def _legenda_cores():
         )
     legenda.append("</div>")
     st.markdown("".join(legenda), unsafe_allow_html=True)
+
+
+def _legenda_cores():
+    _render_legenda([
+        ("Entradas", CORES["entrada"]),
+        ("Saidas e despesas", CORES["saida"]),
+        ("Saldo e dizimos", CORES["saldo"]),
+        ("Funcoes", CORES["funcao"]),
+        ("Alertas", CORES["alerta"]),
+    ])
 
 
 def _grafico_rosca(
@@ -752,20 +761,18 @@ def _grafico_rosca(
     label_central=None,
     cor_central="#F1F5F9",
 ):
+    """Renderiza o grafico de rosca e, logo abaixo, a legenda de cores customizada."""
     total = float(resumo[valores].sum())
     valor_centro = total if valor_central is None else float(valor_central)
     label_centro = total_label if label_central is None else label_central
+    cores_fatias = cores or PALETA[:len(resumo)]
     percentuais = [
         (float(valor) / total * 100) if total else 0.0
         for valor in resumo[valores]
     ]
-    legendas = [
-        f"{rotulo} {percentual:.1f}%"
-        for rotulo, percentual in zip(resumo[rotulos], percentuais)
-    ]
     fig = go.Figure(go.Pie(
         name=total_label,
-        labels=legendas,
+        labels=resumo[rotulos],
         values=resumo[valores],
         hole=.68,
         textinfo="percent",
@@ -774,7 +781,7 @@ def _grafico_rosca(
         hovertemplate="<b>%{label}</b><br>%{customdata}<extra></extra>",
         customdata=[formatar_moeda(valor) for valor in resumo[valores]],
         marker=dict(
-            colors=cores or PALETA[:len(resumo)],
+            colors=cores_fatias,
             line=dict(color="#1E293B", width=2),
         ),
     ))
@@ -786,19 +793,15 @@ def _grafico_rosca(
         font=dict(size=16, color=cor_central),
     )
     fig.update_layout(**_layout_grafico(
-        altura=560,
-        margem=dict(t=30, b=175, l=105, r=105),
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            y=-.30,
-            yanchor="top",
-            x=.5,
-            xanchor="center",
-            font=dict(size=11, color="#E2E8F0"),
-        ),
+        altura=420,
+        margem=dict(t=30, b=30, l=105, r=105),
+        showlegend=False,
     ))
-    return fig
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+    _render_legenda([
+        (f"{rotulo} ({percentual:.1f}%)", cor)
+        for rotulo, percentual, cor in zip(resumo[rotulos], percentuais, cores_fatias)
+    ])
 
 
 def _grafico_ranking(resumo, rotulos, valores, cor):
@@ -1720,37 +1723,23 @@ def _render_cruzamento_geo(df_cruzamento):
         )
 
 
-def _render_botoes_acao_rapida(abc_info, membros, igreja, mes_ref, slug):
-    """Renderiza botoes de acao rapida: agradecimento a dizimistas classe A."""
-    if abc_info is None:
+def _render_lista_whatsapp_classe(classe_df, membros, igreja, mes_ref, rotulo_classe):
+    """Lista dizimistas de uma classe ABC com botao de envio de agradecimento via WhatsApp."""
+    if classe_df.empty:
+        st.caption(f"Sem dizimistas Classe {rotulo_classe} no periodo.")
         return
 
-    st.markdown(
-        '<div class="acao-rapida-info">'
-        '<strong>💬 Acao rapida:</strong> Envie mensagens de agradecimento aos '
-        'dizimistas Classe A (principais contribuintes do periodo) '
-        'ou de acompanhamento aos afastados.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    classe_a = abc_info["por_membro"][abc_info["por_membro"]["classe"] == "A"]
-    if classe_a.empty:
-        st.caption("Sem dizimistas Classe A no periodo.")
-        return
-
-    # Enriquece com telefones
     telefones_dict = membros.set_index("id_cadastro")["telefone"].to_dict()
-    classe_a = classe_a.copy()
-    classe_a["telefone"] = classe_a["id_cadastro"].map(
+    classe_df = classe_df.copy()
+    classe_df["telefone"] = classe_df["id_cadastro"].map(
         lambda x: telefones_dict.get(int(x), "")
     )
 
-    with_tel = classe_a[classe_a["telefone"].astype(str).str.len() > 0]
-    without_tel = classe_a[classe_a["telefone"].astype(str).str.len() == 0]
+    with_tel = classe_df[classe_df["telefone"].astype(str).str.len() > 0]
+    without_tel = classe_df[classe_df["telefone"].astype(str).str.len() == 0]
 
     if not with_tel.empty:
-        st.markdown(f"**Dizimistas Classe A com telefone:** {len(with_tel)}")
+        st.markdown(f"**Dizimistas Classe {rotulo_classe} com telefone:** {len(with_tel)}")
         with st.expander(f"Ver {len(with_tel)} membro(s)", expanded=False):
             nome_igreja = igreja.get("nome", "Igreja")
             mes_str = _mes_label(mes_ref)
@@ -1775,9 +1764,31 @@ def _render_botoes_acao_rapida(abc_info, membros, igreja, mes_ref, slug):
 
     if not without_tel.empty:
         st.caption(
-            f"⚠️ {len(without_tel)} dizimista(s) Classe A sem telefone cadastrado. "
+            f"⚠️ {len(without_tel)} dizimista(s) Classe {rotulo_classe} sem telefone cadastrado. "
             "Atualize os cadastros para enviar mensagens automaticas."
         )
+
+
+def _render_botoes_acao_rapida(abc_info, membros, igreja, mes_ref, slug):
+    """Renderiza botoes de acao rapida: agradecimento a dizimistas das classes A, B e C."""
+    if abc_info is None:
+        return
+
+    st.markdown(
+        '<div class="acao-rapida-info">'
+        '<strong>💬 Acao rapida:</strong> Envie mensagens de agradecimento aos '
+        'dizimistas por classe ABC (Classe A = principais contribuintes, '
+        'B e C = demais contribuintes do periodo).'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    por_membro = abc_info["por_membro"]
+    tab_a, tab_b, tab_c = st.tabs(["Classe A", "Classe B", "Classe C"])
+    for tab, classe in ((tab_a, "A"), (tab_b, "B"), (tab_c, "C")):
+        with tab:
+            classe_df = por_membro[por_membro["classe"] == classe]
+            _render_lista_whatsapp_classe(classe_df, membros, igreja, mes_ref, classe)
 
 
 def _gerar_html_relatorio_executivo(
@@ -2143,19 +2154,15 @@ def render():
             "Valor": [ent, sai],
         })
         if composicao["Valor"].sum() > 0:
-            st.plotly_chart(
-                _grafico_rosca(
-                    composicao,
-                    "Tipo",
-                    "Valor",
-                    [CORES["entrada"], CORES["saida"]],
-                    "Composicao",
-                    valor_central=saldo,
-                    label_central="Saldo do periodo",
-                    cor_central=CORES["entrada"] if saldo >= 0 else CORES["saida"],
-                ),
-                use_container_width=True,
-                config=CONFIG_PLOTLY,
+            _grafico_rosca(
+                composicao,
+                "Tipo",
+                "Valor",
+                [CORES["entrada"], CORES["saida"]],
+                "Composicao",
+                valor_central=saldo,
+                label_central="Saldo do periodo",
+                cor_central=CORES["entrada"] if saldo >= 0 else CORES["saida"],
             )
 
         # ═══ NOVO: Heatmap de sazonalidade ═══
@@ -2177,11 +2184,7 @@ def render():
         if resumo.empty:
             st.info("Nao ha despesas no periodo selecionado.")
         else:
-            st.plotly_chart(
-                _grafico_rosca(resumo, "Subcategoria", "Valor", PALETA, "Despesas"),
-                use_container_width=True,
-                config=CONFIG_PLOTLY,
-            )
+            _grafico_rosca(resumo, "Subcategoria", "Valor", PALETA, "Despesas")
             _secao_dashboard(
                 "Ranking de despesas",
                 "Subcategorias ordenadas pelo valor realizado no mes.",
@@ -2230,14 +2233,17 @@ def render():
                     ))
                 fig_temporal.update_layout(**_layout_grafico(
                     altura=380,
-                    margem=dict(t=50, b=40, l=20, r=20),
+                    margem=dict(t=25, b=40, l=20, r=20),
                     barmode="group",
-                    showlegend=True,
-                    legend=dict(orientation="h", y=-.20, x=0),
+                    showlegend=False,
                     xaxis=dict(fixedrange=True, gridcolor="#334155"),
                     yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
                 ))
                 st.plotly_chart(fig_temporal, use_container_width=True, config=CONFIG_PLOTLY)
+                _render_legenda([
+                    (col, PALETA[i % len(PALETA)])
+                    for i, col in enumerate(pivot.columns)
+                ])
 
                 # Ranking de subcategorias com maior crescimento
                 if len(pivot) >= 2:
@@ -2269,11 +2275,7 @@ def render():
         if resumo.empty:
             st.info("Nao ha receitas no periodo selecionado.")
         else:
-            st.plotly_chart(
-                _grafico_rosca(resumo, "Categoria", "Valor", PALETA, "Receitas"),
-                use_container_width=True,
-                config=CONFIG_PLOTLY,
-            )
+            _grafico_rosca(resumo, "Categoria", "Valor", PALETA, "Receitas")
             _secao_dashboard(
                 "Ranking de receitas",
                 "Categorias ordenadas pelo valor recebido no mes.",
@@ -2456,9 +2458,9 @@ def render():
                     text=[formatar_moeda(v) if v else "" for v in valores_dizimos],
                     textposition="outside",
                     textfont=dict(size=10, color="#CBD5E1"),
-                    showlegend=True,
                 ))
-                if sum(1 for valor in valores_dizimos if valor > 0) >= 3:
+                tem_tendencia = sum(1 for valor in valores_dizimos if valor > 0) >= 3
+                if tem_tendencia:
                     tendencia = pd.Series(valores_dizimos).rolling(3, min_periods=1).mean()
                     fig_dizimos.add_trace(go.Scatter(
                         x=serie_dizimos["rotulo"],
@@ -2468,21 +2470,17 @@ def render():
                         name="Tendencia",
                     ))
                 fig_dizimos.update_layout(**_layout_grafico(
-                    altura=430,
-                    margem=dict(t=25, b=105, l=20, r=20),
-                    showlegend=True,
+                    altura=380,
+                    margem=dict(t=25, b=40, l=20, r=20),
+                    showlegend=False,
                     xaxis=dict(fixedrange=True, gridcolor="#334155"),
                     yaxis=dict(fixedrange=True, gridcolor="#334155", tickformat=",.0f"),
-                    legend=dict(
-                        orientation="h",
-                        y=-.22,
-                        yanchor="top",
-                        x=.5,
-                        xanchor="center",
-                        font=dict(size=11, color="#E2E8F0"),
-                    ),
                 ))
                 st.plotly_chart(fig_dizimos, use_container_width=True, config=CONFIG_PLOTLY)
+                legenda_dizimos = [("Dizimos", CORES["dizimo"])]
+                if tem_tendencia:
+                    legenda_dizimos.append(("Tendencia (media movel 3 meses)", "#CBD5E1"))
+                _render_legenda(legenda_dizimos)
 
             _secao_dashboard(
                 "Dizimos por membro - top 8",
@@ -2642,19 +2640,15 @@ def render():
                     font=dict(size=25, color="#F1F5F9"),
                 )
                 fig_participacao.update_layout(**_layout_grafico(
-                    altura=390,
-                    margem=dict(t=25, b=110, l=35, r=35),
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        y=-.22,
-                        yanchor="top",
-                        x=.5,
-                        xanchor="center",
-                        font=dict(size=11, color="#E2E8F0"),
-                    ),
+                    altura=330,
+                    margem=dict(t=25, b=25, l=35, r=35),
+                    showlegend=False,
                 ))
                 st.plotly_chart(fig_participacao, use_container_width=True, config=CONFIG_PLOTLY)
+                _render_legenda([
+                    ("Dizimistas", CORES["entrada"]),
+                    ("Sem contribuicao no periodo", "#374151"),
+                ])
                 p1, p2, p3 = st.columns(3)
                 p1.metric("Membros ativos", total_membros)
                 p2.metric("Dizimistas no periodo", qtd_periodo)
