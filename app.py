@@ -142,9 +142,29 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 
+APP_PAGE_TITLE = "FielMordomo - Gestão Financeira para Igrejas"
+APP_PAGE_ICON_PATHS = (
+    os.path.join(_HERE, "assets", "logo.png"),
+    os.path.join(_HERE, "assets", "favicon.png"),
+)
+
+
+def _carregar_page_icon():
+    """Carrega o logo usado como ícone da aba do navegador."""
+    for caminho in APP_PAGE_ICON_PATHS:
+        try:
+            with open(caminho, "rb") as arquivo:
+                return arquivo.read()
+        except OSError:
+            continue
+
+    # Fallback caso os arquivos ainda não tenham sido enviados ao servidor.
+    return "💰"
+
+
 st.set_page_config(
-    page_title="FielMordomo",
-    page_icon="FM",
+    page_title=APP_PAGE_TITLE,
+    page_icon=_carregar_page_icon(),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
