@@ -688,8 +688,8 @@ def _cruzar_com_frequencia_geo(slug, membros, dizimos_periodo, inicio, fim):
 def _mensagem_agradecimento_dizimista(nome_igreja, nome_membro, mes_str):
     return (
         f"Paz do Senhor, {nome_membro}! "
-        f"Somos gratos pela sua fidelidade em {mes_str}. "
-        f"Que Deus continue abencoando sua vida e familia. "
+        f"Somos gratos pela sua fidelidade nos dízimos e ofertas no mês de {mes_str}. "
+        f"Que Deus continue abencoando abundantemente sua vida e familia. "
         f"Equipe {nome_igreja}."
     )
 
@@ -697,7 +697,13 @@ def _mensagem_agradecimento_dizimista(nome_igreja, nome_membro, mes_str):
 def _mensagem_acompanhamento_afastado(nome_igreja, nome_membro):
     return (
         f"Paz do Senhor, {nome_membro}! "
-        f"Sentimos sua falta em nossa comunidade. "
+
+        f"Queremos agradecer por sua presença e participação nos trabalhos da igreja."
+        f"Sua vida é importante para nós e para o Reino de Deus! "
+
+        f"Percebemos que, neste mês, não houve registro de suas contribuições no tesouro da igreja,"
+        f"e gostaríamos de saber, com carinho e respeito, se você está passando por alguma dificuldade."
+        
         f"Estamos disponiveis se precisar conversar ou orar. "
         f"Equipe pastoral {nome_igreja}."
     )
