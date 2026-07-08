@@ -3,10 +3,15 @@ Autenticação do FielMordomo.
 """
 
 import base64
+import hashlib
+import hmac
 import html
+import json
 import re
+import time
 import urllib.parse
 import streamlit as st
+from streamlit_cookies_controller import CookieController
 
 from data.repository import (
     autenticar_super_admin, autenticar_igreja, autenticar_tesoureiro,
@@ -24,6 +29,111 @@ from data.repository import (
 
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+SESSAO_COOKIE_NOME = "fm_sessao"
+SESSAO_COOKIE_KEY = "fm_cookies"
+SESSAO_TTL_SEGUNDOS = 12 * 3600
+_CAMPOS_SESSAO = (
+    "modo", "igreja", "tesoureiro", "secretario_ebd", "secretaria_orhafe",
+    "secretaria_gfc", "pastor_auxiliar", "recepcao", "secretario_geral",
+)
+
+
+def _cookie_controller():
+    return CookieController(key=SESSAO_COOKIE_KEY)
+
+
+def _sessao_secret() -> str:
+    try:
+        return str(st.secrets.get("auth", {}).get("session_secret", "") or "")
+    except Exception:
+        return ""
+
+
+def _gerar_token_sessao(dados: dict) -> str:
+    segredo = _sessao_secret()
+    if not segredo:
+        return ""
+    corpo = {chave: valor for chave, valor in dados.items() if valor is not None}
+    corpo["exp"] = int(time.time()) + SESSAO_TTL_SEGUNDOS
+    payload_json = json.dumps(corpo, separators=(",", ":"), sort_keys=True, default=str)
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("ascii")
+    assinatura = hmac.new(segredo.encode("utf-8"), payload_b64.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{assinatura}"
+
+
+def _validar_token_sessao(token: str):
+    segredo = _sessao_secret()
+    if not segredo or not token or "." not in token:
+        return None
+    payload_b64, _, assinatura = token.partition(".")
+    esperada = hmac.new(segredo.encode("utf-8"), payload_b64.encode("ascii"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(assinatura, esperada):
+        return None
+    try:
+        corpo = json.loads(base64.urlsafe_b64decode(payload_b64.encode("ascii")).decode("utf-8"))
+    except Exception:
+        return None
+    if int(corpo.get("exp", 0)) < int(time.time()):
+        return None
+    return corpo
+
+
+def _persistir_sessao_cookie(**dados):
+    if not _sessao_secret():
+        return
+    token = _gerar_token_sessao(dados)
+    if not token:
+        return
+    try:
+        _cookie_controller().set(
+            SESSAO_COOKIE_NOME,
+            token,
+            max_age=SESSAO_TTL_SEGUNDOS,
+            same_site="lax",
+            secure=True,
+        )
+    except Exception:
+        pass
+
+
+def _remover_sessao_cookie():
+    try:
+        _cookie_controller().remove(SESSAO_COOKIE_NOME)
+    except Exception:
+        pass
+
+
+def _tela_carregando_sessao():
+    st.markdown(
+        """
+        <div style="display:flex;justify-content:center;align-items:center;height:60vh">
+          <span style="color:#64748B;font-size:.95rem">Carregando sessão...</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _restaurar_sessao_por_cookie() -> bool:
+    if not _sessao_secret():
+        return False
+    cookies_ja_carregados = SESSAO_COOKIE_KEY in st.session_state
+    controller = _cookie_controller()
+    if not cookies_ja_carregados:
+        _tela_carregando_sessao()
+        st.stop()
+    token = controller.get(SESSAO_COOKIE_NOME)
+    dados = _validar_token_sessao(token)
+    if not dados:
+        return False
+    modo = dados.pop("modo", None)
+    dados.pop("exp", None)
+    if not modo:
+        return False
+    dados = {chave: valor for chave, valor in dados.items() if chave in _CAMPOS_SESSAO}
+    _iniciar_sessao(modo, **dados)
+    return True
 
 
 def _normalizar_email(email: str) -> str:
@@ -68,6 +178,17 @@ def _iniciar_sessao(
         st.session_state["recepcao"] = recepcao
     if secretario_geral is not None:
         st.session_state["secretario_geral"] = secretario_geral
+    _persistir_sessao_cookie(
+        modo=modo,
+        igreja=igreja,
+        tesoureiro=tesoureiro,
+        secretario_ebd=secretario_ebd,
+        secretaria_orhafe=secretaria_orhafe,
+        secretaria_gfc=secretaria_gfc,
+        pastor_auxiliar=pastor_auxiliar,
+        recepcao=recepcao,
+        secretario_geral=secretario_geral,
+    )
 
 
 def _limpar_sessao():
@@ -498,6 +619,9 @@ def _botao_recuperar_senha(modo, key):
 
 def tela_login():
     if st.session_state.get("autenticado"):
+        return True
+
+    if _restaurar_sessao_por_cookie():
         return True
 
     inicializar_master()
@@ -1040,6 +1164,7 @@ def _login_gfc():
 
 
 def logout():
+    _remover_sessao_cookie()
     _limpar_sessao()
     st.rerun()
 
