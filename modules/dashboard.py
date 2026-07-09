@@ -696,16 +696,16 @@ def _mensagem_agradecimento_dizimista(nome_igreja, nome_membro, mes_str):
     )
 
 
-def _mensagem_acompanhamento_afastado(nome_igreja, nome_membro):
+def _mensagem_acompanhamento_afastado(nome_igreja, nome_membro, mes_str):
     return (
         f"Paz do Senhor, {nome_membro}! "
 
-        f"Queremos agradecer por sua presença e participação nos trabalhos da igreja."
+        f"Queremos agradecer por sua presença e participação nos trabalhos da igreja. "
         f"Sua vida é importante para nós e para o Reino de Deus! "
 
-        f"Percebemos que, neste mês de {mes_str}, não houve registro de suas contribuições no tesouro da igreja,"
-        f"e gostaríamos de saber, com carinho e respeito, se você está passando por alguma dificuldade."
-        
+        f"Percebemos que, neste mês de {mes_str}, não houve registro de suas contribuições no tesouro da igreja, "
+        f"e gostaríamos de saber, com carinho e respeito, se você está passando por alguma dificuldade. "
+
         f"Estamos disponiveis se precisar conversar ou orar. "
         f"Equipe pastoral {nome_igreja}."
     )
@@ -1451,7 +1451,7 @@ def _render_score_saude(score):
     )
 
 
-def _render_churn_alerta(churn_info, slug, igreja):
+def _render_churn_alerta(churn_info, slug, igreja, mes_ref):
     """Renderiza alerta e lista de dizimistas em churn."""
     if churn_info["quantidade"] == 0:
         st.success(
@@ -1482,7 +1482,8 @@ def _render_churn_alerta(churn_info, slug, igreja):
             with col_wa:
                 if item["Telefone"]:
                     nome_igreja = igreja.get("nome", "Igreja")
-                    msg = _mensagem_acompanhamento_afastado(nome_igreja, item["Nome"])
+                    mes_str = _mes_label(mes_ref)
+                    msg = _mensagem_acompanhamento_afastado(nome_igreja, item["Nome"], mes_str)
                     link = _link_whatsapp_padrao(item["Telefone"], msg)
                     if link:
                         st.markdown(
@@ -2333,7 +2334,7 @@ def render():
                 "no mes de referencia. Impacto financeiro estimado.",
             )
             churn_info = _identificar_churn(df, mes_ref, membros, dias_referencia=90)
-            _render_churn_alerta(churn_info, slug, igreja)
+            _render_churn_alerta(churn_info, slug, igreja, mes_ref)
 
             _secao_dashboard(
                 "Previsao (proximos 3 meses)",
