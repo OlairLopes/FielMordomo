@@ -4,6 +4,7 @@ Camada de persistencia multi-tenant.
 
 import os
 import re
+import json
 import sqlite3
 import hashlib
 import hmac
@@ -7313,5 +7314,178 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
         resultado["erros"].append(f"Erro ao migrar master.db restaurado: {ex}")
 
     return resultado
+
+
+def _garantir_tabela_plano_leitura(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS plano_leitura_dias (
+            dia_numero INTEGER PRIMARY KEY,
+            passagens  TEXT NOT NULL
+        );
+    """)
+    existe = conn.execute("SELECT 1 FROM plano_leitura_dias LIMIT 1").fetchone()
+    if existe:
+        return
+    caminho = Path(__file__).resolve().parent / "plano_leitura_biblica_sbb.json"
+    if not caminho.exists():
+        return
+    try:
+        dias = json.loads(caminho.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        LOGGER.exception("Nao foi possivel carregar o plano de leitura biblica.")
+        return
+    for item in dias:
+        dia_numero = int(item.get("dia", 0))
+        passagens = "; ".join(
+            str(p).strip() for p in item.get("passagens", []) if str(p).strip()
+        )
+        if dia_numero > 0 and passagens:
+            conn.execute(
+                "INSERT OR IGNORE INTO plano_leitura_dias (dia_numero, passagens) VALUES (?, ?)",
+                (dia_numero, passagens),
+            )
+
+
+def obter_leitura_do_dia(dia_numero):
+    """Retorna {"dia_numero": int, "passagens": str} para o dia informado (1-365), ou None."""
+    dia_numero = int(dia_numero)
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_plano_leitura(conn)
+        row = conn.execute(
+            "SELECT dia_numero, passagens FROM plano_leitura_dias WHERE dia_numero=?",
+            (dia_numero,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def _garantir_tabela_leitores_biblia(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS leitores_biblia (
+            id_leitor       INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome            TEXT NOT NULL,
+            cpf             TEXT NOT NULL,
+            data_nascimento TEXT NOT NULL,
+            telefone        TEXT DEFAULT '',
+            criado_em       TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(cpf, data_nascimento)
+        );
+    """)
+
+
+def cadastrar_leitor_biblia(slug, nome, cpf, data_nascimento, telefone=""):
+    """Cria um leitor avulso (sem vinculo com a membresia) para o plano de leitura biblica."""
+    cpf_limpo = "".join(c for c in str(cpf or "") if c.isdigit())
+    data_nascimento = str(data_nascimento or "").strip()
+    nome = sanitizar(nome)
+    if not nome:
+        raise ValueError("Nome e obrigatorio.")
+    if len(cpf_limpo) != 11:
+        raise ValueError("CPF invalido.")
+    if not data_nascimento:
+        raise ValueError("Data de nascimento e obrigatoria.")
+
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_leitores_biblia(conn)
+        existente = conn.execute(
+            "SELECT id_leitor FROM leitores_biblia WHERE cpf=? AND data_nascimento=?",
+            (cpf_limpo, data_nascimento),
+        ).fetchone()
+        if existente:
+            raise ValueError("Ja existe um cadastro de leitor com esse CPF e data de nascimento.")
+        cur = conn.execute(
+            """INSERT INTO leitores_biblia (nome, cpf, data_nascimento, telefone)
+               VALUES (?, ?, ?, ?)""",
+            (nome, cpf_limpo, data_nascimento, sanitizar(telefone or "")),
+        )
+        id_leitor = cur.lastrowid
+    return {"id_leitor": id_leitor, "nome": nome, "cpf": cpf_limpo, "data_nascimento": data_nascimento}
+
+
+def localizar_leitor_biblia(slug, cpf, data_nascimento):
+    cpf_limpo = "".join(c for c in str(cpf or "") if c.isdigit())
+    data_nascimento = str(data_nascimento or "").strip()
+    if len(cpf_limpo) != 11 or not data_nascimento:
+        return None
+    db = _tenant_db(slug)
+    if not db.exists():
+        return None
+    with _conn(db) as conn:
+        _garantir_tabela_leitores_biblia(conn)
+        row = conn.execute(
+            """SELECT id_leitor, nome, cpf, data_nascimento, telefone
+               FROM leitores_biblia WHERE cpf=? AND data_nascimento=? LIMIT 1""",
+            (cpf_limpo, data_nascimento),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def localizar_leitor_plano_biblico(slug, cpf, data_nascimento):
+    """Busca a pessoa para o plano de leitura biblica: primeiro entre os membros
+    cadastrados, depois entre os leitores avulsos. Retorna um dict com "origem"
+    ('membro' ou 'leitor'), "id_pessoa", "nome" e "igreja_nome", ou None."""
+    membro = localizar_cadastro_publico(slug, cpf, data_nascimento)
+    if membro:
+        return {
+            "origem": "membro",
+            "id_pessoa": membro["id_cadastro"],
+            "nome": membro.get("nome", ""),
+            "igreja_nome": membro.get("igreja_nome", ""),
+        }
+    leitor = localizar_leitor_biblia(slug, cpf, data_nascimento)
+    if leitor:
+        igreja = buscar_igreja_por_slug(slug)
+        return {
+            "origem": "leitor",
+            "id_pessoa": leitor["id_leitor"],
+            "nome": leitor.get("nome", ""),
+            "igreja_nome": (igreja or {}).get("nome", ""),
+        }
+    return None
+
+
+def _garantir_tabela_leitura_confirmacoes(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS leitura_biblica_confirmacoes (
+            id_confirmacao INTEGER PRIMARY KEY AUTOINCREMENT,
+            origem         TEXT NOT NULL CHECK(origem IN ('membro', 'leitor')),
+            id_pessoa      INTEGER NOT NULL,
+            dia_numero     INTEGER NOT NULL,
+            confirmado_em  TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(origem, id_pessoa, dia_numero)
+        );
+    """)
+
+
+def leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero):
+    db = _tenant_db(slug)
+    if not db.exists():
+        return False
+    with _conn(db) as conn:
+        _garantir_tabela_leitura_confirmacoes(conn)
+        row = conn.execute(
+            """SELECT 1 FROM leitura_biblica_confirmacoes
+               WHERE origem=? AND id_pessoa=? AND dia_numero=? LIMIT 1""",
+            (origem, int(id_pessoa), int(dia_numero)),
+        ).fetchone()
+    return row is not None
+
+
+def confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero):
+    """Registra a confirmacao de leitura do dia. Retorna True se foi confirmada agora,
+    False se ja existia uma confirmacao para essa pessoa/dia."""
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_leitura_confirmacoes(conn)
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO leitura_biblica_confirmacoes (origem, id_pessoa, dia_numero)
+               VALUES (?, ?, ?)""",
+            (origem, int(id_pessoa), int(dia_numero)),
+        )
+        return cur.rowcount > 0
 
 

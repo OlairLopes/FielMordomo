@@ -1381,6 +1381,7 @@ def _css_base():
             backdrop-filter: blur(12px);
         }}
         .fm-navbar {{
+            position: relative;
             width: min(1180px, calc(100% - 32px));
             min-height: 76px;
             margin: 0 auto;
@@ -1415,6 +1416,27 @@ def _css_base():
             background: var(--fm-navy);
             color: #FFFFFF !important;
         }}
+        .fm-menu-toggle-input {{ position: absolute; opacity: 0; pointer-events: none; }}
+        .fm-menu-toggle {{
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            gap: 5px;
+            width: 30px;
+            height: 24px;
+            cursor: pointer;
+        }}
+        .fm-menu-toggle span {{
+            display: block;
+            height: 2px;
+            width: 100%;
+            background: var(--fm-navy);
+            border-radius: 2px;
+            transition: transform .2s ease, opacity .2s ease;
+        }}
+        .fm-menu-toggle-input:checked + .fm-menu-toggle span:nth-child(1) {{ transform: translateY(7px) rotate(45deg); }}
+        .fm-menu-toggle-input:checked + .fm-menu-toggle span:nth-child(2) {{ opacity: 0; }}
+        .fm-menu-toggle-input:checked + .fm-menu-toggle span:nth-child(3) {{ transform: translateY(-7px) rotate(-45deg); }}
 
         .fm-hero-new {{
             position: relative;
@@ -1603,7 +1625,29 @@ def _css_base():
         .fm-update-card p {{ max-width: 760px; margin: 0; color: var(--fm-muted); line-height: 1.65; }}
 
         @media (max-width: 980px) {{
-            .fm-menu a:not(.fm-btn-login) {{ display: none; }}
+            .fm-menu-toggle {{ display: flex; }}
+            .fm-menu {{
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0;
+                background: #FFFFFF;
+                border-bottom: 1px solid var(--fm-line);
+                box-shadow: 0 16px 30px rgba(6,27,68,.12);
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height .25s ease;
+            }}
+            .fm-menu a:not(.fm-btn-login) {{
+                display: block;
+                padding: 14px 24px;
+                border-bottom: 1px solid var(--fm-line);
+            }}
+            .fm-btn-login {{ margin: 14px 24px; text-align: center; }}
+            .fm-menu-toggle-input:checked ~ .fm-menu {{ max-height: 70vh; overflow-y: auto; }}
             .fm-product-stage {{ grid-template-columns: 170px 1fr; }}
             .fm-kpis {{ grid-template-columns: repeat(2,minmax(0,1fr)); }}
             .fm-module-list {{ grid-template-columns: repeat(2,minmax(0,1fr)); }}
@@ -1654,9 +1698,14 @@ def _navbar():
     <header class="fm-navbar-wrap">
         <nav class="fm-navbar" aria-label="Navegação principal">
             {_marca_fielmordomo_html()}
+            <input type="checkbox" id="fm-menu-toggle" class="fm-menu-toggle-input">
+            <label for="fm-menu-toggle" class="fm-menu-toggle" aria-label="Abrir menu">
+                <span></span><span></span><span></span>
+            </label>
             <div class="fm-menu">
                 <a href="?pagina=inicio#modulos" target="_top">Módulos</a>
                 <a href="?pagina=agenda" target="_top">Agenda</a>
+                <a href="?pagina=leitura-biblica" target="_top">Plano de Leitura</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
                 <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
                 <a href="?pagina=contato" target="_top">Contato</a>
@@ -1674,6 +1723,7 @@ def _footer():
             <div>FielMordomo © 2026. Gestão integrada para igrejas.</div>
             <div>
                 <a href="?pagina=agenda" target="_top">Agenda</a>
+                <a href="?pagina=leitura-biblica" target="_top">Plano de Leitura</a>
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a href="?pagina=privacidade" target="_top">Privacidade e LGPD</a>
                 <a href="?pagina=termos" target="_top">Termos de uso</a>
@@ -2317,6 +2367,54 @@ def render_institucional():
             unsafe_allow_html=True,
         )
         _render_agenda_publica()
+        st.markdown(_html_sem_indentacao(_footer()), unsafe_allow_html=True)
+        return
+
+    if _pagina_atual() == "leitura-biblica":
+        st.markdown(
+            """
+            <style>
+                .stApp {
+                    background: #F5F7FA !important;
+                }
+                .block-container {
+                    padding: 0 0 1rem 0 !important;
+                    margin: 0 !important;
+                    max-width: 100% !important;
+                }
+                div[data-testid="stForm"],
+                div[data-testid="stAlert"],
+                div[data-testid="stMarkdownContainer"],
+                div[data-testid="stDateInput"] {
+                    max-width: 920px;
+                    margin-left: auto !important;
+                    margin-right: auto !important;
+                }
+                div[data-testid="stVerticalBlock"] {
+                    gap: .25rem !important;
+                }
+                div[data-testid="stForm"] {
+                    margin-top: 0 !important;
+                    margin-bottom: 8px !important;
+                }
+                main .block-container > div:first-child {
+                    margin-top: 0 !important;
+                    padding-top: 0 !important;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            _html_sem_indentacao(
+                _css_base()
+                + _navbar()
+            ),
+            unsafe_allow_html=True,
+        )
+        from modules.leitura_biblica import render_publico
+
+        render_publico()
         st.markdown(_html_sem_indentacao(_footer()), unsafe_allow_html=True)
         return
 
