@@ -28,7 +28,7 @@ from data.repository import (
     salvar_ebd_matricula,
     salvar_ebd_secretario,
 )
-from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
+from utils.helpers import confirmar_exclusao, gerar_csv, normalizar_data_digitada, slug_da_sessao
 
 
 CORES = {
@@ -777,6 +777,7 @@ def _render_classes(slug):
                     data_inicio_edit = c2.text_input(
                         "Data de início",
                         value=str(row.get("data_inicio", "") or ""),
+                        placeholder="Ex.: 26/06/2024 ou 26062024",
                     )
                     ativa_edit = st.selectbox(
                         "Situação",
@@ -791,7 +792,7 @@ def _render_classes(slug):
                                 op_classes[classe_edit],
                                 nome_edit,
                                 row.get("id_cadastro"),
-                                data_inicio_edit,
+                                _data_iso(normalizar_data_digitada(data_inicio_edit)),
                                 obs_edit,
                                 id_matricula=int(row["id_matricula"]),
                                 ativa=ativa_edit == "Ativa",

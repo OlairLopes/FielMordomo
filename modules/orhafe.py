@@ -25,7 +25,7 @@ from data.repository import (
     salvar_orhafe_matricula,
     salvar_orhafe_secretaria,
 )
-from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
+from utils.helpers import confirmar_exclusao, gerar_csv, normalizar_data_digitada, slug_da_sessao
 
 
 CORES = {
@@ -519,7 +519,11 @@ def _render_matriculas(slug):
                 c1, c2 = st.columns(2)
                 nome = c1.text_input("Nome", value=row.get("nome", ""))
                 telefone = c2.text_input("Telefone / WhatsApp", value=row.get("telefone", ""))
-                data_inicio = st.text_input("Data de inicio", value=str(row.get("data_inicio", "") or ""))
+                data_inicio = st.text_input(
+                    "Data de inicio",
+                    value=str(row.get("data_inicio", "") or ""),
+                    placeholder="Ex.: 26/06/2024 ou 26062024",
+                )
                 ativa = st.selectbox(
                     "Situacao",
                     ["Ativa", "Encerrada"],
@@ -532,7 +536,7 @@ def _render_matriculas(slug):
                         nome,
                         id_cadastro=row.get("id_cadastro"),
                         telefone=telefone,
-                        data_inicio=data_inicio,
+                        data_inicio=_data_iso(normalizar_data_digitada(data_inicio)),
                         observacoes=observacoes,
                         id_matricula=int(row["id_matricula"]),
                         ativa=ativa == "Ativa",

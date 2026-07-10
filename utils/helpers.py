@@ -9,6 +9,25 @@ from data.repository import autenticar_igreja
 AUTORIZACAO_TTL_SEGUNDOS = 5 * 60
 
 
+def normalizar_data_digitada(texto: str) -> str:
+    """Aceita datas digitadas somente com numeros (ex.: 26061979 ou 260679) e
+    retorna no formato dd/mm/aaaa. Anos com 2 digitos sao expandidos para 4
+    (00-49 -> 20xx, 50-99 -> 19xx). Entradas ja formatadas (com barra ou hifen)
+    ou que nao tenham 6 ou 8 digitos sao devolvidas sem alteracao."""
+    original = str(texto or "").strip()
+    if not original or not original.isdigit():
+        return original
+
+    digitos = original
+    if len(digitos) == 6:
+        dia, mes, ano2 = digitos[:2], digitos[2:4], digitos[4:6]
+        ano4 = f"20{ano2}" if int(ano2) < 50 else f"19{ano2}"
+        digitos = dia + mes + ano4
+    if len(digitos) == 8:
+        return f"{digitos[0:2]}/{digitos[2:4]}/{digitos[4:8]}"
+    return original
+
+
 def formatar_moeda(valor) -> str:
     try:
         return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")

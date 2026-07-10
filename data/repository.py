@@ -7316,44 +7316,84 @@ def restaurar_backup_zip(zip_bytes: bytes) -> dict:
     return resultado
 
 
+PLANOS_LEITURA_BIBLICA = {
+    "sbb-1-ano": {
+        "nome": "Bíblia em 1 ano (SBB)",
+        "arquivo": "plano_leitura_biblica_sbb.json",
+    },
+    "cronologico": {
+        "nome": "Cronológico (ordem dos eventos)",
+        "arquivo": "plano_leitura_biblica_cronologico.json",
+    },
+    "por-assuntos": {
+        "nome": "Por assuntos",
+        "arquivo": "plano_leitura_biblica_por_assuntos.json",
+    },
+}
+PLANO_LEITURA_PADRAO = "sbb-1-ano"
+
+
+def listar_planos_leitura_biblica():
+    """Retorna os planos de leitura biblica disponiveis: [{"id":..., "nome":...}, ...]."""
+    return [{"id": pid, "nome": info["nome"]} for pid, info in PLANOS_LEITURA_BIBLICA.items()]
+
+
 def _garantir_tabela_plano_leitura(conn):
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(plano_leitura_dias)").fetchall()]
+    if cols and "plano_id" not in cols:
+        # Tabela antiga (versao com um unico plano); os dados sao apenas
+        # conteudo semeado a partir dos JSON, seguro recriar.
+        conn.execute("DROP TABLE plano_leitura_dias")
+
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS plano_leitura_dias (
-            dia_numero INTEGER PRIMARY KEY,
-            passagens  TEXT NOT NULL
+            plano_id   TEXT NOT NULL,
+            dia_numero INTEGER NOT NULL,
+            passagens  TEXT NOT NULL,
+            tema       TEXT DEFAULT '',
+            PRIMARY KEY (plano_id, dia_numero)
         );
     """)
-    existe = conn.execute("SELECT 1 FROM plano_leitura_dias LIMIT 1").fetchone()
-    if existe:
-        return
-    caminho = Path(__file__).resolve().parent / "plano_leitura_biblica_sbb.json"
-    if not caminho.exists():
-        return
-    try:
-        dias = json.loads(caminho.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        LOGGER.exception("Nao foi possivel carregar o plano de leitura biblica.")
-        return
-    for item in dias:
-        dia_numero = int(item.get("dia", 0))
-        passagens = "; ".join(
-            str(p).strip() for p in item.get("passagens", []) if str(p).strip()
-        )
-        if dia_numero > 0 and passagens:
-            conn.execute(
-                "INSERT OR IGNORE INTO plano_leitura_dias (dia_numero, passagens) VALUES (?, ?)",
-                (dia_numero, passagens),
+    for plano_id, info in PLANOS_LEITURA_BIBLICA.items():
+        existe = conn.execute(
+            "SELECT 1 FROM plano_leitura_dias WHERE plano_id=? LIMIT 1", (plano_id,)
+        ).fetchone()
+        if existe:
+            continue
+        caminho = Path(__file__).resolve().parent / info["arquivo"]
+        if not caminho.exists():
+            continue
+        try:
+            dias = json.loads(caminho.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            LOGGER.exception("Nao foi possivel carregar o plano de leitura %s.", plano_id)
+            continue
+        for item in dias:
+            dia_numero = int(item.get("dia", 0))
+            passagens = "; ".join(
+                str(p).strip() for p in item.get("passagens", []) if str(p).strip()
             )
+            tema = str(item.get("tema", "") or "").strip()
+            if dia_numero > 0 and passagens:
+                conn.execute(
+                    """INSERT OR IGNORE INTO plano_leitura_dias
+                       (plano_id, dia_numero, passagens, tema) VALUES (?, ?, ?, ?)""",
+                    (plano_id, dia_numero, passagens, tema),
+                )
 
 
-def obter_leitura_do_dia(dia_numero):
-    """Retorna {"dia_numero": int, "passagens": str} para o dia informado (1-365), ou None."""
+def obter_leitura_do_dia(dia_numero, plano_id=PLANO_LEITURA_PADRAO):
+    """Retorna {"dia_numero": int, "passagens": str, "tema": str} para o dia informado
+    (1-365) do plano informado, ou None."""
     dia_numero = int(dia_numero)
+    if plano_id not in PLANOS_LEITURA_BIBLICA:
+        plano_id = PLANO_LEITURA_PADRAO
     with _conn(MASTER_DB) as conn:
         _garantir_tabela_plano_leitura(conn)
         row = conn.execute(
-            "SELECT dia_numero, passagens FROM plano_leitura_dias WHERE dia_numero=?",
-            (dia_numero,),
+            """SELECT dia_numero, passagens, tema FROM plano_leitura_dias
+               WHERE plano_id=? AND dia_numero=?""",
+            (plano_id, dia_numero),
         ).fetchone()
     return dict(row) if row else None
 
@@ -7447,19 +7487,47 @@ def localizar_leitor_plano_biblico(slug, cpf, data_nascimento):
 
 
 def _garantir_tabela_leitura_confirmacoes(conn):
+    cols = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(leitura_biblica_confirmacoes)").fetchall()
+    ]
+    if cols and "plano_id" not in cols and "origem" in cols:
+        # Tabela de uma versao anterior (um unico plano implicito). Preserva as
+        # confirmacoes existentes, atribuindo-as ao plano padrao.
+        conn.executescript("""
+            ALTER TABLE leitura_biblica_confirmacoes
+                RENAME TO leitura_biblica_confirmacoes_old;
+            CREATE TABLE leitura_biblica_confirmacoes (
+                id_confirmacao INTEGER PRIMARY KEY AUTOINCREMENT,
+                origem         TEXT NOT NULL CHECK(origem IN ('membro', 'leitor')),
+                id_pessoa      INTEGER NOT NULL,
+                plano_id       TEXT NOT NULL DEFAULT 'sbb-1-ano',
+                dia_numero     INTEGER NOT NULL,
+                confirmado_em  TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(origem, id_pessoa, plano_id, dia_numero)
+            );
+            INSERT INTO leitura_biblica_confirmacoes
+                (origem, id_pessoa, plano_id, dia_numero, confirmado_em)
+            SELECT origem, id_pessoa, 'sbb-1-ano', dia_numero, confirmado_em
+            FROM leitura_biblica_confirmacoes_old;
+            DROP TABLE leitura_biblica_confirmacoes_old;
+        """)
+        return
+
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS leitura_biblica_confirmacoes (
             id_confirmacao INTEGER PRIMARY KEY AUTOINCREMENT,
             origem         TEXT NOT NULL CHECK(origem IN ('membro', 'leitor')),
             id_pessoa      INTEGER NOT NULL,
+            plano_id       TEXT NOT NULL DEFAULT 'sbb-1-ano',
             dia_numero     INTEGER NOT NULL,
             confirmado_em  TEXT NOT NULL DEFAULT (datetime('now')),
-            UNIQUE(origem, id_pessoa, dia_numero)
+            UNIQUE(origem, id_pessoa, plano_id, dia_numero)
         );
     """)
 
 
-def leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero):
+def leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero, plano_id=PLANO_LEITURA_PADRAO):
     db = _tenant_db(slug)
     if not db.exists():
         return False
@@ -7467,32 +7535,32 @@ def leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero):
         _garantir_tabela_leitura_confirmacoes(conn)
         row = conn.execute(
             """SELECT 1 FROM leitura_biblica_confirmacoes
-               WHERE origem=? AND id_pessoa=? AND dia_numero=? LIMIT 1""",
-            (origem, int(id_pessoa), int(dia_numero)),
+               WHERE origem=? AND id_pessoa=? AND plano_id=? AND dia_numero=? LIMIT 1""",
+            (origem, int(id_pessoa), plano_id, int(dia_numero)),
         ).fetchone()
     return row is not None
 
 
-def confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero):
-    """Registra a confirmacao de leitura do dia. Retorna True se foi confirmada agora,
-    False se ja existia uma confirmacao para essa pessoa/dia."""
+def confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero, plano_id=PLANO_LEITURA_PADRAO):
+    """Registra a confirmacao de leitura do dia num plano especifico. Retorna True se foi
+    confirmada agora, False se ja existia uma confirmacao para essa pessoa/plano/dia."""
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
     with _conn(db) as conn:
         _garantir_tabela_leitura_confirmacoes(conn)
         cur = conn.execute(
-            """INSERT OR IGNORE INTO leitura_biblica_confirmacoes (origem, id_pessoa, dia_numero)
-               VALUES (?, ?, ?)""",
-            (origem, int(id_pessoa), int(dia_numero)),
+            """INSERT OR IGNORE INTO leitura_biblica_confirmacoes
+               (origem, id_pessoa, plano_id, dia_numero) VALUES (?, ?, ?, ?)""",
+            (origem, int(id_pessoa), plano_id, int(dia_numero)),
         )
         return cur.rowcount > 0
 
 
-def listar_confirmacoes_leitura_biblica(slug, dia_numero=None):
-    """Retorna as confirmacoes de leitura biblica do tenant, com nome e origem de
-    quem confirmou. Se dia_numero for informado, filtra apenas esse dia do plano."""
-    colunas = ["nome", "origem", "dia_numero", "confirmado_em"]
+def listar_confirmacoes_leitura_biblica(slug, dia_numero=None, plano_id=None):
+    """Retorna as confirmacoes de leitura biblica do tenant, com nome e origem de quem
+    confirmou. Se dia_numero/plano_id forem informados, filtra por eles."""
+    colunas = ["nome", "origem", "id_pessoa", "plano_id", "dia_numero", "confirmado_em"]
     db = _tenant_db(slug)
     if not db.exists():
         return pd.DataFrame(columns=colunas)
@@ -7500,10 +7568,18 @@ def listar_confirmacoes_leitura_biblica(slug, dia_numero=None):
         _garantir_tabela_leitura_confirmacoes(conn)
         _garantir_tabela_leitores_biblia(conn)
         _garantir_colunas_cadastros(conn)
-        where = "WHERE c.dia_numero=?" if dia_numero is not None else ""
-        params = (int(dia_numero),) if dia_numero is not None else ()
+        condicoes = []
+        params = []
+        if dia_numero is not None:
+            condicoes.append("c.dia_numero=?")
+            params.append(int(dia_numero))
+        if plano_id is not None:
+            condicoes.append("c.plano_id=?")
+            params.append(plano_id)
+        where = f"WHERE {' AND '.join(condicoes)}" if condicoes else ""
         return _read_sql_query_formatado(
-            f"""SELECT COALESCE(m.nome, l.nome) AS nome, c.origem, c.dia_numero, c.confirmado_em
+            f"""SELECT COALESCE(m.nome, l.nome) AS nome, c.origem, c.id_pessoa,
+                       c.plano_id, c.dia_numero, c.confirmado_em
                 FROM leitura_biblica_confirmacoes c
                 LEFT JOIN cadastros m ON c.origem='membro' AND m.id_cadastro=c.id_pessoa
                 LEFT JOIN leitores_biblia l ON c.origem='leitor' AND l.id_leitor=c.id_pessoa
@@ -7514,9 +7590,10 @@ def listar_confirmacoes_leitura_biblica(slug, dia_numero=None):
         )
 
 
-def resumo_leitores_biblia(slug):
-    """Retorna, por leitor, o total de dias confirmados e a data da ultima confirmacao."""
-    colunas = ["nome", "origem", "total_confirmacoes", "ultima_confirmacao"]
+def resumo_leitores_biblia(slug, plano_id=None):
+    """Retorna, por leitor (e por plano), o total de dias confirmados e a data da
+    ultima confirmacao. Se plano_id for informado, filtra apenas esse plano."""
+    colunas = ["nome", "origem", "id_pessoa", "plano_id", "total_confirmacoes", "ultima_confirmacao"]
     db = _tenant_db(slug)
     if not db.exists():
         return pd.DataFrame(columns=colunas)
@@ -7524,15 +7601,19 @@ def resumo_leitores_biblia(slug):
         _garantir_tabela_leitura_confirmacoes(conn)
         _garantir_tabela_leitores_biblia(conn)
         _garantir_colunas_cadastros(conn)
+        where = "WHERE c.plano_id=?" if plano_id is not None else ""
+        params = (plano_id,) if plano_id is not None else ()
         return _read_sql_query_formatado(
-            """SELECT COALESCE(m.nome, l.nome) AS nome, c.origem,
+            f"""SELECT COALESCE(m.nome, l.nome) AS nome, c.origem, c.id_pessoa, c.plano_id,
                       COUNT(*) AS total_confirmacoes, MAX(c.confirmado_em) AS ultima_confirmacao
                FROM leitura_biblica_confirmacoes c
                LEFT JOIN cadastros m ON c.origem='membro' AND m.id_cadastro=c.id_pessoa
                LEFT JOIN leitores_biblia l ON c.origem='leitor' AND l.id_leitor=c.id_pessoa
-               GROUP BY c.origem, c.id_pessoa
+               {where}
+               GROUP BY c.origem, c.id_pessoa, c.plano_id
                ORDER BY total_confirmacoes DESC""",
             conn,
+            params=params,
         )
 
 

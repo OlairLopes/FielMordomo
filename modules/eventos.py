@@ -69,7 +69,7 @@ def _render_form(slug):
         "exigem CPF valido. Eventos restritos ficam apenas dentro do sistema."
     )
 
-    with st.form("form_evento_novo"):
+    with st.form("form_evento_novo", clear_on_submit=True):
         titulo = st.text_input("Titulo do evento")
         c1, c2, c3 = st.columns(3)
         data = c1.date_input("Data", value=_hoje(), format="DD/MM/YYYY")
@@ -188,7 +188,7 @@ def _render_lista(slug):
                     key=f"baixar_cartaz_evento_{id_evento}",
                 )
 
-        with st.form(f"form_evento_editar_{id_evento}"):
+        with st.form(f"form_evento_editar_{id_evento}", clear_on_submit=True):
             titulo = st.text_input("Titulo", value=row["titulo"])
             c1, c2, c3 = st.columns(3)
             data = c1.date_input("Data", value=_parse_data(row["data"]), key=f"evento_data_{id_evento}", format="DD/MM/YYYY")

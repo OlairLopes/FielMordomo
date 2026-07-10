@@ -7,14 +7,16 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from data.repository import (
+    PLANO_LEITURA_PADRAO,
     carregar_cadastros,
     carregar_lancamentos,
     listar_confirmacoes_leitura_biblica,
+    listar_planos_leitura_biblica,
     obter_leitura_do_dia,
     obter_logo_igreja,
     resumo_leitores_biblia,
 )
-from report_exports import gerar_excel_relatorio, gerar_pdf_relatorio
+from report_exports import AZUL, gerar_excel_relatorio, gerar_pdf_relatorio
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
 
@@ -569,11 +571,61 @@ def _gerar_excel_leitura_biblica(confirmacoes_dia, resumo, dia_numero):
     return buffer.getvalue()
 
 
+def _grafico_progresso_leitura(progresso_diario):
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=list(progresso_diario.index),
+        y=list(progresso_diario.values),
+        marker_color=f"#{AZUL}",
+        hovertemplate="Dia %{x}: %{y} confirmacao(oes)<extra></extra>",
+    ))
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10),
+        height=260,
+        xaxis_title="Dia do plano",
+        yaxis_title="Confirmacoes",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
+def _grafico_progresso_individual(dias_confirmados, dia_atual):
+    dias = list(range(1, dia_atual + 1))
+    status = ["Confirmado" if d in dias_confirmados else "Nao confirmado" for d in dias]
+    cores = [CORES["entrada"] if d in dias_confirmados else "#E2E8F0" for d in dias]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=dias,
+        y=[1] * len(dias),
+        marker_color=cores,
+        customdata=status,
+        hovertemplate="Dia %{x}: %{customdata}<extra></extra>",
+    ))
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10),
+        height=120,
+        xaxis_title="Dia do plano",
+        yaxis=dict(visible=False),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        showlegend=False,
+        bargap=0.15,
+    )
+    return fig
+
+
 def _render_leitura_biblica(slug):
     st.caption(
         "Acompanhamento do plano de leitura biblica: quem confirmou a leitura de cada "
         "dia e o total de dias confirmados por leitor."
     )
+    planos = listar_planos_leitura_biblica()
+    opcoes_planos = {p["nome"]: p["id"] for p in planos}
+    nomes_planos = list(opcoes_planos.keys())
+    nome_plano_escolhido = st.selectbox("Plano de leitura", nomes_planos, key="rel_leitura_plano")
+    plano_id = opcoes_planos[nome_plano_escolhido]
+
     data_ref = st.date_input(
         "Ver confirmacoes do dia",
         value=datetime.date.today(),
@@ -581,13 +633,15 @@ def _render_leitura_biblica(slug):
         key="rel_leitura_data",
     )
     dia_numero = min(data_ref.timetuple().tm_yday, 365)
-    leitura = obter_leitura_do_dia(dia_numero)
+    leitura = obter_leitura_do_dia(dia_numero, plano_id=plano_id)
+
+    todas_confirmacoes = listar_confirmacoes_leitura_biblica(slug, plano_id=plano_id)
 
     st.markdown(f"#### Dia {dia_numero} — {data_ref.strftime('%d/%m/%Y')}")
     if leitura:
         st.caption(f"Passagens: {leitura['passagens']}")
 
-    confirmacoes_dia = listar_confirmacoes_leitura_biblica(slug, dia_numero=dia_numero)
+    confirmacoes_dia = todas_confirmacoes[todas_confirmacoes["dia_numero"] == dia_numero]
     if confirmacoes_dia.empty:
         st.info("Ninguem confirmou a leitura deste dia ainda.")
     else:
@@ -602,7 +656,7 @@ def _render_leitura_biblica(slug):
 
     st.divider()
     st.markdown("#### Resumo por leitor")
-    resumo = resumo_leitores_biblia(slug)
+    resumo = resumo_leitores_biblia(slug, plano_id=plano_id)
     if resumo.empty:
         st.info("Ainda nao ha confirmacoes de leitura registradas.")
         return
@@ -621,6 +675,48 @@ def _render_leitura_biblica(slug):
         use_container_width=True,
         hide_index=True,
     )
+
+    st.divider()
+    st.markdown("#### Progresso do plano de leitura")
+    progresso_diario = (
+        todas_confirmacoes.groupby("dia_numero").size()
+        .reindex(range(1, dia_atual_ano + 1), fill_value=0)
+    )
+    st.plotly_chart(
+        _grafico_progresso_leitura(progresso_diario),
+        use_container_width=True,
+        config=CONFIG_PLOTLY,
+    )
+
+    st.markdown("#### Progresso individual")
+    opcoes_leitor = {"Todos os leitores": None}
+    for _, row in resumo.iterrows():
+        opcoes_leitor[f'{row["nome"]} ({row["origem"]})'] = (row["origem"], row["id_pessoa"])
+    escolha_leitor = st.selectbox(
+        "Selecione o leitor", list(opcoes_leitor.keys()), key="rel_leitura_leitor"
+    )
+    chave = opcoes_leitor[escolha_leitor]
+    if chave:
+        origem_sel, id_pessoa_sel = chave
+        linha = resumo[
+            (resumo["origem"] == origem_sel) & (resumo["id_pessoa"] == id_pessoa_sel)
+        ].iloc[0]
+        m1, m2 = st.columns(2)
+        m1.metric("Dias confirmados", int(linha["total_confirmacoes"]))
+        m2.metric("Adesao ao plano", f'{linha["adesao_pct"]}%')
+
+        dias_confirmados = set(
+            todas_confirmacoes[
+                (todas_confirmacoes["origem"] == origem_sel)
+                & (todas_confirmacoes["id_pessoa"] == id_pessoa_sel)
+            ]["dia_numero"]
+        )
+        st.plotly_chart(
+            _grafico_progresso_individual(dias_confirmados, dia_atual_ano),
+            use_container_width=True,
+            config=CONFIG_PLOTLY,
+        )
+        st.caption("Verde = dia confirmado · Cinza = dia nao confirmado")
 
     c1, c2, c3 = st.columns(3)
     with c1:

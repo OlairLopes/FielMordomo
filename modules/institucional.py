@@ -6,6 +6,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from utils.helpers import normalizar_data_digitada
+
 
 AZUL_PRINCIPAL = "#0B3A66"
 AZUL_ESCURO = "#082A4A"
@@ -1050,7 +1052,7 @@ def _render_atualizar_cadastro_publico():
     )
 
     def _parse_data_nascimento(valor):
-        texto = str(valor or "").strip()
+        texto = normalizar_data_digitada(str(valor or "").strip())
         if not texto:
             return ""
         for formato in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
@@ -1111,7 +1113,7 @@ def _render_atualizar_cadastro_publico():
         cpf = c3.text_input("CPF")
         data_nascimento_txt = c4.text_input(
             "Data de nascimento",
-            placeholder="Ex.: 26/06/1979",
+            placeholder="Ex.: 26/06/1979 ou 26061979",
             help="Informe no formato dia/mes/ano.",
         )
         if st.form_submit_button("Localizar cadastro", type="primary"):
@@ -1182,8 +1184,8 @@ def _render_atualizar_cadastro_publico():
             tipo_membro = c3.selectbox("Tipo", tipo_membro_opcoes)
             funcao = st.selectbox("Funcao ministerial", funcao_opcoes)
             b1, b2, b3 = st.columns(3)
-            batismo_aguas_txt = b1.text_input("Data de batismo nas aguas", placeholder="Ex.: 26/06/1979")
-            batismo_espirito_txt = b2.text_input("Data de batismo no Espirito Santo", placeholder="Ex.: 26/06/1979")
+            batismo_aguas_txt = b1.text_input("Data de batismo nas aguas", placeholder="Ex.: 26/06/1979 ou 26061979")
+            batismo_espirito_txt = b2.text_input("Data de batismo no Espirito Santo", placeholder="Ex.: 26/06/1979 ou 26061979")
             telefone = b3.text_input("Telefone / WhatsApp")
             st.markdown("**Endereco**")
             c3, c4 = st.columns([3, 1])
@@ -1274,12 +1276,12 @@ def _render_atualizar_cadastro_publico():
         batismo_aguas_txt = b1.text_input(
             "Data de batismo nas aguas",
             value=_formatar_data_br(cadastro.get("data_batismo_aguas", "")),
-            placeholder="Ex.: 26/06/1979",
+            placeholder="Ex.: 26/06/1979 ou 26061979",
         )
         batismo_espirito_txt = b2.text_input(
             "Data de batismo no Espirito Santo",
             value=_formatar_data_br(cadastro.get("data_batismo_espirito_santo", "")),
-            placeholder="Ex.: 26/06/1979",
+            placeholder="Ex.: 26/06/1979 ou 26061979",
         )
         telefone = b3.text_input("Telefone / WhatsApp", value=cadastro.get("telefone", ""))
         st.markdown("**Endereco**")
@@ -2438,6 +2440,12 @@ def render_institucional():
                     color: #607089;
                     font-size: .9rem;
                     font-weight: 600;
+                }
+                .leitura-tema {
+                    margin: 0 0 12px;
+                    color: #061B44;
+                    font-size: 1rem;
+                    font-weight: 700;
                 }
                 .leitura-passagens-label {
                     color: #607089;

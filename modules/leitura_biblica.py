@@ -6,20 +6,23 @@ import pandas as pd
 import streamlit as st
 
 from data.repository import (
+    PLANO_LEITURA_PADRAO,
     cadastrar_leitor_biblia,
     carregar_cadastros,
     confirmar_leitura_biblica,
     leitura_ja_confirmada,
     listar_igrejas,
+    listar_planos_leitura_biblica,
     localizar_leitor_plano_biblico,
     obter_leitura_do_dia,
 )
+from utils.helpers import normalizar_data_digitada
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _parse_data_nascimento(valor):
-    texto = str(valor or "").strip()
+    texto = normalizar_data_digitada(str(valor or "").strip())
     if not texto:
         return ""
     for formato in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
@@ -38,11 +41,14 @@ def _html_sem_indentacao(html_final):
     return "\n".join(linha.strip() for linha in str(html_final).splitlines() if linha.strip())
 
 
-def _card_leitura_html(dia_numero, data_escolhida, passagens):
+def _card_leitura_html(dia_numero, data_escolhida, passagens, tema=""):
     pills = "".join(
         f'<span class="leitura-pill">{html.escape(p.strip())}</span>'
         for p in passagens.split(";")
         if p.strip()
+    )
+    tema_html = (
+        f'<p class="leitura-tema">{html.escape(tema)}</p>' if tema else ""
     )
     return _html_sem_indentacao(f"""
         <div class="leitura-card">
@@ -50,6 +56,7 @@ def _card_leitura_html(dia_numero, data_escolhida, passagens):
                 <span class="leitura-day-badge">Dia {dia_numero}</span>
                 <span class="leitura-date">{data_escolhida.strftime('%d/%m/%Y')}</span>
             </div>
+            {tema_html}
             <p class="leitura-passagens-label">Passagens de hoje</p>
             <div class="leitura-passagens">{pills}</div>
         </div>
@@ -134,7 +141,7 @@ def _identificar_leitor(slug):
         c1, c2 = st.columns(2)
         cpf = c1.text_input("CPF")
         data_nascimento_txt = c2.text_input(
-            "Data de nascimento", placeholder="Ex.: 26/06/1979"
+            "Data de nascimento", placeholder="Ex.: 26/06/1979 ou 26061979"
         )
         localizar = st.form_submit_button("Localizar meu cadastro", type="primary")
 
@@ -169,8 +176,7 @@ def _identificar_leitor(slug):
 def render_publico():
     st.markdown("## Plano de Leitura Bíblica")
     st.caption(
-        "Acompanhe o plano de leitura da Bíblia em 1 ano da Sociedade Bíblica do Brasil "
-        "e confirme sua leitura diária."
+        "Escolha um plano de leitura da Bíblia em 1 ano e confirme sua leitura diária."
     )
 
     slug = st.session_state.get("leitura_slug")
@@ -196,26 +202,42 @@ def render_publico():
             st.session_state.pop("leitura_nao_encontrado", None)
             st.rerun()
 
+    planos = listar_planos_leitura_biblica()
+    opcoes_planos = {p["nome"]: p["id"] for p in planos}
+    nomes_planos = list(opcoes_planos.keys())
+    plano_id_atual = st.session_state.get("leitura_plano_id", PLANO_LEITURA_PADRAO)
+    nome_atual = next(
+        (nome for nome, pid in opcoes_planos.items() if pid == plano_id_atual),
+        nomes_planos[0],
+    )
+    nome_escolhido = st.selectbox(
+        "Plano de leitura", nomes_planos, index=nomes_planos.index(nome_atual)
+    )
+    plano_id = opcoes_planos[nome_escolhido]
+    st.session_state["leitura_plano_id"] = plano_id
+
     data_escolhida = st.date_input(
         "Escolha o dia da leitura", value=datetime.date.today()
     )
     dia_numero = _dia_do_plano(data_escolhida)
 
-    leitura = obter_leitura_do_dia(dia_numero)
+    leitura = obter_leitura_do_dia(dia_numero, plano_id=plano_id)
     if not leitura:
         st.info("Leitura ainda não cadastrada para este dia.")
         return
 
     st.markdown(
-        _card_leitura_html(dia_numero, data_escolhida, leitura["passagens"]),
+        _card_leitura_html(
+            dia_numero, data_escolhida, leitura["passagens"], leitura.get("tema", "")
+        ),
         unsafe_allow_html=True,
     )
 
     origem = cadastro.get("origem")
     id_pessoa = cadastro.get("id_pessoa")
-    if leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero):
+    if leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero, plano_id=plano_id):
         st.success("✅ Leitura deste dia já confirmada. Continue firme!")
     else:
         if st.button("Confirmar leitura deste dia", type="primary"):
-            confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero)
+            confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero, plano_id=plano_id)
             st.rerun()

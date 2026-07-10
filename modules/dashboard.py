@@ -1541,14 +1541,6 @@ def _render_curva_abc(abc_info):
     cards_html += '</div>'
     st.markdown(cards_html, unsafe_allow_html=True)
 
-    with st.expander("Ver detalhamento por membro", expanded=False):
-        tabela = abc_info["por_membro"][["nome", "classe", "valor", "percentual", "acumulado"]].copy()
-        tabela.columns = ["Membro", "Classe", "Total contribuido", "% do valor", "Acumulado %"]
-        tabela["Total contribuido"] = tabela["Total contribuido"].apply(formatar_moeda)
-        tabela["% do valor"] = tabela["% do valor"].apply(lambda x: f"{x:.2f}%")
-        tabela["Acumulado %"] = tabela["Acumulado %"].apply(lambda x: f"{x:.2f}%")
-        st.dataframe(tabela, use_container_width=True, hide_index=True)
-
 
 def _render_metas_arrecadacao(slug, ent_atual, dizimo_atual):
     """Renderiza barra de progresso das metas de arrecadacao."""
@@ -1710,26 +1702,6 @@ def _render_cruzamento_geo(df_cruzamento):
                 f'</div>',
                 unsafe_allow_html=True,
             )
-
-    with st.expander("Ver detalhamento por classe", expanded=False):
-        classe_filtro = st.selectbox(
-            "Filtrar por classe",
-            ["Todas"] + list(classes_labels.keys()),
-            format_func=lambda x: "Todas" if x == "Todas" else classes_labels[x][0],
-            key="geo_classe_filtro",
-        )
-        tabela = df_cruzamento.copy()
-        if classe_filtro != "Todas":
-            tabela = tabela[tabela["classe"] == classe_filtro]
-        tabela["classe"] = tabela["classe"].map(lambda c: classes_labels.get(c, (c,))[0])
-        tabela = tabela.rename(columns={
-            "nome": "Membro", "presencas": "Presencas",
-            "contribuicoes": "Contribuicoes", "classe": "Classe",
-        })
-        st.dataframe(
-            tabela[["Membro", "Presencas", "Contribuicoes", "Classe"]],
-            use_container_width=True, hide_index=True,
-        )
 
 
 def _render_lista_whatsapp_classe(classe_df, membros, igreja, mes_ref, rotulo_classe):
@@ -2203,7 +2175,6 @@ def render():
                 use_container_width=True,
                 config=CONFIG_PLOTLY,
             )
-            st.dataframe(_tabela_monetaria(resumo), use_container_width=True, hide_index=True)
 
             # ═══ NOVO: Analise temporal de despesas por subcategoria ═══
             _secao_dashboard(
@@ -2254,25 +2225,6 @@ def render():
                     for i, col in enumerate(pivot.columns)
                 ])
 
-                # Ranking de subcategorias com maior crescimento
-                if len(pivot) >= 2:
-                    ult_mes = pivot.iloc[-1]
-                    penult_mes = pivot.iloc[-2]
-                    diff = ult_mes - penult_mes
-                    crescimento = pd.DataFrame({
-                        "Subcategoria": diff.index,
-                        "Variacao (R$)": diff.values,
-                        "Valor atual": ult_mes.values,
-                    })
-                    crescimento = crescimento[crescimento["Variacao (R$)"] > 0].sort_values(
-                        "Variacao (R$)", ascending=False
-                    ).head(3)
-                    if not crescimento.empty:
-                        st.markdown("**Top 3 subcategorias que mais cresceram vs mes anterior:**")
-                        crescimento["Variacao (R$)"] = crescimento["Variacao (R$)"].apply(formatar_moeda)
-                        crescimento["Valor atual"] = crescimento["Valor atual"].apply(formatar_moeda)
-                        st.dataframe(crescimento, use_container_width=True, hide_index=True)
-
     with tab_receitas:
         entradas = ref[ref["tipo_norm"] == "ENTRADA"]
         resumo = entradas.groupby("categoria", as_index=False)["valor"].sum().sort_values("valor", ascending=False)
@@ -2294,7 +2246,6 @@ def render():
                 use_container_width=True,
                 config=CONFIG_PLOTLY,
             )
-            st.dataframe(_tabela_monetaria(resumo), use_container_width=True, hide_index=True)
 
     with tab_pastoral:
         if dashboard_restrito:
@@ -2399,12 +2350,6 @@ def render():
                 st.plotly_chart(fig_qualidade, use_container_width=True, config=CONFIG_PLOTLY)
             else:
                 st.success("Nenhuma pendencia identificada nos dados.")
-            st.markdown("#### Tabela de pendencias")
-            st.dataframe(
-                pendencias[["Pendencia", "Quantidade", "Status", "Acao sugerida"]],
-                use_container_width=True,
-                hide_index=True,
-            )
             st.caption("Registros invalidos sao excluidos dos KPIs ate serem corrigidos.")
 
             st.divider()
@@ -2617,7 +2562,6 @@ def render():
                     if tabela.empty:
                         st.info("Nenhum registro nesta faixa.")
                     else:
-                        st.dataframe(tabela, use_container_width=True, hide_index=True)
                         st.download_button(
                             f"Exportar {titulo.lower()}",
                             gerar_csv(tabela),
