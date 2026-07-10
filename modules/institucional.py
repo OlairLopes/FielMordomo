@@ -1951,7 +1951,7 @@ def _render_cards_eventos(df, titulo, slug=None):
         local = html.escape(str(row.get("local", "") or "Local a confirmar"))
         departamento = html.escape(str(row.get("departamento", "") or ""))
         descricao = html.escape(str(row.get("descricao", "") or ""))
-        visibilidade = html.escape(str(row.get("visibilidade", "") or "Publico"))
+        visibilidade = html.escape(str(row.get("visibilidade", "") or "Público"))
         responsavel = html.escape(str(row.get("responsavel", "") or ""))
         contato = html.escape(str(row.get("contato", "") or ""))
         cartaz_html = ""
@@ -1961,20 +1961,20 @@ def _render_cards_eventos(df, titulo, slug=None):
         if departamento:
             meta_extra += f"<span>{departamento}</span>"
         if responsavel:
-            meta_extra += f"<span>Responsavel: {responsavel}</span>"
+            meta_extra += f"<span>Responsável: {responsavel}</span>"
         if contato:
             meta_extra += f"<span>Contato: {contato}</span>"
         st.markdown(
-            f"""
+            _html_sem_indentacao(f"""
             <div class="fm-event-card">
                 <div class="fm-event-date">
                     <strong>{data}</strong>
-                    <small>{horario or "Horario a confirmar"}</small>
+                    <small>{horario or "Horário a confirmar"}</small>
                 </div>
                 <div class="fm-event-body">
                     {cartaz_html}
                     <div class="fm-event-top">
-                        <h3>{titulo_evento}</h3>
+                        <div class="fm-event-title">{titulo_evento}</div>
                         <span>{visibilidade}</span>
                     </div>
                     <p class="fm-event-local">{local}</p>
@@ -1982,7 +1982,7 @@ def _render_cards_eventos(df, titulo, slug=None):
                     <div class="fm-event-meta">{meta_extra}</div>
                 </div>
             </div>
-            """,
+            """),
             unsafe_allow_html=True,
         )
 
@@ -2052,9 +2052,12 @@ def _render_agenda_publica():
                 gap: 12px;
                 align-items: flex-start;
             }
-            .fm-event-top h3 {
+            .fm-event-top .fm-event-title {
                 margin: 0 0 4px;
                 color: #061B44;
+                font-size: 1.17rem;
+                font-weight: 800;
+                line-height: 1.3;
             }
             .fm-event-top span {
                 background: #EAF2FB;
@@ -2160,7 +2163,7 @@ def _render_agenda_publica():
     with st.form("form_agenda_membro"):
         cpf = st.text_input(
             "CPF do membro para acessar eventos internos",
-            placeholder="Digite apenas numeros",
+            placeholder="Digite apenas números",
             type="password",
         )
         enviado = st.form_submit_button("Validar CPF", type="primary")
@@ -2173,7 +2176,7 @@ def _render_agenda_publica():
                     st.success("CPF validado. Eventos para membros foram liberados.")
                     st.rerun()
                 else:
-                    st.error("CPF nao localizado no cadastro de membros ativos desta igreja.")
+                    st.error("CPF não localizado no cadastro de membros ativos desta igreja.")
             except Exception as exc:
                 st.error(str(exc))
 
@@ -2186,7 +2189,7 @@ def _render_agenda_publica():
             st.rerun()
 
     eventos = listar_eventos_publicos(slug, incluir_membros=incluir_membros, data_inicio=hoje)
-    titulo = "Eventos publicos e eventos para membros" if incluir_membros else "Eventos publicos"
+    titulo = "Eventos públicos e eventos para membros" if incluir_membros else "Eventos públicos"
     _render_cards_eventos(eventos, titulo, slug=slug)
 
 
@@ -2385,10 +2388,14 @@ def render_institucional():
                 div[data-testid="stForm"],
                 div[data-testid="stAlert"],
                 div[data-testid="stMarkdownContainer"],
+                div[data-testid="stButton"],
                 div[data-testid="stDateInput"] {
                     max-width: 920px;
                     margin-left: auto !important;
                     margin-right: auto !important;
+                }
+                div[data-testid="stButton"] button {
+                    width: 100%;
                 }
                 div[data-testid="stVerticalBlock"] {
                     gap: .25rem !important;
@@ -2400,6 +2407,59 @@ def render_institucional():
                 main .block-container > div:first-child {
                     margin-top: 0 !important;
                     padding-top: 0 !important;
+                }
+                .leitura-card {
+                    background: #FFFFFF;
+                    border-radius: 16px;
+                    border: 1px solid #E3E8F0;
+                    box-shadow: 0 10px 30px rgba(6,27,68,.08);
+                    padding: 22px 26px;
+                    margin: 4px 0 14px;
+                }
+                .leitura-card-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-bottom: 14px;
+                }
+                .leitura-day-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 6px 14px;
+                    border-radius: 999px;
+                    background: #061B44;
+                    color: #FFFFFF;
+                    font-weight: 800;
+                    font-size: .92rem;
+                }
+                .leitura-date {
+                    color: #607089;
+                    font-size: .9rem;
+                    font-weight: 600;
+                }
+                .leitura-passagens-label {
+                    color: #607089;
+                    font-size: .75rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: .06em;
+                    margin: 0 0 10px;
+                }
+                .leitura-passagens {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+                .leitura-pill {
+                    padding: 8px 14px;
+                    border-radius: 10px;
+                    background: #F5F7FA;
+                    border: 1px solid #E3E8F0;
+                    color: #10213A;
+                    font-size: .86rem;
+                    font-weight: 650;
                 }
             </style>
             """,

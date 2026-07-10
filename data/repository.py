@@ -7489,3 +7489,50 @@ def confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero):
         return cur.rowcount > 0
 
 
+def listar_confirmacoes_leitura_biblica(slug, dia_numero=None):
+    """Retorna as confirmacoes de leitura biblica do tenant, com nome e origem de
+    quem confirmou. Se dia_numero for informado, filtra apenas esse dia do plano."""
+    colunas = ["nome", "origem", "dia_numero", "confirmado_em"]
+    db = _tenant_db(slug)
+    if not db.exists():
+        return pd.DataFrame(columns=colunas)
+    with _conn(db) as conn:
+        _garantir_tabela_leitura_confirmacoes(conn)
+        _garantir_tabela_leitores_biblia(conn)
+        _garantir_colunas_cadastros(conn)
+        where = "WHERE c.dia_numero=?" if dia_numero is not None else ""
+        params = (int(dia_numero),) if dia_numero is not None else ()
+        return _read_sql_query_formatado(
+            f"""SELECT COALESCE(m.nome, l.nome) AS nome, c.origem, c.dia_numero, c.confirmado_em
+                FROM leitura_biblica_confirmacoes c
+                LEFT JOIN cadastros m ON c.origem='membro' AND m.id_cadastro=c.id_pessoa
+                LEFT JOIN leitores_biblia l ON c.origem='leitor' AND l.id_leitor=c.id_pessoa
+                {where}
+                ORDER BY c.confirmado_em DESC""",
+            conn,
+            params=params,
+        )
+
+
+def resumo_leitores_biblia(slug):
+    """Retorna, por leitor, o total de dias confirmados e a data da ultima confirmacao."""
+    colunas = ["nome", "origem", "total_confirmacoes", "ultima_confirmacao"]
+    db = _tenant_db(slug)
+    if not db.exists():
+        return pd.DataFrame(columns=colunas)
+    with _conn(db) as conn:
+        _garantir_tabela_leitura_confirmacoes(conn)
+        _garantir_tabela_leitores_biblia(conn)
+        _garantir_colunas_cadastros(conn)
+        return _read_sql_query_formatado(
+            """SELECT COALESCE(m.nome, l.nome) AS nome, c.origem,
+                      COUNT(*) AS total_confirmacoes, MAX(c.confirmado_em) AS ultima_confirmacao
+               FROM leitura_biblica_confirmacoes c
+               LEFT JOIN cadastros m ON c.origem='membro' AND m.id_cadastro=c.id_pessoa
+               LEFT JOIN leitores_biblia l ON c.origem='leitor' AND l.id_leitor=c.id_pessoa
+               GROUP BY c.origem, c.id_pessoa
+               ORDER BY total_confirmacoes DESC""",
+            conn,
+        )
+
+

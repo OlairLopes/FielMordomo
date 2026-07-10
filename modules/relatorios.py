@@ -1,11 +1,19 @@
 import datetime
+import io
 import logging
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from data.repository import carregar_cadastros, carregar_lancamentos, obter_logo_igreja
+from data.repository import (
+    carregar_cadastros,
+    carregar_lancamentos,
+    listar_confirmacoes_leitura_biblica,
+    obter_leitura_do_dia,
+    obter_logo_igreja,
+    resumo_leitores_biblia,
+)
 from report_exports import gerar_excel_relatorio, gerar_pdf_relatorio
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
@@ -267,6 +275,14 @@ def render():
         igreja = {}
     st.subheader("Relatorios")
 
+    tab_financeiro, tab_leitura = st.tabs(["Financeiro", "Plano de Leitura"])
+    with tab_financeiro:
+        _render_financeiro(slug, igreja)
+    with tab_leitura:
+        _render_leitura_biblica(slug)
+
+
+def _render_financeiro(slug, igreja):
     df_bruto = carregar_lancamentos(slug)
     cad = carregar_cadastros(slug)
     if df_bruto.empty:
@@ -543,3 +559,88 @@ def render():
                 f"prestacao_contas_{nome_periodo}.pdf",
                 "application/pdf",
             )
+
+
+def _gerar_excel_leitura_biblica(confirmacoes_dia, resumo, dia_numero):
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        confirmacoes_dia.to_excel(writer, sheet_name=f"Dia {dia_numero}"[:31], index=False)
+        resumo.to_excel(writer, sheet_name="Resumo por leitor", index=False)
+    return buffer.getvalue()
+
+
+def _render_leitura_biblica(slug):
+    st.caption(
+        "Acompanhamento do plano de leitura biblica: quem confirmou a leitura de cada "
+        "dia e o total de dias confirmados por leitor."
+    )
+    data_ref = st.date_input(
+        "Ver confirmacoes do dia",
+        value=datetime.date.today(),
+        format="DD/MM/YYYY",
+        key="rel_leitura_data",
+    )
+    dia_numero = min(data_ref.timetuple().tm_yday, 365)
+    leitura = obter_leitura_do_dia(dia_numero)
+
+    st.markdown(f"#### Dia {dia_numero} — {data_ref.strftime('%d/%m/%Y')}")
+    if leitura:
+        st.caption(f"Passagens: {leitura['passagens']}")
+
+    confirmacoes_dia = listar_confirmacoes_leitura_biblica(slug, dia_numero=dia_numero)
+    if confirmacoes_dia.empty:
+        st.info("Ninguem confirmou a leitura deste dia ainda.")
+    else:
+        st.metric("Confirmacoes neste dia", len(confirmacoes_dia))
+        st.dataframe(
+            confirmacoes_dia.rename(columns={
+                "nome": "Nome", "origem": "Origem", "confirmado_em": "Confirmado em",
+            })[["Nome", "Origem", "Confirmado em"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.divider()
+    st.markdown("#### Resumo por leitor")
+    resumo = resumo_leitores_biblia(slug)
+    if resumo.empty:
+        st.info("Ainda nao ha confirmacoes de leitura registradas.")
+        return
+
+    dia_atual_ano = min(datetime.date.today().timetuple().tm_yday, 365)
+    resumo = resumo.copy()
+    resumo["adesao_pct"] = (resumo["total_confirmacoes"] / dia_atual_ano * 100).round(1)
+    st.dataframe(
+        resumo.rename(columns={
+            "nome": "Nome",
+            "origem": "Origem",
+            "total_confirmacoes": "Dias confirmados",
+            "ultima_confirmacao": "Ultima confirmacao",
+            "adesao_pct": "Adesao (%)",
+        })[["Nome", "Origem", "Dias confirmados", "Adesao (%)", "Ultima confirmacao"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.download_button(
+            "CSV - confirmacoes do dia",
+            gerar_csv(confirmacoes_dia),
+            f"leitura_biblica_dia_{dia_numero}.csv",
+            "text/csv",
+        )
+    with c2:
+        st.download_button(
+            "CSV - resumo por leitor",
+            gerar_csv(resumo),
+            "leitura_biblica_resumo.csv",
+            "text/csv",
+        )
+    with c3:
+        st.download_button(
+            "Excel - plano de leitura",
+            _gerar_excel_leitura_biblica(confirmacoes_dia, resumo, dia_numero),
+            "leitura_biblica_relatorio.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )

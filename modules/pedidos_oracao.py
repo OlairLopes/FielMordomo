@@ -40,13 +40,13 @@ MENSAGEM_ORACAO_PADRAO = """Paz do Senhor!
 
 Novo pedido recebido pelo FielMordomo.
 
-Congregacao: {congregacao}
+Congregação: {congregacao}
 Membro: {nome}
 Tipo: {tipo}
 Motivo: {motivo}
 Privacidade: {privacidade}
 Solicitou visita: {visita}
-Horario da visita: {horario}
+Horário da visita: {horario}
 
 Pedido:
 {pedido}
@@ -101,9 +101,9 @@ def _enviar_whatsapp_texto_api(telefone, mensagem):
     cfg = _config_whatsapp()
     numero = _normalizar_tel_brasil(telefone)
     if not numero:
-        return False, "Telefone vazio ou invalido."
+        return False, "Telefone vazio ou inválido."
     if not cfg["access_token"] or not cfg["phone_number_id"]:
-        return False, "WhatsApp Cloud API nao configurada."
+        return False, "WhatsApp Cloud API não configurada."
 
     url = f"https://graph.facebook.com/{cfg['api_version']}/{cfg['phone_number_id']}/messages"
     payload = {
@@ -123,8 +123,8 @@ def _enviar_whatsapp_texto_api(telefone, mensagem):
         LOGGER.warning("WhatsApp Cloud API retornou HTTP %s: %s", resp.status_code, resp.text[:1000])
         return False, f"HTTP {resp.status_code}"
     except requests.RequestException:
-        LOGGER.exception("Falha ao enviar pedido de oracao pelo WhatsApp.")
-        return False, "Falha de comunicacao."
+        LOGGER.exception("Falha ao enviar pedido de oração pelo WhatsApp.")
+        return False, "Falha de comunicação."
 
 
 def _formatar_data(valor):
@@ -138,7 +138,7 @@ def _slot_label(row):
     data = _formatar_data(row.get("data"))
     local = str(row.get("local") or "").strip()
     trecho_local = f" - {local}" if local else ""
-    return f'{data} das {row.get("hora_inicio")} as {row.get("hora_fim")}{trecho_local}'
+    return f'{data} das {row.get("hora_inicio")} às {row.get("hora_fim")}{trecho_local}'
 
 
 def _contatos_pastorais(slug):
@@ -150,7 +150,7 @@ def _contatos_pastorais(slug):
     try:
         pastores_aux = listar_pastores_auxiliares(slug, incluir_inativos=False)
     except Exception:
-        LOGGER.exception("Nao foi possivel listar pastores auxiliares para notificacao.")
+        LOGGER.exception("Não foi possível listar pastores auxiliares para notificação.")
         pastores_aux = pd.DataFrame()
     if not pastores_aux.empty:
         for _, row in pastores_aux.iterrows():
@@ -182,9 +182,9 @@ def _montar_mensagem(
         tipo=tipo_pedido,
         motivo=motivo_oracao,
         privacidade=privacidade,
-        confidencial="Sim" if privacidade == "Pastor" else "Nao",
-        visita="Sim" if deseja_visita else "Nao",
-        horario=slot_texto or "Nao agendada",
+        confidencial="Sim" if privacidade == "Pastor" else "Não",
+        visita="Sim" if deseja_visita else "Não",
+        horario=slot_texto or "Não agendada",
         pedido=pedido,
     )
 
@@ -227,7 +227,7 @@ def _notificar_pastores(
         if falhas:
             status += " Falhas: " + "; ".join(falhas[:3])
     else:
-        status = "WhatsApp Cloud API nao configurada. Links manuais disponiveis no painel interno."
+        status = "WhatsApp Cloud API não configurada. Links manuais disponíveis no painel interno."
     atualizar_notificacao_pedido_oracao(slug, id_pedido, status)
     return status, links
 
@@ -236,16 +236,16 @@ def _selecionar_igreja_publica():
     try:
         igrejas = listar_igrejas()
     except Exception:
-        LOGGER.exception("Nao foi possivel carregar a lista de igrejas.")
+        LOGGER.exception("Não foi possível carregar a lista de igrejas.")
         igrejas = pd.DataFrame()
 
     if igrejas.empty:
-        st.error("Nenhuma igreja cadastrada para receber pedidos de oracao.")
+        st.error("Nenhuma igreja cadastrada para receber pedidos de oração.")
         return None
 
     igrejas = igrejas[igrejas["ativa"].astype(int) == 1].copy()
     if igrejas.empty:
-        st.error("Nenhuma igreja ativa encontrada para receber pedidos de oracao.")
+        st.error("Nenhuma igreja ativa encontrada para receber pedidos de oração.")
         return None
 
     opcoes = {
@@ -254,8 +254,8 @@ def _selecionar_igreja_publica():
     }
 
     with st.form("form_identificar_igreja_oracao"):
-        st.markdown("#### Identificacao da igreja")
-        selecionada = st.selectbox("Igreja / congregacao", list(opcoes.keys()))
+        st.markdown("#### Identificação da igreja")
+        selecionada = st.selectbox("Igreja / congregação", list(opcoes.keys()))
         continuar = st.form_submit_button("Continuar", type="primary")
     if not continuar:
         return None
@@ -267,8 +267,8 @@ def _selecionar_igreja_publica():
     try:
         carregar_cadastros(slug)
     except Exception:
-        LOGGER.exception("Falha ao carregar cadastros para pedido de oracao.")
-        st.error("Nao foi possivel localizar essa igreja. Confira o identificador.")
+        LOGGER.exception("Falha ao carregar cadastros para pedido de oração.")
+        st.error("Não foi possível localizar essa igreja. Confira o identificador.")
         return None
     st.session_state["oracao_slug"] = slug
     return slug
@@ -278,7 +278,7 @@ def _membros_e_congregacoes(slug):
     try:
         df = carregar_cadastros(slug)
     except Exception:
-        LOGGER.exception("Nao foi possivel carregar membros para pedido de oracao.")
+        LOGGER.exception("Não foi possível carregar membros para pedido de oração.")
         return pd.DataFrame(), [slug]
     if df.empty:
         return pd.DataFrame(), [slug]
@@ -305,10 +305,10 @@ def _congregacoes_publicas(slug):
 
 
 def render_publico():
-    st.markdown("## Pedidos de Oracao e Visita Pastoral")
+    st.markdown("## Pedidos de Oração e Visita Pastoral")
     st.caption(
-        "Registre pedidos de oracao, atendimento no gabinete ou visita pastoral. "
-        "Membros podem ser selecionados pelo cadastro; nao membros podem ser informados manualmente."
+        "Registre pedidos de oração, atendimento no gabinete ou visita pastoral. "
+        "Membros podem ser selecionados pelo cadastro; não membros podem ser informados manualmente."
     )
 
     slug = st.session_state.get("oracao_slug")
@@ -335,11 +335,11 @@ def render_publico():
             op_horarios[_slot_label(row)] = int(row["id_slot"])
 
     with st.form("form_pedido_oracao_publico"):
-        congregacao = st.selectbox("Identificador da congregacao", congregacoes)
+        congregacao = st.selectbox("Identificador da congregação", congregacoes)
 
         tipo_solicitante = st.radio(
-            "Quem esta fazendo o pedido?",
-            ["Membro cadastrado", "Nao membro"],
+            "Quem está fazendo o pedido?",
+            ["Membro cadastrado", "Não membro"],
             horizontal=True,
         )
         pin_cpf = ""
@@ -347,29 +347,29 @@ def render_publico():
         telefone_manual = ""
         if tipo_solicitante == "Membro cadastrado":
             pin_cpf = st.text_input(
-                "Codigo de acesso do membro",
+                "Código de acesso do membro",
                 type="password",
                 max_chars=11,
-                placeholder="CPF com 11 digitos",
-                help="Digite somente numeros, sem pontos e sem hifen.",
+                placeholder="CPF com 11 dígitos",
+                help="Digite somente números, sem pontos e sem hífen.",
             )
-            st.caption("O nome do membro sera preenchido automaticamente apos enviar.")
+            st.caption("O nome do membro será preenchido automaticamente após enviar.")
         else:
             c_nome, c_tel = st.columns(2)
-            nome_manual = c_nome.text_input("Nome de quem esta pedindo oracao")
+            nome_manual = c_nome.text_input("Nome de quem está pedindo oração")
             telefone_manual = c_tel.text_input("Telefone / WhatsApp")
 
         tipo_pedido = st.selectbox("Tipo de pedido", TIPOS_PEDIDO)
-        motivo_oracao = st.text_input("Motivo da oracao", placeholder="Ex.: familia, saude, decisao, trabalho...")
+        motivo_oracao = st.text_input("Motivo da oração", placeholder="Ex.: família, saúde, decisão, trabalho...")
         privacidade = st.selectbox("Privacidade", PRIVACIDADE_OPCOES)
         pedido = st.text_area("Descreva seu pedido", height=180)
         deseja_visita = tipo_pedido == "Solicitacao de visita pastoral" or st.checkbox("Desejo solicitar visita pastoral")
         slot_label = "Sem agendamento agora"
         if deseja_visita:
             if len(op_horarios) == 1:
-                st.info("Nao ha horarios pastorais disponiveis no momento. O pedido sera enviado sem agendamento.")
+                st.info("Não há horários pastorais disponíveis no momento. O pedido será enviado sem agendamento.")
             else:
-                slot_label = st.selectbox("Horario disponivel para visita", list(op_horarios.keys()))
+                slot_label = st.selectbox("Horário disponível para visita", list(op_horarios.keys()))
         enviar = st.form_submit_button("Enviar pedido", type="primary")
 
     if enviar:
@@ -378,7 +378,7 @@ def render_publico():
             if tipo_solicitante == "Membro cadastrado":
                 membro_localizado = localizar_membro_por_pin_cpf(slug, pin_cpf)
                 if not membro_localizado:
-                    st.error("Nao localizamos membro ativo com este CPF.")
+                    st.error("Não localizamos membro ativo com este CPF.")
                     return
                 id_cadastro = int(membro_localizado["id_cadastro"])
                 membro_notificacao = {
@@ -416,10 +416,10 @@ def render_publico():
                 motivo_oracao=motivo_oracao,
             )
         except Exception as ex:
-            LOGGER.exception("Nao foi possivel registrar pedido de oracao.")
+            LOGGER.exception("Não foi possível registrar pedido de oração.")
             st.error(str(ex))
         else:
-            st.success("Pedido registrado com sucesso. A equipe pastoral sera notificada.")
+            st.success("Pedido registrado com sucesso. A equipe pastoral será notificada.")
             st.caption(status)
 
 
@@ -435,10 +435,10 @@ def _render_pedidos(slug):
         status="" if status == "Todos" else status,
     )
     if df.empty:
-        st.info("Nenhum pedido encontrado no periodo.")
+        st.info("Nenhum pedido encontrado no período.")
         return
 
-    st.metric("Pedidos no periodo", len(df))
+    st.metric("Pedidos no período", len(df))
     st.dataframe(
         df[[
             "id_pedido", "criado_em", "congregacao", "nome_membro", "tipo_pedido",
@@ -465,7 +465,7 @@ def _render_pedidos(slug):
     row = opcoes[selecionado]
     st.markdown(f"#### Pedido de {row['nome_membro']}")
     st.caption(
-        f"Congregacao: {row.get('congregacao') or '-'} | "
+        f"Congregação: {row.get('congregacao') or '-'} | "
         f"Motivo: {row.get('motivo_oracao') or '-'} | "
         f"Privacidade: {row.get('privacidade') or 'Pastor'}"
     )
@@ -490,14 +490,14 @@ def _render_pedidos(slug):
 
 def _render_agenda(slug):
     with st.form("form_agenda_pastoral"):
-        st.markdown("#### Novo horario disponivel")
+        st.markdown("#### Novo horário disponível")
         c1, c2, c3 = st.columns(3)
         data = c1.date_input("Data", value=_hoje(), format="DD/MM/YYYY")
-        hora_inicio = c2.time_input("Inicio", value=dt.time(19, 0))
+        hora_inicio = c2.time_input("Início", value=dt.time(19, 0))
         hora_fim = c3.time_input("Fim", value=dt.time(20, 0))
-        local = st.text_input("Local", placeholder="Gabinete pastoral, residencia, igreja...")
-        observacoes = st.text_area("Observacoes")
-        if st.form_submit_button("Adicionar horario", type="primary"):
+        local = st.text_input("Local", placeholder="Gabinete pastoral, residência, igreja...")
+        observacoes = st.text_area("Observações")
+        if st.form_submit_button("Adicionar horário", type="primary"):
             try:
                 salvar_horario_visita_pastoral(
                     slug,
@@ -511,7 +511,7 @@ def _render_agenda(slug):
             except Exception as ex:
                 st.error(str(ex))
             else:
-                st.success("Horario cadastrado.")
+                st.success("Horário cadastrado.")
                 st.rerun()
 
     agenda = listar_horarios_visita_pastoral(
@@ -520,28 +520,28 @@ def _render_agenda(slug):
         data_fim=(_hoje() + dt.timedelta(days=90)).isoformat(),
     )
     if agenda.empty:
-        st.info("Nenhum horario cadastrado.")
+        st.info("Nenhum horário cadastrado.")
         return
     st.dataframe(agenda, use_container_width=True, hide_index=True)
     opcoes = {
         f'{int(row["id_slot"])} - {_slot_label(row)}': int(row["id_slot"])
         for _, row in agenda.iterrows()
     }
-    excluir = st.selectbox("Excluir/inativar horario", ["Selecione"] + list(opcoes.keys()))
-    if excluir != "Selecione" and st.button("Excluir horario selecionado", type="secondary"):
+    excluir = st.selectbox("Excluir/inativar horário", ["Selecione"] + list(opcoes.keys()))
+    if excluir != "Selecione" and st.button("Excluir horário selecionado", type="secondary"):
         removido = excluir_horario_visita_pastoral(slug, opcoes[excluir])
         if removido:
-            st.success("Horario removido.")
+            st.success("Horário removido.")
         else:
-            st.warning("Horario ja vinculado a pedido. Ele foi apenas inativado.")
+            st.warning("Horário já vinculado a pedido. Ele foi apenas inativado.")
         st.rerun()
 
 
 def render():
-    st.subheader("Pedidos de Oracao")
+    st.subheader("Pedidos de Oração")
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão inválida. Faça login novamente.")
         return
     modo = st.session_state.get("modo", "igreja")
     tabs = st.tabs(["Pedidos", "Agenda pastoral"] if modo != "pastor_auxiliar" else ["Pedidos"])

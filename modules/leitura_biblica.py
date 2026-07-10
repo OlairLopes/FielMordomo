@@ -1,4 +1,5 @@
 import datetime
+import html
 import logging
 
 import pandas as pd
@@ -31,6 +32,28 @@ def _parse_data_nascimento(valor):
 
 def _dia_do_plano(data):
     return min(data.timetuple().tm_yday, 365)
+
+
+def _html_sem_indentacao(html_final):
+    return "\n".join(linha.strip() for linha in str(html_final).splitlines() if linha.strip())
+
+
+def _card_leitura_html(dia_numero, data_escolhida, passagens):
+    pills = "".join(
+        f'<span class="leitura-pill">{html.escape(p.strip())}</span>'
+        for p in passagens.split(";")
+        if p.strip()
+    )
+    return _html_sem_indentacao(f"""
+        <div class="leitura-card">
+            <div class="leitura-card-header">
+                <span class="leitura-day-badge">Dia {dia_numero}</span>
+                <span class="leitura-date">{data_escolhida.strftime('%d/%m/%Y')}</span>
+            </div>
+            <p class="leitura-passagens-label">Passagens de hoje</p>
+            <div class="leitura-passagens">{pills}</div>
+        </div>
+    """)
 
 
 def _selecionar_igreja_publica():
@@ -179,12 +202,14 @@ def render_publico():
     dia_numero = _dia_do_plano(data_escolhida)
 
     leitura = obter_leitura_do_dia(dia_numero)
-    st.markdown(f"### Dia {dia_numero} — {data_escolhida.strftime('%d/%m/%Y')}")
     if not leitura:
         st.info("Leitura ainda não cadastrada para este dia.")
         return
 
-    st.markdown(f"**Passagens:** {leitura['passagens']}")
+    st.markdown(
+        _card_leitura_html(dia_numero, data_escolhida, leitura["passagens"]),
+        unsafe_allow_html=True,
+    )
 
     origem = cadastro.get("origem")
     id_pessoa = cadastro.get("id_pessoa")
