@@ -41,6 +41,20 @@ def _html_sem_indentacao(html_final):
     return "\n".join(linha.strip() for linha in str(html_final).splitlines() if linha.strip())
 
 
+def _hero_html(planos):
+    badges = "".join(
+        f'<span class="leitura-hero-badge">{html.escape(p["nome"])}</span>' for p in planos
+    )
+    return _html_sem_indentacao(f"""
+        <div class="leitura-hero">
+            <span class="leitura-hero-eyebrow">Plano de leitura</span>
+            <div class="leitura-hero-badges">{badges}</div>
+            <h1 class="leitura-hero-title">Plano de Leitura Bíblica</h1>
+            <p class="leitura-hero-subtitle">Leia a sua Bíblia todos os dias.</p>
+        </div>
+    """)
+
+
 def _card_leitura_html(dia_numero, data_escolhida, passagens, tema=""):
     pills = "".join(
         f'<span class="leitura-pill">{html.escape(p.strip())}</span>'
@@ -174,10 +188,7 @@ def _identificar_leitor(slug):
 
 
 def render_publico():
-    st.markdown("## Plano de Leitura Bíblica")
-    st.caption(
-        "Escolha um plano de leitura da Bíblia em 1 ano e confirme sua leitura diária."
-    )
+    st.markdown(_hero_html(listar_planos_leitura_biblica()), unsafe_allow_html=True)
 
     slug = st.session_state.get("leitura_slug")
     if not slug:

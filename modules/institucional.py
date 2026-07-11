@@ -2410,6 +2410,49 @@ def render_institucional():
                     margin-top: 0 !important;
                     padding-top: 0 !important;
                 }
+                .leitura-hero {
+                    background: linear-gradient(135deg, #061B44 0%, #0B3A66 100%);
+                    border-radius: 20px;
+                    padding: 34px 32px;
+                    margin: 4px 0 18px;
+                    color: #FFFFFF;
+                }
+                .leitura-hero-eyebrow {
+                    display: block;
+                    color: #F2D36B;
+                    font-size: .78rem;
+                    font-weight: 800;
+                    letter-spacing: .08em;
+                    text-transform: uppercase;
+                    margin-bottom: 14px;
+                }
+                .leitura-hero-badges {
+                    display: flex;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    margin-bottom: 16px;
+                }
+                .leitura-hero-badge {
+                    padding: 6px 14px;
+                    border-radius: 999px;
+                    background: rgba(255,255,255,.14);
+                    border: 1px solid rgba(255,255,255,.25);
+                    color: #FFFFFF;
+                    font-size: .8rem;
+                    font-weight: 700;
+                }
+                .leitura-hero-title {
+                    margin: 0 0 8px;
+                    font-size: 2.15rem;
+                    font-weight: 800;
+                    color: #FFFFFF;
+                    line-height: 1.2;
+                }
+                .leitura-hero-subtitle {
+                    margin: 0;
+                    color: rgba(255,255,255,.82);
+                    font-size: 1rem;
+                }
                 .leitura-card {
                     background: #FFFFFF;
                     border-radius: 16px;
