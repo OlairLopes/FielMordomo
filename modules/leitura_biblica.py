@@ -119,72 +119,40 @@ def _selecionar_igreja_publica():
     return slug
 
 
-def _cadastrar_novo_leitor(slug, cpf, data_nascimento):
-    st.markdown("##### Cadastre-se como leitor")
-    st.caption(
-        "Você pode participar do plano de leitura mesmo sem ser membro desta igreja."
-    )
-    with st.form("form_cadastrar_leitor_biblia"):
-        nome = st.text_input("Nome completo")
-        telefone = st.text_input("Telefone (opcional)")
-        confirmar = st.form_submit_button("Cadastrar como leitor", type="primary")
-
-    if not confirmar:
-        return
-
-    if not nome.strip():
-        st.error("Informe seu nome completo.")
-        return
-
-    try:
-        cadastrar_leitor_biblia(slug, nome, cpf, data_nascimento, telefone)
-    except ValueError as erro:
-        st.error(str(erro))
-        return
-
-    st.session_state.pop("leitura_nao_encontrado", None)
-    st.session_state["leitura_cadastro"] = localizar_leitor_plano_biblico(
-        slug, cpf, data_nascimento
-    )
-    st.rerun()
-
-
 def _identificar_leitor(slug):
-    st.markdown("#### Identifique-se para confirmar sua leitura")
+    st.markdown("#### Cadastre-se para confirmar sua leitura")
+    st.caption(
+        "Membros cadastrados são reconhecidos automaticamente. Se você ainda não "
+        "é membro, esse cadastro cria seu acesso como leitor do plano."
+    )
     with st.form("form_identificar_leitor_leitura"):
+        nome = st.text_input("Nome completo")
         c1, c2 = st.columns(2)
         cpf = c1.text_input("CPF")
         data_nascimento_txt = c2.text_input(
             "Data de nascimento", placeholder="Ex.: 26/06/1979 ou 26061979"
         )
-        localizar = st.form_submit_button("Localizar meu cadastro", type="primary")
+        confirmar = st.form_submit_button("Continuar", type="primary")
 
-    if localizar:
-        data_nascimento = _parse_data_nascimento(data_nascimento_txt)
-        if not cpf or not data_nascimento:
-            st.error("Informe CPF e data de nascimento válidos.")
+    if not confirmar:
+        return
+
+    data_nascimento = _parse_data_nascimento(data_nascimento_txt)
+    if not nome.strip() or not cpf or not data_nascimento:
+        st.error("Informe nome, CPF e data de nascimento válidos.")
+        return
+
+    cadastro = localizar_leitor_plano_biblico(slug, cpf, data_nascimento)
+    if not cadastro:
+        try:
+            cadastrar_leitor_biblia(slug, nome, cpf, data_nascimento)
+        except ValueError as erro:
+            st.error(str(erro))
             return
-
         cadastro = localizar_leitor_plano_biblico(slug, cpf, data_nascimento)
-        if cadastro:
-            st.session_state.pop("leitura_nao_encontrado", None)
-            st.session_state["leitura_cadastro"] = cadastro
-            st.rerun()
-            return
 
-        st.session_state["leitura_nao_encontrado"] = {
-            "cpf": cpf,
-            "data_nascimento": data_nascimento,
-        }
-
-    pendente = st.session_state.get("leitura_nao_encontrado")
-    if pendente:
-        st.warning(
-            "Cadastro não localizado. Se você é membro, procure a secretaria da sua "
-            "igreja para atualizar seu cadastro. Se não é membro, cadastre-se abaixo "
-            "para participar do plano de leitura."
-        )
-        _cadastrar_novo_leitor(slug, pendente["cpf"], pendente["data_nascimento"])
+    st.session_state["leitura_cadastro"] = cadastro
+    st.rerun()
 
 
 def render_publico():
@@ -210,7 +178,6 @@ def render_publico():
         if st.button("Trocar igreja/membro"):
             st.session_state.pop("leitura_slug", None)
             st.session_state.pop("leitura_cadastro", None)
-            st.session_state.pop("leitura_nao_encontrado", None)
             st.rerun()
 
     planos = listar_planos_leitura_biblica()
