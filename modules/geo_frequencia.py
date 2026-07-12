@@ -14,6 +14,7 @@ REQUISITOS:
 import datetime
 import html
 import math
+import os
 import re
 import json
 import sqlite3
@@ -611,8 +612,12 @@ def _config_whatsapp():
         cfg = {}
 
     return {
-        "access_token": str(cfg.get("access_token", "")).strip(),
-        "phone_number_id": str(cfg.get("phone_number_id", "")).strip(),
+        "access_token": str(
+            cfg.get("access_token", "") or os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+        ).strip(),
+        "phone_number_id": str(
+            cfg.get("phone_number_id", "") or os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+        ).strip(),
         "api_version": str(cfg.get("api_version", "v20.0")).strip(),
     }
 

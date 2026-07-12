@@ -225,8 +225,12 @@ def _config_whatsapp():
 
     return {
         "auto_enviar": bool(cfg.get("auto_enviar", False)),
-        "access_token": str(cfg.get("access_token", "")).strip(),
-        "phone_number_id": str(cfg.get("phone_number_id", "")).strip(),
+        "access_token": str(
+            cfg.get("access_token", "") or os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+        ).strip(),
+        "phone_number_id": str(
+            cfg.get("phone_number_id", "") or os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+        ).strip(),
         "api_version": str(cfg.get("api_version", "v20.0")).strip(),
         "modo_envio": str(cfg.get("modo_envio", "text")).strip().lower(),
         "template_name": str(cfg.get("template_name", "feliz_aniversario")).strip(),

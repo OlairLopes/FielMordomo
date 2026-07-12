@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+import os
 import re
 import urllib.parse
 
@@ -81,8 +82,12 @@ def _config_whatsapp():
     except Exception:
         cfg = {}
     resultado = {
-        "access_token": str(cfg.get("access_token", "")).strip(),
-        "phone_number_id": str(cfg.get("phone_number_id", "")).strip(),
+        "access_token": str(
+            cfg.get("access_token", "") or os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+        ).strip(),
+        "phone_number_id": str(
+            cfg.get("phone_number_id", "") or os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+        ).strip(),
         "api_version": str(cfg.get("api_version", "v20.0")).strip(),
     }
     if not PHONE_NUMBER_ID_RE.fullmatch(resultado["phone_number_id"]):
