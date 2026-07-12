@@ -1,6 +1,7 @@
 import datetime
 import html
 import logging
+import os
 import re
 
 import pandas as pd
@@ -127,9 +128,12 @@ def _parsear_passagens(texto):
 
 def _token_biblia_api():
     try:
-        return str(st.secrets.get("biblia_api", {}).get("token", "")).strip()
+        token = str(st.secrets.get("biblia_api", {}).get("token", "")).strip()
     except Exception:
-        return ""
+        token = ""
+    if token:
+        return token
+    return str(os.environ.get("BIBLIA_API_TOKEN", "")).strip()
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
