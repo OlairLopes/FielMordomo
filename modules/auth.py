@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import html
 import json
+import os
 import re
 import time
 import urllib.parse
@@ -45,9 +46,12 @@ def _cookie_controller():
 
 def _sessao_secret() -> str:
     try:
-        return str(st.secrets.get("auth", {}).get("session_secret", "") or "")
+        segredo = str(st.secrets.get("auth", {}).get("session_secret", "") or "")
     except Exception:
-        return ""
+        segredo = ""
+    if segredo:
+        return segredo
+    return str(os.environ.get("SESSION_SECRET", "") or "")
 
 
 def _gerar_token_sessao(dados: dict) -> str:
