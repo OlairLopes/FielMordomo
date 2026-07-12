@@ -1,8 +1,10 @@
 import datetime
 import html
 import logging
+import re
 
 import pandas as pd
+import requests
 import streamlit as st
 
 from data.repository import (
@@ -14,11 +16,198 @@ from data.repository import (
     listar_igrejas,
     listar_planos_leitura_biblica,
     localizar_leitor_plano_biblico,
+    obter_capitulo_biblico_cache,
     obter_leitura_do_dia,
+    salvar_capitulo_biblico_cache,
 )
 from utils.helpers import normalizar_data_digitada
 
 LOGGER = logging.getLogger(__name__)
+
+BIBLIA_API_BASE = "https://www.abibliadigital.com.br/api"
+BIBLIA_VERSAO_PADRAO = "nvi"
+
+LIVRO_ABREV = {
+    "gênesis": "gn", "êxodo": "ex", "levítico": "lv", "números": "nm", "deuteronômio": "dt",
+    "josué": "js", "juízes": "jz", "rute": "rt",
+    "1 samuel": "1sm", "2 samuel": "2sm",
+    "1 reis": "1rs", "2 reis": "2rs",
+    "1 crônicas": "1cr", "2 crônicas": "2cr",
+    "esdras": "ed", "neemias": "ne", "ester": "et",
+    "jó": "job", "salmos": "sl", "provérbios": "pv", "eclesiastes": "ec",
+    "cânticos": "ct", "cântico dos cânticos": "ct",
+    "isaías": "is", "jeremias": "jr", "lamentações": "lm", "ezequiel": "ez", "daniel": "dn",
+    "oséias": "os", "oseias": "os", "joel": "jl", "amós": "am", "obadias": "ob", "jonas": "jn",
+    "miquéias": "mq", "miqueias": "mq", "naum": "na", "habacuque": "hc", "sofonias": "sf",
+    "ageu": "ag", "zacarias": "zc", "malaquias": "ml",
+    "mateus": "mt", "marcos": "mc", "lucas": "lc", "joão": "jo", "atos": "at",
+    "romanos": "rm", "1 coríntios": "1co", "2 coríntios": "2co", "gálatas": "gl",
+    "efésios": "ef", "filipenses": "fp", "colossenses": "cl",
+    "1 tessalonicenses": "1ts", "2 tessalonicenses": "2ts",
+    "1 timóteo": "1tm", "2 timóteo": "2tm", "tito": "tt", "filemom": "fm",
+    "hebreus": "hb", "tiago": "tg", "1 pedro": "1pe", "2 pedro": "2pe",
+    "1 joão": "1jo", "2 joão": "2jo", "3 joão": "3jo", "judas": "jd", "apocalipse": "ap",
+}
+
+_REF_COM_LIVRO_RE = re.compile(
+    r'^([1-3]?\s?[A-Za-zÀ-ÿ]+(?:\s[A-Za-zÀ-ÿ]+)*?)\s*(\d+)(?:[.:](\d+))?(?:-(\d+)(?:[.:](\d+))?)?$'
+)
+_REF_CONTINUACAO_RE = re.compile(r'^(\d+)(?:[.:](\d+))?(?:-(\d+)(?:[.:](\d+))?)?$')
+
+
+def _abrev_livro(nome):
+    chave = nome.strip().lower()
+    if chave in LIVRO_ABREV:
+        return LIVRO_ABREV[chave]
+    chave_sem_espaco = chave.replace(" ", "")
+    for k, v in LIVRO_ABREV.items():
+        if k.replace(" ", "") == chave_sem_espaco:
+            return v
+    return None
+
+
+def _interpretar_grupos(cap_ini, v_ini_raw, end_raw, v_fim_raw):
+    """Resolve a ambiguidade do regex: sem verso inicial, o "fim" e capitulo;
+    com verso inicial e um segundo verso, o "fim" e capitulo (span entre
+    capitulos); com verso inicial e sem segundo verso, o "fim" e verso final
+    no mesmo capitulo."""
+    if v_ini_raw is None:
+        return None, (int(end_raw) if end_raw else cap_ini), None
+    vers_ini = int(v_ini_raw)
+    if v_fim_raw is not None:
+        return vers_ini, int(end_raw), int(v_fim_raw)
+    if end_raw is not None:
+        return vers_ini, cap_ini, int(end_raw)
+    return vers_ini, cap_ini, vers_ini
+
+
+def _parsear_passagens(texto):
+    """Converte uma string de passagens (ex.: "Lucas 5.27-39; Gênesis 1-3") em
+    uma lista de unidades de leitura, cada uma com livro/abreviacao/capitulos/
+    versos, prontas para buscar na API biblica."""
+    unidades = []
+    livro_atual = None
+    for parte in str(texto or "").split(";"):
+        for pedaco in parte.split(","):
+            pedaco = pedaco.strip()
+            if not pedaco:
+                continue
+            m_cont = _REF_CONTINUACAO_RE.match(pedaco)
+            if m_cont and livro_atual:
+                nome_candidato, abrev = livro_atual
+                cap_ini = int(m_cont.group(1))
+                vers_ini, cap_fim, vers_fim = _interpretar_grupos(
+                    cap_ini, m_cont.group(2), m_cont.group(3), m_cont.group(4)
+                )
+                unidades.append({
+                    "livro": nome_candidato, "abrev": abrev,
+                    "cap_ini": cap_ini, "cap_fim": cap_fim,
+                    "vers_ini": vers_ini, "vers_fim": vers_fim,
+                })
+                continue
+            m = _REF_COM_LIVRO_RE.match(pedaco)
+            if not m:
+                continue
+            nome_candidato = m.group(1).strip()
+            abrev = _abrev_livro(nome_candidato)
+            if not abrev:
+                continue
+            livro_atual = (nome_candidato, abrev)
+            cap_ini = int(m.group(2))
+            vers_ini, cap_fim, vers_fim = _interpretar_grupos(
+                cap_ini, m.group(3), m.group(4), m.group(5)
+            )
+            unidades.append({
+                "livro": nome_candidato, "abrev": abrev,
+                "cap_ini": cap_ini, "cap_fim": cap_fim,
+                "vers_ini": vers_ini, "vers_fim": vers_fim,
+            })
+    return unidades
+
+
+def _token_biblia_api():
+    try:
+        return str(st.secrets.get("biblia_api", {}).get("token", "")).strip()
+    except Exception:
+        return ""
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _buscar_capitulo(abrev_livro, capitulo, versao=BIBLIA_VERSAO_PADRAO):
+    cache = obter_capitulo_biblico_cache(versao, abrev_livro, capitulo)
+    if cache is not None:
+        return cache
+
+    token = _token_biblia_api()
+    if not token:
+        return None
+    try:
+        resp = requests.get(
+            f"{BIBLIA_API_BASE}/verses/{versao}/{abrev_livro}/{capitulo}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        versos = resp.json().get("verses", [])
+    except Exception:
+        LOGGER.exception("Falha ao buscar capitulo biblico %s %s.", abrev_livro, capitulo)
+        return None
+
+    if versos:
+        salvar_capitulo_biblico_cache(versao, abrev_livro, capitulo, versos)
+    return versos
+
+
+def _texto_da_unidade(unidade):
+    linhas = []
+    for cap in range(unidade["cap_ini"], unidade["cap_fim"] + 1):
+        versos = _buscar_capitulo(unidade["abrev"], cap)
+        if versos is None:
+            return None
+        v_ini = unidade["vers_ini"] if cap == unidade["cap_ini"] and unidade["vers_ini"] else 1
+        v_fim = unidade["vers_fim"] if cap == unidade["cap_fim"] and unidade["vers_fim"] else None
+        for verso in versos:
+            numero = verso.get("number")
+            if numero is None or numero < v_ini:
+                continue
+            if v_fim and numero > v_fim:
+                continue
+            linhas.append(f"**{numero}** {verso.get('text', '')}")
+    return "\n\n".join(linhas)
+
+
+def _rotulo_unidade(unidade):
+    if unidade["cap_ini"] == unidade["cap_fim"]:
+        base = f"{unidade['livro']} {unidade['cap_ini']}"
+    else:
+        base = f"{unidade['livro']} {unidade['cap_ini']}-{unidade['cap_fim']}"
+    if unidade["vers_ini"] and not (
+        unidade["vers_ini"] == 1 and unidade["vers_fim"] is None
+    ):
+        if unidade["cap_ini"] == unidade["cap_fim"]:
+            base += f".{unidade['vers_ini']}-{unidade['vers_fim']}"
+    return base
+
+
+def _render_texto_biblico(passagens_texto):
+    unidades = _parsear_passagens(passagens_texto)
+    if not unidades:
+        return
+    if not _token_biblia_api():
+        return
+
+    st.markdown("##### Ler o texto")
+    for unidade in unidades:
+        with st.expander(f"📖 {_rotulo_unidade(unidade)}"):
+            texto = _texto_da_unidade(unidade)
+            if texto is None:
+                st.warning(
+                    "Não foi possível carregar o texto agora. Tente novamente em instantes."
+                )
+            elif not texto:
+                st.info("Texto indisponível para esta passagem.")
+            else:
+                st.markdown(texto)
 
 
 def _parse_data_nascimento(valor):
@@ -210,6 +399,7 @@ def render_publico():
         ),
         unsafe_allow_html=True,
     )
+    _render_texto_biblico(leitura["passagens"])
 
     origem = cadastro.get("origem")
     id_pessoa = cadastro.get("id_pessoa")

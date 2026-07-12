@@ -7617,3 +7617,38 @@ def resumo_leitores_biblia(slug, plano_id=None):
         )
 
 
+def _garantir_tabela_biblia_cache(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS biblia_texto_cache (
+            versao      TEXT NOT NULL,
+            livro       TEXT NOT NULL,
+            capitulo    INTEGER NOT NULL,
+            versos_json TEXT NOT NULL,
+            obtido_em   TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (versao, livro, capitulo)
+        );
+    """)
+
+
+def obter_capitulo_biblico_cache(versao, livro_abbrev, capitulo):
+    """Retorna a lista de versos em cache para (versao, livro, capitulo), ou None."""
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_biblia_cache(conn)
+        row = conn.execute(
+            """SELECT versos_json FROM biblia_texto_cache
+               WHERE versao=? AND livro=? AND capitulo=?""",
+            (versao, livro_abbrev, int(capitulo)),
+        ).fetchone()
+    return json.loads(row["versos_json"]) if row else None
+
+
+def salvar_capitulo_biblico_cache(versao, livro_abbrev, capitulo, versos):
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_biblia_cache(conn)
+        conn.execute(
+            """INSERT OR REPLACE INTO biblia_texto_cache (versao, livro, capitulo, versos_json)
+               VALUES (?, ?, ?, ?)""",
+            (versao, livro_abbrev, int(capitulo), json.dumps(versos, ensure_ascii=False)),
+        )
+
+
