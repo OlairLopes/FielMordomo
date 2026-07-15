@@ -1473,28 +1473,56 @@ def _render_escala(slug):
                 )
             tema = st.text_input("Tema/assunto")
             obs = st.text_area("Observacoes")
+            st.markdown("#### Repetir escala")
+            repetir = st.checkbox("Repetir esta escala em mais datas")
+            st.caption("Os campos abaixo so tem efeito se a opcao acima estiver marcada.")
+            c3, c4 = st.columns(2)
+            intervalo_label = c3.selectbox(
+                "Intervalo entre repeticoes",
+                ["Semanal (7 dias)", "Quinzenal (14 dias)", "Mensal (28 dias)"],
+            )
+            repeticoes = c4.number_input(
+                "Quantas datas seguidas (alem da data acima)",
+                min_value=1,
+                max_value=24,
+                value=4,
+            )
             classe_nome = "" if op_classes[classe_label] else classe_label
             if st.form_submit_button("Adicionar escala", type="primary"):
-                try:
-                    salvar_ebd_escala(
-                        slug,
-                        data.isoformat(),
-                        professor,
-                        op_classes[classe_label],
-                        classe_nome,
-                        auxiliar,
-                        tema,
-                        obs,
-                        telefone_professor=telefone_professor,
-                        funcao_professor=funcao_professor,
-                        superintendente=superintendente,
-                        telefone_superintendente=telefone_superintendente,
-                        telefone_auxiliar=telefone_auxiliar,
-                    )
-                    st.success("Escala salva.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
+                if not professor.strip():
+                    st.error("Professor e obrigatorio.")
+                else:
+                    try:
+                        intervalo_dias = {
+                            "Semanal (7 dias)": 7,
+                            "Quinzenal (14 dias)": 14,
+                            "Mensal (28 dias)": 28,
+                        }[intervalo_label]
+                        qtd_datas = int(repeticoes) + 1 if repetir else 1
+                        for i in range(qtd_datas):
+                            data_ocorrencia = data + datetime.timedelta(days=intervalo_dias * i)
+                            salvar_ebd_escala(
+                                slug,
+                                data_ocorrencia.isoformat(),
+                                professor,
+                                op_classes[classe_label],
+                                classe_nome,
+                                auxiliar,
+                                tema,
+                                obs,
+                                telefone_professor=telefone_professor,
+                                funcao_professor=funcao_professor,
+                                superintendente=superintendente,
+                                telefone_superintendente=telefone_superintendente,
+                                telefone_auxiliar=telefone_auxiliar,
+                            )
+                        if qtd_datas > 1:
+                            st.success(f"Escala salva para {qtd_datas} datas.")
+                        else:
+                            st.success("Escala salva.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
 
     with tab_consulta:
         c1, c2 = st.columns(2)
