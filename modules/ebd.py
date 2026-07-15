@@ -1345,6 +1345,86 @@ def _render_escala(slug):
         use_container_width=True,
         hide_index=True,
     )
+    st.markdown("#### Editar item da escala")
+    opcoes_editar = {
+        f'{int(row["id_escala"])} - {_fmt_data(row["data"])} - {row["professor"]}': int(row["id_escala"])
+        for _, row in escala.iterrows()
+    }
+    editar_label = st.selectbox(
+        "Selecione o item para editar",
+        ["Selecione"] + list(opcoes_editar.keys()),
+        key="escala_editar_select",
+    )
+    if editar_label != "Selecione":
+        id_editar = opcoes_editar[editar_label]
+        linha = escala[escala["id_escala"] == id_editar].iloc[0]
+        classe_atual_label = "Sem classe definida"
+        if pd.notna(linha.get("id_classe")):
+            for label, id_valor in op_classes.items():
+                if id_valor == int(linha["id_classe"]):
+                    classe_atual_label = label
+                    break
+        with st.form(f"form_ebd_escala_editar_{id_editar}"):
+            c1, c2 = st.columns(2)
+            data_edit = c1.date_input(
+                "Data", value=_parse_data(linha["data"]) or _hoje(), format="DD/MM/YYYY"
+            )
+            classe_label_edit = c2.selectbox(
+                "Classe",
+                list(op_classes.keys()),
+                index=list(op_classes.keys()).index(classe_atual_label),
+            )
+            professor_edit = st.text_input("Professor", value=str(linha.get("professor", "") or ""))
+            c3, c4 = st.columns(2)
+            telefone_professor_edit = c3.text_input(
+                "WhatsApp do professor", value=str(linha.get("telefone_professor", "") or "")
+            )
+            funcao_professor_edit = c4.text_input(
+                "Funcao do professor", value=str(linha.get("funcao_professor", "") or "")
+            )
+            st.markdown("##### Superintendente")
+            c5, c6 = st.columns(2)
+            superintendente_edit = c5.text_input(
+                "Superintendente", value=str(linha.get("superintendente", "") or "")
+            )
+            telefone_superintendente_edit = c6.text_input(
+                "WhatsApp do superintendente", value=str(linha.get("telefone_superintendente", "") or "")
+            )
+            st.markdown("##### Auxiliar")
+            c7, c8 = st.columns(2)
+            auxiliar_edit = c7.text_input("Auxiliar", value=str(linha.get("auxiliar", "") or ""))
+            telefone_auxiliar_edit = c8.text_input(
+                "WhatsApp do auxiliar", value=str(linha.get("telefone_auxiliar", "") or "")
+            )
+            tema_edit = st.text_input("Tema/assunto", value=str(linha.get("tema", "") or ""))
+            obs_edit = st.text_area("Observacoes", value=str(linha.get("observacoes", "") or ""))
+            classe_nome_edit = "" if op_classes[classe_label_edit] else classe_label_edit
+            if st.form_submit_button("Salvar alteracoes", type="primary"):
+                if not professor_edit.strip():
+                    st.error("Professor e obrigatorio.")
+                else:
+                    try:
+                        salvar_ebd_escala(
+                            slug,
+                            data_edit.isoformat(),
+                            professor_edit,
+                            op_classes[classe_label_edit],
+                            classe_nome_edit,
+                            auxiliar_edit,
+                            tema_edit,
+                            obs_edit,
+                            id_escala=id_editar,
+                            telefone_professor=telefone_professor_edit,
+                            funcao_professor=funcao_professor_edit,
+                            superintendente=superintendente_edit,
+                            telefone_superintendente=telefone_superintendente_edit,
+                            telefone_auxiliar=telefone_auxiliar_edit,
+                        )
+                        st.success("Escala atualizada.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+
     st.markdown("#### Avisos por WhatsApp")
     st.caption("Filtre por data e clique para abrir o WhatsApp com a mensagem pronta.")
     modo_aviso = st.radio(
