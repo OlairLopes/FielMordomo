@@ -594,18 +594,38 @@ def _membros_opcoes(slug):
     return opcoes, membros
 
 
-def _selecionar_pessoa_escala(slug, titulo, key_prefix, obrigatorio=False):
+def _selecionar_pessoa_escala(
+    slug, titulo, key_prefix, obrigatorio=False,
+    nome_padrao="", telefone_padrao="", funcao_padrao="",
+):
     op_membros, df_membros = _membros_opcoes(slug)
+    nome_padrao = str(nome_padrao or "").strip()
+    id_padrao = None
+    if nome_padrao and op_membros:
+        for label, id_cadastro in op_membros.items():
+            if label.split(" - ", 1)[-1].strip().lower() == nome_padrao.lower():
+                id_padrao = id_cadastro
+                break
+    index_origem = 1 if (nome_padrao and id_padrao is None) else 0
     origem = st.radio(
         titulo,
         ["Buscar no cadastro de membros", "Inserir manualmente"],
         horizontal=True,
+        index=index_origem,
         key=f"{key_prefix}_origem",
     )
     if origem == "Buscar no cadastro de membros" and op_membros:
+        labels = list(op_membros.keys())
+        index_membro = 0
+        if id_padrao is not None:
+            for i, label in enumerate(labels):
+                if op_membros[label] == id_padrao:
+                    index_membro = i
+                    break
         membro_label = st.selectbox(
             f"{titulo} - membro",
-            list(op_membros.keys()),
+            labels,
+            index=index_membro,
             key=f"{key_prefix}_membro",
         )
         id_cadastro = op_membros[membro_label]
@@ -620,17 +640,19 @@ def _selecionar_pessoa_escala(slug, titulo, key_prefix, obrigatorio=False):
     c1, c2 = st.columns(2)
     nome = c1.text_input(
         f"{titulo} - nome manual",
+        value=nome_padrao,
         key=f"{key_prefix}_nome_manual",
     )
     telefone = c2.text_input(
         f"{titulo} - WhatsApp",
+        value=str(telefone_padrao or ""),
         key=f"{key_prefix}_telefone_manual",
         placeholder="Opcional",
     )
     funcao = st.text_input(
         f"{titulo} - funcao",
+        value=str(funcao_padrao or ""),
         key=f"{key_prefix}_funcao_manual",
-        value="",
         help="Preencha manualmente quando a pessoa nao estiver no cadastro.",
     )
     if obrigatorio and not nome.strip():
@@ -1304,24 +1326,24 @@ def _render_escala_editar(slug, escala, op_classes, opcoes_item):
             list(op_classes.keys()),
             index=list(op_classes.keys()).index(classe_atual_label),
         )
-        professor_edit = st.text_input("Professor", value=str(linha.get("professor", "") or ""))
-        telefone_professor_edit = st.text_input(
-            "WhatsApp do professor", value=str(linha.get("telefone_professor", "") or "")
-        )
-        funcao_professor_edit = st.text_input(
-            "Funcao do professor", value=str(linha.get("funcao_professor", "") or "")
+        st.markdown("##### Professor")
+        professor_edit, telefone_professor_edit, funcao_professor_edit = _selecionar_pessoa_escala(
+            slug, "Professor", f"escala_editar_professor_{id_editar}", obrigatorio=True,
+            nome_padrao=str(linha.get("professor", "") or ""),
+            telefone_padrao=str(linha.get("telefone_professor", "") or ""),
+            funcao_padrao=str(linha.get("funcao_professor", "") or ""),
         )
         with st.expander("Superintendente"):
-            superintendente_edit = st.text_input(
-                "Superintendente", value=str(linha.get("superintendente", "") or "")
-            )
-            telefone_superintendente_edit = st.text_input(
-                "WhatsApp do superintendente", value=str(linha.get("telefone_superintendente", "") or "")
+            superintendente_edit, telefone_superintendente_edit, _ = _selecionar_pessoa_escala(
+                slug, "Superintendente", f"escala_editar_superintendente_{id_editar}",
+                nome_padrao=str(linha.get("superintendente", "") or ""),
+                telefone_padrao=str(linha.get("telefone_superintendente", "") or ""),
             )
         with st.expander("Auxiliar"):
-            auxiliar_edit = st.text_input("Auxiliar", value=str(linha.get("auxiliar", "") or ""))
-            telefone_auxiliar_edit = st.text_input(
-                "WhatsApp do auxiliar", value=str(linha.get("telefone_auxiliar", "") or "")
+            auxiliar_edit, telefone_auxiliar_edit, _ = _selecionar_pessoa_escala(
+                slug, "Auxiliar", f"escala_editar_auxiliar_{id_editar}",
+                nome_padrao=str(linha.get("auxiliar", "") or ""),
+                telefone_padrao=str(linha.get("telefone_auxiliar", "") or ""),
             )
         tema_edit = st.text_input("Tema/assunto", value=str(linha.get("tema", "") or ""))
         obs_edit = st.text_area("Observacoes", value=str(linha.get("observacoes", "") or ""))
