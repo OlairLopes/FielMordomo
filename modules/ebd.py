@@ -1367,6 +1367,82 @@ def _render_escala_excluir(slug, opcoes_item):
         st.rerun()
 
 
+def _render_escala_duplicar(slug, escala, opcoes_item):
+    duplicar_label = st.selectbox(
+        "Selecione o item para duplicar",
+        ["Selecione"] + list(opcoes_item.keys()),
+        key="escala_duplicar_select",
+    )
+    if duplicar_label == "Selecione":
+        return
+    id_duplicar = opcoes_item[duplicar_label]
+    linha = escala[escala["id_escala"] == id_duplicar].iloc[0]
+    with st.form(f"form_ebd_escala_duplicar_{id_duplicar}"):
+        st.caption(
+            f"Professor: {linha.get('professor', '') or '-'} | "
+            f"Classe: {linha.get('classe', '') or 'Sem classe definida'}"
+        )
+        nova_data = st.date_input(
+            "Nova data",
+            value=(_parse_data(linha["data"]) or _hoje()) + datetime.timedelta(days=7),
+            format="DD/MM/YYYY",
+        )
+        if st.form_submit_button("Duplicar para a nova data", type="primary"):
+            try:
+                id_classe = int(linha["id_classe"]) if pd.notna(linha.get("id_classe")) else None
+                salvar_ebd_escala(
+                    slug,
+                    nova_data.isoformat(),
+                    str(linha.get("professor", "") or ""),
+                    id_classe,
+                    "" if id_classe else str(linha.get("classe", "") or ""),
+                    str(linha.get("auxiliar", "") or ""),
+                    str(linha.get("tema", "") or ""),
+                    str(linha.get("observacoes", "") or ""),
+                    telefone_professor=str(linha.get("telefone_professor", "") or ""),
+                    funcao_professor=str(linha.get("funcao_professor", "") or ""),
+                    superintendente=str(linha.get("superintendente", "") or ""),
+                    telefone_superintendente=str(linha.get("telefone_superintendente", "") or ""),
+                    telefone_auxiliar=str(linha.get("telefone_auxiliar", "") or ""),
+                )
+                st.success("Escala duplicada.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+
+def _salvar_edicoes_tabela_escala(slug, escala):
+    estado = st.session_state.get("escala_data_editor", {})
+    linhas_alteradas = estado.get("edited_rows", {})
+    if not linhas_alteradas:
+        st.info("Nenhuma alteracao para salvar.")
+        return
+    base = escala.reset_index(drop=True)
+    for idx_str, alteracoes in linhas_alteradas.items():
+        linha_original = base.iloc[int(idx_str)]
+        linha = {**linha_original.to_dict(), **alteracoes}
+        data_valor = _parse_data(linha.get("data")) or _hoje()
+        id_classe = int(linha_original["id_classe"]) if pd.notna(linha_original.get("id_classe")) else None
+        salvar_ebd_escala(
+            slug,
+            data_valor.isoformat(),
+            str(linha.get("professor", "") or ""),
+            id_classe,
+            "" if id_classe else str(linha_original.get("classe", "") or ""),
+            str(linha.get("auxiliar", "") or ""),
+            str(linha.get("tema", "") or ""),
+            str(linha.get("observacoes", "") or ""),
+            id_escala=int(linha_original["id_escala"]),
+            telefone_professor=str(linha.get("telefone_professor", "") or ""),
+            funcao_professor=str(linha.get("funcao_professor", "") or ""),
+            superintendente=str(linha.get("superintendente", "") or ""),
+            telefone_superintendente=str(linha.get("telefone_superintendente", "") or ""),
+            telefone_auxiliar=str(linha.get("telefone_auxiliar", "") or ""),
+        )
+    st.success(f"{len(linhas_alteradas)} escala(s) atualizada(s).")
+    st.rerun()
+
+
 def _render_escala(slug):
     st.markdown("### Escala de professores")
     df_classes = listar_ebd_classes(slug)
@@ -1428,9 +1504,10 @@ def _render_escala(slug):
         if escala.empty:
             st.info("Nenhuma escala cadastrada para o periodo.")
         else:
-            exibir = escala.copy()
+            st.caption("Edite direto na tabela (data, professor, telefones, tema...) e clique em salvar.")
+            exibir = escala.reset_index(drop=True).copy()
             exibir["data"] = exibir["data"].apply(_fmt_data)
-            st.dataframe(
+            st.data_editor(
                 exibir[[
                     "data", "classe", "professor", "funcao_professor",
                     "telefone_professor", "superintendente", "telefone_superintendente",
@@ -1438,7 +1515,12 @@ def _render_escala(slug):
                 ]],
                 use_container_width=True,
                 hide_index=True,
+                num_rows="fixed",
+                disabled=["classe"],
+                key="escala_data_editor",
             )
+            if st.button("Salvar alteracoes da tabela"):
+                _salvar_edicoes_tabela_escala(slug, escala)
             st.download_button(
                 "Baixar escala CSV",
                 data=gerar_csv(escala),
@@ -1450,9 +1532,13 @@ def _render_escala(slug):
                 f'{int(row["id_escala"])} - {_fmt_data(row["data"])} - {row["professor"]}': int(row["id_escala"])
                 for _, row in escala.iterrows()
             }
-            col_editar, col_excluir = st.columns(2)
+            col_duplicar, col_editar, col_excluir = st.columns(3)
+            with col_duplicar:
+                st.markdown("#### Duplicar para outra data")
+                _render_escala_duplicar(slug, escala, opcoes_item)
             with col_editar:
                 st.markdown("#### Editar item da escala")
+                st.caption("Use para trocar a classe vinculada.")
                 _render_escala_editar(slug, escala, op_classes, opcoes_item)
             with col_excluir:
                 st.markdown("#### Excluir item da escala")
