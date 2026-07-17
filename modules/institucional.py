@@ -2388,10 +2388,7 @@ def render_institucional():
                     max-width: 100% !important;
                 }
                 div[data-testid="stForm"],
-                div[data-testid="stAlert"],
-                div[data-testid="stMarkdownContainer"],
-                div[data-testid="stButton"],
-                div[data-testid="stDateInput"] {
+                div[data-testid="stElementContainer"] {
                     max-width: 920px;
                     margin-left: auto !important;
                     margin-right: auto !important;
