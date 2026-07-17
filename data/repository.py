@@ -7329,6 +7329,10 @@ PLANOS_LEITURA_BIBLICA = {
         "nome": "Por assuntos",
         "arquivo": "plano_leitura_biblica_por_assuntos.json",
     },
+    "por-livro": {
+        "nome": "Bíblia em 1 ano (por livro)",
+        "arquivo": "plano_leitura_biblica_por_livro.json",
+    },
 }
 PLANO_LEITURA_PADRAO = "sbb-1-ano"
 
