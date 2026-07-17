@@ -16,6 +16,7 @@ from data.repository import (
     obter_logo_igreja,
     resumo_leitores_biblia,
 )
+from modules.leitura_biblica import render_importar_leitores
 from report_exports import AZUL, gerar_excel_relatorio, gerar_pdf_relatorio
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
 
@@ -620,6 +621,9 @@ def _render_leitura_biblica(slug):
         "Acompanhamento do plano de leitura biblica: quem confirmou a leitura de cada "
         "dia e o total de dias confirmados por leitor."
     )
+    with st.expander("Importar leitores do WhatsApp em lote"):
+        render_importar_leitores(slug)
+
     planos = listar_planos_leitura_biblica()
     opcoes_planos = {p["nome"]: p["id"] for p in planos}
     nomes_planos = list(opcoes_planos.keys())

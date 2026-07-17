@@ -13,10 +13,12 @@ from data.repository import (
     cadastrar_leitor_biblia,
     carregar_cadastros,
     confirmar_leitura_biblica,
+    importar_leitores_biblia_em_lote,
     leitura_ja_confirmada,
     listar_igrejas,
     listar_planos_leitura_biblica,
     localizar_leitor_plano_biblico,
+    localizar_leitor_plano_biblico_por_telefone,
     obter_capitulo_biblico_cache,
     obter_leitura_do_dia,
     salvar_capitulo_biblico_cache,
@@ -312,8 +314,44 @@ def _selecionar_igreja_publica():
     return slug
 
 
+def _identificar_leitor_por_telefone(slug):
+    st.caption(
+        "Digite o mesmo número de WhatsApp que a igreja cadastrou para você."
+    )
+    with st.form("form_identificar_leitor_telefone"):
+        telefone = st.text_input("Número de WhatsApp", placeholder="Ex.: (11) 99999-8888")
+        confirmar = st.form_submit_button("Continuar", type="primary")
+
+    if not confirmar:
+        return
+
+    if not telefone.strip():
+        st.error("Informe o número de WhatsApp.")
+        return
+
+    cadastro = localizar_leitor_plano_biblico_por_telefone(slug, telefone)
+    if not cadastro:
+        st.error(
+            "Número não encontrado. Confira com a secretaria da igreja ou "
+            "identifique-se com nome, CPF e data de nascimento."
+        )
+        return
+
+    st.session_state["leitura_cadastro"] = cadastro
+    st.rerun()
+
+
 def _identificar_leitor(slug):
     st.markdown("#### Cadastre-se para confirmar sua leitura")
+    modo = st.radio(
+        "Como você quer se identificar?",
+        ["Nome, CPF e data de nascimento", "Fui cadastrado pela igreja (WhatsApp)"],
+        key="leitura_modo_identificacao",
+    )
+    if modo == "Fui cadastrado pela igreja (WhatsApp)":
+        _identificar_leitor_por_telefone(slug)
+        return
+
     st.caption(
         "Membros cadastrados são reconhecidos automaticamente. Se você ainda não "
         "é membro, esse cadastro cria seu acesso como leitor do plano."
@@ -346,6 +384,49 @@ def _identificar_leitor(slug):
 
     st.session_state["leitura_cadastro"] = cadastro
     st.rerun()
+
+
+def render_importar_leitores(slug):
+    st.markdown("#### Importar leitores em lote")
+    st.caption(
+        "Cole a lista de participantes do grupo do WhatsApp, um por linha, no "
+        "formato \"Nome, Telefone\". Esses leitores não terão CPF cadastrado — "
+        "eles confirmam a leitura diária informando o mesmo número de WhatsApp "
+        "na tela pública do plano de leitura."
+    )
+    texto = st.text_area(
+        "Nome, Telefone (um por linha)",
+        height=160,
+        placeholder="Maria Silva, (11) 99999-0000\nJoão Souza, 11 98888-7777",
+        key="leitura_importar_texto",
+    )
+    if not st.button("Importar leitores", type="primary"):
+        return
+
+    entradas = []
+    for linha in texto.splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        partes = linha.split(",", 1)
+        if len(partes) == 2:
+            entradas.append({"nome": partes[0].strip(), "telefone": partes[1].strip()})
+        else:
+            entradas.append({"nome": linha, "telefone": ""})
+
+    if not entradas:
+        st.warning("Cole ao menos uma linha no formato Nome, Telefone.")
+        return
+
+    resultado = importar_leitores_biblia_em_lote(slug, entradas)
+    if resultado["importados"]:
+        st.success(f"{resultado['importados']} leitor(es) importado(s).")
+    if resultado["duplicados"]:
+        st.info(f"Já cadastrados (ignorados): {', '.join(resultado['duplicados'])}")
+    if resultado["invalidos"]:
+        st.warning(
+            f"Sem nome ou telefone válido (ignorados): {', '.join(resultado['invalidos'])}"
+        )
 
 
 def render_publico():

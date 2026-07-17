@@ -7403,17 +7403,51 @@ def obter_leitura_do_dia(dia_numero, plano_id=PLANO_LEITURA_PADRAO):
 
 
 def _garantir_tabela_leitores_biblia(conn):
+    cols_info = conn.execute("PRAGMA table_info(leitores_biblia)").fetchall()
+    if cols_info:
+        cpf_notnull = next((row[3] for row in cols_info if row[1] == "cpf"), 0)
+        if cpf_notnull:
+            # Tabela antiga exigia cpf/data_nascimento; leitores importados em lote
+            # (sem CPF, identificados so pelo telefone) precisam desses campos
+            # opcionais.
+            conn.executescript("""
+                ALTER TABLE leitores_biblia RENAME TO leitores_biblia_old;
+                CREATE TABLE leitores_biblia (
+                    id_leitor       INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome            TEXT NOT NULL,
+                    cpf             TEXT,
+                    data_nascimento TEXT,
+                    telefone        TEXT DEFAULT '',
+                    criado_em       TEXT NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE(cpf, data_nascimento)
+                );
+                INSERT INTO leitores_biblia
+                    (id_leitor, nome, cpf, data_nascimento, telefone, criado_em)
+                SELECT id_leitor, nome, cpf, data_nascimento, telefone, criado_em
+                FROM leitores_biblia_old;
+                DROP TABLE leitores_biblia_old;
+            """)
+            return
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS leitores_biblia (
             id_leitor       INTEGER PRIMARY KEY AUTOINCREMENT,
             nome            TEXT NOT NULL,
-            cpf             TEXT NOT NULL,
-            data_nascimento TEXT NOT NULL,
+            cpf             TEXT,
+            data_nascimento TEXT,
             telefone        TEXT DEFAULT '',
             criado_em       TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(cpf, data_nascimento)
         );
     """)
+
+
+def _normalizar_telefone_leitor(tel):
+    digitos = "".join(c for c in str(tel or "") if c.isdigit())
+    while digitos.startswith("0"):
+        digitos = digitos[1:]
+    if len(digitos) in (10, 11):
+        digitos = "55" + digitos
+    return digitos
 
 
 def cadastrar_leitor_biblia(slug, nome, cpf, data_nascimento, telefone=""):
@@ -7488,6 +7522,77 @@ def localizar_leitor_plano_biblico(slug, cpf, data_nascimento):
             "igreja_nome": (igreja or {}).get("nome", ""),
         }
     return None
+
+
+def localizar_leitor_biblia_por_telefone(slug, telefone):
+    """Busca um leitor avulso pelo telefone (usado por leitores importados em
+    lote, sem CPF cadastrado)."""
+    telefone_norm = _normalizar_telefone_leitor(telefone)
+    if not telefone_norm:
+        return None
+    db = _tenant_db(slug)
+    if not db.exists():
+        return None
+    with _conn(db) as conn:
+        _garantir_tabela_leitores_biblia(conn)
+        row = conn.execute(
+            """SELECT id_leitor, nome, telefone FROM leitores_biblia
+               WHERE telefone=? LIMIT 1""",
+            (telefone_norm,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def localizar_leitor_plano_biblico_por_telefone(slug, telefone):
+    """Equivalente a localizar_leitor_plano_biblico, mas identificando o leitor
+    avulso pelo telefone em vez de CPF/data de nascimento."""
+    leitor = localizar_leitor_biblia_por_telefone(slug, telefone)
+    if not leitor:
+        return None
+    igreja = buscar_igreja_por_slug(slug)
+    return {
+        "origem": "leitor",
+        "id_pessoa": leitor["id_leitor"],
+        "nome": leitor.get("nome", ""),
+        "igreja_nome": (igreja or {}).get("nome", ""),
+    }
+
+
+def importar_leitores_biblia_em_lote(slug, entradas):
+    """Cria leitores avulsos em lote a partir de {"nome":..., "telefone":...}
+    (ex.: lista extraida de um grupo do WhatsApp). Sem CPF/data de nascimento:
+    esses leitores confirmam a leitura diaria informando o telefone.
+    Retorna {"importados": int, "duplicados": [nomes], "invalidos": [nomes]}."""
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    importados = 0
+    duplicados = []
+    invalidos = []
+    with _conn(db) as conn:
+        _garantir_tabela_leitores_biblia(conn)
+        existentes = {
+            row[0] for row in conn.execute(
+                "SELECT telefone FROM leitores_biblia WHERE telefone != ''"
+            ).fetchall()
+        }
+        for item in entradas:
+            nome = sanitizar(item.get("nome", ""))
+            telefone = _normalizar_telefone_leitor(item.get("telefone", ""))
+            if not nome or not telefone:
+                invalidos.append(item.get("nome") or item.get("telefone") or "(linha vazia)")
+                continue
+            if telefone in existentes:
+                duplicados.append(nome)
+                continue
+            conn.execute(
+                """INSERT INTO leitores_biblia (nome, cpf, data_nascimento, telefone)
+                   VALUES (?, NULL, NULL, ?)""",
+                (nome, telefone),
+            )
+            existentes.add(telefone)
+            importados += 1
+    return {"importados": importados, "duplicados": duplicados, "invalidos": invalidos}
 
 
 def _garantir_tabela_leitura_confirmacoes(conn):
