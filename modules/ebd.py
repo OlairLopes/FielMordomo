@@ -638,7 +638,7 @@ def _selecionar_pessoa_escala(
             _limpar_estado_pessoa_escala(key_prefix, manter_origem=True)
         st.session_state[chave_origem_anterior] = origem
     if origem == "Buscar no cadastro de membros" and op_membros:
-        if st.button(
+        if st.form_submit_button(
             f"Limpar {titulo.lower()}",
             key=f"{key_prefix}_limpar_busca",
             use_container_width=True,
@@ -685,7 +685,7 @@ def _selecionar_pessoa_escala(
         key=f"{key_prefix}_funcao_manual",
         help="Preencha manualmente quando a pessoa nao estiver no cadastro.",
     )
-    if st.button(
+    if st.form_submit_button(
         f"Limpar {titulo.lower()} digitado",
         key=f"{key_prefix}_limpar_manual",
         use_container_width=True,
