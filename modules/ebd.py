@@ -578,6 +578,19 @@ def _classes_opcoes(df_classes):
     }
 
 
+def _limpar_estado_pessoa_escala(key_prefix, manter_origem=False):
+    chaves = [
+        f"{key_prefix}_membro",
+        f"{key_prefix}_nome_manual",
+        f"{key_prefix}_telefone_manual",
+        f"{key_prefix}_funcao_manual",
+    ]
+    if not manter_origem:
+        chaves.append(f"{key_prefix}_origem")
+    for chave in chaves:
+        st.session_state.pop(chave, None)
+
+
 def _membros_opcoes(slug):
     df = carregar_cadastros(slug)
     if df.empty:
@@ -614,7 +627,24 @@ def _selecionar_pessoa_escala(
         index=index_origem,
         key=f"{key_prefix}_origem",
     )
+    chave_origem_anterior = f"{key_prefix}_origem_anterior"
+    origem_anterior = st.session_state.get(chave_origem_anterior)
+    if origem_anterior != origem:
+        if origem == "Inserir manualmente":
+            st.session_state[f"{key_prefix}_nome_manual"] = ""
+            st.session_state[f"{key_prefix}_telefone_manual"] = ""
+            st.session_state[f"{key_prefix}_funcao_manual"] = ""
+        else:
+            _limpar_estado_pessoa_escala(key_prefix, manter_origem=True)
+        st.session_state[chave_origem_anterior] = origem
     if origem == "Buscar no cadastro de membros" and op_membros:
+        if st.button(
+            f"Limpar {titulo.lower()}",
+            key=f"{key_prefix}_limpar_busca",
+            use_container_width=True,
+        ):
+            _limpar_estado_pessoa_escala(key_prefix)
+            st.rerun()
         labels = list(op_membros.keys())
         index_membro = 0
         if id_padrao is not None:
@@ -655,9 +685,145 @@ def _selecionar_pessoa_escala(
         key=f"{key_prefix}_funcao_manual",
         help="Preencha manualmente quando a pessoa nao estiver no cadastro.",
     )
+    if st.button(
+        f"Limpar {titulo.lower()} digitado",
+        key=f"{key_prefix}_limpar_manual",
+        use_container_width=True,
+    ):
+        _limpar_estado_pessoa_escala(key_prefix, manter_origem=True)
+        st.session_state[f"{key_prefix}_origem"] = "Inserir manualmente"
+        st.session_state[chave_origem_anterior] = "Inserir manualmente"
+        st.rerun()
     if obrigatorio and not nome.strip():
         st.caption("Informe o nome antes de salvar.")
     return nome, telefone, funcao
+
+
+def _normalizar_coluna_importacao(texto):
+    return (
+        str(texto or "")
+        .strip()
+        .lower()
+        .replace("ã", "a")
+        .replace("á", "a")
+        .replace("à", "a")
+        .replace("â", "a")
+        .replace("é", "e")
+        .replace("ê", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ô", "o")
+        .replace("õ", "o")
+        .replace("ú", "u")
+        .replace("ç", "c")
+    )
+
+
+def _importar_escala_planilha(slug, arquivo, df_classes):
+    try:
+        nome_arquivo = str(getattr(arquivo, "name", "") or "").lower()
+        if nome_arquivo.endswith(".csv"):
+            planilha = pd.read_csv(arquivo)
+        else:
+            planilha = pd.read_excel(arquivo)
+    except Exception as exc:
+        st.error(f"Nao foi possivel ler a planilha: {exc}")
+        return
+
+    if planilha.empty:
+        st.warning("A planilha enviada esta vazia.")
+        return
+
+    planilha = planilha.rename(columns={col: _normalizar_coluna_importacao(col) for col in planilha.columns})
+    mapa_colunas = {
+        "data": "data",
+        "classe": "classe",
+        "professor": "professor",
+        "telefone professor": "telefone_professor",
+        "telefone_professor": "telefone_professor",
+        "funcao professor": "funcao_professor",
+        "funcao_professor": "funcao_professor",
+        "superintendente": "superintendente",
+        "telefone superintendente": "telefone_superintendente",
+        "telefone_superintendente": "telefone_superintendente",
+        "auxiliar": "auxiliar",
+        "telefone auxiliar": "telefone_auxiliar",
+        "telefone_auxiliar": "telefone_auxiliar",
+        "tema": "tema",
+        "assunto": "tema",
+        "observacoes": "observacoes",
+        "observacao": "observacoes",
+    }
+    planilha = planilha.rename(columns={col: mapa_colunas.get(col, col) for col in planilha.columns})
+
+    faltantes = [col for col in ("data", "professor") if col not in planilha.columns]
+    if faltantes:
+        st.error("A planilha precisa ter pelo menos as colunas: data e professor.")
+        return
+
+    if "classe" not in planilha.columns:
+        planilha["classe"] = ""
+
+    classes_por_nome = {}
+    if not df_classes.empty:
+        for _, row in df_classes.iterrows():
+            nome = str(row.get("nome", "") or "").strip()
+            if nome:
+                classes_por_nome[_normalizar_coluna_importacao(nome)] = int(row["id_classe"])
+
+    erros = []
+    salvas = 0
+    for idx, row in planilha.fillna("").iterrows():
+        data_valor = _parse_data(row.get("data"))
+        professor = str(row.get("professor", "") or "").strip()
+        classe_texto = str(row.get("classe", "") or "").strip()
+        id_classe = None
+        classe_nome = ""
+
+        if not data_valor:
+            erros.append(f"Linha {idx + 2}: data invalida.")
+            continue
+        if not professor:
+            erros.append(f"Linha {idx + 2}: professor obrigatorio.")
+            continue
+
+        if classe_texto:
+            classe_normalizada = _normalizar_coluna_importacao(classe_texto)
+            if classe_normalizada in ("sem classe definida", "sem classe", "geral"):
+                classe_nome = "Sem classe definida"
+            elif classe_normalizada in classes_por_nome:
+                id_classe = classes_por_nome[classe_normalizada]
+            else:
+                erros.append(f"Linha {idx + 2}: classe '{classe_texto}' nao encontrada.")
+                continue
+
+        try:
+            salvar_ebd_escala(
+                slug,
+                data_valor.isoformat(),
+                professor,
+                id_classe,
+                classe_nome,
+                str(row.get("auxiliar", "") or "").strip(),
+                str(row.get("tema", "") or "").strip(),
+                str(row.get("observacoes", "") or "").strip(),
+                telefone_professor=str(row.get("telefone_professor", "") or "").strip(),
+                funcao_professor=str(row.get("funcao_professor", "") or "").strip(),
+                superintendente=str(row.get("superintendente", "") or "").strip(),
+                telefone_superintendente=str(row.get("telefone_superintendente", "") or "").strip(),
+                telefone_auxiliar=str(row.get("telefone_auxiliar", "") or "").strip(),
+            )
+            salvas += 1
+        except Exception as exc:
+            erros.append(f"Linha {idx + 2}: {exc}")
+
+    if salvas:
+        st.success(f"{salvas} escala(s) importada(s) com sucesso.")
+    if erros:
+        st.warning("Algumas linhas nao puderam ser importadas:")
+        st.code("\n".join(erros))
+    if salvas:
+        st.rerun()
 
 
 def _escala_da_aula(slug, data_aula, id_classe):
@@ -1546,11 +1712,41 @@ def _render_escala(slug):
                     except Exception as exc:
                         st.error(str(exc))
 
+        with st.expander("Importar escala do Excel"):
+            st.caption(
+                "Colunas aceitas: data, classe, professor, telefone_professor, funcao_professor, "
+                "superintendente, telefone_superintendente, auxiliar, telefone_auxiliar, tema e observacoes."
+            )
+            arquivo = st.file_uploader(
+                "Selecione a planilha",
+                type=["xlsx", "xls", "csv"],
+                key="escala_importacao_excel",
+                help="As colunas obrigatorias sao: data e professor.",
+            )
+            if arquivo is not None and st.button("Importar planilha", type="primary"):
+                _importar_escala_planilha(slug, arquivo, df_classes)
+
     with tab_consulta:
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         inicio = c1.date_input("Inicio da escala", value=_inicio_mes(), key="escala_ini", format="DD/MM/YYYY")
         fim = c2.date_input("Fim da escala", value=_hoje() + datetime.timedelta(days=60), key="escala_fim", format="DD/MM/YYYY")
+        filtro_classe = c3.selectbox(
+            "Filtrar por classe",
+            ["Todas"] + list(op_classes.keys()),
+            key="escala_filtro_classe",
+        )
         escala = listar_ebd_escala(slug, inicio.isoformat(), fim.isoformat())
+        if filtro_classe != "Todas":
+            id_classe_filtro = op_classes[filtro_classe]
+            if id_classe_filtro is None:
+                escala = escala[
+                    escala["id_classe"].isna()
+                    | (escala["id_classe"].fillna(0).astype(int) == 0)
+                ].copy()
+            else:
+                escala = escala[
+                    escala["id_classe"].fillna(0).astype(int) == int(id_classe_filtro)
+                ].copy()
         if escala.empty:
             st.info("Nenhuma escala cadastrada para o periodo.")
         else:
