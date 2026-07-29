@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+import streamlit.components.v1 as components
 
 from data.repository import (
     carregar_cadastros,
@@ -838,6 +839,190 @@ def _escala_da_aula(slug, data_aula, id_classe):
     return escala_classe.iloc[0].to_dict()
 
 
+def _gerar_html_chamada_classe(igreja, nome_classe, data_aula, tema, professor, alunos):
+    nome_igreja = html.escape(str((igreja or {}).get("nome") or (igreja or {}).get("slug") or "Igreja"))
+    data_fmt = _fmt_data(data_aula)
+    emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    tema_html = html.escape(tema) if tema else "-"
+    professor_html = html.escape(professor) if professor else "-"
+
+    linhas = []
+    for idx, (nome, presente) in enumerate(sorted(alunos, key=lambda item: item[0].lower()), start=1):
+        if presente is None:
+            marca_presente = '<span class="quadro"></span>'
+            marca_falta = '<span class="quadro"></span>'
+        else:
+            marca_presente = '<span class="quadro marcado">X</span>' if presente else '<span class="quadro"></span>'
+            marca_falta = '<span class="quadro marcado">X</span>' if not presente else '<span class="quadro"></span>'
+        linhas.append(
+            "<tr>"
+            f'<td class="col-num">{idx}</td>'
+            f'<td class="col-nome">{html.escape(nome)}</td>'
+            f'<td class="col-marca">{marca_presente}</td>'
+            f'<td class="col-marca">{marca_falta}</td>'
+            '<td class="col-obs"></td>'
+            "</tr>"
+        )
+    linhas_html = "".join(linhas) if linhas else '<tr><td colspan="5">Nenhum aluno matriculado.</td></tr>'
+
+    return f"""
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Chamada - {html.escape(nome_classe)} - {data_fmt}</title>
+<style>
+* {{ box-sizing: border-box; }}
+body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }}
+.toolbar {{ text-align: center; margin-bottom: 14px; }}
+.toolbar button {{ background: #0F6E56; color: white; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; }}
+.folha {{ width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 16mm; border: 1px solid #d1d5db; }}
+.cabecalho {{ text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
+.igreja {{ font-size: 18px; font-weight: 800; text-transform: uppercase; }}
+.titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
+.emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
+.info {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 16px; margin: 14px 0; font-size: 13px; }}
+.info b {{ color: #374151; }}
+table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }}
+th, td {{ border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; }}
+th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #374151; }}
+.col-num {{ width: 30px; text-align: center; }}
+.col-marca {{ width: 70px; text-align: center; }}
+.col-obs {{ width: 120px; }}
+.quadro {{ display: inline-block; width: 16px; height: 16px; border: 1px solid #111827; text-align: center; line-height: 16px; font-weight: 800; }}
+.quadro.marcado {{ background: #d1fae5; }}
+.rodape {{ margin-top: 30px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; font-size: 12px; }}
+.assinatura {{ border-top: 1px solid #111827; text-align: center; padding-top: 6px; }}
+@media print {{
+    body {{ background: white; padding: 0; }}
+    .toolbar {{ display: none !important; }}
+    .folha {{ width: 100%; min-height: auto; margin: 0; border: 0; padding: 12mm; }}
+}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+    <button onclick="window.print()">Imprimir chamada</button>
+</div>
+<main class="folha">
+    <header class="cabecalho">
+        <div class="igreja">{nome_igreja}</div>
+        <div class="titulo">Lista de Chamada - Escola Bíblica</div>
+        <div class="emitido">Emitido em {emitido}</div>
+    </header>
+    <div class="info">
+        <div><b>Classe:</b> {html.escape(nome_classe)}</div>
+        <div><b>Data:</b> {data_fmt}</div>
+        <div><b>Professor:</b> {professor_html}</div>
+        <div><b>Tema:</b> {tema_html}</div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th class="col-num">#</th>
+                <th>Aluno</th>
+                <th class="col-marca">Presente</th>
+                <th class="col-marca">Falta</th>
+                <th class="col-obs">Observações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {linhas_html}
+        </tbody>
+    </table>
+    <div class="rodape">
+        <div class="assinatura">Assinatura do professor</div>
+        <div class="assinatura">Assinatura do secretário(a)</div>
+    </div>
+</main>
+</body>
+</html>"""
+
+
+def _gerar_html_escala_professores(igreja, periodo_texto, classe_texto, escala):
+    nome_igreja = html.escape(str((igreja or {}).get("nome") or (igreja or {}).get("slug") or "Igreja"))
+    emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    dados = escala.copy()
+    if "data" in dados.columns:
+        dados["_data_ordem"] = pd.to_datetime(dados["data"], errors="coerce")
+        dados = dados.sort_values("_data_ordem")
+
+    linhas = []
+    for _, row in dados.iterrows():
+        linhas.append(
+            "<tr>"
+            f"<td>{html.escape(_fmt_data(row.get('data')))}</td>"
+            f"<td>{html.escape(str(row.get('classe', '') or 'Sem classe definida'))}</td>"
+            f"<td>{html.escape(str(row.get('professor', '') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('funcao_professor', '') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('superintendente', '') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('auxiliar', '') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('tema', '') or ''))}</td>"
+            "</tr>"
+        )
+    linhas_html = "".join(linhas) if linhas else '<tr><td colspan="7">Nenhuma escala no periodo.</td></tr>'
+
+    return f"""
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Escala de professores - Escola Biblica</title>
+<style>
+* {{ box-sizing: border-box; }}
+body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }}
+.toolbar {{ text-align: center; margin-bottom: 14px; }}
+.toolbar button {{ background: #0F6E56; color: white; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; }}
+.folha {{ width: 297mm; min-height: 210mm; margin: 0 auto; background: white; padding: 14mm; border: 1px solid #d1d5db; }}
+.cabecalho {{ text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
+.igreja {{ font-size: 18px; font-weight: 800; text-transform: uppercase; }}
+.titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
+.filtro {{ font-size: 12px; color: #374151; margin-top: 4px; }}
+.emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
+table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
+th, td {{ border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; }}
+th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #374151; }}
+@media print {{
+    body {{ background: white; padding: 0; }}
+    .toolbar {{ display: none !important; }}
+    .folha {{ width: 100%; min-height: auto; margin: 0; border: 0; padding: 10mm; }}
+    @page {{ size: landscape; }}
+}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+    <button onclick="window.print()">Imprimir escala</button>
+</div>
+<main class="folha">
+    <header class="cabecalho">
+        <div class="igreja">{nome_igreja}</div>
+        <div class="titulo">Escala de Professores - Escola Biblica</div>
+        <div class="filtro">Periodo: {html.escape(periodo_texto)} | Classe: {html.escape(classe_texto)}</div>
+        <div class="emitido">Emitido em {emitido}</div>
+    </header>
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Classe</th>
+                <th>Professor</th>
+                <th>Funcao</th>
+                <th>Superintendente</th>
+                <th>Auxiliar</th>
+                <th>Tema</th>
+            </tr>
+        </thead>
+        <tbody>
+            {linhas_html}
+        </tbody>
+    </table>
+</main>
+</body>
+</html>"""
+
+
 def _render_classes(slug):
     st.markdown("### Classes e alunos")
     df_classes = listar_ebd_classes(slug, incluir_inativas=True)
@@ -1047,6 +1232,72 @@ def _render_classes(slug):
             st.rerun()
 
 
+def _render_impressao_chamada(slug, id_classe, nome_classe):
+    with st.expander("🖨️ Imprimir chamada da classe", expanded=False):
+        st.caption(
+            "Gere uma lista para impressão com os alunos da classe. Se já houver "
+            "chamada registrada na data escolhida, a lista sai preenchida com as "
+            "presenças salvas; caso contrário, sai em branco para preenchimento manual."
+        )
+        data_impressao = st.date_input(
+            "Data da chamada para impressão",
+            value=_hoje(),
+            format="DD/MM/YYYY",
+            key=f"ebd_imprimir_chamada_data_{id_classe}",
+        )
+
+        matriculas_todas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
+        matriculas_data = _filtrar_matriculas_validas_na_data(matriculas_todas, data_impressao)
+        if matriculas_data.empty:
+            st.info("Nenhum aluno matriculado ativo nesta data.")
+            return
+
+        tema = ""
+        professor = ""
+        presencas = {}
+        aula_salva = listar_ebd_aulas(
+            slug, data_impressao.isoformat(), data_impressao.isoformat(), id_classe
+        )
+        if not aula_salva.empty:
+            aula_row = aula_salva.iloc[0]
+            tema = str(aula_row.get("tema", "") or "")
+            professor = str(aula_row.get("professor", "") or "")
+            id_aula = _int_seguro(aula_row.get("id_aula"), 0)
+            if id_aula:
+                from data.repository import carregar_ebd_presencas
+                df_pres = carregar_ebd_presencas(slug, id_aula)
+                for _, row in df_pres.iterrows():
+                    id_matricula = _int_seguro(row.get("id_matricula"), 0)
+                    if id_matricula:
+                        presencas[id_matricula] = bool(row.get("presente"))
+        else:
+            escala_dia = _escala_da_aula(slug, data_impressao, id_classe)
+            if escala_dia:
+                tema = str(escala_dia.get("tema", "") or "")
+                professor = str(escala_dia.get("professor", "") or "")
+
+        alunos = [
+            (
+                str(row["nome_aluno"]),
+                presencas.get(_int_seguro(row["id_matricula"])) if presencas else None,
+            )
+            for _, row in matriculas_data.iterrows()
+        ]
+
+        igreja = st.session_state.get("igreja", {})
+        html_chamada = _gerar_html_chamada_classe(
+            igreja, nome_classe, data_impressao, tema, professor, alunos,
+        )
+        components.html(html_chamada, height=760, scrolling=True)
+        st.download_button(
+            "📥 Baixar lista de chamada (HTML)",
+            data=html_chamada,
+            file_name=f"chamada_{nome_classe}_{data_impressao.isoformat()}.html",
+            mime="text/html",
+            key=f"ebd_download_chamada_{id_classe}_{data_impressao.isoformat()}",
+        )
+
+
 def _render_chamada(slug, id_classe_fixo=None):
     try:
         _render_chamada_conteudo(slug, id_classe_fixo)
@@ -1077,6 +1328,9 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
         disabled=bool(id_classe_fixo),
     )
     id_classe = op_classes[classe_label]
+    nome_classe = df_classes[df_classes["id_classe"] == id_classe].iloc[0]["nome"]
+
+    _render_impressao_chamada(slug, id_classe, nome_classe)
 
     escala_classe = listar_ebd_escala(slug, id_classe=id_classe)
     chamadas_salvas = listar_ebd_aulas(slug, id_classe=id_classe)
@@ -1773,6 +2027,21 @@ def _render_escala(slug):
                 file_name="escala_professores_ebd.csv",
                 mime="text/csv",
             )
+
+            with st.expander("🖨️ Imprimir escala de professores", expanded=False):
+                periodo_texto = f"{_fmt_data(inicio)} a {_fmt_data(fim)}"
+                igreja = st.session_state.get("igreja", {})
+                html_escala = _gerar_html_escala_professores(
+                    igreja, periodo_texto, filtro_classe, escala,
+                )
+                components.html(html_escala, height=760, scrolling=True)
+                st.download_button(
+                    "📥 Baixar escala de professores (HTML)",
+                    data=html_escala,
+                    file_name=f"escala_professores_ebd_{inicio.isoformat()}_{fim.isoformat()}.html",
+                    mime="text/html",
+                    key="ebd_download_escala_html",
+                )
 
             opcoes_item = {
                 f'{int(row["id_escala"])} - {_fmt_data(row["data"])} - {row["professor"]}': int(row["id_escala"])
