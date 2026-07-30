@@ -1,5 +1,6 @@
 import datetime
 import html
+import re
 import urllib.parse
 from collections import defaultdict
 
@@ -28,6 +29,11 @@ from data.repository import (
     salvar_ebd_escala,
     salvar_ebd_matricula,
     salvar_ebd_secretario,
+)
+from modules.aniversariantes import (
+    _enviar_whatsapp_texto_api,
+    _renderizar_resultados_envio,
+    _whatsapp_api_configurada,
 )
 from utils.helpers import confirmar_exclusao, gerar_csv, normalizar_data_digitada, slug_da_sessao
 
@@ -348,6 +354,53 @@ def _botao_whatsapp(label, telefone, mensagem, key):
         f'{html.escape(label)}</a>',
         unsafe_allow_html=True,
     )
+
+
+def _pessoas_avisos_escala(slug, escala_avisos):
+    pessoas = []
+    for _, row in escala_avisos.iterrows():
+        for funcao, campo_nome, campo_telefone in (
+            ("Professor", "professor", "telefone_professor"),
+            ("Superintendente", "superintendente", "telefone_superintendente"),
+            ("Auxiliar", "auxiliar", "telefone_auxiliar"),
+        ):
+            nome = str(row.get(campo_nome, "") or "").strip()
+            if not nome:
+                continue
+            pessoas.append({
+                "id_escala": row.get("id_escala"),
+                "data": _fmt_data(row.get("data", "")),
+                "classe": str(row.get("classe", "") or "Escola Bíblica").strip(),
+                "funcao": funcao,
+                "nome": nome,
+                "telefone": row.get(campo_telefone, ""),
+                "mensagem": _mensagem_escala(slug, row, nome, funcao),
+            })
+    return pessoas
+
+
+def _executar_envio_avisos_escala(pessoas):
+    resultados = []
+    for pessoa in pessoas:
+        telefone_normalizado = _normalizar_tel_brasil(pessoa["telefone"])
+        if not telefone_normalizado:
+            resultados.append({
+                "nome": pessoa["nome"],
+                "funcao": pessoa["funcao"],
+                "telefone": pessoa["telefone"],
+                "status": "ignorado",
+                "detalhe": "Telefone invalido ou vazio.",
+            })
+            continue
+        ok, detalhe = _enviar_whatsapp_texto_api(pessoa["telefone"], pessoa["mensagem"])
+        resultados.append({
+            "nome": pessoa["nome"],
+            "funcao": pessoa["funcao"],
+            "telefone": telefone_normalizado,
+            "status": "enviado" if ok else "erro",
+            "detalhe": detalhe,
+        })
+    return resultados
 
 
 def _metricas_ebd(resumo, aulas):
@@ -939,7 +992,7 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
 </html>"""
 
 
-def _gerar_html_escala_professores(igreja, periodo_texto, classe_texto, escala):
+def _gerar_html_escala_professores(igreja, periodo_texto, classe_texto, escala, professor_texto="Todos"):
     nome_igreja = html.escape(str((igreja or {}).get("nome") or (igreja or {}).get("slug") or "Igreja"))
     emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -999,7 +1052,7 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
     <header class="cabecalho">
         <div class="igreja">{nome_igreja}</div>
         <div class="titulo">Escala de Professores - Escola Biblica</div>
-        <div class="filtro">Periodo: {html.escape(periodo_texto)} | Classe: {html.escape(classe_texto)}</div>
+        <div class="filtro">Periodo: {html.escape(periodo_texto)} | Classe: {html.escape(classe_texto)} | Professor: {html.escape(professor_texto)}</div>
         <div class="emitido">Emitido em {emitido}</div>
     </header>
     <table>
@@ -1981,7 +2034,7 @@ def _render_escala(slug):
                 _importar_escala_planilha(slug, arquivo, df_classes)
 
     with tab_consulta:
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         inicio = c1.date_input("Inicio da escala", value=_inicio_mes(), key="escala_ini", format="DD/MM/YYYY")
         fim = c2.date_input("Fim da escala", value=_hoje() + datetime.timedelta(days=60), key="escala_fim", format="DD/MM/YYYY")
         filtro_classe = c3.selectbox(
@@ -2001,6 +2054,20 @@ def _render_escala(slug):
                 escala = escala[
                     escala["id_classe"].fillna(0).astype(int) == int(id_classe_filtro)
                 ].copy()
+        professores_disponiveis = sorted({
+            str(p).strip()
+            for p in escala.get("professor", pd.Series(dtype=str)).dropna()
+            if str(p).strip()
+        })
+        filtro_professor = c4.selectbox(
+            "Filtrar por professor",
+            ["Todos"] + professores_disponiveis,
+            key="escala_filtro_professor",
+        )
+        if filtro_professor != "Todos":
+            escala = escala[
+                escala["professor"].fillna("").astype(str).str.strip() == filtro_professor
+            ].copy()
         if escala.empty:
             st.info("Nenhuma escala cadastrada para o periodo.")
         else:
@@ -2032,13 +2099,18 @@ def _render_escala(slug):
                 periodo_texto = f"{_fmt_data(inicio)} a {_fmt_data(fim)}"
                 igreja = st.session_state.get("igreja", {})
                 html_escala = _gerar_html_escala_professores(
-                    igreja, periodo_texto, filtro_classe, escala,
+                    igreja, periodo_texto, filtro_classe, escala, filtro_professor,
                 )
                 components.html(html_escala, height=760, scrolling=True)
+                sufixo_professor = (
+                    "_" + re.sub(r"[^a-z0-9]+", "_", filtro_professor.lower()).strip("_")
+                    if filtro_professor != "Todos"
+                    else ""
+                )
                 st.download_button(
                     "📥 Baixar escala de professores (HTML)",
                     data=html_escala,
-                    file_name=f"escala_professores_ebd_{inicio.isoformat()}_{fim.isoformat()}.html",
+                    file_name=f"escala_professores_ebd_{inicio.isoformat()}_{fim.isoformat()}{sufixo_professor}.html",
                     mime="text/html",
                     key="ebd_download_escala_html",
                 )
@@ -2107,8 +2179,49 @@ def _render_escala(slug):
                         escala_avisos["data"].apply(_data_iso) == data_aviso
                     ].copy()
 
+            professores_avisos_disponiveis = sorted({
+                str(p).strip()
+                for p in escala_avisos.get("professor", pd.Series(dtype=str)).dropna()
+                if str(p).strip()
+            })
+            filtro_professor_aviso = st.selectbox(
+                "Filtrar por professor",
+                ["Todos"] + professores_avisos_disponiveis,
+                key="ebd_avisos_filtro_professor",
+            )
+            if filtro_professor_aviso != "Todos":
+                escala_avisos = escala_avisos[
+                    escala_avisos["professor"].fillna("").astype(str).str.strip() == filtro_professor_aviso
+                ].copy()
+
             if escala_avisos.empty:
                 st.info("Nenhum aviso encontrado para o filtro selecionado.")
+            else:
+                pessoas_avisos = _pessoas_avisos_escala(slug, escala_avisos)
+                pessoas_validas = [p for p in pessoas_avisos if _normalizar_tel_brasil(p["telefone"])]
+
+                st.divider()
+                st.markdown("#### 📤 Envio em lote")
+                st.caption(
+                    f"{len(pessoas_validas)} de {len(pessoas_avisos)} envolvido(s) "
+                    "(professor, superintendente e auxiliar) com WhatsApp valido no filtro atual."
+                )
+                if not _whatsapp_api_configurada():
+                    st.info(
+                        "Para enviar em lote automaticamente, configure a WhatsApp Cloud API em "
+                        "st.secrets (mesma configuracao usada em Aniversariantes). Sem isso, use "
+                        "os botoes individuais abaixo para abrir o WhatsApp manualmente."
+                    )
+                if st.button(
+                    "📤 Enviar avisos em lote agora",
+                    type="primary",
+                    disabled=not _whatsapp_api_configurada() or not pessoas_validas,
+                    key="ebd_avisos_enviar_lote",
+                ):
+                    with st.spinner("Enviando avisos..."):
+                        resultados_lote = _executar_envio_avisos_escala(pessoas_avisos)
+                    _renderizar_resultados_envio(resultados_lote)
+                st.divider()
 
             for _, row in escala_avisos.iterrows():
                 titulo = f'{_fmt_data(row["data"])} - {row.get("classe", "Escola Bíblica")} - {row["professor"]}'
