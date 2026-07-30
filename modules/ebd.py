@@ -1,3 +1,4 @@
+import base64
 import datetime
 import html
 import re
@@ -24,6 +25,8 @@ from data.repository import (
     relatorio_ebd_frequencia,
     relatorio_ebd_resumo_classes,
     obter_config_igreja,
+    obter_logo_igreja,
+    obter_logo_sistema,
     salvar_ebd_chamada,
     salvar_ebd_classe,
     salvar_ebd_escala,
@@ -55,6 +58,26 @@ Funcao: {funcao}
 Tema: {tema}
 
 Contamos com sua presenca e dedicacao. Deus abencoe!"""
+
+MIMES_LOGO = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+}
+
+
+def _logo_html_cabecalho(igreja):
+    slug = str((igreja or {}).get("slug") or "").strip()
+    logo_dados = (obter_logo_igreja(slug) if slug else None) or obter_logo_sistema()
+    if not logo_dados:
+        return ""
+    dados, ext = logo_dados
+    mime = MIMES_LOGO.get(str(ext or "").strip().lower().replace(".", ""))
+    if not mime or not isinstance(dados, (bytes, bytearray, memoryview)):
+        return ""
+    src = "data:" + mime + ";base64," + base64.b64encode(dados).decode()
+    return f'<img class="logo" src="{html.escape(src, quote=True)}" alt="Logo"/>'
 
 
 def _hoje():
@@ -894,6 +917,7 @@ def _escala_da_aula(slug, data_aula, id_classe):
 
 def _gerar_html_chamada_classe(igreja, nome_classe, data_aula, tema, professor, alunos):
     nome_igreja = html.escape(str((igreja or {}).get("nome") or (igreja or {}).get("slug") or "Igreja"))
+    logo_html = _logo_html_cabecalho(igreja)
     data_fmt = _fmt_data(data_aula)
     emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     tema_html = html.escape(tema) if tema else "-"
@@ -931,6 +955,7 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 .toolbar button {{ background: #0F6E56; color: white; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; }}
 .folha {{ width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 16mm; border: 1px solid #d1d5db; }}
 .cabecalho {{ text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
+.cabecalho .logo {{ max-height: 64px; max-width: 200px; display: block; margin: 0 auto 8px; }}
 .igreja {{ font-size: 18px; font-weight: 800; text-transform: uppercase; }}
 .titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
 .emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
@@ -959,6 +984,7 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
 </div>
 <main class="folha">
     <header class="cabecalho">
+        {logo_html}
         <div class="igreja">{nome_igreja}</div>
         <div class="titulo">Lista de Chamada - Escola Bíblica</div>
         <div class="emitido">Emitido em {emitido}</div>
@@ -994,6 +1020,7 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
 
 def _gerar_html_escala_professores(igreja, periodo_texto, classe_texto, escala, professor_texto="Todos"):
     nome_igreja = html.escape(str((igreja or {}).get("nome") or (igreja or {}).get("slug") or "Igreja"))
+    logo_html = _logo_html_cabecalho(igreja)
     emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
 
     dados = escala.copy()
@@ -1029,6 +1056,7 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 .toolbar button {{ background: #0F6E56; color: white; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; }}
 .folha {{ width: 297mm; min-height: 210mm; margin: 0 auto; background: white; padding: 14mm; border: 1px solid #d1d5db; }}
 .cabecalho {{ text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
+.cabecalho .logo {{ max-height: 64px; max-width: 200px; display: block; margin: 0 auto 8px; }}
 .igreja {{ font-size: 18px; font-weight: 800; text-transform: uppercase; }}
 .titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
 .filtro {{ font-size: 12px; color: #374151; margin-top: 4px; }}
@@ -1050,6 +1078,7 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
 </div>
 <main class="folha">
     <header class="cabecalho">
+        {logo_html}
         <div class="igreja">{nome_igreja}</div>
         <div class="titulo">Escala de Professores - Escola Biblica</div>
         <div class="filtro">Periodo: {html.escape(periodo_texto)} | Classe: {html.escape(classe_texto)} | Professor: {html.escape(professor_texto)}</div>
