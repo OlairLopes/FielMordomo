@@ -1060,7 +1060,7 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 .titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
 .filtro {{ font-size: 12px; color: #374151; margin-top: 4px; }}
 .emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
-table {{ border-collapse: collapse; margin-top: 10px; font-size: 11px; width: auto; }}
+table {{ border-collapse: collapse; margin-top: 10px; font-size: 11px; width: 100%; }}
 th, td {{ border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; white-space: nowrap; }}
 th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #374151; }}
 @media print {{
