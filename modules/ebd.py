@@ -1032,12 +1032,12 @@ def _gerar_html_escala_professores(igreja, periodo_texto, classe_texto, escala, 
         linhas.append(
             "<tr>"
             f"<td>{html.escape(_fmt_data(row.get('data')))}</td>"
-            f"<td>{html.escape(str(row.get('classe', '') or 'Sem classe definida'))}</td>"
-            f"<td>{html.escape(str(row.get('professor', '') or ''))}</td>"
-            f"<td>{html.escape(str(row.get('funcao_professor', '') or ''))}</td>"
-            f"<td>{html.escape(str(row.get('superintendente', '') or ''))}</td>"
-            f"<td>{html.escape(str(row.get('auxiliar', '') or ''))}</td>"
-            f"<td>{html.escape(str(row.get('tema', '') or ''))}</td>"
+            f"<td class=\"col-1linha\">{html.escape(str(row.get('classe', '') or 'Sem classe definida'))}</td>"
+            f"<td class=\"col-1linha\">{html.escape(str(row.get('professor', '') or ''))}</td>"
+            f"<td class=\"col-1linha\">{html.escape(str(row.get('funcao_professor', '') or ''))}</td>"
+            f"<td class=\"col-1linha\">{html.escape(str(row.get('superintendente', '') or ''))}</td>"
+            f"<td class=\"col-1linha\">{html.escape(str(row.get('auxiliar', '') or ''))}</td>"
+            f"<td class=\"col-1linha\">{html.escape(str(row.get('tema', '') or ''))}</td>"
             "</tr>"
         )
     linhas_html = "".join(linhas) if linhas else '<tr><td colspan="7">Nenhuma escala no periodo.</td></tr>'
@@ -1060,9 +1060,10 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 .titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
 .filtro {{ font-size: 12px; color: #374151; margin-top: 4px; }}
 .emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }}
+table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; table-layout: fixed; }}
 th, td {{ border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; }}
 th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #374151; }}
+.col-1linha {{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 @media print {{
     body {{ background: white; padding: 0; }}
     .toolbar {{ display: none !important; }}
@@ -1083,6 +1084,15 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
         <div class="emitido">Emitido em {emitido}</div>
     </header>
     <table>
+        <colgroup>
+            <col style="width:9%"/>
+            <col style="width:15%"/>
+            <col style="width:16%"/>
+            <col style="width:12%"/>
+            <col style="width:16%"/>
+            <col style="width:16%"/>
+            <col style="width:16%"/>
+        </colgroup>
         <thead>
             <tr>
                 <th>Data</th>
