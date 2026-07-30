@@ -80,6 +80,13 @@ def _logo_html_cabecalho(igreja):
     return f'<img class="logo" src="{html.escape(src, quote=True)}" alt="Logo"/>'
 
 
+TZ_BRASILIA = datetime.timezone(datetime.timedelta(hours=-3))
+
+
+def _agora_brasil():
+    return datetime.datetime.now(TZ_BRASILIA)
+
+
 def _hoje():
     return datetime.date.today()
 
@@ -919,7 +926,7 @@ def _gerar_html_chamada_classe(igreja, nome_classe, data_aula, tema, professor, 
     nome_igreja = html.escape(str((igreja or {}).get("nome") or (igreja or {}).get("slug") or "Igreja"))
     logo_html = _logo_html_cabecalho(igreja)
     data_fmt = _fmt_data(data_aula)
-    emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    emitido = _agora_brasil().strftime("%d/%m/%Y %H:%M")
     tema_html = html.escape(tema) if tema else "-"
     professor_html = html.escape(professor) if professor else "-"
 
@@ -1020,7 +1027,7 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
 
 def _gerar_html_escala_professores(igreja, periodo_texto, classe_texto, escala, professor_texto="Todos"):
     logo_html = _logo_html_cabecalho(igreja)
-    emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    emitido = _agora_brasil().strftime("%d/%m/%Y %H:%M")
 
     dados = escala.copy()
     if "data" in dados.columns:
