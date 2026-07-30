@@ -660,7 +660,7 @@ def _login_igreja():
     with st.form("form_login_igreja"):
         st.markdown("#### Acesso do Gestor/Pastor")
         slug = _selectbox_igreja_login("login_igreja_slug")
-        senha = st.text_input("Senha", type="password")
+        senha = st.text_input("Senha", type="password", autocomplete="off")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
@@ -682,7 +682,7 @@ def _login_admin():
     with st.form("form_login_admin"):
         st.markdown("#### Administrador do sistema")
         usuario = st.text_input("Usuário")
-        senha   = st.text_input("Senha", type="password")
+        senha   = st.text_input("Senha", type="password", autocomplete="off")
 
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             usuario = usuario.strip()
@@ -712,7 +712,7 @@ def _login_tesoureiro():
     )
 
     with st.form("form_login_tesoureiro"):
-        senha = st.text_input("Senha", type="password")
+        senha = st.text_input("Senha", type="password", autocomplete="off")
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -746,7 +746,7 @@ def _login_pastor_auxiliar():
     )
 
     with st.form("form_login_pastor_auxiliar"):
-        senha = st.text_input("Senha", type="password")
+        senha = st.text_input("Senha", type="password", autocomplete="off")
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -955,6 +955,7 @@ def _login_recepcao():
         senha = st.text_input(
             "PIN de 4 dígitos",
             type="password",
+            autocomplete="off",
             max_chars=4,
             help="Informe o PIN de 4 dígitos cadastrado.",
         )
@@ -995,7 +996,7 @@ def _login_secretario_geral():
     )
 
     with st.form("form_login_secretario_geral"):
-        senha = st.text_input("Senha", type="password")
+        senha = st.text_input("Senha", type="password", autocomplete="off")
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -1029,7 +1030,7 @@ def _login_ebd():
     )
 
     with st.form("form_login_ebd"):
-        senha = st.text_input("PIN de 4 dígitos", type="password", max_chars=4)
+        senha = st.text_input("PIN de 4 dígitos", type="password", max_chars=4, autocomplete="off")
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
             usuario = str(usuario or "").strip().lower()
@@ -1066,6 +1067,7 @@ def _login_orhafe():
         cpf4 = st.text_input(
             "4 últimos dígitos do CPF",
             type="password",
+            autocomplete="off",
             max_chars=4,
             help="Informe os 4 últimos dígitos do CPF cadastrado para esta secretária.",
         )
@@ -1136,6 +1138,7 @@ def _login_gfc():
         cpf4 = st.text_input(
             "PIN - 4 ultimos digitos do CPF",
             type="password",
+            autocomplete="off",
             max_chars=4,
             help="Informe os 4 ultimos digitos do CPF do membro vinculado a esta secretaria.",
         )

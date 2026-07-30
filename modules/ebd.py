@@ -1019,7 +1019,6 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
 
 
 def _gerar_html_escala_professores(igreja, periodo_texto, classe_texto, escala, professor_texto="Todos"):
-    nome_igreja = html.escape(str((igreja or {}).get("nome") or (igreja or {}).get("slug") or "Igreja"))
     logo_html = _logo_html_cabecalho(igreja)
     emitido = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -1079,7 +1078,6 @@ th {{ background: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #3
 <main class="folha">
     <header class="cabecalho">
         {logo_html}
-        <div class="igreja">{nome_igreja}</div>
         <div class="titulo">Escala de Professores - Escola Biblica</div>
         <div class="filtro">Periodo: {html.escape(periodo_texto)} | Classe: {html.escape(classe_texto)} | Professor: {html.escape(professor_texto)}</div>
         <div class="emitido">Emitido em {emitido}</div>
