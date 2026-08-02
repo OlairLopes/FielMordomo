@@ -151,10 +151,17 @@ def _filtrar_matriculas_validas_na_data(matriculas, data_referencia):
         dados["data_inicio"] = ""
     if "data_fim" not in dados.columns:
         dados["data_fim"] = ""
+    if "ativa" not in dados.columns:
+        dados["ativa"] = 1
     inicio = dados["data_inicio"].apply(_data_iso)
     fim = dados["data_fim"].apply(_data_iso)
+    ativa = dados["ativa"].apply(lambda v: _int_seguro(v, 1) == 1)
 
-    validas = (inicio.eq("") | (inicio <= data_ref)) & (fim.eq("") | (fim >= data_ref))
+    validas = (
+        (inicio.eq("") | (inicio <= data_ref))
+        & (fim.eq("") | (fim >= data_ref))
+        & (fim.ne("") | ativa)
+    )
     return dados[validas].copy()
 
 
@@ -1235,7 +1242,14 @@ def _render_classes(slug):
                     if op_classes[label] == int(row["id_classe"]):
                         classe_idx = idx
                         break
-                with st.form(f"form_editar_matricula_ebd_{int(row['id_matricula'])}"):
+                id_matricula_edit = int(row["id_matricula"])
+                ativa_edit = st.selectbox(
+                    "Situação",
+                    ["Ativa", "Encerrada"],
+                    index=0 if _int_seguro(row.get("ativa"), 1) == 1 else 1,
+                    key=f"ebd_situacao_edit_{id_matricula_edit}",
+                )
+                with st.form(f"form_editar_matricula_ebd_{id_matricula_edit}"):
                     classe_edit = st.selectbox("Classe", classe_labels, index=classe_idx)
                     c1, c2 = st.columns(2)
                     nome_edit = c1.text_input("Nome do aluno", value=str(row.get("nome_aluno", "") or ""))
@@ -1244,11 +1258,13 @@ def _render_classes(slug):
                         value=_parse_data(row.get("data_inicio")) or _hoje(),
                         format="DD/MM/YYYY",
                     )
-                    ativa_edit = st.selectbox(
-                        "Situação",
-                        ["Ativa", "Encerrada"],
-                        index=0 if _int_seguro(row.get("ativa"), 1) == 1 else 1,
-                    )
+                    data_fim_edit = None
+                    if ativa_edit == "Encerrada":
+                        data_fim_edit = st.date_input(
+                            "Data de encerramento",
+                            value=_parse_data(row.get("data_fim")) or _hoje(),
+                            format="DD/MM/YYYY",
+                        )
                     obs_edit = st.text_area("Observações", value=str(row.get("observacoes", "") or ""))
                     if st.form_submit_button("Atualizar matrícula", type="primary"):
                         try:
@@ -1259,8 +1275,9 @@ def _render_classes(slug):
                                 row.get("id_cadastro"),
                                 data_inicio_edit.isoformat(),
                                 obs_edit,
-                                id_matricula=int(row["id_matricula"]),
+                                id_matricula=id_matricula_edit,
                                 ativa=ativa_edit == "Ativa",
+                                data_fim=data_fim_edit.isoformat() if data_fim_edit else "",
                             )
                             st.success("Matrícula atualizada.")
                             st.rerun()

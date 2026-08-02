@@ -2133,7 +2133,7 @@ def listar_ebd_matriculas(slug, id_classe=None, incluir_inativas=False):
         )
 
 
-def salvar_ebd_matricula(slug, id_classe, nome_aluno, id_cadastro=None, data_inicio="", observacoes="", id_matricula=None, ativa=True):
+def salvar_ebd_matricula(slug, id_classe, nome_aluno, id_cadastro=None, data_inicio="", observacoes="", id_matricula=None, ativa=True, data_fim=None):
     nome_aluno = sanitizar(nome_aluno)
     if not nome_aluno:
         raise ValueError("Nome do aluno e obrigatorio.")
@@ -2150,24 +2150,37 @@ def salvar_ebd_matricula(slug, id_classe, nome_aluno, id_cadastro=None, data_ini
             if row:
                 nome_aluno = sanitizar(row["nome"])
         if id_matricula:
-            conn.execute(
-                """UPDATE ebd_matriculas
-                   SET id_classe=?, id_cadastro=?, nome_aluno=?, ativa=?,
-                       data_inicio=?, observacoes=?
-                   WHERE id_matricula=?""",
-                (
-                    int(id_classe), id_cadastro, nome_aluno, int(bool(ativa)),
-                    str(data_inicio or ""), sanitizar(observacoes), int(id_matricula),
-                ),
-            )
+            if data_fim is None:
+                conn.execute(
+                    """UPDATE ebd_matriculas
+                       SET id_classe=?, id_cadastro=?, nome_aluno=?, ativa=?,
+                           data_inicio=?, observacoes=?
+                       WHERE id_matricula=?""",
+                    (
+                        int(id_classe), id_cadastro, nome_aluno, int(bool(ativa)),
+                        str(data_inicio or ""), sanitizar(observacoes), int(id_matricula),
+                    ),
+                )
+            else:
+                conn.execute(
+                    """UPDATE ebd_matriculas
+                       SET id_classe=?, id_cadastro=?, nome_aluno=?, ativa=?,
+                           data_inicio=?, observacoes=?, data_fim=?
+                       WHERE id_matricula=?""",
+                    (
+                        int(id_classe), id_cadastro, nome_aluno, int(bool(ativa)),
+                        str(data_inicio or ""), sanitizar(observacoes), str(data_fim or ""),
+                        int(id_matricula),
+                    ),
+                )
             return int(id_matricula)
         cur = conn.execute(
             """INSERT INTO ebd_matriculas
-               (id_classe, id_cadastro, nome_aluno, ativa, data_inicio, observacoes)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (id_classe, id_cadastro, nome_aluno, ativa, data_inicio, observacoes, data_fim)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 int(id_classe), id_cadastro, nome_aluno, int(bool(ativa)),
-                str(data_inicio or ""), sanitizar(observacoes),
+                str(data_inicio or ""), sanitizar(observacoes), str(data_fim or ""),
             ),
         )
         return cur.lastrowid
