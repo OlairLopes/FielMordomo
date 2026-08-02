@@ -1155,9 +1155,14 @@ def _render_classes(slug):
     op_membros, df_membros = _membros_opcoes(slug)
 
     with st.expander("Nova matrícula", expanded=False):
+        modo = st.radio(
+            "Origem do aluno",
+            ["Membro cadastrado", "Nome manual"],
+            horizontal=True,
+            key="matricula_modo_novo",
+        )
         with st.form("form_ebd_matricula"):
             classe_label = st.selectbox("Classe", list(op_classes.keys()), key="matricula_classe_nova")
-            modo = st.radio("Origem do aluno", ["Membro cadastrado", "Nome manual"], horizontal=True)
             id_cadastro = None
             nome_aluno = ""
             if modo == "Membro cadastrado":
@@ -1168,7 +1173,7 @@ def _render_classes(slug):
                 else:
                     st.warning("Nao ha membros ativos cadastrados.")
             else:
-                nome_aluno = st.text_input("Nome do aluno")
+                nome_aluno = st.text_input("Nome do aluno", key="matricula_nome_manual_novo")
             c1, c2 = st.columns(2)
             data_inicio = c1.date_input("Data de início", value=_hoje(), format="DD/MM/YYYY")
             obs = c2.text_input("Observações")
