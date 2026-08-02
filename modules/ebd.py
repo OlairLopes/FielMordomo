@@ -482,6 +482,55 @@ def _grafico_frequencia_classes(resumo):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
 
+def _resumo_professores(aulas):
+    colunas = ["professor", "classes", "aulas", "matriculados", "presentes", "ausentes", "frequencia_pct"]
+    if aulas.empty:
+        return pd.DataFrame(columns=colunas)
+    dados = aulas.copy()
+    dados["professor"] = dados["professor"].fillna("").astype(str).str.strip()
+    dados = dados[dados["professor"] != ""]
+    if dados.empty:
+        return pd.DataFrame(columns=colunas)
+    resumo = dados.groupby("professor", as_index=False).agg(
+        classes=("classe", "nunique"),
+        aulas=("id_aula", "nunique"),
+        matriculados=("matriculados", "sum"),
+        presentes=("presentes", "sum"),
+        ausentes=("ausentes", "sum"),
+    )
+    total = resumo["matriculados"]
+    resumo["frequencia_pct"] = (resumo["presentes"] / total.where(total > 0, 1) * 100).round(1)
+    return resumo.sort_values("frequencia_pct", ascending=False)
+
+
+def _grafico_desempenho_professores(dados):
+    if dados.empty:
+        st.info("Sem dados de professores para o periodo selecionado.")
+        return
+    ordenado = dados.sort_values("frequencia_pct", ascending=True)
+    fig = go.Figure(go.Bar(
+        name="Frequencia dos alunos",
+        x=ordenado["frequencia_pct"],
+        y=ordenado["professor"],
+        orientation="h",
+        marker_color=CORES["azul"],
+        text=[_pct(v) for v in ordenado["frequencia_pct"]],
+        textposition="outside",
+        hovertemplate="<b>%{y}</b><br>Frequencia dos alunos: %{x:.1f}%<extra></extra>",
+    ))
+    fig.update_layout(
+        height=max(360, 70 * len(ordenado)),
+        margin=dict(t=35, b=40, l=20, r=30),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(range=[0, 105], title="Frequencia dos alunos (%)", fixedrange=True),
+        yaxis=dict(title="", fixedrange=True),
+        showlegend=True,
+        legend=dict(orientation="h", y=1.12, x=0),
+    )
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+
+
 def _valor_grafico_ebd(indicador, valor):
     try:
         numero = float(valor)
@@ -1711,123 +1760,159 @@ def _render_relatorios(slug):
     aulas = listar_ebd_aulas(slug, inicio.isoformat(), fim.isoformat())
     resumo = relatorio_ebd_resumo_classes(slug, inicio.isoformat(), fim.isoformat())
     freq = relatorio_ebd_frequencia(slug, inicio.isoformat(), fim.isoformat())
+    professores = _resumo_professores(aulas)
 
-    if aulas.empty:
-        st.info("Nenhuma aula registrada no periodo selecionado.")
-    else:
-        st.markdown("#### Grafico por classe")
-        classes = sorted(aulas["classe"].dropna().astype(str).unique().tolist())
-        classe_escolhida = st.selectbox(
-            "Escolha a classe",
-            ["Todas as classes"] + classes,
-            key="grafico_ebd_classe",
-        )
-        if classe_escolhida == "Todas as classes":
-            st.caption(
-                "Comparativo por sala. Quando uma sala possui mais de uma chamada "
-                "no periodo, o grafico apresenta a media por chamada daquela sala."
-            )
-            _grafico_comparativo_classes_ebd(
-                "Resumo comparativo por classe",
-                aulas,
-            )
+    tab_classe, tab_frequencia, tab_professores, tab_geral = st.tabs(
+        ["Relatorio por classe", "Frequencia por classe", "Desempenho dos professores", "Relatorio geral"]
+    )
+
+    with tab_classe:
+        if aulas.empty:
+            st.info("Nenhuma aula registrada no periodo selecionado.")
         else:
-            aulas_classe = aulas[aulas["classe"].astype(str) == classe_escolhida]
-            media_classe = int(aulas_classe["id_aula"].nunique()) > 1
-            modo_classe = "Média por chamada" if media_classe else "Total"
-            st.caption(
-                f"{modo_classe}. Chamadas consideradas: "
-                f"{int(aulas_classe['id_aula'].nunique())}."
+            st.markdown("#### Grafico por classe")
+            classes = sorted(aulas["classe"].dropna().astype(str).unique().tolist())
+            classe_escolhida = st.selectbox(
+                "Escolha a classe",
+                ["Todas as classes"] + classes,
+                key="grafico_ebd_classe",
             )
-            _grafico_totais_ebd(
-                f"Resumo da classe {classe_escolhida}",
-                _totais_aulas(aulas_classe, media=media_classe),
-                modo=modo_classe,
-            )
+            if classe_escolhida == "Todas as classes":
+                st.caption(
+                    "Comparativo por sala. Quando uma sala possui mais de uma chamada "
+                    "no periodo, o grafico apresenta a media por chamada daquela sala."
+                )
+                _grafico_comparativo_classes_ebd(
+                    "Resumo comparativo por classe",
+                    aulas,
+                )
+            else:
+                aulas_classe = aulas[aulas["classe"].astype(str) == classe_escolhida]
+                media_classe = int(aulas_classe["id_aula"].nunique()) > 1
+                modo_classe = "Média por chamada" if media_classe else "Total"
+                st.caption(
+                    f"{modo_classe}. Chamadas consideradas: "
+                    f"{int(aulas_classe['id_aula'].nunique())}."
+                )
+                _grafico_totais_ebd(
+                    f"Resumo da classe {classe_escolhida}",
+                    _totais_aulas(aulas_classe, media=media_classe),
+                    modo=modo_classe,
+                )
 
-    st.markdown("#### Frequencia por classe")
-    _grafico_frequencia_classes(resumo)
-    if not resumo.empty:
-        tabela = resumo.copy()
-        tabela["frequencia_pct"] = tabela["frequencia_pct"].apply(_pct)
-        st.dataframe(tabela, use_container_width=True, hide_index=True)
-        st.download_button(
-            "Baixar relatorio de classes CSV",
-            data=gerar_csv(resumo),
-            file_name="relatorio_ebd_classes.csv",
-            mime="text/csv",
-        )
-
-    with st.expander("Relatorio individual por aluno", expanded=False):
-        if freq.empty:
-            st.info("Sem chamadas registradas no periodo.")
-        else:
-            freq = freq.copy()
-            total = freq["presencas"] + freq["faltas"]
-            freq["frequencia_pct"] = (freq["presencas"] / total.where(total > 0, 1) * 100).round(1)
-            freq["acompanhamento"] = freq["frequencia_pct"].apply(
-                lambda v: "Acompanhar aluno/familia" if v < 60 else "Regular"
-            )
-            exibicao = freq.copy()
-            exibicao["frequencia_pct"] = exibicao["frequencia_pct"].apply(_pct)
-            st.dataframe(exibicao, use_container_width=True, hide_index=True)
+    with tab_frequencia:
+        st.markdown("#### Frequencia por classe")
+        _grafico_frequencia_classes(resumo)
+        if not resumo.empty:
+            tabela = resumo.copy()
+            tabela["frequencia_pct"] = tabela["frequencia_pct"].apply(_pct)
+            st.dataframe(tabela, use_container_width=True, hide_index=True)
             st.download_button(
-                "Baixar relatorio de alunos CSV",
-                data=gerar_csv(freq),
-                file_name="relatorio_ebd_alunos.csv",
+                "Baixar relatorio de classes CSV",
+                data=gerar_csv(resumo),
+                file_name="relatorio_ebd_classes.csv",
                 mime="text/csv",
             )
 
-    with st.expander("Aulas registradas", expanded=False):
-        if aulas.empty:
-            st.info("Nenhuma aula no periodo.")
-        else:
-            aulas_exibir = aulas.copy()
-            aulas_exibir["data"] = aulas_exibir["data"].apply(_fmt_data)
-            aulas_exibir["ofertas"] = aulas_exibir["ofertas"].apply(_moeda)
-            aulas_exibir["frequencia"] = (
-                aulas_exibir["presentes"].fillna(0)
-                / aulas_exibir["matriculados"].replace(0, 1).fillna(1)
-                * 100
-            ).round(1).apply(_pct)
-            st.dataframe(
-                aulas_exibir[[
-                    "data", "classe", "tema", "professor", "matriculados",
-                    "presentes", "ausentes", "visitantes", "frequencia",
-                    "assistentes", "qtd_revistas", "qtd_biblias", "qtd_harpas",
-                    "ofertas",
-                ]],
-                use_container_width=True,
-                hide_index=True,
+        with st.expander("Relatorio individual por aluno", expanded=False):
+            if freq.empty:
+                st.info("Sem chamadas registradas no periodo.")
+            else:
+                freq = freq.copy()
+                total = freq["presencas"] + freq["faltas"]
+                freq["frequencia_pct"] = (freq["presencas"] / total.where(total > 0, 1) * 100).round(1)
+                freq["acompanhamento"] = freq["frequencia_pct"].apply(
+                    lambda v: "Acompanhar aluno/familia" if v < 60 else "Regular"
+                )
+                exibicao = freq.copy()
+                exibicao["frequencia_pct"] = exibicao["frequencia_pct"].apply(_pct)
+                st.dataframe(exibicao, use_container_width=True, hide_index=True)
+                st.download_button(
+                    "Baixar relatorio de alunos CSV",
+                    data=gerar_csv(freq),
+                    file_name="relatorio_ebd_alunos.csv",
+                    mime="text/csv",
+                )
+
+    with tab_professores:
+        st.markdown("#### Desempenho dos professores")
+        st.caption(
+            "Frequencia media dos alunos nas aulas ministradas por cada professor no periodo selecionado."
+        )
+        _grafico_desempenho_professores(professores)
+        if not professores.empty:
+            tabela_prof = professores.copy()
+            tabela_prof["frequencia_pct"] = tabela_prof["frequencia_pct"].apply(_pct)
+            tabela_prof = tabela_prof.rename(columns={
+                "professor": "Professor",
+                "classes": "Classes",
+                "aulas": "Aulas",
+                "matriculados": "Matriculados",
+                "presentes": "Presentes",
+                "ausentes": "Ausentes",
+                "frequencia_pct": "Frequencia",
+            })
+            st.dataframe(tabela_prof, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Baixar desempenho dos professores CSV",
+                data=gerar_csv(professores),
+                file_name="relatorio_ebd_professores.csv",
+                mime="text/csv",
             )
 
-    if not aulas.empty:
-        media_geral = int(aulas["id_aula"].nunique()) > 1
-        modo_geral = "Média por chamada" if media_geral else "Total"
-        totais = _totais_aulas(aulas, media=media_geral)
-        st.markdown("#### Relatorio geral")
-        st.caption(
-            f"{modo_geral}. Chamadas consideradas no periodo: "
-            f"{int(aulas['id_aula'].nunique())}."
-        )
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Matriculados", _valor_grafico_ebd("Matriculados", totais["Matriculados"]))
-        c2.metric("Presentes", _valor_grafico_ebd("Presentes", totais["Presentes"]))
-        c3.metric("Ausentes", _valor_grafico_ebd("Ausentes", totais["Ausentes"]))
-        c4.metric("Visitantes", _valor_grafico_ebd("Visitantes", totais["Visitantes"]))
-        c5.metric("Assistentes", _valor_grafico_ebd("Assistentes", totais["Assistentes"]))
-        c5, c6, c7, c8 = st.columns(4)
-        c5.metric("Biblias", _valor_grafico_ebd("Biblias", totais["Biblias"]))
-        c6.metric("Revistas", _valor_grafico_ebd("Revistas", totais["Revistas"]))
-        c7.metric("Harpas", _valor_grafico_ebd("Harpas", totais["Harpas"]))
-        c8.metric("Ofertas", _moeda(totais["Ofertas"]))
+    with tab_geral:
+        with st.expander("Aulas registradas", expanded=False):
+            if aulas.empty:
+                st.info("Nenhuma aula no periodo.")
+            else:
+                aulas_exibir = aulas.copy()
+                aulas_exibir["data"] = aulas_exibir["data"].apply(_fmt_data)
+                aulas_exibir["ofertas"] = aulas_exibir["ofertas"].apply(_moeda)
+                aulas_exibir["frequencia"] = (
+                    aulas_exibir["presentes"].fillna(0)
+                    / aulas_exibir["matriculados"].replace(0, 1).fillna(1)
+                    * 100
+                ).round(1).apply(_pct)
+                st.dataframe(
+                    aulas_exibir[[
+                        "data", "classe", "tema", "professor", "matriculados",
+                        "presentes", "ausentes", "visitantes", "frequencia",
+                        "assistentes", "qtd_revistas", "qtd_biblias", "qtd_harpas",
+                        "ofertas",
+                    ]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
-        st.markdown("#### Grafico geral da Escola Bíblica")
-        _grafico_totais_ebd(
-            "Resumo geral da Escola Bíblica",
-            totais,
-            modo=modo_geral,
-        )
+        if aulas.empty:
+            st.info("Nenhuma aula registrada no periodo selecionado.")
+        else:
+            media_geral = int(aulas["id_aula"].nunique()) > 1
+            modo_geral = "Média por chamada" if media_geral else "Total"
+            totais = _totais_aulas(aulas, media=media_geral)
+            st.markdown("#### Relatorio geral")
+            st.caption(
+                f"{modo_geral}. Chamadas consideradas no periodo: "
+                f"{int(aulas['id_aula'].nunique())}."
+            )
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("Matriculados", _valor_grafico_ebd("Matriculados", totais["Matriculados"]))
+            c2.metric("Presentes", _valor_grafico_ebd("Presentes", totais["Presentes"]))
+            c3.metric("Ausentes", _valor_grafico_ebd("Ausentes", totais["Ausentes"]))
+            c4.metric("Visitantes", _valor_grafico_ebd("Visitantes", totais["Visitantes"]))
+            c5.metric("Assistentes", _valor_grafico_ebd("Assistentes", totais["Assistentes"]))
+            c5, c6, c7, c8 = st.columns(4)
+            c5.metric("Biblias", _valor_grafico_ebd("Biblias", totais["Biblias"]))
+            c6.metric("Revistas", _valor_grafico_ebd("Revistas", totais["Revistas"]))
+            c7.metric("Harpas", _valor_grafico_ebd("Harpas", totais["Harpas"]))
+            c8.metric("Ofertas", _moeda(totais["Ofertas"]))
+
+            st.markdown("#### Grafico geral da Escola Bíblica")
+            _grafico_totais_ebd(
+                "Resumo geral da Escola Bíblica",
+                totais,
+                modo=modo_geral,
+            )
 
 
 def _render_escala_editar(slug, escala, op_classes, opcoes_item):
