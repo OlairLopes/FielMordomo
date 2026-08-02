@@ -2140,7 +2140,7 @@ def salvar_ebd_matricula(slug, id_classe, nome_aluno, id_cadastro=None, data_ini
     db = _tenant_db(slug)
     if not db.exists():
         inicializar_tenant(slug)
-    id_cadastro = int(id_cadastro) if id_cadastro else None
+    id_cadastro = None if id_cadastro is None or pd.isna(id_cadastro) else int(id_cadastro)
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         if id_cadastro:
