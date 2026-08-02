@@ -38,7 +38,7 @@ from modules.aniversariantes import (
     _renderizar_resultados_envio,
     _whatsapp_api_configurada,
 )
-from utils.helpers import confirmar_exclusao, gerar_csv, normalizar_data_digitada, slug_da_sessao
+from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
 
 
 CORES = {
@@ -1239,10 +1239,10 @@ def _render_classes(slug):
                     classe_edit = st.selectbox("Classe", classe_labels, index=classe_idx)
                     c1, c2 = st.columns(2)
                     nome_edit = c1.text_input("Nome do aluno", value=str(row.get("nome_aluno", "") or ""))
-                    data_inicio_edit = c2.text_input(
+                    data_inicio_edit = c2.date_input(
                         "Data de início",
-                        value=str(row.get("data_inicio", "") or ""),
-                        placeholder="Ex.: 26/06/2024 ou 26062024",
+                        value=_parse_data(row.get("data_inicio")) or _hoje(),
+                        format="DD/MM/YYYY",
                     )
                     ativa_edit = st.selectbox(
                         "Situação",
@@ -1257,7 +1257,7 @@ def _render_classes(slug):
                                 op_classes[classe_edit],
                                 nome_edit,
                                 row.get("id_cadastro"),
-                                _data_iso(normalizar_data_digitada(data_inicio_edit)),
+                                data_inicio_edit.isoformat(),
                                 obs_edit,
                                 id_matricula=int(row["id_matricula"]),
                                 ativa=ativa_edit == "Ativa",
