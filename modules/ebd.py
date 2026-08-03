@@ -698,7 +698,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
 
 
-def _totais_aulas(aulas, media=False):
+def _totais_aulas(aulas, media=False, por_semana=False):
     if aulas.empty:
         return {
             "Matriculados": 0,
@@ -711,13 +711,17 @@ def _totais_aulas(aulas, media=False):
             "Harpas": 0,
             "Ofertas": 0.0,
         }
-    divisor = int(aulas["id_aula"].nunique()) if media else 1
+    if media:
+        coluna_divisor = "data" if por_semana else "id_aula"
+        divisor = int(aulas[coluna_divisor].nunique())
+    else:
+        divisor = 1
     divisor = max(divisor, 1)
     dados = {
         "Matriculados": float(aulas["matriculados"].fillna(0).sum()) / divisor,
         "Presentes": float(aulas["presentes"].fillna(0).sum()) / divisor,
         "Ausentes": float(aulas["ausentes"].fillna(0).sum()) / divisor,
-        "Visitantes": float(aulas["visitantes"].fillna(0).sum()) / divisor,
+        "Visitantes": float(aulas["visitantes"].fillna(0).sum()),
         "Assistentes": float(aulas["assistentes"].fillna(0).sum()) / divisor,
         "Biblias": float(aulas["qtd_biblias"].fillna(0).sum()) / divisor,
         "Revistas": float(aulas["qtd_revistas"].fillna(0).sum()) / divisor,
@@ -1916,11 +1920,14 @@ def _render_relatorios(slug):
         if aulas.empty:
             st.info("Nenhuma aula registrada no periodo selecionado.")
         else:
-            modo_geral = "Total"
-            totais = _totais_aulas(aulas, media=False)
+            modo_geral = "Média ponderada"
+            totais = _totais_aulas(aulas, media=True, por_semana=True)
             st.markdown("#### Relatorio geral")
             st.caption(
-                "Soma de todas as classes no periodo. Chamadas consideradas: "
+                "Matriculados, presentes, ausentes, assistentes, biblias, revistas e "
+                "harpas somam todas as classes e sao divididos pela quantidade de "
+                "domingos com aula no periodo (media ponderada). Visitantes e ofertas "
+                "somam o valor total do periodo. Chamadas consideradas: "
                 f"{int(aulas['id_aula'].nunique())}."
             )
             c1, c2, c3, c4, c5 = st.columns(5)
