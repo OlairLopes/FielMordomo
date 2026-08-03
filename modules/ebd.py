@@ -483,7 +483,10 @@ def _grafico_frequencia_classes(resumo):
 
 
 def _resumo_professores(aulas):
-    colunas = ["professor", "classes", "aulas", "matriculados", "presentes", "ausentes", "frequencia_pct"]
+    colunas = [
+        "professor", "classes", "aulas", "matriculados", "presentes", "ausentes",
+        "frequencia_pct", "indice_desempenho",
+    ]
     if aulas.empty:
         return pd.DataFrame(columns=colunas)
     dados = aulas.copy()
@@ -500,30 +503,46 @@ def _resumo_professores(aulas):
     )
     total = resumo["matriculados"]
     resumo["frequencia_pct"] = (resumo["presentes"] / total.where(total > 0, 1) * 100).round(1)
-    return resumo.sort_values("frequencia_pct", ascending=False)
+
+    # Indice ponderado: pondera a frequencia pela quantidade de aulas ministradas
+    # (media bayesiana), para que poucos registros nao distorcam o ranking.
+    media_geral = (
+        resumo["presentes"].sum() / total.sum() * 100 if total.sum() > 0 else 0
+    )
+    peso_confianca = max(float(resumo["aulas"].median()), 1.0)
+    resumo["indice_desempenho"] = (
+        (resumo["aulas"] / (resumo["aulas"] + peso_confianca)) * resumo["frequencia_pct"]
+        + (peso_confianca / (resumo["aulas"] + peso_confianca)) * media_geral
+    ).round(1)
+    return resumo.sort_values("indice_desempenho", ascending=False)
 
 
 def _grafico_desempenho_professores(dados):
     if dados.empty:
         st.info("Sem dados de professores para o periodo selecionado.")
         return
-    ordenado = dados.sort_values("frequencia_pct", ascending=True)
+    ordenado = dados.sort_values("indice_desempenho", ascending=True)
     fig = go.Figure(go.Bar(
-        name="Frequencia dos alunos",
-        x=ordenado["frequencia_pct"],
+        name="Indice de desempenho",
+        x=ordenado["indice_desempenho"],
         y=ordenado["professor"],
         orientation="h",
         marker_color=CORES["azul"],
-        text=[_pct(v) for v in ordenado["frequencia_pct"]],
+        text=[_pct(v) for v in ordenado["indice_desempenho"]],
         textposition="outside",
-        hovertemplate="<b>%{y}</b><br>Frequencia dos alunos: %{x:.1f}%<extra></extra>",
+        customdata=ordenado[["frequencia_pct", "aulas"]],
+        hovertemplate=(
+            "<b>%{y}</b><br>Indice de desempenho: %{x:.1f}%"
+            "<br>Frequencia dos alunos: %{customdata[0]:.1f}%"
+            "<br>Aulas ministradas: %{customdata[1]}<extra></extra>"
+        ),
     ))
     fig.update_layout(
         height=max(360, 70 * len(ordenado)),
         margin=dict(t=35, b=40, l=20, r=30),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(range=[0, 105], title="Frequencia dos alunos (%)", fixedrange=True),
+        xaxis=dict(range=[0, 105], title="Indice de desempenho (%)", fixedrange=True),
         yaxis=dict(title="", fixedrange=True),
         showlegend=True,
         legend=dict(orientation="h", y=1.12, x=0),
@@ -1786,6 +1805,7 @@ def _render_relatorios(slug):
                     "Resumo comparativo por classe",
                     aulas,
                 )
+                resumo_classe_escolhida = resumo
             else:
                 aulas_classe = aulas[aulas["classe"].astype(str) == classe_escolhida]
                 media_classe = int(aulas_classe["id_aula"].nunique()) > 1
@@ -1799,6 +1819,10 @@ def _render_relatorios(slug):
                     _totais_aulas(aulas_classe, media=media_classe),
                     modo=modo_classe,
                 )
+                resumo_classe_escolhida = resumo[resumo["classe"].astype(str) == classe_escolhida]
+
+            st.markdown("##### Percentual de frequencia")
+            _grafico_frequencia_classes(resumo_classe_escolhida)
 
     with tab_frequencia:
         st.markdown("#### Frequencia por classe")
@@ -1837,12 +1861,16 @@ def _render_relatorios(slug):
     with tab_professores:
         st.markdown("#### Desempenho dos professores")
         st.caption(
-            "Frequencia media dos alunos nas aulas ministradas por cada professor no periodo selecionado."
+            "O indice de desempenho pondera a frequencia dos alunos pela quantidade de aulas "
+            "ministradas por cada professor, para que professores com poucos registros nao "
+            "fiquem em vantagem ou desvantagem injusta frente aos que ministraram mais aulas "
+            "no periodo."
         )
         _grafico_desempenho_professores(professores)
         if not professores.empty:
             tabela_prof = professores.copy()
             tabela_prof["frequencia_pct"] = tabela_prof["frequencia_pct"].apply(_pct)
+            tabela_prof["indice_desempenho"] = tabela_prof["indice_desempenho"].apply(_pct)
             tabela_prof = tabela_prof.rename(columns={
                 "professor": "Professor",
                 "classes": "Classes",
@@ -1851,6 +1879,7 @@ def _render_relatorios(slug):
                 "presentes": "Presentes",
                 "ausentes": "Ausentes",
                 "frequencia_pct": "Frequencia",
+                "indice_desempenho": "Indice de desempenho",
             })
             st.dataframe(tabela_prof, use_container_width=True, hide_index=True)
             st.download_button(
@@ -1887,12 +1916,11 @@ def _render_relatorios(slug):
         if aulas.empty:
             st.info("Nenhuma aula registrada no periodo selecionado.")
         else:
-            media_geral = int(aulas["id_aula"].nunique()) > 1
-            modo_geral = "Média por chamada" if media_geral else "Total"
-            totais = _totais_aulas(aulas, media=media_geral)
+            modo_geral = "Total"
+            totais = _totais_aulas(aulas, media=False)
             st.markdown("#### Relatorio geral")
             st.caption(
-                f"{modo_geral}. Chamadas consideradas no periodo: "
+                "Soma de todas as classes no periodo. Chamadas consideradas: "
                 f"{int(aulas['id_aula'].nunique())}."
             )
             c1, c2, c3, c4, c5 = st.columns(5)
