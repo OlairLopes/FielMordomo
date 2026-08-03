@@ -461,17 +461,19 @@ def _metricas_ebd(resumo, aulas):
     c4.metric("Frequencia media", _pct(freq))
 
 
-def _grafico_frequencia_classes(resumo, key=None):
+def _grafico_frequencia_classes(resumo, cores_classes=None, key=None):
     if resumo.empty:
         st.info("Sem dados de frequencia para o periodo selecionado.")
         return
     dados = resumo.sort_values("frequencia_pct", ascending=True)
+    cores_classes = cores_classes or {}
+    cores_barras = [cores_classes.get(classe, CORES["verde"]) for classe in dados["classe"]]
     fig = go.Figure(go.Bar(
         name="Frequencia",
         x=dados["frequencia_pct"],
         y=dados["classe"],
         orientation="h",
-        marker_color=CORES["verde"],
+        marker_color=cores_barras,
         text=[_pct(v) for v in dados["frequencia_pct"]],
         textposition="outside",
         hovertemplate="<b>%{y}</b><br>Frequencia: %{x:.1f}%<extra></extra>",
@@ -642,6 +644,13 @@ def _salvar_cores_classes(slug, cores):
 
 def _cor_classe(classe, indice, cores_salvas):
     return cores_salvas.get(classe) or PALETA_CORES_CLASSES[indice % len(PALETA_CORES_CLASSES)]
+
+
+def _mapa_cores_classes(classes, cores_salvas):
+    return {
+        classe: _cor_classe(classe, indice, cores_salvas)
+        for indice, classe in enumerate(classes)
+    }
 
 
 def _seletor_cores_classes(slug, classes):
@@ -1817,6 +1826,11 @@ def _render_relatorios(slug):
     freq = relatorio_ebd_frequencia(slug, inicio.isoformat(), fim.isoformat())
     professores = _resumo_professores(aulas)
 
+    classes_periodo = (
+        sorted(aulas["classe"].dropna().astype(str).unique().tolist()) if not aulas.empty else []
+    )
+    cores_classes_salvas = _mapa_cores_classes(classes_periodo, _carregar_cores_classes(slug))
+
     tab_classe, tab_frequencia, tab_professores, tab_geral = st.tabs(
         ["Relatorio por classe", "Frequencia por classe", "Desempenho dos professores", "Relatorio geral"]
     )
@@ -1826,10 +1840,9 @@ def _render_relatorios(slug):
             st.info("Nenhuma aula registrada no periodo selecionado.")
         else:
             st.markdown("#### Grafico por classe")
-            classes = sorted(aulas["classe"].dropna().astype(str).unique().tolist())
             classe_escolhida = st.selectbox(
                 "Escolha a classe",
-                ["Todas as classes"] + classes,
+                ["Todas as classes"] + classes_periodo,
                 key="grafico_ebd_classe",
             )
             if classe_escolhida == "Todas as classes":
@@ -1837,7 +1850,7 @@ def _render_relatorios(slug):
                     "Comparativo por sala. Quando uma sala possui mais de uma chamada "
                     "no periodo, o grafico apresenta a media por chamada daquela sala."
                 )
-                cores_classes = _seletor_cores_classes(slug, classes)
+                cores_classes = _seletor_cores_classes(slug, classes_periodo)
                 _grafico_comparativo_classes_ebd(
                     "Resumo comparativo por classe",
                     aulas,
@@ -1859,13 +1872,20 @@ def _render_relatorios(slug):
                     key="ebd_grafico_totais_classe_selecionada",
                 )
                 resumo_classe_escolhida = resumo[resumo["classe"].astype(str) == classe_escolhida]
+                cores_classes = cores_classes_salvas
 
             st.markdown("##### Percentual de frequencia")
-            _grafico_frequencia_classes(resumo_classe_escolhida, key="ebd_grafico_frequencia_relatorio_classe")
+            _grafico_frequencia_classes(
+                resumo_classe_escolhida,
+                cores_classes=cores_classes,
+                key="ebd_grafico_frequencia_relatorio_classe",
+            )
 
     with tab_frequencia:
         st.markdown("#### Frequencia por classe")
-        _grafico_frequencia_classes(resumo, key="ebd_grafico_frequencia_aba_frequencia")
+        _grafico_frequencia_classes(
+            resumo, cores_classes=cores_classes_salvas, key="ebd_grafico_frequencia_aba_frequencia"
+        )
         if not resumo.empty:
             tabela = resumo.copy()
             tabela["frequencia_pct"] = tabela["frequencia_pct"].apply(_pct)
