@@ -1,6 +1,7 @@
 import base64
 import datetime
 import html
+import json
 import re
 import urllib.parse
 from collections import defaultdict
@@ -27,6 +28,7 @@ from data.repository import (
     obter_config_igreja,
     obter_logo_igreja,
     obter_logo_sistema,
+    salvar_config_igreja,
     salvar_ebd_chamada,
     salvar_ebd_classe,
     salvar_ebd_escala,
@@ -49,6 +51,11 @@ CORES = {
     "cinza": "#64748B",
 }
 CONFIG_PLOTLY = {"displayModeBar": False, "responsive": True}
+CHAVE_CORES_CLASSES_EBD = "ebd_cores_classes"
+PALETA_CORES_CLASSES = [
+    "#0F3D5E", "#DB2777", "#F59E0B", "#1D9E75", "#7C3AED",
+    "#0EA5E9", "#B45309", "#DC2626", "#0891B2", "#64748B",
+]
 MENSAGEM_ESCALA_PADRAO = """Paz do Senhor, {nome}!
 
 Voce esta escalado(a) para servir na Escola Bíblica.
@@ -618,7 +625,44 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None):
     st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key=key)
 
 
-def _grafico_comparativo_classes_ebd(titulo, aulas):
+def _carregar_cores_classes(slug):
+    bruto = obter_config_igreja(slug, CHAVE_CORES_CLASSES_EBD, "")
+    if not bruto:
+        return {}
+    try:
+        dados = json.loads(bruto)
+    except (ValueError, TypeError):
+        return {}
+    return dados if isinstance(dados, dict) else {}
+
+
+def _salvar_cores_classes(slug, cores):
+    salvar_config_igreja(slug, CHAVE_CORES_CLASSES_EBD, json.dumps(cores))
+
+
+def _cor_classe(classe, indice, cores_salvas):
+    return cores_salvas.get(classe) or PALETA_CORES_CLASSES[indice % len(PALETA_CORES_CLASSES)]
+
+
+def _seletor_cores_classes(slug, classes):
+    cores_salvas = _carregar_cores_classes(slug)
+    cores_atuais = {}
+    with st.expander("Personalizar cores das classes", expanded=False):
+        colunas = st.columns(3)
+        for indice, classe in enumerate(classes):
+            cor_padrao = _cor_classe(classe, indice, cores_salvas)
+            cor_escolhida = colunas[indice % 3].color_picker(
+                classe, value=cor_padrao, key=f"ebd_cor_classe_{classe}"
+            )
+            cores_atuais[classe] = cor_escolhida
+        if st.button("Salvar cores", key="ebd_salvar_cores_classes"):
+            _salvar_cores_classes(slug, cores_atuais)
+            st.success("Cores das classes salvas.")
+            st.rerun()
+    return cores_atuais
+
+
+def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None):
     if aulas.empty:
         st.info("Sem dados para gerar o grafico.")
         return
@@ -643,28 +687,16 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
 
     altura = max(460, min(820, 72 * df["Indicador"].nunique() + 220))
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    cores_indicador = {
-        "Matriculados": CORES["azul"],
-        "Presentes": CORES["verde"],
-        "Ausentes": CORES["vermelho"],
-        "Visitantes": CORES["laranja"],
-        "Assistentes": "#0EA5E9",
-        "Biblias": "#7C3AED",
-        "Revistas": "#0891B2",
-        "Harpas": "#B45309",
-        "Ofertas": "#DB2777",
-    }
+    cores_classes = cores_classes or {}
     for idx, classe in enumerate(df["Classe"].drop_duplicates().tolist()):
+        cor_classe = cores_classes.get(classe) or PALETA_CORES_CLASSES[idx % len(PALETA_CORES_CLASSES)]
         sub = df[(df["Classe"] == classe) & (df["Indicador"] != "Ofertas")]
         if not sub.empty:
             fig.add_trace(go.Bar(
                 name=classe,
                 x=sub["Indicador"],
                 y=sub["Valor"],
-                marker_color=[
-                    cores_indicador.get(str(indicador), CORES["cinza"])
-                    for indicador in sub["Indicador"]
-                ],
+                marker_color=cor_classe,
                 text=sub["Texto"],
                 textposition="outside",
                 hovertemplate="<b>%{fullData.name}</b><br>%{x}: %{text}<extra></extra>",
@@ -676,7 +708,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
                 name=f"{classe} - Ofertas",
                 x=sub_ofertas["Indicador"],
                 y=sub_ofertas["Valor"],
-                marker_color=cores_indicador["Ofertas"],
+                marker_color=cor_classe,
                 text=sub_ofertas["Texto"],
                 textposition="outside",
                 hovertemplate="<b>%{fullData.name}</b><br>%{x}: %{text}<extra></extra>",
@@ -695,7 +727,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
         legend=dict(orientation="h", y=1.12, x=0),
     )
-    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key="ebd_grafico_comparativo_classes")
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key=key or "ebd_grafico_comparativo_classes")
 
 
 def _totais_aulas(aulas, media=False, por_semana=False):
@@ -1805,9 +1837,11 @@ def _render_relatorios(slug):
                     "Comparativo por sala. Quando uma sala possui mais de uma chamada "
                     "no periodo, o grafico apresenta a media por chamada daquela sala."
                 )
+                cores_classes = _seletor_cores_classes(slug, classes)
                 _grafico_comparativo_classes_ebd(
                     "Resumo comparativo por classe",
                     aulas,
+                    cores_classes=cores_classes,
                 )
                 resumo_classe_escolhida = resumo
             else:
