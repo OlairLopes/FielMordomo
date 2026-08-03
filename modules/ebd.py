@@ -1812,7 +1812,26 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
                 st.error(str(exc))
 
 
+def _estilo_sombra_graficos():
+    st.markdown(
+        """
+        <style>
+        [data-testid="stPlotlyChart"] {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+            margin-bottom: 18px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_relatorios(slug):
+    _estilo_sombra_graficos()
     st.markdown("### Relatorios da Escola Bíblica")
     c1, c2 = st.columns(2)
     inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="ebd_rel_ini", format="DD/MM/YYYY")
