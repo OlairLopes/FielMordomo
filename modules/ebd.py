@@ -454,7 +454,7 @@ def _metricas_ebd(resumo, aulas):
     c4.metric("Frequencia media", _pct(freq))
 
 
-def _grafico_frequencia_classes(resumo):
+def _grafico_frequencia_classes(resumo, key=None):
     if resumo.empty:
         st.info("Sem dados de frequencia para o periodo selecionado.")
         return
@@ -479,7 +479,7 @@ def _grafico_frequencia_classes(resumo):
         showlegend=True,
         legend=dict(orientation="h", y=1.12, x=0),
     )
-    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key=key)
 
 
 def _resumo_professores(aulas):
@@ -547,7 +547,7 @@ def _grafico_desempenho_professores(dados):
         showlegend=True,
         legend=dict(orientation="h", y=1.12, x=0),
     )
-    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key="ebd_grafico_desempenho_professores")
 
 
 def _valor_grafico_ebd(indicador, valor):
@@ -561,7 +561,7 @@ def _valor_grafico_ebd(indicador, valor):
     return str(inteiro)
 
 
-def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None):
+def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None):
     if not dados:
         st.info("Sem dados para gerar o grafico.")
         return
@@ -615,7 +615,7 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None):
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
         showlegend=False,
     )
-    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key=key)
 
 
 def _grafico_comparativo_classes_ebd(titulo, aulas):
@@ -695,7 +695,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas):
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
         legend=dict(orientation="h", y=1.12, x=0),
     )
-    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY)
+    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key="ebd_grafico_comparativo_classes")
 
 
 def _totais_aulas(aulas, media=False, por_semana=False):
@@ -1822,15 +1822,16 @@ def _render_relatorios(slug):
                     f"Resumo da classe {classe_escolhida}",
                     _totais_aulas(aulas_classe, media=media_classe),
                     modo=modo_classe,
+                    key="ebd_grafico_totais_classe_selecionada",
                 )
                 resumo_classe_escolhida = resumo[resumo["classe"].astype(str) == classe_escolhida]
 
             st.markdown("##### Percentual de frequencia")
-            _grafico_frequencia_classes(resumo_classe_escolhida)
+            _grafico_frequencia_classes(resumo_classe_escolhida, key="ebd_grafico_frequencia_relatorio_classe")
 
     with tab_frequencia:
         st.markdown("#### Frequencia por classe")
-        _grafico_frequencia_classes(resumo)
+        _grafico_frequencia_classes(resumo, key="ebd_grafico_frequencia_aba_frequencia")
         if not resumo.empty:
             tabela = resumo.copy()
             tabela["frequencia_pct"] = tabela["frequencia_pct"].apply(_pct)
@@ -1947,6 +1948,7 @@ def _render_relatorios(slug):
                 "Resumo geral da Escola Bíblica",
                 totais,
                 modo=modo_geral,
+                key="ebd_grafico_totais_geral",
             )
 
 
