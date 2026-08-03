@@ -1951,6 +1951,17 @@ def _render_relatorios(slug):
                 key="ebd_grafico_totais_geral",
             )
 
+            total_matriculados = float(aulas["matriculados"].fillna(0).sum())
+            total_presentes = float(aulas["presentes"].fillna(0).sum())
+            freq_geral_pct = round(
+                total_presentes / total_matriculados * 100, 1
+            ) if total_matriculados else 0.0
+            resumo_geral_freq = pd.DataFrame(
+                [{"classe": "Escola Bíblica", "frequencia_pct": freq_geral_pct}]
+            )
+            st.markdown("##### Percentual de frequencia geral")
+            _grafico_frequencia_classes(resumo_geral_freq, key="ebd_grafico_frequencia_geral")
+
 
 def _render_escala_editar(slug, escala, op_classes, opcoes_item):
     editar_label = st.selectbox(
