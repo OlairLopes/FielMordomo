@@ -625,11 +625,10 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None, resp
             hovertemplate="<b>%{x}</b><br>Total: %{text}<extra></extra>",
         ), secondary_y=True)
 
-    largura = max(480, 100 * len(df))
     fig.update_layout(
         title=titulo,
         height=altura,
-        width=largura,
+        autosize=True,
         margin=dict(t=60, b=80, l=25, r=25),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -642,8 +641,8 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None, resp
     )
     st.plotly_chart(
         fig,
-        use_container_width=False,
-        config={"displayModeBar": False, "responsive": False},
+        use_container_width=True,
+        config=CONFIG_PLOTLY,
         key=key,
     )
 
@@ -718,21 +717,14 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
     altura = max(460, min(820, 72 * df["Indicador"].nunique() + 220))
     if _dispositivo_movel():
         altura = round(altura * 0.5)
-    n_classes = max(df["Classe"].nunique(), 1)
-    n_indicadores = max(df[df["Indicador"] != "Ofertas"]["Indicador"].nunique(), 1)
     classes_unicas = df["Classe"].drop_duplicates().tolist()
-    largura = max(640, 46 * n_classes * n_indicadores + 80)
-
-    # Legenda em 2 colunas no topo: reserva altura extra proporcional ao
-    # numero de linhas para nunca sobrepor as barras do grafico.
-    linhas_legenda = -(-n_classes // 2)
-    margem_topo = 34 + linhas_legenda * 22 + 16
-    altura += max(0, margem_topo - 60)
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     cores_classes = cores_classes or {}
+    cores_por_classe = {}
     for idx, classe in enumerate(classes_unicas):
         cor_classe = cores_classes.get(classe) or PALETA_CORES_CLASSES[idx % len(PALETA_CORES_CLASSES)]
+        cores_por_classe[classe] = cor_classe
         sub = df[(df["Classe"] == classe) & (df["Indicador"] != "Ofertas")]
         if not sub.empty:
             fig.add_trace(go.Bar(
@@ -761,9 +753,9 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
     fig.update_layout(
         title=titulo,
         height=altura,
-        width=largura,
+        autosize=True,
         barmode="group",
-        margin=dict(t=margem_topo, b=90, l=25, r=35),
+        margin=dict(t=60, b=90, l=25, r=25),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(size=12),
@@ -771,22 +763,36 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         xaxis=dict(title="", fixedrange=True, automargin=True, tickangle=-20),
         yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0", automargin=True),
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
-        legend=dict(
-            orientation="h",
-            entrywidth=0.5,
-            entrywidthmode="fraction",
-            yanchor="top",
-            y=1 - 34 / altura,
-            xanchor="left",
-            x=0,
-            font=dict(size=11),
-        ),
+        showlegend=False,
     )
     st.plotly_chart(
         fig,
-        use_container_width=False,
-        config={"displayModeBar": False, "responsive": False},
+        use_container_width=True,
+        config=CONFIG_PLOTLY,
         key=key or "ebd_grafico_comparativo_classes",
+    )
+    _legenda_classes_html(cores_por_classe)
+
+
+def _legenda_classes_html(cores_por_classe):
+    # Legenda em HTML/CSS (flex-wrap) no rodape do grafico: fica fora do
+    # canvas do Plotly, entao nunca sobrepoe as barras, e se reorganiza
+    # sozinha quando a tela e redimensionada ou girada (portrait/landscape).
+    itens = "".join(
+        f'<span style="display:inline-flex;align-items:center;gap:6px;'
+        f'margin:4px 12px;">'
+        f'<span style="width:12px;height:12px;border-radius:3px;'
+        f'background:{html.escape(cor)};display:inline-block;flex:none;"></span>'
+        f'<span style="font-size:13px;color:#334155;">{html.escape(str(classe))}</span>'
+        f'</span>'
+        for classe, cor in cores_por_classe.items()
+    )
+    st.markdown(
+        f'<div style="display:flex;flex-wrap:wrap;justify-content:center;'
+        f'background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;'
+        f'box-shadow:0 6px 16px rgba(15,23,42,0.08);'
+        f'padding:8px 6px;margin:-10px 0 18px;">{itens}</div>',
+        unsafe_allow_html=True,
     )
 
 
