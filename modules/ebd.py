@@ -480,11 +480,12 @@ def _grafico_frequencia_classes(resumo, cores_classes=None, key=None):
     ))
     fig.update_layout(
         height=max(360, 70 * len(dados)),
-        margin=dict(t=35, b=40, l=20, r=30),
+        margin=dict(t=35, b=40, l=10, r=30),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(range=[0, 105], title="Frequencia (%)", fixedrange=True),
-        yaxis=dict(title="", fixedrange=True),
+        font=dict(size=12),
+        xaxis=dict(range=[0, 105], title="Frequencia (%)", fixedrange=True, automargin=True),
+        yaxis=dict(title="", fixedrange=True, automargin=True),
         showlegend=True,
         legend=dict(orientation="h", y=1.12, x=0),
     )
@@ -548,11 +549,12 @@ def _grafico_desempenho_professores(dados):
     ))
     fig.update_layout(
         height=max(360, 70 * len(ordenado)),
-        margin=dict(t=35, b=40, l=20, r=30),
+        margin=dict(t=35, b=40, l=10, r=30),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(range=[0, 105], title="Indice de desempenho (%)", fixedrange=True),
-        yaxis=dict(title="", fixedrange=True),
+        font=dict(size=12),
+        xaxis=dict(range=[0, 105], title="Indice de desempenho (%)", fixedrange=True, automargin=True),
+        yaxis=dict(title="", fixedrange=True, automargin=True),
         showlegend=True,
         legend=dict(orientation="h", y=1.12, x=0),
     )
@@ -613,18 +615,27 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None):
             hovertemplate="<b>%{x}</b><br>Total: %{text}<extra></extra>",
         ), secondary_y=True)
 
+    largura = max(480, 100 * len(df))
     fig.update_layout(
         title=titulo,
         height=altura,
+        width=largura,
         margin=dict(t=60, b=80, l=25, r=25),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(fixedrange=True),
-        yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0"),
+        font=dict(size=12),
+        uniformtext=dict(minsize=9, mode="hide"),
+        xaxis=dict(fixedrange=True, automargin=True, tickangle=-20),
+        yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0", automargin=True),
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
         showlegend=False,
     )
-    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key=key)
+    st.plotly_chart(
+        fig,
+        use_container_width=False,
+        config={"displayModeBar": False, "responsive": False},
+        key=key,
+    )
 
 
 def _carregar_cores_classes(slug):
@@ -695,6 +706,9 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         return
 
     altura = max(460, min(820, 72 * df["Indicador"].nunique() + 220))
+    n_classes = max(df["Classe"].nunique(), 1)
+    n_indicadores = max(df[df["Indicador"] != "Ofertas"]["Indicador"].nunique(), 1)
+    largura = max(640, 46 * n_classes * n_indicadores + 80)
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     cores_classes = cores_classes or {}
     for idx, classe in enumerate(df["Classe"].drop_duplicates().tolist()):
@@ -727,16 +741,24 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
     fig.update_layout(
         title=titulo,
         height=altura,
+        width=largura,
         barmode="group",
         margin=dict(t=60, b=90, l=25, r=35),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title="", fixedrange=True),
-        yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0"),
+        font=dict(size=12),
+        uniformtext=dict(minsize=9, mode="hide"),
+        xaxis=dict(title="", fixedrange=True, automargin=True, tickangle=-20),
+        yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0", automargin=True),
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
         legend=dict(orientation="h", y=1.12, x=0),
     )
-    st.plotly_chart(fig, use_container_width=True, config=CONFIG_PLOTLY, key=key or "ebd_grafico_comparativo_classes")
+    st.plotly_chart(
+        fig,
+        use_container_width=False,
+        config={"displayModeBar": False, "responsive": False},
+        key=key or "ebd_grafico_comparativo_classes",
+    )
 
 
 def _totais_aulas(aulas, media=False, por_semana=False):
@@ -1823,6 +1845,13 @@ def _estilo_sombra_graficos():
             padding: 14px;
             box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
             margin-bottom: 18px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        @media (max-width: 640px) {
+            [data-testid="stPlotlyChart"] {
+                padding: 8px;
+            }
         }
         </style>
         """,
