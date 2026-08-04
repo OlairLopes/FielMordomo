@@ -572,7 +572,15 @@ def _valor_grafico_ebd(indicador, valor):
     return str(inteiro)
 
 
-def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None):
+def _dispositivo_movel():
+    try:
+        user_agent = str(st.context.headers.get("user-agent", "") or "")
+    except Exception:
+        user_agent = ""
+    return bool(re.search(r"Mobi|Android|iPhone|iPad|iPod|Tablet", user_agent, re.IGNORECASE))
+
+
+def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None, responsivo_mobile=False):
     if not dados:
         st.info("Sem dados para gerar o grafico.")
         return
@@ -582,6 +590,8 @@ def _grafico_totais_ebd(titulo, dados, modo="Total", altura=None, key=None):
     df_ofertas = df[df["Indicador"] == "Ofertas"].copy()
     df_qtd = df[df["Indicador"] != "Ofertas"].copy()
     altura = altura or max(380, min(680, 80 * len(df) + 180))
+    if responsivo_mobile and _dispositivo_movel():
+        altura = round(altura * 0.5)
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
     if not df_qtd.empty:
@@ -706,6 +716,8 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         return
 
     altura = max(460, min(820, 72 * df["Indicador"].nunique() + 220))
+    if _dispositivo_movel():
+        altura = round(altura * 0.5)
     n_classes = max(df["Classe"].nunique(), 1)
     n_indicadores = max(df[df["Indicador"] != "Ofertas"]["Indicador"].nunique(), 1)
     largura = max(640, 46 * n_classes * n_indicadores + 80)
@@ -2051,6 +2063,7 @@ def _render_relatorios(slug):
                 totais,
                 modo=modo_geral,
                 key="ebd_grafico_totais_geral",
+                responsivo_mobile=True,
             )
 
             total_matriculados = float(aulas["matriculados"].fillna(0).sum())
