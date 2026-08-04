@@ -721,8 +721,14 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
     n_classes = max(df["Classe"].nunique(), 1)
     n_indicadores = max(df[df["Indicador"] != "Ofertas"]["Indicador"].nunique(), 1)
     classes_unicas = df["Classe"].drop_duplicates().tolist()
-    margem_legenda = max(90, min(220, 9 * max((len(c) for c in classes_unicas), default=0) + 50))
-    largura = max(640, 46 * n_classes * n_indicadores + 80) + margem_legenda
+    largura = max(640, 46 * n_classes * n_indicadores + 80)
+
+    # Legenda em 2 colunas no topo: reserva altura extra proporcional ao
+    # numero de linhas para nunca sobrepor as barras do grafico.
+    linhas_legenda = -(-n_classes // 2)
+    margem_topo = 34 + linhas_legenda * 22 + 16
+    altura += max(0, margem_topo - 60)
+
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     cores_classes = cores_classes or {}
     for idx, classe in enumerate(classes_unicas):
@@ -757,7 +763,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         height=altura,
         width=largura,
         barmode="group",
-        margin=dict(t=60, b=90, l=25, r=margem_legenda),
+        margin=dict(t=margem_topo, b=90, l=25, r=35),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(size=12),
@@ -765,7 +771,16 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         xaxis=dict(title="", fixedrange=True, automargin=True, tickangle=-20),
         yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0", automargin=True),
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, font=dict(size=11)),
+        legend=dict(
+            orientation="h",
+            entrywidth=0.5,
+            entrywidthmode="fraction",
+            yanchor="top",
+            y=1 - 34 / altura,
+            xanchor="left",
+            x=0,
+            font=dict(size=11),
+        ),
     )
     st.plotly_chart(
         fig,
