@@ -569,6 +569,18 @@ def _garantir_tabelas_ebd(conn):
             ON ebd_presencas(id_aula);
         CREATE INDEX IF NOT EXISTS idx_ebd_escala_data
             ON ebd_escala_professores(data);
+        CREATE TABLE IF NOT EXISTS ebd_professores_classe (
+            id_professor_classe INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_classe   INTEGER REFERENCES ebd_classes(id_classe) ON DELETE CASCADE,
+            funcao      TEXT NOT NULL DEFAULT 'Professor',
+            nome        TEXT NOT NULL,
+            telefone    TEXT DEFAULT '',
+            ativo       INTEGER NOT NULL DEFAULT 1,
+            ordem       INTEGER NOT NULL DEFAULT 0,
+            criado_em   TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_ebd_professores_classe
+            ON ebd_professores_classe(id_classe, funcao, ativo);
         CREATE TABLE IF NOT EXISTS ebd_secretarios (
             id_secretario INTEGER PRIMARY KEY AUTOINCREMENT,
             nome          TEXT NOT NULL,
@@ -2563,6 +2575,84 @@ def excluir_ebd_escala(slug, id_escala):
     with _conn(db) as conn:
         _garantir_tabelas_ebd(conn)
         conn.execute("DELETE FROM ebd_escala_professores WHERE id_escala=?", (int(id_escala),))
+
+
+def listar_ebd_professores_classe(slug, id_classe=None, funcao=None, incluir_inativos=False):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_ebd(conn)
+        where = []
+        params = []
+        if id_classe is None:
+            where.append("p.id_classe IS NULL")
+        else:
+            where.append("p.id_classe=?")
+            params.append(int(id_classe))
+        if funcao:
+            where.append("p.funcao=?")
+            params.append(str(funcao))
+        if not incluir_inativos:
+            where.append("p.ativo=1")
+        filtro = f"WHERE {' AND '.join(where)}" if where else ""
+        return _read_sql_query_formatado(
+            f"""SELECT p.id_professor_classe, p.id_classe, c.nome AS classe,
+                       p.funcao, p.nome, p.telefone, p.ativo, p.ordem
+                FROM ebd_professores_classe p
+                LEFT JOIN ebd_classes c ON c.id_classe=p.id_classe
+                {filtro}
+                ORDER BY p.ordem, p.nome""",
+            conn,
+            params=params,
+        )
+
+
+def salvar_ebd_professor_classe(
+    slug, nome, id_classe=None, funcao="Professor", telefone="",
+    ativo=True, ordem=0, id_professor_classe=None,
+):
+    nome = sanitizar(nome)
+    if not nome:
+        raise ValueError("Nome do professor e obrigatorio.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_ebd(conn)
+        dados = (
+            int(id_classe) if id_classe else None,
+            sanitizar(funcao) or "Professor",
+            nome,
+            sanitizar(telefone),
+            int(bool(ativo)),
+            int(ordem),
+        )
+        if id_professor_classe:
+            conn.execute(
+                """UPDATE ebd_professores_classe
+                   SET id_classe=?, funcao=?, nome=?, telefone=?, ativo=?, ordem=?
+                   WHERE id_professor_classe=?""",
+                (*dados, int(id_professor_classe)),
+            )
+            return int(id_professor_classe)
+        cur = conn.execute(
+            """INSERT INTO ebd_professores_classe
+               (id_classe, funcao, nome, telefone, ativo, ordem)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            dados,
+        )
+        return cur.lastrowid
+
+
+def excluir_ebd_professor_classe(slug, id_professor_classe):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabelas_ebd(conn)
+        conn.execute(
+            "DELETE FROM ebd_professores_classe WHERE id_professor_classe=?",
+            (int(id_professor_classe),),
+        )
 
 
 def _normalizar_usuario_ebd(usuario):

@@ -22,6 +22,7 @@ from data.repository import (
     listar_ebd_classes,
     listar_ebd_escala,
     listar_ebd_matriculas,
+    listar_ebd_professores_classe,
     listar_ebd_secretarios,
     relatorio_ebd_frequencia,
     relatorio_ebd_resumo_classes,
@@ -33,7 +34,9 @@ from data.repository import (
     salvar_ebd_classe,
     salvar_ebd_escala,
     salvar_ebd_matricula,
+    salvar_ebd_professor_classe,
     salvar_ebd_secretario,
+    excluir_ebd_professor_classe,
 )
 from modules.aniversariantes import (
     _enviar_whatsapp_texto_api,
@@ -2265,6 +2268,315 @@ def _salvar_edicoes_tabela_escala(slug, escala):
     st.rerun()
 
 
+def _render_professores_classe_editar(slug, quadro, id_classe_contexto, funcoes_disponiveis, opcoes_item):
+    editar_label = st.selectbox(
+        "Selecione para editar",
+        ["Selecione"] + list(opcoes_item.keys()),
+        key="prof_classe_editar_select",
+    )
+    if editar_label == "Selecione":
+        return
+    id_item = opcoes_item[editar_label]
+    linha = quadro[quadro["id_professor_classe"] == id_item].iloc[0]
+    with st.form(f"form_prof_classe_editar_{id_item}"):
+        nome_edit = st.text_input("Nome", value=str(linha["nome"]))
+        telefone_edit = st.text_input("WhatsApp", value=str(linha.get("telefone", "") or ""))
+        if len(funcoes_disponiveis) > 1:
+            funcao_edit = st.radio(
+                "Funcao",
+                funcoes_disponiveis,
+                horizontal=True,
+                index=funcoes_disponiveis.index(linha["funcao"]) if linha["funcao"] in funcoes_disponiveis else 0,
+                key=f"prof_classe_funcao_editar_{id_item}",
+            )
+        else:
+            funcao_edit = funcoes_disponiveis[0]
+        ativo_edit = st.checkbox("Ativo", value=bool(linha["ativo"]))
+        if st.form_submit_button("Salvar alteracoes", type="primary"):
+            if not nome_edit.strip():
+                st.error("Informe o nome.")
+            else:
+                try:
+                    salvar_ebd_professor_classe(
+                        slug, nome_edit, id_classe=id_classe_contexto, funcao=funcao_edit,
+                        telefone=telefone_edit, ativo=ativo_edit, ordem=int(linha["ordem"]),
+                        id_professor_classe=id_item,
+                    )
+                    st.success("Professor atualizado.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+
+def _render_professores_classe_excluir(slug, opcoes_item):
+    excluir_label = st.selectbox(
+        "Selecione para remover",
+        ["Selecione"] + list(opcoes_item.keys()),
+        key="prof_classe_excluir_select",
+    )
+    if excluir_label == "Selecione":
+        return
+    if confirmar_exclusao(f"excluir_prof_classe_{excluir_label}", "Remover professor selecionado"):
+        excluir_ebd_professor_classe(slug, opcoes_item[excluir_label])
+        st.success("Professor removido.")
+        st.rerun()
+
+
+def _render_professores_classe(slug, df_classes):
+    st.caption(
+        "Cadastre o quadro fixo de professores de cada classe (recomendado: 4 "
+        "titulares por classe) para a geracao automatica dividir as aulas de "
+        "forma equilibrada entre eles. Cadastre tambem o rodizio de "
+        "superintendentes, valido para toda a Escola Biblica em cada data."
+    )
+    opcoes_contexto = {"Superintendentes (toda a Escola Biblica)": None}
+    if not df_classes.empty:
+        opcoes_contexto.update(_classes_opcoes(df_classes))
+    contexto_label = st.selectbox(
+        "Contexto", list(opcoes_contexto.keys()), key="prof_classe_contexto"
+    )
+    id_classe_contexto = opcoes_contexto[contexto_label]
+    e_superintendente = id_classe_contexto is None
+    funcoes_disponiveis = ["Superintendente"] if e_superintendente else ["Professor", "Auxiliar"]
+
+    quadro = listar_ebd_professores_classe(slug, id_classe=id_classe_contexto, incluir_inativos=True)
+    qtd_titulares = int((quadro["funcao"] == funcoes_disponiveis[0]).sum()) if not quadro.empty else 0
+    rotulo_titular = "superintendentes" if e_superintendente else "professores titulares"
+    st.caption(f"{qtd_titulares} de 4 {rotulo_titular} cadastrados (recomendado).")
+
+    if quadro.empty:
+        st.info("Nenhum professor cadastrado ainda para este contexto.")
+    else:
+        exibir = quadro.copy()
+        exibir["Situacao"] = exibir["ativo"].apply(lambda v: "Ativo" if v else "Inativo")
+        st.dataframe(
+            exibir[["funcao", "nome", "telefone", "Situacao"]].rename(
+                columns={"funcao": "Funcao", "nome": "Nome", "telefone": "WhatsApp"}
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    rotulo_add = "Adicionar superintendente" if e_superintendente else "Adicionar professor"
+    with st.expander(rotulo_add, expanded=quadro.empty), st.form(
+        f"form_prof_classe_add_{id_classe_contexto or 'sup'}"
+    ):
+        if len(funcoes_disponiveis) > 1:
+            funcao = st.radio(
+                "Funcao", funcoes_disponiveis, horizontal=True, key="prof_classe_funcao_add"
+            )
+        else:
+            funcao = funcoes_disponiveis[0]
+        nome, telefone, _ = _selecionar_pessoa_escala(
+            slug, funcao, f"prof_classe_pessoa_{id_classe_contexto or 'sup'}", obrigatorio=True,
+        )
+        if st.form_submit_button("Salvar", type="primary"):
+            if not nome.strip():
+                st.error("Informe o nome.")
+            else:
+                try:
+                    salvar_ebd_professor_classe(
+                        slug, nome, id_classe=id_classe_contexto, funcao=funcao,
+                        telefone=telefone, ordem=len(quadro),
+                    )
+                    st.success("Professor cadastrado.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    if not quadro.empty:
+        opcoes_item = {
+            f'{int(row["id_professor_classe"])} - {row["funcao"]} - {row["nome"]}': int(row["id_professor_classe"])
+            for _, row in quadro.iterrows()
+        }
+        col_editar, col_excluir = st.columns(2)
+        with col_editar:
+            st.markdown("##### Editar professor")
+            _render_professores_classe_editar(
+                slug, quadro, id_classe_contexto, funcoes_disponiveis, opcoes_item
+            )
+        with col_excluir:
+            st.markdown("##### Remover professor")
+            _render_professores_classe_excluir(slug, opcoes_item)
+
+
+def _gerar_datas_periodo(inicio, fim, intervalo_dias):
+    datas = []
+    atual = inicio
+    while atual <= fim:
+        datas.append(atual)
+        atual += datetime.timedelta(days=intervalo_dias)
+    return datas
+
+
+def _montar_plano_escala_automatica(slug, inicio, fim, intervalo_dias, ids_classes, incluir_superintendente):
+    datas = _gerar_datas_periodo(inicio, fim, intervalo_dias)
+    avisos = []
+    if not datas or not ids_classes:
+        return [], avisos
+
+    existentes = listar_ebd_escala(slug, datas[0].isoformat(), datas[-1].isoformat())
+    ocupadas = set()
+    for _, row in existentes.iterrows():
+        id_classe_existente = int(row["id_classe"]) if pd.notna(row.get("id_classe")) else None
+        ocupadas.add((_data_iso(row["data"]), id_classe_existente))
+
+    superintendentes = []
+    if incluir_superintendente:
+        superintendentes = listar_ebd_professores_classe(
+            slug, id_classe=None, funcao="Superintendente"
+        ).to_dict("records")
+        if not superintendentes:
+            avisos.append(
+                "Nenhum superintendente cadastrado: as aulas serao geradas sem superintendente."
+            )
+    superintendente_por_data = {}
+    if superintendentes:
+        for i, data in enumerate(datas):
+            superintendente_por_data[data] = superintendentes[i % len(superintendentes)]
+
+    df_classes = listar_ebd_classes(slug, incluir_inativas=True)
+    nomes_classes = {int(row["id_classe"]): row["nome"] for _, row in df_classes.iterrows()}
+
+    plano = []
+    for id_classe in ids_classes:
+        professores = listar_ebd_professores_classe(
+            slug, id_classe=id_classe, funcao="Professor"
+        ).to_dict("records")
+        if not professores:
+            avisos.append(
+                f"Classe '{nomes_classes.get(id_classe, id_classe)}' sem professores "
+                "cadastrados: nenhuma aula gerada para ela."
+            )
+            continue
+        auxiliares = listar_ebd_professores_classe(
+            slug, id_classe=id_classe, funcao="Auxiliar"
+        ).to_dict("records")
+        for i, data in enumerate(datas):
+            if (data.isoformat(), id_classe) in ocupadas:
+                continue
+            professor = professores[i % len(professores)]
+            auxiliar = auxiliares[i % len(auxiliares)] if auxiliares else None
+            superintendente = superintendente_por_data.get(data)
+            plano.append({
+                "data": data.isoformat(),
+                "id_classe": id_classe,
+                "classe_nome": nomes_classes.get(id_classe, ""),
+                "professor": professor["nome"],
+                "telefone_professor": professor.get("telefone", "") or "",
+                "auxiliar": auxiliar["nome"] if auxiliar else "",
+                "telefone_auxiliar": (auxiliar.get("telefone", "") or "") if auxiliar else "",
+                "superintendente": superintendente["nome"] if superintendente else "",
+                "telefone_superintendente": (
+                    (superintendente.get("telefone", "") or "") if superintendente else ""
+                ),
+            })
+    return plano, avisos
+
+
+def _render_gerar_escala_automatica(slug, df_classes):
+    st.caption(
+        "Gera automaticamente a escala de professores para o periodo escolhido, "
+        "dividindo as aulas de forma equilibrada entre os professores cadastrados "
+        "no quadro de cada classe. Datas que ja tiverem escala cadastrada sao "
+        "preservadas e puladas."
+    )
+    if df_classes.empty:
+        st.info("Cadastre ao menos uma classe antes de gerar a escala.")
+        return
+
+    c1, c2 = st.columns(2)
+    inicio = c1.date_input(
+        "Data inicial", value=_hoje(), key="gerar_escala_ini", format="DD/MM/YYYY"
+    )
+    fim = c2.date_input(
+        "Data final",
+        value=_hoje() + datetime.timedelta(days=84),
+        key="gerar_escala_fim",
+        format="DD/MM/YYYY",
+    )
+    intervalo_label = st.selectbox(
+        "Intervalo entre aulas",
+        ["Semanal (7 dias)", "Quinzenal (14 dias)", "Mensal (28 dias)"],
+        key="gerar_escala_intervalo",
+    )
+    if inicio > fim:
+        st.error("A data inicial nao pode ser maior que a data final.")
+        return
+
+    op_classes = _classes_opcoes(df_classes)
+    classes_escolhidas = st.multiselect(
+        "Classes incluidas na geracao",
+        list(op_classes.keys()),
+        default=list(op_classes.keys()),
+        key="gerar_escala_classes",
+    )
+    incluir_superintendente = st.checkbox(
+        "Incluir rodizio de superintendentes (um por data, para toda a escola)",
+        value=True,
+        key="gerar_escala_incluir_superintendente",
+    )
+
+    if st.button("Pre-visualizar geracao", type="primary", key="gerar_escala_preview_btn"):
+        intervalo_dias = {
+            "Semanal (7 dias)": 7, "Quinzenal (14 dias)": 14, "Mensal (28 dias)": 28,
+        }[intervalo_label]
+        ids_classes = [op_classes[label] for label in classes_escolhidas]
+        plano, avisos = _montar_plano_escala_automatica(
+            slug, inicio, fim, intervalo_dias, ids_classes, incluir_superintendente
+        )
+        st.session_state["gerar_escala_plano"] = plano
+        st.session_state["gerar_escala_avisos"] = avisos
+
+    plano = st.session_state.get("gerar_escala_plano")
+    if plano is None:
+        return
+
+    for aviso in st.session_state.get("gerar_escala_avisos", []):
+        st.warning(aviso)
+
+    if not plano:
+        st.info(
+            "Nada para gerar: todas as datas do periodo ja possuem escala, ou "
+            "nenhuma classe selecionada tem professores cadastrados."
+        )
+        return
+
+    st.markdown(f"##### Previa: {len(plano)} aula(s) serao criadas")
+    previa = pd.DataFrame([
+        {
+            "Data": _fmt_data(item["data"]),
+            "Classe": item["classe_nome"],
+            "Professor": item["professor"],
+            "Auxiliar": item["auxiliar"],
+            "Superintendente": item["superintendente"],
+        }
+        for item in plano
+    ])
+    st.dataframe(previa, use_container_width=True, hide_index=True)
+    if st.button("Confirmar e salvar escala", type="primary", key="gerar_escala_confirmar_btn"):
+        for item in plano:
+            salvar_ebd_escala(
+                slug,
+                item["data"],
+                item["professor"],
+                item["id_classe"],
+                "",
+                item["auxiliar"],
+                "",
+                "Gerado automaticamente",
+                telefone_professor=item["telefone_professor"],
+                funcao_professor="Professor",
+                superintendente=item["superintendente"],
+                telefone_superintendente=item["telefone_superintendente"],
+                telefone_auxiliar=item["telefone_auxiliar"],
+            )
+        st.session_state.pop("gerar_escala_plano", None)
+        st.session_state.pop("gerar_escala_avisos", None)
+        st.success(f"{len(plano)} aula(s) adicionadas a escala.")
+        st.rerun()
+
+
 def _render_escala(slug):
     st.markdown("### Escala de professores")
     df_classes = listar_ebd_classes(slug)
@@ -2272,9 +2584,15 @@ def _render_escala(slug):
     if not df_classes.empty:
         op_classes.update(_classes_opcoes(df_classes))
 
-    tab_nova, tab_consulta, tab_avisos = st.tabs(
-        ["Nova escala", "Consultar / editar", "Avisos"]
+    tab_nova, tab_consulta, tab_professores, tab_gerar, tab_avisos = st.tabs(
+        ["Nova escala", "Consultar / editar", "Professores por classe", "Gerar automatica", "Avisos"]
     )
+
+    with tab_professores:
+        _render_professores_classe(slug, df_classes)
+
+    with tab_gerar:
+        _render_gerar_escala_automatica(slug, df_classes)
 
     with tab_nova:
         with st.form("form_ebd_escala"):
