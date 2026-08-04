@@ -720,10 +720,12 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         altura = round(altura * 0.5)
     n_classes = max(df["Classe"].nunique(), 1)
     n_indicadores = max(df[df["Indicador"] != "Ofertas"]["Indicador"].nunique(), 1)
-    largura = max(640, 46 * n_classes * n_indicadores + 80)
+    classes_unicas = df["Classe"].drop_duplicates().tolist()
+    margem_legenda = max(90, min(220, 9 * max((len(c) for c in classes_unicas), default=0) + 50))
+    largura = max(640, 46 * n_classes * n_indicadores + 80) + margem_legenda
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     cores_classes = cores_classes or {}
-    for idx, classe in enumerate(df["Classe"].drop_duplicates().tolist()):
+    for idx, classe in enumerate(classes_unicas):
         cor_classe = cores_classes.get(classe) or PALETA_CORES_CLASSES[idx % len(PALETA_CORES_CLASSES)]
         sub = df[(df["Classe"] == classe) & (df["Indicador"] != "Ofertas")]
         if not sub.empty:
@@ -755,7 +757,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         height=altura,
         width=largura,
         barmode="group",
-        margin=dict(t=60, b=90, l=25, r=35),
+        margin=dict(t=60, b=90, l=25, r=margem_legenda),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(size=12),
@@ -763,7 +765,7 @@ def _grafico_comparativo_classes_ebd(titulo, aulas, cores_classes=None, key=None
         xaxis=dict(title="", fixedrange=True, automargin=True, tickangle=-20),
         yaxis=dict(title="Quantidades", fixedrange=True, gridcolor="#E2E8F0", automargin=True),
         yaxis2=dict(title="Ofertas (R$)", fixedrange=True, overlaying="y", side="right"),
-        legend=dict(orientation="h", y=1.12, x=0),
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, font=dict(size=11)),
     )
     st.plotly_chart(
         fig,
