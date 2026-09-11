@@ -1,4 +1,5 @@
-﻿import logging
+﻿import base64
+import logging
 import datetime
 import html
 import sqlite3
@@ -258,6 +259,153 @@ def _rotulo_tipo_historico(codigo, ocorrencia, categoria):
     return f"{codigo} - {ocorrencia} - {categoria}"
 
 
+def _renderizar_historico_membro(slug, id_cadastro, congregacao_padrao):
+    """Aba de historico do membro: registra e lista marcos e movimentacoes
+    (conversao, batismo, consagracoes, transferencias, desligamentos, etc.)."""
+    st.caption(
+        "Registre os marcos e movimentacoes do membro na igreja: conversao, "
+        "batismo, consagracoes, transferencias, desligamentos, etc."
+    )
+
+    with st.expander("➕ Adicionar ocorrencia", expanded=False):
+        opcoes_tipo = {
+            _rotulo_tipo_historico(codigo, ocorrencia, categoria): (codigo, ocorrencia, categoria)
+            for codigo, ocorrencia, categoria in TIPOS_HISTORICO
+        }
+        col_data, col_tipo = st.columns([1, 2])
+        with col_data:
+            data_hist = st.date_input(
+                "Data",
+                value=datetime.date.today(),
+                format="DD/MM/YYYY",
+                key=f"chist_data_{id_cadastro}",
+            )
+        with col_tipo:
+            escolha_tipo = st.selectbox(
+                "Tipo de ocorrencia",
+                list(opcoes_tipo.keys()),
+                key=f"chist_tipo_{id_cadastro}",
+            )
+        codigo_sel, ocorrencia_sel, categoria_sel = opcoes_tipo[escolha_tipo]
+
+        localidade_hist = st.text_input(
+            "Localidade / Congregacao",
+            value=congregacao_padrao,
+            key=f"chist_local_{id_cadastro}",
+            help="Congregacao ou igreja relacionada a esta ocorrencia.",
+        )
+        observacao_hist = st.text_area(
+            "Observacao (opcional)",
+            key=f"chist_obs_{id_cadastro}",
+            height=80,
+        )
+
+        if st.button(
+            "💾 Salvar ocorrencia",
+            type="primary",
+            use_container_width=True,
+            key=f"chist_salvar_{id_cadastro}",
+        ):
+            try:
+                _inserir_historico(
+                    slug=slug,
+                    id_cadastro=id_cadastro,
+                    data_ocorrencia=data_hist.isoformat(),
+                    codigo_tipo=codigo_sel,
+                    ocorrencia=ocorrencia_sel,
+                    categoria=categoria_sel,
+                    localidade=localidade_hist,
+                    observacao=observacao_hist,
+                )
+            except Exception as exc:
+                st.error(f"Nao foi possivel salvar a ocorrencia: {exc}")
+            else:
+                st.toast("✅ Ocorrencia registrada!")
+                st.rerun()
+
+    st.divider()
+
+    df_hist = _listar_historico(slug, id_cadastro)
+
+    if df_hist.empty:
+        st.info("Nenhuma ocorrencia registrada ainda para este membro.")
+        return
+
+    for _, linha in df_hist.iterrows():
+        categoria_h = linha.get("categoria") or "Normal"
+        cor_cat = CATEGORIA_COR.get(categoria_h, "#3B82F6")
+        data_fmt = _formatar_data(linha.get("data_ocorrencia", ""))
+        ocorrencia_txt = linha.get("ocorrencia", "") or ""
+        localidade_txt = linha.get("localidade", "") or "(nao informado)"
+        observacao_txt = linha.get("observacao", "") or ""
+        id_hist = int(linha["id_historico"])
+
+        col_txt, col_del = st.columns([9, 1])
+        with col_txt:
+            obs_html = (
+                f'<div style="color:#6b7280;font-size:12px;margin-top:3px;">'
+                f'{_html(observacao_txt)}</div>'
+                if observacao_txt else ""
+            )
+            st.markdown(
+                f"""
+                <div style="padding:10px 12px;border-left:3px solid {cor_cat};
+                            background:{cor_cat}10;border-radius:6px;margin-bottom:8px;">
+                    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;">
+                        <strong style="font-size:13px;">{_html(data_fmt)}</strong>
+                        <span style="background:{cor_cat}22;color:{cor_cat};
+                                     padding:1px 8px;border-radius:10px;font-size:11px;
+                                     font-weight:600;">{_html(categoria_h)}</span>
+                    </div>
+                    <div style="margin-top:4px;font-size:13px;">{_html(ocorrencia_txt)}</div>
+                    <div style="color:#6b7280;font-size:12px;margin-top:2px;">
+                        📍 {_html(localidade_txt)}
+                    </div>
+                    {obs_html}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col_del:
+            if st.button(
+                "🗑️",
+                key=f"chist_del_{id_hist}",
+                help="Excluir esta ocorrencia",
+            ):
+                st.session_state[f"chist_confirmar_del_{id_hist}"] = True
+                st.rerun()
+
+        if st.session_state.get(f"chist_confirmar_del_{id_hist}"):
+            st.warning(
+                f"Confirma a exclusao da ocorrencia "
+                f"**{ocorrencia_txt}** de {data_fmt}?"
+            )
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                if st.button(
+                    "Sim, excluir",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"chist_del_sim_{id_hist}",
+                ):
+                    try:
+                        _excluir_historico(slug, id_hist)
+                    except Exception as exc:
+                        st.error(f"Nao foi possivel excluir: {exc}")
+                    else:
+                        st.session_state.pop(f"chist_confirmar_del_{id_hist}", None)
+                        st.toast("Ocorrencia excluida.")
+                        st.rerun()
+            with cc2:
+                if st.button(
+                    "Cancelar",
+                    use_container_width=True,
+                    key=f"chist_del_nao_{id_hist}",
+                ):
+                    st.session_state.pop(f"chist_confirmar_del_{id_hist}", None)
+                    st.rerun()
+
+
 def _html(valor):
     return html.escape(str(valor if valor is not None else ""), quote=True)
 
@@ -276,9 +424,21 @@ def _campo_linha(rotulo, valor):
 # HTML do formulario para impressao (inalterado)
 # ═══════════════════════════════════════════════════════════════════════
 
-def _gerar_html_formulario_membro(row, igreja):
+def _logo_base64(slug):
+    resultado = obter_logo_igreja(slug)
+    if not resultado:
+        return None
+    dados, ext = resultado
+    b64 = base64.b64encode(dados).decode()
+    mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+    return f"data:{mime};base64,{b64}"
+
+
+def _gerar_html_formulario_membro(row, igreja, slug=None):
     igreja = igreja if isinstance(igreja, dict) else {}
     nome_igreja = igreja.get("nome") or igreja.get("slug") or "Igreja"
+    logo_src = _logo_base64(slug) if slug else None
+    logo_html = f'<img class="logo" src="{logo_src}" alt="Logo"/>' if logo_src else ""
     tipo = _val(row, "tipo_cadastro")
     documento = _formatar_doc(_val(row, "cpf"), tipo)
     nascimento = _formatar_data(_val(row, "data_nascimento"))
@@ -306,6 +466,7 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 .toolbar button {{ background: #061B44; color: white; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; }}
 .folha {{ width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 16mm; border: 1px solid #d1d5db; }}
 .cabecalho {{ text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
+.logo {{ max-height: 64px; max-width: 160px; margin-bottom: 8px; }}
 .igreja {{ font-size: 18px; font-weight: 800; text-transform: uppercase; }}
 .titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
 .emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
@@ -333,6 +494,7 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 </div>
 <main class="folha">
     <header class="cabecalho">
+        {logo_html}
         <div class="igreja">{_html(nome_igreja)}</div>
         <div class="titulo">Formulario de Cadastro de Membro</div>
         <div class="emitido">Emitido em {emitido}</div>
@@ -378,669 +540,6 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 </body>
 </html>
 """
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# MODAL: Novo cadastro
-# ═══════════════════════════════════════════════════════════════════════
-
-@st.dialog("➕ Novo cadastro", width="large")
-def modal_novo_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite):
-    """Modal para criar novo membro ou fornecedor."""
-
-    # Version counter para limpar widgets apos salvar
-    if "mnc_ver" not in st.session_state:
-        st.session_state["mnc_ver"] = 0
-    ver = st.session_state["mnc_ver"]
-
-    st.markdown("**Dados principais**")
-
-    tipo = st.selectbox(
-        "Tipo",
-        TIPOS_CADASTRO,
-        format_func=_rotulo_tipo_cadastro,
-        key=f"mnc_tipo_v{ver}",
-    )
-
-    if tipo == "Membro" and bloqueado:
-        st.error(
-            f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
-            f"**{p_info['nome']}**. Faca upgrade para "
-            f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
-        )
-        st.info("Entre em contato com o administrador para upgrade do plano.")
-        if st.button("Fechar", use_container_width=True, key=f"mnc_fechar_v{ver}"):
-            st.rerun()
-        return
-
-    nome = st.text_input("Nome completo", key=f"mnc_nome_v{ver}")
-
-    doc_label = "CPF *" if tipo == "Membro" else "CNPJ *"
-    doc_placeholder = "000.000.000-00" if tipo == "Membro" else "00.000.000/0000-00"
-    cpf = st.text_input(
-        doc_label,
-        placeholder=doc_placeholder,
-        help="Obrigatorio.",
-        key=f"mnc_cpf_v{ver}",
-    )
-
-    dt_nasc = st.date_input(
-        "Data de nascimento" if tipo == "Membro" else "Data de fundacao",
-        value=None,
-        format="DD/MM/YYYY",
-        key=f"mnc_dn_v{ver}",
-        min_value=datetime.date(1900, 1, 1),
-        max_value=datetime.date.today(),
-    )
-
-    if tipo == "Membro":
-        sexo = st.selectbox("Sexo", SEXO_OPC, key=f"mnc_sexo_v{ver}")
-        funcao = st.selectbox("Funcao", FUNCOES, key=f"mnc_funcao_v{ver}")
-    else:
-        sexo, funcao = "", ""
-
-    st.text_input(
-        "Congregacao",
-        value=congregacao_fixa,
-        disabled=True,
-        key=f"mnc_cong_v{ver}",
-        help="Definida automaticamente pelo identificador da igreja logada.",
-    )
-
-    sit = st.selectbox("Situacao", ["Ativo", "Inativo"], key=f"mnc_sit_v{ver}")
-
-    st.markdown("**Contato**")
-    telefone = st.text_input(
-        "Telefone / WhatsApp",
-        placeholder="(00) 00000-0000",
-        key=f"mnc_tel_v{ver}",
-    )
-
-    st.markdown("**Endereco**")
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        logradouro = st.text_input(
-            "Rua / Avenida",
-            placeholder="Ex: Rua das Flores",
-            key=f"mnc_log_v{ver}",
-        )
-    with col2:
-        numero = st.text_input(
-            "Numero",
-            placeholder="123",
-            key=f"mnc_num_v{ver}",
-        )
-
-    bairro = st.text_input(
-        "Bairro",
-        placeholder="Ex: Setor Central",
-        key=f"mnc_bai_v{ver}",
-    )
-
-    col3, col4 = st.columns([2, 1])
-    with col3:
-        cidade = st.text_input("Cidade", value="Minacu", key=f"mnc_cid_v{ver}")
-    with col4:
-        cep = st.text_input("CEP", value="76450-000", key=f"mnc_cep_v{ver}")
-
-    st.divider()
-
-    c_salvar, c_cancelar = st.columns(2)
-    with c_salvar:
-        salvar = st.button(
-            "💾 Salvar",
-            type="primary",
-            use_container_width=True,
-            key=f"mnc_salvar_v{ver}",
-        )
-    with c_cancelar:
-        cancelar = st.button(
-            "Cancelar",
-            use_container_width=True,
-            key=f"mnc_cancelar_v{ver}",
-        )
-
-    if cancelar:
-        st.session_state["mnc_ver"] += 1
-        st.rerun()
-
-    if salvar:
-        dn_str = dt_nasc.isoformat() if dt_nasc else ""
-
-        c = Cadastro(
-            nome=nome,
-            tipo_cadastro=tipo,
-            funcao=funcao,
-            congregacao=congregacao_fixa,
-            cpf=cpf,
-            situacao=sit,
-            data_nascimento=dn_str,
-            sexo=sexo,
-            telefone=telefone,
-            logradouro=logradouro,
-            numero=numero,
-            bairro=bairro,
-            cidade=cidade,
-            cep=cep,
-        )
-
-        erros = c.validar()
-
-        doc_limpo = limpar_documento(cpf)
-        if doc_limpo and cpf_existe(slug, doc_limpo):
-            doc_tipo = "CPF" if tipo == "Membro" else "CNPJ"
-            erros.append(doc_tipo + " ja cadastrado.")
-
-        if erros:
-            for e in erros:
-                st.error(e)
-        else:
-            try:
-                inserir_cadastro(slug, c)
-            except LimiteMembrosExcedido as ex:
-                st.error(str(ex))
-            else:
-                _invalida(slug)
-                st.session_state["mnc_ver"] += 1
-                st.toast("✅ Cadastro salvo!")
-                st.rerun()
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# MODAL: Editar cadastro
-# ═══════════════════════════════════════════════════════════════════════
-
-@st.dialog("✏️ Editar cadastro", width="large")
-def modal_editar_cadastro(slug, sel, plano, p_info, congregacao_fixa, bloqueado):
-    """Modal para editar cadastro existente."""
-
-    id_sel = int(sel["id_cadastro"])
-    kp = f"medit_{id_sel}_"
-
-    st.markdown(f"**Editando:** {_val(sel, 'nome')} (ID #{id_sel})")
-    st.divider()
-
-    st.markdown("**Dados principais**")
-
-    tipo_atual = _val(sel, "tipo_cadastro") or "Membro"
-    tipo_edit = st.selectbox(
-        "Tipo",
-        TIPOS_CADASTRO,
-        format_func=_rotulo_tipo_cadastro,
-        index=TIPOS_CADASTRO.index(tipo_atual) if tipo_atual in TIPOS_CADASTRO else 0,
-        key=kp + "tipo",
-    )
-
-    nome_edit = st.text_input(
-        "Nome completo",
-        value=_val(sel, "nome"),
-        key=kp + "nome",
-    )
-
-    cpf_atual = _val(sel, "cpf")
-    doc_label_e = "CPF *" if tipo_edit == "Membro" else "CNPJ *"
-    doc_placeholder_e = "000.000.000-00" if tipo_edit == "Membro" else "00.000.000/0000-00"
-    cpf_edit = st.text_input(
-        doc_label_e,
-        value=_formatar_doc(cpf_atual, tipo_edit) if cpf_atual else "",
-        placeholder=doc_placeholder_e,
-        key=kp + "cpf",
-        help="Obrigatorio.",
-    )
-
-    dn_atual = _val(sel, "data_nascimento")
-    try:
-        dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
-    except Exception:
-        dn_value = None
-
-    dt_nasc_edit = st.date_input(
-        "Data de nascimento" if tipo_edit == "Membro" else "Data de fundacao",
-        value=dn_value,
-        format="DD/MM/YYYY",
-        key=kp + "dt_nasc",
-        min_value=datetime.date(1900, 1, 1),
-        max_value=datetime.date.today(),
-    )
-
-    if tipo_edit == "Membro":
-        sexo_atual = _val(sel, "sexo")
-        idx_sexo = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
-        sexo_edit = st.selectbox(
-            "Sexo",
-            SEXO_OPC,
-            index=idx_sexo,
-            key=kp + "sexo",
-        )
-
-        funcao_atual = _val(sel, "funcao")
-        funcao_edit = st.selectbox(
-            "Funcao",
-            FUNCOES,
-            index=FUNCOES.index(funcao_atual) if funcao_atual in FUNCOES else 0,
-            key=kp + "funcao",
-        )
-    else:
-        sexo_edit, funcao_edit = "", ""
-
-    cong_edit = _val(sel, "congregacao") or congregacao_fixa
-    st.text_input(
-        "Congregacao",
-        value=cong_edit,
-        disabled=True,
-        key=kp + "cong_fixo",
-        help="Definida automaticamente pelo identificador da igreja logada.",
-    )
-
-    sit_opc = ["Ativo", "Inativo"]
-    sit_edit = st.selectbox(
-        "Situacao",
-        sit_opc,
-        index=sit_opc.index(sel["situacao"]) if sel["situacao"] in sit_opc else 0,
-        key=kp + "sit",
-    )
-
-    st.markdown("**Contato**")
-    tel_atual = _val(sel, "telefone")
-    tel_edit = st.text_input(
-        "Telefone / WhatsApp",
-        value=_formatar_tel(tel_atual) if tel_atual else "",
-        placeholder="(00) 00000-0000",
-        key=kp + "tel",
-    )
-
-    st.markdown("**Endereco**")
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        log_edit = st.text_input(
-            "Rua / Avenida",
-            value=_val(sel, "logradouro"),
-            key=kp + "log",
-        )
-    with col2:
-        num_edit = st.text_input(
-            "Numero",
-            value=_val(sel, "numero"),
-            key=kp + "num",
-        )
-
-    bai_edit = st.text_input(
-        "Bairro",
-        value=_val(sel, "bairro"),
-        key=kp + "bai",
-    )
-
-    col3, col4 = st.columns([2, 1])
-    with col3:
-        cid_edit = st.text_input(
-            "Cidade",
-            value=_val(sel, "cidade"),
-            key=kp + "cid",
-        )
-    with col4:
-        cep_atual = _val(sel, "cep")
-        cep_edit = st.text_input(
-            "CEP",
-            value=_formatar_cep(cep_atual) if cep_atual else "",
-            key=kp + "cep",
-        )
-
-    st.divider()
-
-    # Botoes
-    c_salvar, c_cancelar = st.columns(2)
-    with c_salvar:
-        salvar = st.button(
-            "💾 Salvar alteracoes",
-            type="primary",
-            use_container_width=True,
-            key=kp + "btn_salvar",
-        )
-    with c_cancelar:
-        cancelar = st.button(
-            "Cancelar",
-            use_container_width=True,
-            key=kp + "btn_cancelar",
-        )
-
-    if cancelar:
-        # Limpa todas as keys do modal
-        for k in list(st.session_state.keys()):
-            if k.startswith(kp):
-                st.session_state.pop(k, None)
-        st.rerun()
-
-    if salvar:
-        dn_edit_str = dt_nasc_edit.isoformat() if dt_nasc_edit else ""
-
-        c = Cadastro(
-            id_cadastro=id_sel,
-            nome=nome_edit,
-            tipo_cadastro=tipo_edit,
-            funcao=funcao_edit,
-            congregacao=cong_edit,
-            cpf=cpf_edit,
-            situacao=sit_edit,
-            data_nascimento=dn_edit_str,
-            sexo=sexo_edit,
-            telefone=tel_edit,
-            logradouro=log_edit,
-            numero=num_edit,
-            bairro=bai_edit,
-            cidade=cid_edit,
-            cep=cep_edit,
-        )
-
-        erros = c.validar()
-
-        doc_limpo_e = limpar_documento(cpf_edit)
-
-        # Verifica limite de membros se mudou tipo para Membro
-        if (
-            tipo_edit == "Membro"
-            and sel["tipo_cadastro"] != "Membro"
-            and bloqueado
-        ):
-            erros.append(
-                f"O plano {p_info['nome']} atingiu o limite de membros."
-            )
-
-        if doc_limpo_e and cpf_existe(slug, doc_limpo_e, id_excluir=id_sel):
-            doc_tipo_e = "CPF" if tipo_edit == "Membro" else "CNPJ"
-            erros.append(doc_tipo_e + " ja cadastrado em outro registro.")
-
-        if erros:
-            for e in erros:
-                st.error(e)
-        else:
-            try:
-                atualizar_cadastro(slug, c)
-            except LimiteMembrosExcedido as ex:
-                st.error(str(ex))
-            else:
-                _invalida(slug)
-                # Limpa keys do modal
-                for k in list(st.session_state.keys()):
-                    if k.startswith(kp) or k.startswith("_auth_"):
-                        st.session_state.pop(k, None)
-                st.toast("✅ Cadastro alterado!")
-                st.rerun()
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# MODAL: Visualizar cadastro (somente leitura)
-# ═══════════════════════════════════════════════════════════════════════
-
-@st.dialog("👁️ Visualizar cadastro", width="large")
-def modal_visualizar_cadastro(sel, igreja):
-    """Modal para visualizar dados do cadastro em modo leitura."""
-
-    slug = slug_da_sessao()
-    nome = _val(sel, "nome") or "(sem nome)"
-    tipo = _val(sel, "tipo_cadastro") or "Membro"
-    id_sel = int(sel["id_cadastro"])
-    situacao = _val(sel, "situacao") or "Ativo"
-
-    # Header com nome + badge de tipo e situacao
-    cor_situacao = "#10B981" if situacao == "Ativo" else "#EF4444"
-    cor_tipo = "#3B82F6" if tipo == "Membro" else "#F59E0B"
-
-    st.markdown(
-        f"""
-        <div style="margin-bottom:16px;">
-            <div style="font-size:22px;font-weight:700;margin-bottom:6px;">{_html(nome)}</div>
-            <span style="background:{cor_tipo}22;color:{cor_tipo};padding:3px 10px;
-                         border-radius:12px;font-size:12px;font-weight:600;margin-right:6px;">
-                {_html(_rotulo_tipo_cadastro(tipo))}
-            </span>
-            <span style="background:{cor_situacao}22;color:{cor_situacao};padding:3px 10px;
-                         border-radius:12px;font-size:12px;font-weight:600;margin-right:6px;">
-                {_html(situacao)}
-            </span>
-            <span style="color:#6b7280;font-size:12px;">ID #{id_sel}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Tabs: Dados / Contato / Endereco / (Historico - apenas para Membro)
-    rotulos_tabs = ["📋 Dados principais", "📞 Contato", "🏠 Endereco"]
-    if tipo == "Membro":
-        rotulos_tabs.append("🕰️ Historico")
-        tab_dados, tab_contato, tab_endereco, tab_historico = st.tabs(rotulos_tabs)
-    else:
-        tab_dados, tab_contato, tab_endereco = st.tabs(rotulos_tabs)
-        tab_historico = None
-
-    with tab_dados:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**CPF / CNPJ**")
-            doc = _formatar_doc(_val(sel, "cpf"), tipo)
-            st.code(doc if doc else "(nao informado)", language=None)
-
-            st.markdown("**Data de nascimento**")
-            st.code(_formatar_data(_val(sel, "data_nascimento")) or "(nao informado)", language=None)
-
-            st.markdown("**Funcao ministerial**")
-            st.code(_val(sel, "funcao") or "(nao informado)", language=None)
-
-        with c2:
-            st.markdown("**Sexo**")
-            st.code(_val(sel, "sexo") or "(nao informado)", language=None)
-
-            st.markdown("**Congregacao**")
-            st.code(_val(sel, "congregacao") or "(nao informado)", language=None)
-
-    with tab_contato:
-        st.markdown("**Telefone / WhatsApp**")
-        tel = _formatar_tel(_val(sel, "telefone"))
-        st.code(tel if tel else "(nao informado)", language=None)
-
-        # Link WhatsApp se houver telefone
-        tel_digitos = "".join(c for c in _val(sel, "telefone") if c.isdigit())
-        if tel_digitos:
-            if not tel_digitos.startswith("55"):
-                tel_digitos = "55" + tel_digitos
-            link_wa = f"https://wa.me/{tel_digitos}"
-            st.markdown(
-                f'<a href="{link_wa}" target="_blank" '
-                f'style="display:inline-block;background:#25D366;color:white;'
-                f'padding:8px 18px;border-radius:6px;text-decoration:none;'
-                f'font-weight:600;margin-top:8px;">'
-                f'💬 Abrir conversa no WhatsApp</a>',
-                unsafe_allow_html=True,
-            )
-
-    with tab_endereco:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**CEP**")
-            st.code(_formatar_cep(_val(sel, "cep")) or "(nao informado)", language=None)
-
-            st.markdown("**Rua / Avenida**")
-            st.code(_val(sel, "logradouro") or "(nao informado)", language=None)
-
-            st.markdown("**Numero**")
-            st.code(_val(sel, "numero") or "(nao informado)", language=None)
-
-        with c2:
-            st.markdown("**Bairro**")
-            st.code(_val(sel, "bairro") or "(nao informado)", language=None)
-
-            st.markdown("**Cidade**")
-            st.code(_val(sel, "cidade") or "(nao informado)", language=None)
-
-        # Botao para abrir no Google Maps
-        endereco_completo = ", ".join(filter(None, [
-            _val(sel, "logradouro"),
-            _val(sel, "numero"),
-            _val(sel, "bairro"),
-            _val(sel, "cidade"),
-        ]))
-        if endereco_completo.strip():
-            import urllib.parse
-            link_maps = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote_plus(endereco_completo)
-            st.markdown(
-                f'<a href="{link_maps}" target="_blank" '
-                f'style="display:inline-block;background:#061B44;color:white;'
-                f'padding:8px 18px;border-radius:6px;text-decoration:none;'
-                f'font-weight:600;margin-top:8px;">'
-                f'🗺️ Abrir no Google Maps</a>',
-                unsafe_allow_html=True,
-            )
-
-    if tab_historico is not None:
-        with tab_historico:
-            st.caption(
-                "Registre os marcos e movimentacoes do membro na igreja: conversao, "
-                "batismo, consagracoes, transferencias, desligamentos, etc."
-            )
-
-            # ─── Formulario para adicionar nova ocorrencia ───────────────
-            with st.expander("➕ Adicionar ocorrencia", expanded=False):
-                opcoes_tipo = {
-                    _rotulo_tipo_historico(codigo, ocorrencia, categoria): (codigo, ocorrencia, categoria)
-                    for codigo, ocorrencia, categoria in TIPOS_HISTORICO
-                }
-                col_data, col_tipo = st.columns([1, 2])
-                with col_data:
-                    data_hist = st.date_input(
-                        "Data",
-                        value=datetime.date.today(),
-                        format="DD/MM/YYYY",
-                        key=f"mhist_data_{id_sel}",
-                    )
-                with col_tipo:
-                    escolha_tipo = st.selectbox(
-                        "Tipo de ocorrencia",
-                        list(opcoes_tipo.keys()),
-                        key=f"mhist_tipo_{id_sel}",
-                    )
-                codigo_sel, ocorrencia_sel, categoria_sel = opcoes_tipo[escolha_tipo]
-
-                localidade_padrao = _val(sel, "congregacao")
-                localidade_hist = st.text_input(
-                    "Localidade / Congregacao",
-                    value=localidade_padrao,
-                    key=f"mhist_local_{id_sel}",
-                    help="Congregacao ou igreja relacionada a esta ocorrencia.",
-                )
-                observacao_hist = st.text_area(
-                    "Observacao (opcional)",
-                    key=f"mhist_obs_{id_sel}",
-                    height=80,
-                )
-
-                if st.button(
-                    "💾 Salvar ocorrencia",
-                    type="primary",
-                    use_container_width=True,
-                    key=f"mhist_salvar_{id_sel}",
-                ):
-                    try:
-                        _inserir_historico(
-                            slug=slug,
-                            id_cadastro=id_sel,
-                            data_ocorrencia=data_hist.isoformat(),
-                            codigo_tipo=codigo_sel,
-                            ocorrencia=ocorrencia_sel,
-                            categoria=categoria_sel,
-                            localidade=localidade_hist,
-                            observacao=observacao_hist,
-                        )
-                    except Exception as exc:
-                        st.error(f"Nao foi possivel salvar a ocorrencia: {exc}")
-                    else:
-                        st.toast("✅ Ocorrencia registrada!")
-                        st.rerun()
-
-            st.divider()
-
-            # ─── Tabela de historico existente ───────────────────────────
-            df_hist = _listar_historico(slug, id_sel)
-
-            if df_hist.empty:
-                st.info("Nenhuma ocorrencia registrada ainda para este membro.")
-            else:
-                for _, linha in df_hist.iterrows():
-                    categoria_h = linha.get("categoria") or "Normal"
-                    cor_cat = CATEGORIA_COR.get(categoria_h, "#3B82F6")
-                    data_fmt = _formatar_data(linha.get("data_ocorrencia", ""))
-                    ocorrencia_txt = linha.get("ocorrencia", "") or ""
-                    localidade_txt = linha.get("localidade", "") or "(nao informado)"
-                    observacao_txt = linha.get("observacao", "") or ""
-                    id_hist = int(linha["id_historico"])
-
-                    col_txt, col_del = st.columns([9, 1])
-                    with col_txt:
-                        obs_html = (
-                            f'<div style="color:#6b7280;font-size:12px;margin-top:3px;">'
-                            f'{_html(observacao_txt)}</div>'
-                            if observacao_txt else ""
-                        )
-                        st.markdown(
-                            f"""
-                            <div style="padding:10px 12px;border-left:3px solid {cor_cat};
-                                        background:{cor_cat}10;border-radius:6px;margin-bottom:8px;">
-                                <div style="display:flex;justify-content:space-between;flex-wrap:wrap;">
-                                    <strong style="font-size:13px;">{_html(data_fmt)}</strong>
-                                    <span style="background:{cor_cat}22;color:{cor_cat};
-                                                 padding:1px 8px;border-radius:10px;font-size:11px;
-                                                 font-weight:600;">{_html(categoria_h)}</span>
-                                </div>
-                                <div style="margin-top:4px;font-size:13px;">{_html(ocorrencia_txt)}</div>
-                                <div style="color:#6b7280;font-size:12px;margin-top:2px;">
-                                    📍 {_html(localidade_txt)}
-                                </div>
-                                {obs_html}
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                    with col_del:
-                        if st.button(
-                            "🗑️",
-                            key=f"mhist_del_{id_hist}",
-                            help="Excluir esta ocorrencia",
-                        ):
-                            st.session_state[f"mhist_confirmar_del_{id_hist}"] = True
-                            st.rerun()
-
-                    if st.session_state.get(f"mhist_confirmar_del_{id_hist}"):
-                        st.warning(
-                            f"Confirma a exclusao da ocorrencia "
-                            f"**{ocorrencia_txt}** de {data_fmt}?"
-                        )
-                        cc1, cc2 = st.columns(2)
-                        with cc1:
-                            if st.button(
-                                "Sim, excluir",
-                                type="primary",
-                                use_container_width=True,
-                                key=f"mhist_del_sim_{id_hist}",
-                            ):
-                                try:
-                                    _excluir_historico(slug, id_hist)
-                                except Exception as exc:
-                                    st.error(f"Nao foi possivel excluir: {exc}")
-                                else:
-                                    st.session_state.pop(f"mhist_confirmar_del_{id_hist}", None)
-                                    st.toast("Ocorrencia excluida.")
-                                    st.rerun()
-                        with cc2:
-                            if st.button(
-                                "Cancelar",
-                                use_container_width=True,
-                                key=f"mhist_del_nao_{id_hist}",
-                            ):
-                                st.session_state.pop(f"mhist_confirmar_del_{id_hist}", None)
-                                st.rerun()
-
-    st.divider()
-
-    if st.button("Fechar", use_container_width=True, key=f"mview_fechar_{id_sel}"):
-        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1132,100 +631,103 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
     registro_id = "novo" if novo else str(int(_val(registro, "id_cadastro")))
     kp = f"cadf_{slug}_v{ver}_r{registro_id}_"
 
-    logo = obter_logo_igreja(slug)
-    if logo:
-        dados_logo, _ext = logo
-        st.image(dados_logo, width=90)
-
     tipo_atual = "Membro" if novo else (_val(registro, "tipo_cadastro") or "Membro")
     idx_tipo = TIPOS_CADASTRO.index(tipo_atual) if tipo_atual in TIPOS_CADASTRO else 0
+    id_atual = None if novo else int(_val(registro, "id_cadastro"))
 
-    col_tipo, col_nome, col_doc = st.columns([1, 2, 1.3])
-    with col_tipo:
-        tipo = st.selectbox(
-            "Tipo", TIPOS_CADASTRO, index=idx_tipo,
-            format_func=_rotulo_tipo_cadastro, key=kp + "tipo",
-            disabled=somente_leitura,
-        )
-    with col_nome:
-        nome = st.text_input(
-            "Nome completo",
-            value="" if novo else _val(registro, "nome"),
-            key=kp + "nome", disabled=somente_leitura,
-        )
-    with col_doc:
-        doc_label = "CPF *" if tipo == "Membro" else "CNPJ *"
-        doc_placeholder = "000.000.000-00" if tipo == "Membro" else "00.000.000/0000-00"
-        cpf_atual = "" if novo else _val(registro, "cpf")
-        cpf = st.text_input(
-            doc_label,
-            value=_formatar_doc(cpf_atual, tipo) if cpf_atual else "",
-            placeholder=doc_placeholder,
-            key=kp + "cpf", disabled=somente_leitura,
-        )
+    rotulos_tabs = ["📋 Dados principais", "📞 Contato", "🏠 Endereço"]
+    if tipo_atual == "Membro":
+        rotulos_tabs.append("🕰️ Histórico")
+        tab_dados, tab_contato, tab_endereco, tab_historico = st.tabs(rotulos_tabs)
+    else:
+        tab_dados, tab_contato, tab_endereco = st.tabs(rotulos_tabs)
+        tab_historico = None
 
-    if novo and tipo == "Membro" and bloqueado:
-        st.error(
-            f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
-            f"**{p_info['nome']}**. Faca upgrade para "
-            f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
-        )
-        return
-
-    col_dn, col_sexo, col_funcao, col_sit = st.columns([1.1, 1, 1.3, 1])
-    with col_dn:
-        dn_atual = None if novo else _val(registro, "data_nascimento")
-        try:
-            dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
-        except ValueError:
-            dn_value = None
-        dt_nasc = st.date_input(
-            "Data nasc." if tipo == "Membro" else "Fundacao",
-            value=dn_value,
-            format="DD/MM/YYYY",
-            key=kp + "dn",
-            min_value=datetime.date(1900, 1, 1),
-            max_value=datetime.date.today(),
-            disabled=somente_leitura,
-        )
-    with col_sexo:
-        if tipo == "Membro":
-            sexo_atual = "" if novo else _val(registro, "sexo")
-            idx_sexo = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
-            sexo = st.selectbox(
-                "Sexo", SEXO_OPC, index=idx_sexo, key=kp + "sexo",
+    with tab_dados:
+        col_tipo, col_nome, col_doc = st.columns([1, 2, 1.3])
+        with col_tipo:
+            tipo = st.selectbox(
+                "Tipo", TIPOS_CADASTRO, index=idx_tipo,
+                format_func=_rotulo_tipo_cadastro, key=kp + "tipo",
                 disabled=somente_leitura,
             )
-        else:
-            sexo = ""
-    with col_funcao:
-        if tipo == "Membro":
-            funcao_atual = "" if novo else _val(registro, "funcao")
-            idx_funcao = FUNCOES.index(funcao_atual) if funcao_atual in FUNCOES else 0
-            funcao = st.selectbox(
-                "Funcao", FUNCOES, index=idx_funcao, key=kp + "funcao",
+        with col_nome:
+            nome = st.text_input(
+                "Nome completo",
+                value="" if novo else _val(registro, "nome"),
+                key=kp + "nome", disabled=somente_leitura,
+            )
+        with col_doc:
+            doc_label = "CPF *" if tipo == "Membro" else "CNPJ *"
+            doc_placeholder = "000.000.000-00" if tipo == "Membro" else "00.000.000/0000-00"
+            cpf_atual = "" if novo else _val(registro, "cpf")
+            cpf = st.text_input(
+                doc_label,
+                value=_formatar_doc(cpf_atual, tipo) if cpf_atual else "",
+                placeholder=doc_placeholder,
+                key=kp + "cpf", disabled=somente_leitura,
+            )
+
+        if novo and tipo == "Membro" and bloqueado:
+            st.error(
+                f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
+                f"**{p_info['nome']}**. Faca upgrade para "
+                f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
+            )
+            return
+
+        col_dn, col_sexo, col_funcao, col_sit = st.columns([1.1, 1, 1.3, 1])
+        with col_dn:
+            dn_atual = None if novo else _val(registro, "data_nascimento")
+            try:
+                dn_value = datetime.date.fromisoformat(dn_atual) if dn_atual else None
+            except ValueError:
+                dn_value = None
+            dt_nasc = st.date_input(
+                "Data nasc." if tipo == "Membro" else "Fundacao",
+                value=dn_value,
+                format="DD/MM/YYYY",
+                key=kp + "dn",
+                min_value=datetime.date(1900, 1, 1),
+                max_value=datetime.date.today(),
                 disabled=somente_leitura,
             )
-        else:
-            funcao = ""
-    with col_sit:
-        sit_opc = ["Ativo", "Inativo"]
-        sit_atual = "Ativo" if novo else (_val(registro, "situacao") or "Ativo")
-        sit = st.selectbox(
-            "Situacao", sit_opc,
-            index=sit_opc.index(sit_atual) if sit_atual in sit_opc else 0,
-            key=kp + "sit", disabled=somente_leitura,
+        with col_sexo:
+            if tipo == "Membro":
+                sexo_atual = "" if novo else _val(registro, "sexo")
+                idx_sexo = SEXO_OPC.index(sexo_atual) if sexo_atual in SEXO_OPC else 2
+                sexo = st.selectbox(
+                    "Sexo", SEXO_OPC, index=idx_sexo, key=kp + "sexo",
+                    disabled=somente_leitura,
+                )
+            else:
+                sexo = ""
+        with col_funcao:
+            if tipo == "Membro":
+                funcao_atual = "" if novo else _val(registro, "funcao")
+                idx_funcao = FUNCOES.index(funcao_atual) if funcao_atual in FUNCOES else 0
+                funcao = st.selectbox(
+                    "Funcao", FUNCOES, index=idx_funcao, key=kp + "funcao",
+                    disabled=somente_leitura,
+                )
+            else:
+                funcao = ""
+        with col_sit:
+            sit_opc = ["Ativo", "Inativo"]
+            sit_atual = "Ativo" if novo else (_val(registro, "situacao") or "Ativo")
+            sit = st.selectbox(
+                "Situacao", sit_opc,
+                index=sit_opc.index(sit_atual) if sit_atual in sit_opc else 0,
+                key=kp + "sit", disabled=somente_leitura,
+            )
+
+        st.text_input(
+            "Congregacao", value=congregacao_fixa, disabled=True,
+            key=kp + "cong",
+            help="Definida automaticamente pelo identificador da igreja logada.",
         )
 
-    st.text_input(
-        "Congregacao", value=congregacao_fixa, disabled=True,
-        key=kp + "cong",
-        help="Definida automaticamente pelo identificador da igreja logada.",
-    )
-
-    st.markdown("**Contato e endereço**")
-    col_tel, col_log, col_num = st.columns([1.2, 2.4, 0.8])
-    with col_tel:
+    with tab_contato:
         tel_atual = "" if novo else _val(registro, "telefone")
         telefone = st.text_input(
             "Telefone / WhatsApp",
@@ -1233,39 +735,49 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
             placeholder="(00) 00000-0000",
             key=kp + "tel", disabled=somente_leitura,
         )
-    with col_log:
-        logradouro = st.text_input(
-            "Rua / Avenida",
-            value="" if novo else _val(registro, "logradouro"),
-            key=kp + "log", disabled=somente_leitura,
-        )
-    with col_num:
-        numero = st.text_input(
-            "Numero",
-            value="" if novo else _val(registro, "numero"),
-            key=kp + "num", disabled=somente_leitura,
-        )
 
-    col_bai, col_cid, col_cep = st.columns([1.4, 1.4, 1])
-    with col_bai:
-        bairro = st.text_input(
-            "Bairro",
-            value="" if novo else _val(registro, "bairro"),
-            key=kp + "bai", disabled=somente_leitura,
-        )
-    with col_cid:
-        cidade = st.text_input(
-            "Cidade",
-            value=("Minacu" if novo else _val(registro, "cidade")),
-            key=kp + "cid", disabled=somente_leitura,
-        )
-    with col_cep:
-        cep_atual = "" if novo else _val(registro, "cep")
-        cep = st.text_input(
-            "CEP",
-            value=_formatar_cep(cep_atual) if cep_atual else ("76450-000" if novo else ""),
-            key=kp + "cep", disabled=somente_leitura,
-        )
+    with tab_endereco:
+        col_log, col_num = st.columns([3, 1])
+        with col_log:
+            logradouro = st.text_input(
+                "Rua / Avenida",
+                value="" if novo else _val(registro, "logradouro"),
+                key=kp + "log", disabled=somente_leitura,
+            )
+        with col_num:
+            numero = st.text_input(
+                "Numero",
+                value="" if novo else _val(registro, "numero"),
+                key=kp + "num", disabled=somente_leitura,
+            )
+
+        col_bai, col_cid, col_cep = st.columns([1.4, 1.4, 1])
+        with col_bai:
+            bairro = st.text_input(
+                "Bairro",
+                value="" if novo else _val(registro, "bairro"),
+                key=kp + "bai", disabled=somente_leitura,
+            )
+        with col_cid:
+            cidade = st.text_input(
+                "Cidade",
+                value=("Minacu" if novo else _val(registro, "cidade")),
+                key=kp + "cid", disabled=somente_leitura,
+            )
+        with col_cep:
+            cep_atual = "" if novo else _val(registro, "cep")
+            cep = st.text_input(
+                "CEP",
+                value=_formatar_cep(cep_atual) if cep_atual else ("76450-000" if novo else ""),
+                key=kp + "cep", disabled=somente_leitura,
+            )
+
+    if tab_historico is not None:
+        with tab_historico:
+            if novo or id_atual is None:
+                st.info("Salve o cadastro primeiro para registrar o historico do membro.")
+            else:
+                _renderizar_historico_membro(slug, id_atual, congregacao_fixa)
 
     if somente_leitura:
         return
@@ -1639,7 +1151,7 @@ def render():
                 "bairro": "",
                 "cidade": "",
             }
-            html_form = _gerar_html_formulario_membro(row_imp, igreja)
+            html_form = _gerar_html_formulario_membro(row_imp, igreja, slug)
             components.html(html_form, height=760, scrolling=True)
             st.download_button(
                 "Baixar formulario em branco HTML",
@@ -1671,7 +1183,7 @@ def render():
                     key="sel_membro_impressao_formulario",
                 )
                 row_imp = op_membros[membro_imp]
-                html_form = _gerar_html_formulario_membro(row_imp, igreja)
+                html_form = _gerar_html_formulario_membro(row_imp, igreja, slug)
                 components.html(html_form, height=760, scrolling=True)
                 nome_arquivo = (
                     "formulario_cadastro_"
