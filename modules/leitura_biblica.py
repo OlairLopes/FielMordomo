@@ -1,7 +1,6 @@
 import datetime
 import html
 import logging
-import os
 import re
 
 import pandas as pd
@@ -29,7 +28,7 @@ from utils.helpers import normalizar_data_digitada
 
 LOGGER = logging.getLogger(__name__)
 
-BIBLIA_API_BASE = "https://www.abibliadigital.com.br/api"
+BIBLIA_FONTE_BASE = "https://raw.githubusercontent.com/maatheusgois/bible/main/versions/pt-br"
 BIBLIA_VERSAO_PADRAO = "nvi"
 
 LIVRO_ABREV = {
@@ -52,6 +51,29 @@ LIVRO_ABREV = {
     "1 timóteo": "1tm", "2 timóteo": "2tm", "tito": "tt", "filemom": "fm",
     "hebreus": "hb", "tiago": "tg", "1 pedro": "1pe", "2 pedro": "2pe",
     "1 joão": "1jo", "2 joão": "2jo", "3 joão": "3jo", "judas": "jd", "apocalipse": "ap",
+}
+
+# Traduz a abreviacao interna (LIVRO_ABREV, acima) para o id de livro usado
+# pela fonte de texto biblico (raw.githubusercontent.com/maatheusgois/bible),
+# que mistura codigos em ingles/portugues. Conferido 1-a-1 pelo nome do livro
+# e pela quantidade de capitulos de cada arquivo.
+MAPA_LIVRO_FONTE = {
+    "gn": "gn", "ex": "ex", "lv": "lv", "nm": "nm", "dt": "dt",
+    "js": "js", "jz": "jud", "rt": "rt",
+    "1sm": "1sm", "2sm": "2sm", "1rs": "1kgs", "2rs": "2kgs",
+    "1cr": "1ch", "2cr": "2ch", "ed": "ezr", "ne": "ne", "et": "et",
+    "job": "job", "sl": "ps", "pv": "prv", "ec": "ec", "ct": "so",
+    "is": "is", "jr": "jr", "lm": "lm", "ez": "ez", "dn": "dn",
+    "os": "ho", "jl": "jl", "am": "am", "ob": "ob", "jn": "jn",
+    "mq": "mi", "na": "na", "hc": "hk", "sf": "zp",
+    "ag": "hg", "zc": "zc", "ml": "ml",
+    "mt": "mt", "mc": "mk", "lc": "lk", "jo": "jo", "at": "act",
+    "rm": "rm", "1co": "1co", "2co": "2co", "gl": "gl",
+    "ef": "eph", "fp": "ph", "cl": "cl",
+    "1ts": "1ts", "2ts": "2ts", "1tm": "1tm", "2tm": "2tm",
+    "tt": "tt", "fm": "phm", "hb": "hb", "tg": "jm",
+    "1pe": "1pe", "2pe": "2pe", "1jo": "1jo", "2jo": "2jo", "3jo": "3jo",
+    "jd": "jd", "ap": "re",
 }
 
 _REF_COM_LIVRO_RE = re.compile(
@@ -130,37 +152,41 @@ def _parsear_passagens(texto):
     return unidades
 
 
-def _token_biblia_api():
-    try:
-        token = str(st.secrets.get("biblia_api", {}).get("token", "")).strip()
-    except Exception:
-        token = ""
-    if token:
-        return token
-    return str(os.environ.get("BIBLIA_API_TOKEN", "")).strip()
-
-
 @st.cache_data(ttl=3600, show_spinner=False)
+def _buscar_livro_completo(id_fonte, versao):
+    """Busca o JSON do livro inteiro na fonte (raw.githubusercontent.com) e
+    retorna a lista de capitulos (cada um, uma lista de textos de versos)."""
+    try:
+        resp = requests.get(
+            f"{BIBLIA_FONTE_BASE}/{versao}/{id_fonte}/{id_fonte}.json",
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json().get("chapters", [])
+    except Exception:
+        LOGGER.exception("Falha ao buscar livro biblico %s (versao %s).", id_fonte, versao)
+        return None
+
+
 def _buscar_capitulo(abrev_livro, capitulo, versao=BIBLIA_VERSAO_PADRAO):
     cache = obter_capitulo_biblico_cache(versao, abrev_livro, capitulo)
     if cache is not None:
         return cache
 
-    token = _token_biblia_api()
-    if not token:
-        return None
-    try:
-        resp = requests.get(
-            f"{BIBLIA_API_BASE}/verses/{versao}/{abrev_livro}/{capitulo}",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        versos = resp.json().get("verses", [])
-    except Exception:
-        LOGGER.exception("Falha ao buscar capitulo biblico %s %s.", abrev_livro, capitulo)
+    id_fonte = MAPA_LIVRO_FONTE.get(abrev_livro)
+    if not id_fonte:
         return None
 
+    capitulos = _buscar_livro_completo(id_fonte, versao)
+    if capitulos is None:
+        return None
+    if not (1 <= capitulo <= len(capitulos)):
+        return []
+
+    versos = [
+        {"number": i + 1, "text": texto}
+        for i, texto in enumerate(capitulos[capitulo - 1])
+    ]
     if versos:
         salvar_capitulo_biblico_cache(versao, abrev_livro, capitulo, versos)
     return versos
@@ -200,8 +226,6 @@ def _rotulo_unidade(unidade):
 def _render_texto_biblico(passagens_texto):
     unidades = _parsear_passagens(passagens_texto)
     if not unidades:
-        return
-    if not _token_biblia_api():
         return
 
     st.markdown("##### Ler o texto")
