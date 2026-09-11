@@ -13,7 +13,7 @@ from data.repository import (
     carregar_cadastros, inserir_cadastro, atualizar_cadastro,
     excluir_cadastro, cadastro_em_uso, cpf_existe, LimiteMembrosExcedido,
     aprovar_pre_cadastro_membro, atualizar_status_pre_cadastro,
-    listar_pre_cadastros_membros,
+    listar_pre_cadastros_membros, obter_logo_igreja,
 )
 from utils.helpers import confirmar_exclusao, slug_da_sessao, solicitar_autorizacao
 from utils.planos import obter_plano, pode_cadastrar_membro, proximo_plano
@@ -21,7 +21,7 @@ from utils.planos import obter_plano, pode_cadastrar_membro, proximo_plano
 
 FUNCOES = [
     "Membro", "Congregado", "Auxiliar", "Pastor", "Diacono", "Diaconisa",
-    "Presbitero", "Evangelista", "Cooperador", "Dirigente",
+    "Presbitero", "Evangelista", "Cooperadora", "Dirigente",
     "Secretario", "Tesoureiro", "Professor", "Lider", "Missionário (a)", "",
 ]
 
@@ -1131,6 +1131,11 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
     ver = st.session_state.get(ver_key, 0)
     registro_id = "novo" if novo else str(int(_val(registro, "id_cadastro")))
     kp = f"cadf_{slug}_v{ver}_r{registro_id}_"
+
+    logo = obter_logo_igreja(slug)
+    if logo:
+        dados_logo, _ext = logo
+        st.image(dados_logo, width=90)
 
     tipo_atual = "Membro" if novo else (_val(registro, "tipo_cadastro") or "Membro")
     idx_tipo = TIPOS_CADASTRO.index(tipo_atual) if tipo_atual in TIPOS_CADASTRO else 0
