@@ -2388,7 +2388,9 @@ def render_institucional():
                     max-width: 100% !important;
                 }
                 div[data-testid="stForm"],
-                div[data-testid="stElementContainer"] {
+                div[data-testid="stElementContainer"],
+                div[data-testid="stHorizontalBlock"],
+                div[data-testid="stExpander"] {
                     max-width: 920px;
                     margin-left: auto !important;
                     margin-right: auto !important;
