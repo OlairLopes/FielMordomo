@@ -8008,3 +8008,37 @@ def salvar_capitulo_biblico_cache(versao, livro_abbrev, capitulo, versos):
         )
 
 
+def _garantir_tabela_biblia_audio_cache(conn):
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS biblia_audio_cache (
+            versao     TEXT NOT NULL,
+            chave      TEXT NOT NULL,
+            audio_blob BLOB NOT NULL,
+            obtido_em  TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (versao, chave)
+        );
+    """)
+
+
+def obter_audio_biblico_cache(versao, chave):
+    """Retorna os bytes do audio em cache para (versao, chave), ou None."""
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_biblia_audio_cache(conn)
+        row = conn.execute(
+            """SELECT audio_blob FROM biblia_audio_cache
+               WHERE versao=? AND chave=?""",
+            (versao, chave),
+        ).fetchone()
+    return bytes(row["audio_blob"]) if row else None
+
+
+def salvar_audio_biblico_cache(versao, chave, audio_bytes):
+    with _conn(MASTER_DB) as conn:
+        _garantir_tabela_biblia_audio_cache(conn)
+        conn.execute(
+            """INSERT OR REPLACE INTO biblia_audio_cache (versao, chave, audio_blob)
+               VALUES (?, ?, ?)""",
+            (versao, chave, audio_bytes),
+        )
+
+

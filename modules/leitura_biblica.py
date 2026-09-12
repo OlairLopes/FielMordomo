@@ -1,5 +1,7 @@
 import datetime
+import hashlib
 import html
+import io
 import logging
 import re
 
@@ -20,8 +22,10 @@ from data.repository import (
     listar_igrejas,
     listar_planos_leitura_biblica,
     localizar_leitor_plano_biblico,
+    obter_audio_biblico_cache,
     obter_capitulo_biblico_cache,
     obter_leitura_do_dia,
+    salvar_audio_biblico_cache,
     salvar_capitulo_biblico_cache,
 )
 from utils.helpers import normalizar_data_digitada
@@ -30,6 +34,14 @@ LOGGER = logging.getLogger(__name__)
 
 BIBLIA_FONTE_BASE = "https://raw.githubusercontent.com/maatheusgois/bible/main/versions/pt-br"
 BIBLIA_VERSAO_PADRAO = "nvi"
+
+BIBLIA_VERSOES = {
+    "nvi": "NVI — Nova Versão Internacional",
+    "arc": "ARC — Almeida Revista e Corrigida",
+    "aa": "ARA — Almeida Revisada e Atualizada",
+    "acf": "ACF — Almeida Corrigida e Fiel",
+    "kja": "KJA — King James Atualizada",
+}
 
 LIVRO_ABREV = {
     "gênesis": "gn", "êxodo": "ex", "levítico": "lv", "números": "nm", "deuteronômio": "dt",
@@ -192,22 +204,78 @@ def _buscar_capitulo(abrev_livro, capitulo, versao=BIBLIA_VERSAO_PADRAO):
     return versos
 
 
-def _texto_da_unidade(unidade):
-    linhas = []
+def _versos_da_unidade(unidade, versao):
+    """Retorna lista de tuplas (capitulo, versos_filtrados) da unidade, ou
+    None se algum capitulo nao pode ser carregado."""
+    resultado = []
     for cap in range(unidade["cap_ini"], unidade["cap_fim"] + 1):
-        versos = _buscar_capitulo(unidade["abrev"], cap)
+        versos = _buscar_capitulo(unidade["abrev"], cap, versao)
         if versos is None:
             return None
         v_ini = unidade["vers_ini"] if cap == unidade["cap_ini"] and unidade["vers_ini"] else 1
         v_fim = unidade["vers_fim"] if cap == unidade["cap_fim"] and unidade["vers_fim"] else None
+        filtrados = [
+            v for v in versos
+            if v.get("number") is not None
+            and v["number"] >= v_ini
+            and (not v_fim or v["number"] <= v_fim)
+        ]
+        resultado.append((cap, filtrados))
+    return resultado
+
+
+def _texto_da_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
+    capitulos = _versos_da_unidade(unidade, versao)
+    if capitulos is None:
+        return None
+    varios_capitulos = len(capitulos) > 1
+    linhas = []
+    for cap, versos in capitulos:
+        if varios_capitulos and cap != unidade["cap_ini"]:
+            linhas.append(f"---\n##### {unidade['livro']} {cap}")
         for verso in versos:
-            numero = verso.get("number")
-            if numero is None or numero < v_ini:
-                continue
-            if v_fim and numero > v_fim:
-                continue
-            linhas.append(f"**{numero}** {verso.get('text', '')}")
+            linhas.append(f"**{verso['number']}** {verso.get('text', '')}")
     return "\n\n".join(linhas)
+
+
+def _texto_audio_da_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
+    """Versao em texto corrido (sem numeros de versiculo) da unidade,
+    pronta para sintese de voz."""
+    capitulos = _versos_da_unidade(unidade, versao)
+    if capitulos is None:
+        return None
+    varios_capitulos = len(capitulos) > 1
+    partes = []
+    for cap, versos in capitulos:
+        if varios_capitulos:
+            partes.append(f"Capítulo {cap}.")
+        partes.extend(verso.get("text", "") for verso in versos if verso.get("text"))
+    return " ".join(partes)
+
+
+def _audio_da_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
+    """Gera (ou recupera do cache) o audio MP3 da unidade via gTTS."""
+    texto_audio = _texto_audio_da_unidade(unidade, versao)
+    if not texto_audio:
+        return None
+
+    chave = hashlib.sha256(f"{unidade['abrev']}|{texto_audio}".encode()).hexdigest()
+    audio_bytes = obter_audio_biblico_cache(versao, chave)
+    if audio_bytes is not None:
+        return audio_bytes
+
+    try:
+        from gtts import gTTS
+
+        buffer = io.BytesIO()
+        gTTS(text=texto_audio, lang="pt", tld="com.br").write_to_fp(buffer)
+        audio_bytes = buffer.getvalue()
+    except Exception:
+        LOGGER.exception("Falha ao gerar audio biblico para %s.", unidade.get("abrev"))
+        return None
+
+    salvar_audio_biblico_cache(versao, chave, audio_bytes)
+    return audio_bytes
 
 
 def _rotulo_unidade(unidade):
@@ -223,15 +291,22 @@ def _rotulo_unidade(unidade):
     return base
 
 
-def _render_texto_biblico(passagens_texto):
+def _render_texto_biblico(passagens_texto, versao=BIBLIA_VERSAO_PADRAO):
     unidades = _parsear_passagens(passagens_texto)
     if not unidades:
         return
 
     st.markdown("##### Ler o texto")
-    for unidade in unidades:
+    versao_atual = st.selectbox(
+        "Versão da Bíblia",
+        list(BIBLIA_VERSOES.keys()),
+        index=list(BIBLIA_VERSOES.keys()).index(versao) if versao in BIBLIA_VERSOES else 0,
+        format_func=lambda k: BIBLIA_VERSOES[k],
+        key="leitura_versao_biblia",
+    )
+    for idx, unidade in enumerate(unidades):
         with st.expander(f"📖 {_rotulo_unidade(unidade)}"):
-            texto = _texto_da_unidade(unidade)
+            texto = _texto_da_unidade(unidade, versao_atual)
             if texto is None:
                 st.warning(
                     "Não foi possível carregar o texto agora. Tente novamente em instantes."
@@ -240,6 +315,16 @@ def _render_texto_biblico(passagens_texto):
                 st.info("Texto indisponível para esta passagem.")
             else:
                 st.markdown(texto)
+                audio_key = f"leitura_audio_{versao_atual}_{idx}"
+                if st.button("🔊 Ouvir este trecho", key=f"btn_{audio_key}"):
+                    with st.spinner("Gerando áudio..."):
+                        st.session_state[audio_key] = _audio_da_unidade(unidade, versao_atual)
+                if st.session_state.get(audio_key):
+                    st.audio(st.session_state[audio_key], format="audio/mp3")
+                elif audio_key in st.session_state:
+                    st.warning(
+                        "Não foi possível gerar o áudio agora. Tente novamente em instantes."
+                    )
 
 
 def _parse_data_nascimento(valor):
