@@ -2387,10 +2387,7 @@ def render_institucional():
                     margin: 0 !important;
                     max-width: 100% !important;
                 }
-                div[data-testid="stForm"],
-                div[data-testid="stElementContainer"],
-                div[data-testid="stHorizontalBlock"],
-                div[data-testid="stExpander"] {
+                div[class*="st-key-leitura-pagina"] {
                     max-width: 920px;
                     margin-left: auto !important;
                     margin-right: auto !important;

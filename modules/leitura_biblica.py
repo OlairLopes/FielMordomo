@@ -717,86 +717,87 @@ def _leitor_info_html(cadastro, slug):
 
 
 def render_publico():
-    st.markdown(_hero_html(), unsafe_allow_html=True)
+    with st.container(key="leitura-pagina"):
+        st.markdown(_hero_html(), unsafe_allow_html=True)
 
-    slug = st.session_state.get("leitura_slug")
-    if not slug:
-        slug = _selecionar_igreja_publica()
+        slug = st.session_state.get("leitura_slug")
         if not slug:
+            slug = _selecionar_igreja_publica()
+            if not slug:
+                return
+
+        cadastro = st.session_state.get("leitura_cadastro")
+        if not cadastro:
+            _identificar_leitor(slug)
             return
 
-    cadastro = st.session_state.get("leitura_cadastro")
-    if not cadastro:
-        _identificar_leitor(slug)
-        return
+        with st.container(key="leitura-step-leitor"):
+            col_info, col_trocar = st.columns([4, 1])
+            with col_info:
+                st.markdown(_leitor_info_html(cadastro, slug), unsafe_allow_html=True)
+            with col_trocar:
+                if st.button("Trocar", use_container_width=True):
+                    st.session_state.pop("leitura_slug", None)
+                    st.session_state.pop("leitura_cadastro", None)
+                    st.rerun()
 
-    with st.container(key="leitura-step-leitor"):
-        col_info, col_trocar = st.columns([4, 1])
-        with col_info:
-            st.markdown(_leitor_info_html(cadastro, slug), unsafe_allow_html=True)
-        with col_trocar:
-            if st.button("Trocar", use_container_width=True):
-                st.session_state.pop("leitura_slug", None)
-                st.session_state.pop("leitura_cadastro", None)
+        with st.container(key="leitura-step-plano"):
+            st.markdown(
+                _step_card_html("📅", "Plano e dia de leitura"),
+                unsafe_allow_html=True,
+            )
+            planos = listar_planos_leitura_biblica()
+            opcoes_planos = {p["nome"]: p["id"] for p in planos}
+            nomes_planos = list(opcoes_planos.keys())
+            plano_id_atual = st.session_state.get("leitura_plano_id", PLANO_LEITURA_PADRAO)
+            nome_atual = next(
+                (nome for nome, pid in opcoes_planos.items() if pid == plano_id_atual),
+                nomes_planos[0],
+            )
+            col_plano, col_dia = st.columns(2)
+            with col_plano:
+                nome_escolhido = st.selectbox(
+                    "Plano de leitura", nomes_planos, index=nomes_planos.index(nome_atual)
+                )
+            with col_dia:
+                data_escolhida = st.date_input(
+                    "Dia da leitura", value=datetime.date.today()
+                )
+        plano_id = opcoes_planos[nome_escolhido]
+        st.session_state["leitura_plano_id"] = plano_id
+        dia_numero = _dia_do_plano(data_escolhida)
+
+        leitura = obter_leitura_do_dia(dia_numero, plano_id=plano_id)
+        if not leitura:
+            st.info("Leitura ainda não cadastrada para este dia.")
+            return
+
+        _agendar_prewarm_audio(dia_numero, plano_id, leitura["passagens"])
+
+        st.markdown(
+            _card_leitura_html(
+                dia_numero, data_escolhida, leitura["passagens"], leitura.get("tema", "")
+            ),
+            unsafe_allow_html=True,
+        )
+        with st.container(key="leitura-step-texto"):
+            _render_texto_biblico(leitura["passagens"])
+
+        origem = cadastro.get("origem")
+        id_pessoa = cadastro.get("id_pessoa")
+        if leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero, plano_id=plano_id):
+            st.markdown(
+                _html_sem_indentacao("""
+                    <div class="leitura-confirmado">
+                        ✅ <strong>Leitura de hoje confirmada!</strong>
+                        Continue firme na sua jornada.
+                    </div>
+                """),
+                unsafe_allow_html=True,
+            )
+        else:
+            if st.button(
+                "✅ Confirmar leitura deste dia", type="primary", use_container_width=True
+            ):
+                confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero, plano_id=plano_id)
                 st.rerun()
-
-    with st.container(key="leitura-step-plano"):
-        st.markdown(
-            _step_card_html("📅", "Plano e dia de leitura"),
-            unsafe_allow_html=True,
-        )
-        planos = listar_planos_leitura_biblica()
-        opcoes_planos = {p["nome"]: p["id"] for p in planos}
-        nomes_planos = list(opcoes_planos.keys())
-        plano_id_atual = st.session_state.get("leitura_plano_id", PLANO_LEITURA_PADRAO)
-        nome_atual = next(
-            (nome for nome, pid in opcoes_planos.items() if pid == plano_id_atual),
-            nomes_planos[0],
-        )
-        col_plano, col_dia = st.columns(2)
-        with col_plano:
-            nome_escolhido = st.selectbox(
-                "Plano de leitura", nomes_planos, index=nomes_planos.index(nome_atual)
-            )
-        with col_dia:
-            data_escolhida = st.date_input(
-                "Dia da leitura", value=datetime.date.today()
-            )
-    plano_id = opcoes_planos[nome_escolhido]
-    st.session_state["leitura_plano_id"] = plano_id
-    dia_numero = _dia_do_plano(data_escolhida)
-
-    leitura = obter_leitura_do_dia(dia_numero, plano_id=plano_id)
-    if not leitura:
-        st.info("Leitura ainda não cadastrada para este dia.")
-        return
-
-    _agendar_prewarm_audio(dia_numero, plano_id, leitura["passagens"])
-
-    st.markdown(
-        _card_leitura_html(
-            dia_numero, data_escolhida, leitura["passagens"], leitura.get("tema", "")
-        ),
-        unsafe_allow_html=True,
-    )
-    with st.container(key="leitura-step-texto"):
-        _render_texto_biblico(leitura["passagens"])
-
-    origem = cadastro.get("origem")
-    id_pessoa = cadastro.get("id_pessoa")
-    if leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero, plano_id=plano_id):
-        st.markdown(
-            _html_sem_indentacao("""
-                <div class="leitura-confirmado">
-                    ✅ <strong>Leitura de hoje confirmada!</strong>
-                    Continue firme na sua jornada.
-                </div>
-            """),
-            unsafe_allow_html=True,
-        )
-    else:
-        if st.button(
-            "✅ Confirmar leitura deste dia", type="primary", use_container_width=True
-        ):
-            confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero, plano_id=plano_id)
-            st.rerun()
