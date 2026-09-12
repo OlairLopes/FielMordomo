@@ -429,17 +429,24 @@ def _html_sem_indentacao(html_final):
     return "\n".join(linha.strip() for linha in str(html_final).splitlines() if linha.strip())
 
 
-def _hero_html(planos):
-    badges = "".join(
-        f'<span class="leitura-hero-badge">{html.escape(p["nome"])}</span>' for p in planos
-    )
-    return _html_sem_indentacao(f"""
+def _hero_html():
+    return _html_sem_indentacao("""
         <div class="leitura-hero">
-            <span class="leitura-hero-eyebrow">Plano de leitura</span>
-            <div class="leitura-hero-badges">{badges}</div>
-            <h1 class="leitura-hero-title">Plano de Leitura Bíblica</h1>
-            <p class="leitura-hero-subtitle">Leia a sua Bíblia todos os dias.</p>
+            <span class="leitura-hero-eyebrow">📖 Plano de leitura</span>
+            <h1 class="leitura-hero-title">Leia a Bíblia com a sua igreja</h1>
+            <p class="leitura-hero-subtitle">
+                Escolha o seu plano, acompanhe o texto (ou ouça) e confirme sua
+                leitura de hoje — em poucos passos.
+            </p>
         </div>
+    """)
+
+
+def _step_card_html(icone, titulo, descricao=""):
+    desc_html = f'<p class="leitura-step-desc">{html.escape(descricao)}</p>' if descricao else ""
+    return _html_sem_indentacao(f"""
+        <p class="leitura-step-title">{icone} {html.escape(titulo)}</p>
+        {desc_html}
     """)
 
 
@@ -486,10 +493,19 @@ def _selecionar_igreja_publica():
         for _, row in igrejas.sort_values("nome").iterrows()
     }
 
-    with st.form("form_identificar_igreja_leitura"):
-        st.markdown("#### Identificação da igreja")
-        selecionada = st.selectbox("Igreja / congregação", list(opcoes.keys()))
-        continuar = st.form_submit_button("Continuar", type="primary")
+    with st.container(border=True):
+        st.markdown(
+            _step_card_html(
+                "🏠", "Qual é a sua igreja?",
+                "Selecione a igreja ou congregação para carregar o plano certo.",
+            ),
+            unsafe_allow_html=True,
+        )
+        with st.form("form_identificar_igreja_leitura"):
+            selecionada = st.selectbox("Igreja / congregação", list(opcoes.keys()))
+            continuar = st.form_submit_button(
+                "Continuar →", type="primary", use_container_width=True
+            )
     if not continuar:
         return None
 
@@ -518,7 +534,9 @@ def _identificar_membro(slug):
         data_nascimento_txt = c2.text_input(
             "Data de nascimento", placeholder="Ex.: 26/06/1979 ou 26061979"
         )
-        confirmar = st.form_submit_button("Continuar", type="primary")
+        confirmar = st.form_submit_button(
+            "Continuar →", type="primary", use_container_width=True
+        )
 
     if not confirmar:
         return
@@ -548,7 +566,9 @@ def _login_leitor(slug):
     with st.form("form_login_leitor"):
         telefone = st.text_input("Número de WhatsApp", placeholder="Ex.: (11) 99999-8888")
         senha = st.text_input("Senha", type="password")
-        confirmar = st.form_submit_button("Entrar", type="primary")
+        confirmar = st.form_submit_button(
+            "Entrar →", type="primary", use_container_width=True
+        )
 
     if not confirmar:
         return
@@ -590,7 +610,9 @@ def _cadastro_leitor(slug):
         c1, c2 = st.columns(2)
         senha = c1.text_input("Senha", type="password")
         confirmar_senha = c2.text_input("Confirmar senha", type="password")
-        confirmar = st.form_submit_button("Criar cadastro", type="primary")
+        confirmar = st.form_submit_button(
+            "Criar cadastro →", type="primary", use_container_width=True
+        )
 
     if not confirmar:
         return
@@ -614,18 +636,26 @@ def _cadastro_leitor(slug):
 
 
 def _identificar_leitor(slug):
-    st.markdown("#### Entre ou cadastre-se para confirmar sua leitura")
-    modo = st.radio(
-        "Como você quer acessar?",
-        ["Já tenho login de leitor", "Ainda não tenho cadastro", "Sou membro cadastrado"],
-        key="leitura_modo_identificacao",
-    )
-    if modo == "Já tenho login de leitor":
-        _login_leitor(slug)
-    elif modo == "Ainda não tenho cadastro":
-        _cadastro_leitor(slug)
-    else:
-        _identificar_membro(slug)
+    with st.container(border=True):
+        st.markdown(
+            _step_card_html(
+                "🔑", "Entre ou cadastre-se",
+                "Precisamos saber quem é você para acompanhar sua leitura diária.",
+            ),
+            unsafe_allow_html=True,
+        )
+        modo = st.radio(
+            "Como você quer acessar?",
+            ["Já tenho login de leitor", "Ainda não tenho cadastro", "Sou membro cadastrado"],
+            key="leitura_modo_identificacao",
+            horizontal=True,
+        )
+        if modo == "Já tenho login de leitor":
+            _login_leitor(slug)
+        elif modo == "Ainda não tenho cadastro":
+            _cadastro_leitor(slug)
+        else:
+            _identificar_membro(slug)
 
 
 def render_importar_leitores(slug):
@@ -671,8 +701,23 @@ def render_importar_leitores(slug):
         )
 
 
+def _leitor_info_html(cadastro, slug):
+    nome = str(cadastro.get("nome", "") or "Leitor")
+    igreja_nome = str(cadastro.get("igreja_nome", "") or slug)
+    inicial = (nome.strip()[:1] or "?").upper()
+    return _html_sem_indentacao(f"""
+        <div class="leitura-leitor-info">
+            <span class="leitura-leitor-avatar">{html.escape(inicial)}</span>
+            <div>
+                <p class="leitura-leitor-nome">{html.escape(nome)}</p>
+                <p class="leitura-leitor-igreja">{html.escape(igreja_nome)}</p>
+            </div>
+        </div>
+    """)
+
+
 def render_publico():
-    st.markdown(_hero_html(listar_planos_leitura_biblica()), unsafe_allow_html=True)
+    st.markdown(_hero_html(), unsafe_allow_html=True)
 
     slug = st.session_state.get("leitura_slug")
     if not slug:
@@ -685,34 +730,40 @@ def render_publico():
         _identificar_leitor(slug)
         return
 
-    col_info, col_trocar = st.columns([3, 1])
-    with col_info:
-        st.success(
-            f"Leitor: {cadastro.get('nome', '')} — {cadastro.get('igreja_nome', slug)}"
-        )
-    with col_trocar:
-        if st.button("Trocar igreja/membro"):
-            st.session_state.pop("leitura_slug", None)
-            st.session_state.pop("leitura_cadastro", None)
-            st.rerun()
+    with st.container(key="leitura-step-leitor"):
+        col_info, col_trocar = st.columns([4, 1])
+        with col_info:
+            st.markdown(_leitor_info_html(cadastro, slug), unsafe_allow_html=True)
+        with col_trocar:
+            if st.button("Trocar", use_container_width=True):
+                st.session_state.pop("leitura_slug", None)
+                st.session_state.pop("leitura_cadastro", None)
+                st.rerun()
 
-    planos = listar_planos_leitura_biblica()
-    opcoes_planos = {p["nome"]: p["id"] for p in planos}
-    nomes_planos = list(opcoes_planos.keys())
-    plano_id_atual = st.session_state.get("leitura_plano_id", PLANO_LEITURA_PADRAO)
-    nome_atual = next(
-        (nome for nome, pid in opcoes_planos.items() if pid == plano_id_atual),
-        nomes_planos[0],
-    )
-    nome_escolhido = st.selectbox(
-        "Plano de leitura", nomes_planos, index=nomes_planos.index(nome_atual)
-    )
+    with st.container(key="leitura-step-plano"):
+        st.markdown(
+            _step_card_html("📅", "Plano e dia de leitura"),
+            unsafe_allow_html=True,
+        )
+        planos = listar_planos_leitura_biblica()
+        opcoes_planos = {p["nome"]: p["id"] for p in planos}
+        nomes_planos = list(opcoes_planos.keys())
+        plano_id_atual = st.session_state.get("leitura_plano_id", PLANO_LEITURA_PADRAO)
+        nome_atual = next(
+            (nome for nome, pid in opcoes_planos.items() if pid == plano_id_atual),
+            nomes_planos[0],
+        )
+        col_plano, col_dia = st.columns(2)
+        with col_plano:
+            nome_escolhido = st.selectbox(
+                "Plano de leitura", nomes_planos, index=nomes_planos.index(nome_atual)
+            )
+        with col_dia:
+            data_escolhida = st.date_input(
+                "Dia da leitura", value=datetime.date.today()
+            )
     plano_id = opcoes_planos[nome_escolhido]
     st.session_state["leitura_plano_id"] = plano_id
-
-    data_escolhida = st.date_input(
-        "Escolha o dia da leitura", value=datetime.date.today()
-    )
     dia_numero = _dia_do_plano(data_escolhida)
 
     leitura = obter_leitura_do_dia(dia_numero, plano_id=plano_id)
@@ -728,13 +779,24 @@ def render_publico():
         ),
         unsafe_allow_html=True,
     )
-    _render_texto_biblico(leitura["passagens"])
+    with st.container(key="leitura-step-texto"):
+        _render_texto_biblico(leitura["passagens"])
 
     origem = cadastro.get("origem")
     id_pessoa = cadastro.get("id_pessoa")
     if leitura_ja_confirmada(slug, origem, id_pessoa, dia_numero, plano_id=plano_id):
-        st.success("✅ Leitura deste dia já confirmada. Continue firme!")
+        st.markdown(
+            _html_sem_indentacao("""
+                <div class="leitura-confirmado">
+                    ✅ <strong>Leitura de hoje confirmada!</strong>
+                    Continue firme na sua jornada.
+                </div>
+            """),
+            unsafe_allow_html=True,
+        )
     else:
-        if st.button("Confirmar leitura deste dia", type="primary"):
+        if st.button(
+            "✅ Confirmar leitura deste dia", type="primary", use_container_width=True
+        ):
             confirmar_leitura_biblica(slug, origem, id_pessoa, dia_numero, plano_id=plano_id)
             st.rerun()

@@ -2412,7 +2412,7 @@ def render_institucional():
                 .leitura-hero {
                     background: linear-gradient(135deg, #061B44 0%, #0B3A66 100%);
                     border-radius: 20px;
-                    padding: 34px 32px;
+                    padding: 30px 32px;
                     margin: 4px 0 18px;
                     color: #FFFFFF;
                 }
@@ -2423,34 +2423,21 @@ def render_institucional():
                     font-weight: 800;
                     letter-spacing: .08em;
                     text-transform: uppercase;
-                    margin-bottom: 14px;
-                }
-                .leitura-hero-badges {
-                    display: flex;
-                    gap: 8px;
-                    flex-wrap: wrap;
-                    margin-bottom: 16px;
-                }
-                .leitura-hero-badge {
-                    padding: 6px 14px;
-                    border-radius: 999px;
-                    background: rgba(255,255,255,.14);
-                    border: 1px solid rgba(255,255,255,.25);
-                    color: #FFFFFF;
-                    font-size: .8rem;
-                    font-weight: 700;
+                    margin-bottom: 10px;
                 }
                 .leitura-hero-title {
                     margin: 0 0 8px;
-                    font-size: 2.15rem;
+                    font-size: 2rem;
                     font-weight: 800;
                     color: #FFFFFF;
                     line-height: 1.2;
                 }
                 .leitura-hero-subtitle {
                     margin: 0;
+                    max-width: 620px;
                     color: rgba(255,255,255,.82);
                     font-size: 1rem;
+                    line-height: 1.55;
                 }
                 .leitura-card {
                     background: #FFFFFF;
@@ -2510,6 +2497,77 @@ def render_institucional():
                     color: #10213A;
                     font-size: .86rem;
                     font-weight: 650;
+                }
+                div[class*="st-key-leitura-step-"] {
+                    background: #FFFFFF;
+                    border-radius: 16px;
+                    border: 1px solid #E3E8F0;
+                    box-shadow: 0 10px 30px rgba(6,27,68,.06);
+                    padding: 20px 24px;
+                    margin: 4px 0 14px;
+                }
+                .leitura-step-title {
+                    margin: 0 0 4px;
+                    color: #061B44;
+                    font-size: 1.1rem;
+                    font-weight: 800;
+                }
+                .leitura-step-desc {
+                    margin: 0 0 14px;
+                    color: #607089;
+                    font-size: .88rem;
+                    line-height: 1.5;
+                }
+                .leitura-leitor-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .leitura-leitor-avatar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex: 0 0 42px;
+                    width: 42px;
+                    height: 42px;
+                    border-radius: 50%;
+                    background: #061B44;
+                    color: #F2D36B;
+                    font-weight: 800;
+                    font-size: 1.05rem;
+                }
+                .leitura-leitor-nome {
+                    margin: 0;
+                    color: #061B44;
+                    font-weight: 800;
+                    font-size: .98rem;
+                }
+                .leitura-leitor-igreja {
+                    margin: 0;
+                    color: #607089;
+                    font-size: .82rem;
+                }
+                .leitura-confirmado {
+                    border-radius: 14px;
+                    padding: 16px 20px;
+                    margin: 4px 0 14px;
+                    background: #EAF7F0;
+                    border: 1px solid #BEE8D0;
+                    color: #0F6D3D;
+                    font-size: .95rem;
+                }
+                @media (max-width: 700px) {
+                    .leitura-hero {
+                        padding: 22px 20px;
+                        border-radius: 16px;
+                    }
+                    .leitura-hero-title { font-size: 1.6rem; }
+                    .leitura-hero-subtitle { font-size: .92rem; }
+                    .leitura-card,
+                    div[class*="st-key-leitura-step-"] {
+                        padding: 16px 18px;
+                        border-radius: 14px;
+                    }
                 }
             </style>
             """,
