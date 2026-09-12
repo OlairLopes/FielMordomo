@@ -7,7 +7,7 @@ reportlab>=4.0.0
 requests>=2.31.0
 urllib3>=2.7.0
 pillow>=12.3.0
-gTTS>=2.5.0
+edge-tts>=7.2.0
 -e .
 streamlit-geolocation>=0.0.10
 streamlit-cookies-controller>=0.0.4

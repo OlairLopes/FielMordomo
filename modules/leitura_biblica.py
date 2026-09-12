@@ -1,9 +1,10 @@
+import asyncio
 import datetime
 import hashlib
 import html
-import io
 import logging
 import re
+import threading
 
 import pandas as pd
 import requests
@@ -42,6 +43,15 @@ BIBLIA_VERSOES = {
     "acf": "ACF — Almeida Corrigida e Fiel",
     "kja": "KJA — King James Atualizada",
 }
+
+BIBLIA_VOZES = {
+    "feminina": "pt-BR-FranciscaNeural",
+    "masculina": "pt-BR-AntonioNeural",
+}
+BIBLIA_VOZ_PADRAO = "feminina"
+
+VELOCIDADES_AUDIO = [1.0, 1.25, 1.5, 1.75, 2.0]
+VELOCIDADE_AUDIO_PADRAO = 1.25
 
 LIVRO_ABREV = {
     "gênesis": "gn", "êxodo": "ex", "levítico": "lv", "números": "nm", "deuteronômio": "dt",
@@ -238,44 +248,99 @@ def _texto_da_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
     return "\n\n".join(linhas)
 
 
-def _texto_audio_da_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
-    """Versao em texto corrido (sem numeros de versiculo) da unidade,
-    pronta para sintese de voz."""
-    capitulos = _versos_da_unidade(unidade, versao)
-    if capitulos is None:
+def _texto_audio_do_dia(passagens_texto, versao=BIBLIA_VERSAO_PADRAO):
+    """Texto corrido (sem numeros de versiculo) de toda a leitura do dia,
+    pronto para sintese de voz. Anuncia livro/capitulo a cada troca, para
+    orientar quem esta ouvindo sem ver a tela."""
+    unidades = _parsear_passagens(passagens_texto)
+    if not unidades:
         return None
-    varios_capitulos = len(capitulos) > 1
     partes = []
-    for cap, versos in capitulos:
-        if varios_capitulos:
-            partes.append(f"Capítulo {cap}.")
-        partes.extend(verso.get("text", "") for verso in versos if verso.get("text"))
+    livro_anterior = None
+    for unidade in unidades:
+        capitulos = _versos_da_unidade(unidade, versao)
+        if capitulos is None:
+            return None
+        anunciar_capitulo = len(unidades) > 1 or len(capitulos) > 1
+        for cap, versos in capitulos:
+            if unidade["livro"] != livro_anterior:
+                partes.append(f"{unidade['livro']}, capítulo {cap}.")
+                livro_anterior = unidade["livro"]
+            elif anunciar_capitulo:
+                partes.append(f"Capítulo {cap}.")
+            partes.extend(v.get("text", "") for v in versos if v.get("text"))
     return " ".join(partes)
 
 
-def _audio_da_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
-    """Gera (ou recupera do cache) o audio MP3 da unidade via gTTS."""
-    texto_audio = _texto_audio_da_unidade(unidade, versao)
+def _taxa_edge_tts(velocidade):
+    """Converte um multiplicador de velocidade (1.25 = 1.25x) na string de
+    taxa percentual que o edge-tts espera (ex.: '+25%')."""
+    percentual = round((velocidade - 1) * 100)
+    return f"{'+' if percentual >= 0 else ''}{percentual}%"
+
+
+async def _sintetizar_edge_tts(texto, voz_id, taxa):
+    import edge_tts
+
+    comunicador = edge_tts.Communicate(texto, voz_id, rate=taxa)
+    partes = []
+    async for pedaco in comunicador.stream():
+        if pedaco["type"] == "audio":
+            partes.append(pedaco["data"])
+    return b"".join(partes)
+
+
+def _audio_do_dia(passagens_texto, versao=BIBLIA_VERSAO_PADRAO,
+                   voz=BIBLIA_VOZ_PADRAO, velocidade=VELOCIDADE_AUDIO_PADRAO):
+    """Gera (ou recupera do cache) o audio MP3 da leitura completa do dia,
+    via edge-tts, na versao, voz e velocidade escolhidas."""
+    texto_audio = _texto_audio_do_dia(passagens_texto, versao)
     if not texto_audio:
         return None
 
-    chave = hashlib.sha256(f"{unidade['abrev']}|{texto_audio}".encode()).hexdigest()
+    voz_id = BIBLIA_VOZES.get(voz, BIBLIA_VOZES[BIBLIA_VOZ_PADRAO])
+    taxa = _taxa_edge_tts(velocidade)
+    chave = hashlib.sha256(f"{voz_id}|{taxa}|{texto_audio}".encode()).hexdigest()
     audio_bytes = obter_audio_biblico_cache(versao, chave)
     if audio_bytes is not None:
         return audio_bytes
 
     try:
-        from gtts import gTTS
-
-        buffer = io.BytesIO()
-        gTTS(text=texto_audio, lang="pt", tld="com.br").write_to_fp(buffer)
-        audio_bytes = buffer.getvalue()
+        audio_bytes = asyncio.run(_sintetizar_edge_tts(texto_audio, voz_id, taxa))
     except Exception:
-        LOGGER.exception("Falha ao gerar audio biblico para %s.", unidade.get("abrev"))
+        LOGGER.exception("Falha ao gerar audio biblico (versao=%s, voz=%s).", versao, voz)
         return None
 
     salvar_audio_biblico_cache(versao, chave, audio_bytes)
     return audio_bytes
+
+
+_PREWARM_LOCK = threading.Lock()
+_PREWARM_FEITO = set()
+
+
+def _pre_gerar_audio_dia(passagens_texto):
+    """Gera (em background) o audio de todas as versoes da leitura do dia,
+    na voz e velocidade padrao, para que o audio ja esteja em cache quando
+    um leitor pedir para ouvir."""
+    for versao in BIBLIA_VERSOES:
+        try:
+            _audio_do_dia(passagens_texto, versao, BIBLIA_VOZ_PADRAO, VELOCIDADE_AUDIO_PADRAO)
+        except Exception:
+            LOGGER.exception("Falha ao pre-gerar audio do dia (versao=%s).", versao)
+
+
+def _agendar_prewarm_audio(dia_numero, plano_id, passagens_texto):
+    """Dispara a pre-geracao de audio do dia em uma thread separada, uma
+    unica vez por (dia, plano) por processo em execucao."""
+    chave = (dia_numero, plano_id)
+    with _PREWARM_LOCK:
+        if chave in _PREWARM_FEITO:
+            return
+        _PREWARM_FEITO.add(chave)
+    threading.Thread(
+        target=_pre_gerar_audio_dia, args=(passagens_texto,), daemon=True
+    ).start()
 
 
 def _rotulo_unidade(unidade):
@@ -297,14 +362,41 @@ def _render_texto_biblico(passagens_texto, versao=BIBLIA_VERSAO_PADRAO):
         return
 
     st.markdown("##### Ler o texto")
-    versao_atual = st.selectbox(
-        "Versão da Bíblia",
-        list(BIBLIA_VERSOES.keys()),
-        index=list(BIBLIA_VERSOES.keys()).index(versao) if versao in BIBLIA_VERSOES else 0,
-        format_func=lambda k: BIBLIA_VERSOES[k],
-        key="leitura_versao_biblia",
-    )
-    for idx, unidade in enumerate(unidades):
+    col_versao, col_voz, col_vel = st.columns(3)
+    with col_versao:
+        versao_atual = st.selectbox(
+            "Versão da Bíblia",
+            list(BIBLIA_VERSOES.keys()),
+            index=list(BIBLIA_VERSOES.keys()).index(versao) if versao in BIBLIA_VERSOES else 0,
+            format_func=lambda k: BIBLIA_VERSOES[k],
+            key="leitura_versao_biblia",
+        )
+    with col_voz:
+        voz_atual = st.selectbox(
+            "Voz",
+            list(BIBLIA_VOZES.keys()),
+            index=list(BIBLIA_VOZES.keys()).index(BIBLIA_VOZ_PADRAO),
+            format_func=lambda k: k.capitalize(),
+            key="leitura_voz_biblia",
+        )
+    with col_vel:
+        velocidade_atual = st.selectbox(
+            "Velocidade",
+            VELOCIDADES_AUDIO,
+            index=VELOCIDADES_AUDIO.index(VELOCIDADE_AUDIO_PADRAO),
+            format_func=lambda v: f"{v}x",
+            key="leitura_velocidade_biblia",
+        )
+
+    st.markdown("**🔊 Ouvir a leitura do dia**")
+    with st.spinner("Preparando áudio..."):
+        audio_bytes = _audio_do_dia(passagens_texto, versao_atual, voz_atual, velocidade_atual)
+    if audio_bytes:
+        st.audio(audio_bytes, format="audio/mp3")
+    else:
+        st.warning("Não foi possível gerar o áudio agora. Tente novamente em instantes.")
+
+    for unidade in unidades:
         with st.expander(f"📖 {_rotulo_unidade(unidade)}"):
             texto = _texto_da_unidade(unidade, versao_atual)
             if texto is None:
@@ -315,16 +407,6 @@ def _render_texto_biblico(passagens_texto, versao=BIBLIA_VERSAO_PADRAO):
                 st.info("Texto indisponível para esta passagem.")
             else:
                 st.markdown(texto)
-                audio_key = f"leitura_audio_{versao_atual}_{idx}"
-                if st.button("🔊 Ouvir este trecho", key=f"btn_{audio_key}"):
-                    with st.spinner("Gerando áudio..."):
-                        st.session_state[audio_key] = _audio_da_unidade(unidade, versao_atual)
-                if st.session_state.get(audio_key):
-                    st.audio(st.session_state[audio_key], format="audio/mp3")
-                elif audio_key in st.session_state:
-                    st.warning(
-                        "Não foi possível gerar o áudio agora. Tente novamente em instantes."
-                    )
 
 
 def _parse_data_nascimento(valor):
@@ -637,6 +719,8 @@ def render_publico():
     if not leitura:
         st.info("Leitura ainda não cadastrada para este dia.")
         return
+
+    _agendar_prewarm_audio(dia_numero, plano_id, leitura["passagens"])
 
     st.markdown(
         _card_leitura_html(

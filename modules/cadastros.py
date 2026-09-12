@@ -1,4 +1,5 @@
 ﻿import base64
+import io
 import logging
 import datetime
 import html
@@ -8,6 +9,7 @@ import unicodedata
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
+from PIL import Image
 
 from data.models import Cadastro, limpar_documento
 from data.repository import (
@@ -101,6 +103,57 @@ def _formatar_cep(cep):
     if len(digits) == 8:
         return f"{digits[:5]}-{digits[5:]}"
     return cep
+
+
+FOTO_TIPOS_AUTORIZADOS = {"image/jpeg": "JPEG", "image/png": "PNG"}
+FOTO_TAMANHO_MAXIMO = 8 * 1024 * 1024
+FOTO_LARGURA, FOTO_ALTURA = 300, 400
+
+
+def _recortar_foto_3x4(dados_brutos):
+    """Recorta a imagem para a proporcao 3x4 e recomprime em JPEG pequeno,
+    pronta para armazenar e imprimir."""
+    imagem = Image.open(io.BytesIO(dados_brutos))
+    imagem = imagem.convert("RGB")
+    largura, altura = imagem.size
+    proporcao_alvo = FOTO_LARGURA / FOTO_ALTURA
+    if largura / altura > proporcao_alvo:
+        nova_largura = int(altura * proporcao_alvo)
+        offset = (largura - nova_largura) // 2
+        imagem = imagem.crop((offset, 0, offset + nova_largura, altura))
+    else:
+        nova_altura = int(largura / proporcao_alvo)
+        offset = (altura - nova_altura) // 2
+        imagem = imagem.crop((0, offset, largura, offset + nova_altura))
+    imagem = imagem.resize((FOTO_LARGURA, FOTO_ALTURA))
+    buffer = io.BytesIO()
+    imagem.save(buffer, format="JPEG", quality=85)
+    return buffer.getvalue()
+
+
+def _ler_upload_foto(arquivo):
+    """Valida o arquivo de foto enviado e retorna a data URI (base64) pronta
+    para salvar no cadastro, ja recortada em 3x4."""
+    if arquivo.type not in FOTO_TIPOS_AUTORIZADOS:
+        raise ValueError("Envie uma foto em JPG ou PNG.")
+    dados = arquivo.getvalue()
+    if not dados or len(dados) > FOTO_TAMANHO_MAXIMO:
+        raise ValueError("A foto deve ter ate 8 MB.")
+    try:
+        recortada = _recortar_foto_3x4(dados)
+    except Exception:
+        raise ValueError("Nao foi possivel processar essa imagem. Tente outro arquivo.")
+    b64 = base64.b64encode(recortada).decode()
+    return f"data:image/jpeg;base64,{b64}"
+
+
+def _foto_para_bytes(foto_data_uri):
+    if not foto_data_uri or "," not in foto_data_uri:
+        return None
+    try:
+        return base64.b64decode(foto_data_uri.split(",", 1)[1])
+    except Exception:
+        return None
 
 
 def _formatar_tel(tel):
@@ -439,6 +492,11 @@ def _gerar_html_formulario_membro(row, igreja, slug=None):
     nome_igreja = igreja.get("nome") or igreja.get("slug") or "Igreja"
     logo_src = _logo_base64(slug) if slug else None
     logo_html = f'<img class="logo" src="{logo_src}" alt="Logo"/>' if logo_src else ""
+    foto_src = _val(row, "foto")
+    foto_html = (
+        f'<img class="foto-3x4" src="{foto_src}" alt="Foto 3x4"/>' if foto_src
+        else '<div class="foto-3x4"></div>'
+    )
     tipo = _val(row, "tipo_cadastro")
     documento = _formatar_doc(_val(row, "cpf"), tipo)
     nascimento = _formatar_data(_val(row, "data_nascimento"))
@@ -465,8 +523,9 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 .toolbar {{ text-align: center; margin-bottom: 14px; }}
 .toolbar button {{ background: #061B44; color: white; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; }}
 .folha {{ width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 16mm; border: 1px solid #d1d5db; }}
-.cabecalho {{ text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
+.cabecalho {{ position: relative; text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 16px; }}
 .logo {{ max-height: 64px; max-width: 160px; margin-bottom: 8px; }}
+.foto-3x4 {{ position: absolute; top: 0; right: 0; width: 30mm; height: 40mm; border: 1px solid #111827; border-radius: 4px; object-fit: cover; background: #f9fafb; }}
 .igreja {{ font-size: 18px; font-weight: 800; text-transform: uppercase; }}
 .titulo {{ font-size: 15px; font-weight: 700; margin-top: 6px; }}
 .emitido {{ font-size: 11px; color: #6b7280; margin-top: 4px; }}
@@ -494,6 +553,7 @@ body {{ margin: 0; padding: 18px; background: #f3f4f6; color: #111827; font-fami
 </div>
 <main class="folha">
     <header class="cabecalho">
+        {foto_html}
         {logo_html}
         <div class="igreja">{_html(nome_igreja)}</div>
         <div class="titulo">Formulario de Cadastro de Membro</div>
@@ -727,6 +787,33 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
             help="Definida automaticamente pelo identificador da igreja logada.",
         )
 
+        st.markdown("**📷 Foto 3x4**")
+        foto_atual = "" if novo else _val(registro, "foto")
+        foto_removida = False
+        arquivo_foto = None
+        if not somente_leitura:
+            arquivo_foto = st.file_uploader(
+                "Enviar foto (JPG ou PNG)",
+                type=["jpg", "jpeg", "png"],
+                key=kp + "foto",
+            )
+        col_foto_preview, col_foto_upload = st.columns([1, 3])
+        with col_foto_preview:
+            if arquivo_foto is not None:
+                st.image(arquivo_foto, width=100)
+                st.caption("Novo — recortado 3x4 ao salvar")
+            else:
+                foto_bytes_atual = _foto_para_bytes(foto_atual)
+                if foto_bytes_atual:
+                    st.image(foto_bytes_atual, width=100)
+                else:
+                    st.caption("Sem foto")
+        with col_foto_upload:
+            if not somente_leitura and foto_atual and arquivo_foto is None:
+                foto_removida = st.checkbox(
+                    "Remover foto atual", key=kp + "foto_remover"
+                )
+
     with tab_contato:
         tel_atual = "" if novo else _val(registro, "telefone")
         telefone = st.text_input(
@@ -801,6 +888,17 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
     if salvar:
         dn_str = dt_nasc.isoformat() if dt_nasc else ""
         id_atual = None if novo else int(_val(registro, "id_cadastro"))
+
+        foto_final = foto_atual
+        foto_erro = None
+        if arquivo_foto is not None:
+            try:
+                foto_final = _ler_upload_foto(arquivo_foto)
+            except ValueError as exc:
+                foto_erro = str(exc)
+        elif foto_removida:
+            foto_final = ""
+
         c = Cadastro(
             id_cadastro=id_atual,
             nome=nome,
@@ -817,8 +915,11 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
             bairro=bairro,
             cidade=cidade,
             cep=cep,
+            foto=foto_final,
         )
         erros = c.validar()
+        if foto_erro:
+            erros.append(foto_erro)
 
         doc_limpo = limpar_documento(cpf)
         if not novo and tipo == "Membro" and _val(registro, "tipo_cadastro") != "Membro" and bloqueado:
@@ -1119,6 +1220,8 @@ def render():
             )
 
             df_view = df_view.rename(columns={"cpf": "documento"})
+            if "foto" in df_view.columns:
+                df_view = df_view.drop(columns=["foto"])
             st.dataframe(df_view, use_container_width=True)
 
     # ─── Ficha de cadastro (toolbar + navegacao por registro) ───────

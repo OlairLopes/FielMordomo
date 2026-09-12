@@ -82,6 +82,7 @@ class Cadastro:
     bairro: str = ""
     cidade: str = ""
     cep: str = ""
+    foto: str = ""
     id_cadastro: Optional[int] = None
 
     def validar(self) -> list[str]:

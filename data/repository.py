@@ -6039,6 +6039,7 @@ def _garantir_colunas_cadastros(conn):
         ("bairro", "TEXT DEFAULT ''"),
         ("cidade", "TEXT DEFAULT ''"),
         ("cep", "TEXT DEFAULT ''"),
+        ("foto", "TEXT DEFAULT ''"),
     ]:
         if col not in cols:
             conn.execute(f"ALTER TABLE cadastros ADD COLUMN {col} {tipo}")
@@ -6125,15 +6126,16 @@ def inserir_cadastro(slug, c):
         cur = conn.execute(
             """INSERT INTO cadastros
                (tipo_cadastro, nome, funcao, congregacao, cpf,
-                data_nascimento, sexo, telefone, logradouro, numero, bairro, cidade, cep, situacao)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                data_nascimento, sexo, telefone, logradouro, numero, bairro, cidade, cep, situacao, foto)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
              sanitizar(c.congregacao), cpf_limpo,
              sanitizar(getattr(c, "data_nascimento", "")),
              sanitizar(getattr(c, "sexo", "")),
              sanitizar(c.telefone), sanitizar(c.logradouro),
              sanitizar(c.numero), sanitizar(c.bairro),
-             sanitizar(c.cidade), cep_limpo, c.situacao),
+             sanitizar(c.cidade), cep_limpo, c.situacao,
+             getattr(c, "foto", "") or ""),
         )
         id_cadastro = cur.lastrowid
         if c.tipo_cadastro == "Membro":
@@ -6154,7 +6156,7 @@ def atualizar_cadastro(slug, c):
             """UPDATE cadastros
                SET tipo_cadastro=?, nome=?, funcao=?, congregacao=?, cpf=?,
                    data_nascimento=?, sexo=?, telefone=?, logradouro=?, numero=?,
-                   bairro=?, cidade=?, cep=?, situacao=?
+                   bairro=?, cidade=?, cep=?, situacao=?, foto=?
                WHERE id_cadastro=?""",
             (c.tipo_cadastro, sanitizar(c.nome), sanitizar(c.funcao),
              sanitizar(c.congregacao), cpf_limpo,
@@ -6163,7 +6165,7 @@ def atualizar_cadastro(slug, c):
              sanitizar(c.telefone), sanitizar(c.logradouro),
              sanitizar(c.numero), sanitizar(c.bairro),
              sanitizar(c.cidade), cep_limpo,
-             c.situacao, c.id_cadastro),
+             c.situacao, getattr(c, "foto", "") or "", c.id_cadastro),
         )
         _sincronizar_recepcao_cadastro_conn(conn, c.id_cadastro)
 
