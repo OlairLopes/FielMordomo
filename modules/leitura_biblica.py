@@ -51,7 +51,7 @@ BIBLIA_VOZES = {
 BIBLIA_VOZ_PADRAO = "feminina"
 
 VELOCIDADES_AUDIO = [1.0, 1.25, 1.5, 1.75, 2.0]
-VELOCIDADE_AUDIO_PADRAO = 1.25
+VELOCIDADE_AUDIO_PADRAO = 1.0
 
 LIVRO_ABREV = {
     "gênesis": "gn", "êxodo": "ex", "levítico": "lv", "números": "nm", "deuteronômio": "dt",
