@@ -248,27 +248,36 @@ def _texto_da_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
     return "\n\n".join(linhas)
 
 
+def _texto_audio_por_unidade(unidade, versao=BIBLIA_VERSAO_PADRAO):
+    """Texto corrido (sem numeros de versiculo) de uma unica unidade de
+    leitura, pronto para sintese de voz. Sempre anuncia livro/capitulo no
+    inicio (e a cada troca de capitulo dentro da unidade), pois cada unidade
+    e sintetizada separadamente e precisa se orientar sozinha."""
+    capitulos = _versos_da_unidade(unidade, versao)
+    if capitulos is None:
+        return None
+    partes = []
+    for idx, (cap, versos) in enumerate(capitulos):
+        if idx == 0:
+            partes.append(f"{unidade['livro']}, capítulo {cap}.")
+        else:
+            partes.append(f"Capítulo {cap}.")
+        partes.extend(v.get("text", "") for v in versos if v.get("text"))
+    return " ".join(partes)
+
+
 def _texto_audio_do_dia(passagens_texto, versao=BIBLIA_VERSAO_PADRAO):
-    """Texto corrido (sem numeros de versiculo) de toda a leitura do dia,
-    pronto para sintese de voz. Anuncia livro/capitulo a cada troca, para
-    orientar quem esta ouvindo sem ver a tela."""
+    """Texto corrido de toda a leitura do dia (concatenando as unidades),
+    usado apenas como base para a chave de cache do audio."""
     unidades = _parsear_passagens(passagens_texto)
     if not unidades:
         return None
     partes = []
-    livro_anterior = None
     for unidade in unidades:
-        capitulos = _versos_da_unidade(unidade, versao)
-        if capitulos is None:
+        texto_unidade = _texto_audio_por_unidade(unidade, versao)
+        if texto_unidade is None:
             return None
-        anunciar_capitulo = len(unidades) > 1 or len(capitulos) > 1
-        for cap, versos in capitulos:
-            if unidade["livro"] != livro_anterior:
-                partes.append(f"{unidade['livro']}, capítulo {cap}.")
-                livro_anterior = unidade["livro"]
-            elif anunciar_capitulo:
-                partes.append(f"Capítulo {cap}.")
-            partes.extend(v.get("text", "") for v in versos if v.get("text"))
+        partes.append(texto_unidade)
     return " ".join(partes)
 
 
@@ -290,6 +299,25 @@ async def _sintetizar_edge_tts(texto, voz_id, taxa):
     return b"".join(partes)
 
 
+async def _sintetizar_dia_async(passagens_texto, versao, voz_id, taxa):
+    """Sintetiza cada unidade da leitura do dia em paralelo (uma chamada de
+    rede por passagem, simultaneas) e concatena os MP3 resultantes. Bem mais
+    rapido do que sintetizar o dia inteiro numa unica chamada sequencial."""
+    unidades = _parsear_passagens(passagens_texto)
+    if not unidades:
+        return None
+    textos = [_texto_audio_por_unidade(u, versao) for u in unidades]
+    if any(t is None for t in textos):
+        return None
+    textos = [t for t in textos if t]
+    if not textos:
+        return None
+    resultados = await asyncio.gather(
+        *[_sintetizar_edge_tts(t, voz_id, taxa) for t in textos]
+    )
+    return b"".join(resultados)
+
+
 def _audio_do_dia(passagens_texto, versao=BIBLIA_VERSAO_PADRAO,
                    voz=BIBLIA_VOZ_PADRAO, velocidade=VELOCIDADE_AUDIO_PADRAO):
     """Gera (ou recupera do cache) o audio MP3 da leitura completa do dia,
@@ -306,9 +334,12 @@ def _audio_do_dia(passagens_texto, versao=BIBLIA_VERSAO_PADRAO,
         return audio_bytes
 
     try:
-        audio_bytes = asyncio.run(_sintetizar_edge_tts(texto_audio, voz_id, taxa))
-    except Exception:
+        audio_bytes = asyncio.run(
+            _sintetizar_dia_async(passagens_texto, versao, voz_id, taxa)
+        )
+    except Exception as erro:
         LOGGER.exception("Falha ao gerar audio biblico (versao=%s, voz=%s).", versao, voz)
+        st.session_state["ultimo_erro_audio"] = f"{type(erro).__name__}: {erro}"
         return None
 
     salvar_audio_biblico_cache(versao, chave, audio_bytes)
@@ -389,12 +420,8 @@ def _render_texto_biblico(passagens_texto, versao=BIBLIA_VERSAO_PADRAO):
         )
 
     st.markdown("**🔊 Ouvir a leitura do dia**")
-    with st.spinner("Preparando áudio..."):
-        audio_bytes = _audio_do_dia(passagens_texto, versao_atual, voz_atual, velocidade_atual)
-    if audio_bytes:
-        st.audio(audio_bytes, format="audio/mp3")
-    else:
-        st.warning("Não foi possível gerar o áudio agora. Tente novamente em instantes.")
+    audio_slot = st.empty()
+    audio_slot.caption("Preparando áudio — enquanto isso, já dá pra ler o texto abaixo. 👇")
 
     for unidade in unidades:
         with st.expander(f"📖 {_rotulo_unidade(unidade)}"):
@@ -407,6 +434,16 @@ def _render_texto_biblico(passagens_texto, versao=BIBLIA_VERSAO_PADRAO):
                 st.info("Texto indisponível para esta passagem.")
             else:
                 st.markdown(texto)
+
+    audio_bytes = _audio_do_dia(passagens_texto, versao_atual, voz_atual, velocidade_atual)
+    if audio_bytes:
+        audio_slot.audio(audio_bytes, format="audio/mp3")
+    else:
+        detalhe = st.session_state.get("ultimo_erro_audio", "")
+        audio_slot.warning(
+            "Não foi possível gerar o áudio agora. Tente novamente em instantes."
+            + (f"\n\nDetalhe técnico: `{detalhe}`" if detalhe else "")
+        )
 
 
 def _parse_data_nascimento(valor):
