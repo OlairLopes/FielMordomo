@@ -9,6 +9,7 @@ from data.repository import (
     PIX_QR_EXTENSOES, obter_pix_qr_igreja, remover_pix_qr_igreja,
     rejeitar_contribuicao_online, salvar_pix_igreja, salvar_pix_qr_igreja,
 )
+from modules.institucional import render_barra_publica
 from modules.lancamentos import CATEGORIAS_ENTRADA
 from modules.pix_brcode import gerar_payload_pix, gerar_qr_png
 from utils.helpers import formatar_moeda, slug_da_sessao
@@ -32,6 +33,7 @@ def _chave_gerado(slug):
 
 def pagina_publica(slug):
     """Pagina publica de contribuicao (?contribuir=<slug>), sem login."""
+    render_barra_publica()
     igreja = buscar_igreja_por_slug(slug)
     if not igreja:
         st.error("Igreja não encontrada.")
@@ -58,8 +60,8 @@ def pagina_publica(slug):
             "Valor (R$)", min_value=VALOR_MINIMO, max_value=VALOR_MAXIMO,
             value=50.0, step=5.0, format="%.2f",
         )
-        nome = st.text_input("Seu nome (opcional)", max_chars=80)
-        contato = st.text_input("E-mail ou telefone para contato (opcional)", max_chars=120)
+        nome = st.text_input("Seu nome (obrigatório)", max_chars=80)
+        contato = st.text_input("Telefone com DDD (obrigatório)", max_chars=20, placeholder="(00) 00000-0000")
         enviar = st.form_submit_button("Gerar Pix", type="primary")
 
     chave_sessao = _chave_gerado(slug)

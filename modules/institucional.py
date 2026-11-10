@@ -1958,6 +1958,11 @@ def _render_html(html_final: str):
         st.markdown(html_final, unsafe_allow_html=True)
 
 
+def render_barra_publica():
+    """Barra de menu do site, para paginas publicas fora da pagina inicial (contribuicao, verificacao)."""
+    st.markdown(_html_sem_indentacao(_css_base() + _navbar()), unsafe_allow_html=True)
+
+
 def _html_sem_indentacao(html_final: str) -> str:
     return "\n".join(linha.strip() for linha in str(html_final).splitlines() if linha.strip())
 
