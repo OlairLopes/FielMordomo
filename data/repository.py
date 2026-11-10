@@ -500,6 +500,7 @@ def inicializar_tenant(slug):
         _garantir_tabela_pastores_auxiliares(conn)
         _garantir_tabela_secretarios_gerais(conn)
         _garantir_tabela_recepcao(conn)
+        _garantir_tabela_contribuicoes_online(conn)
 
 
 def _garantir_colunas_lancamentos(conn):
@@ -8044,3 +8045,226 @@ def salvar_audio_biblico_cache(versao, chave, audio_bytes):
         )
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Contribuicao online por Pix estatico (dizimo e ofertas pela pagina publica)
+# ═══════════════════════════════════════════════════════════════════════
+
+TIPOS_CONTRIBUICAO_ONLINE = ("Dizimo", "Oferta", "Missao", "Campanha")
+STATUS_CONTRIBUICAO_ONLINE = ("pendente", "confirmada", "rejeitada")
+
+
+def _garantir_tabela_contribuicoes_online(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS contribuicoes_online (
+            id_contribuicao INTEGER PRIMARY KEY AUTOINCREMENT,
+            criado_em       TEXT NOT NULL,
+            nome_doador     TEXT DEFAULT '',
+            contato         TEXT DEFAULT '',
+            tipo            TEXT NOT NULL,
+            valor           REAL NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'pendente',
+            id_lancamento   INTEGER,
+            confirmado_em   TEXT DEFAULT ''
+        )
+    """)
+
+
+def obter_pix_igreja(slug: str) -> dict:
+    return {
+        "chave": obter_config_igreja(slug, "pix_chave", ""),
+        "beneficiario": obter_config_igreja(slug, "pix_beneficiario", ""),
+        "cidade": obter_config_igreja(slug, "pix_cidade", ""),
+    }
+
+
+def salvar_pix_igreja(slug: str, chave: str, beneficiario: str, cidade: str):
+    chave = str(chave or "").strip()
+    beneficiario = sanitizar(beneficiario).strip()
+    cidade = sanitizar(cidade).strip()
+    if not chave:
+        raise ValueError("Informe a chave Pix.")
+    if not beneficiario or len(beneficiario) > 25:
+        raise ValueError("Beneficiário obrigatório, com até 25 caracteres.")
+    if not cidade or len(cidade) > 15:
+        raise ValueError("Cidade obrigatória, com até 15 caracteres.")
+    salvar_config_igreja(slug, "pix_chave", chave)
+    salvar_config_igreja(slug, "pix_beneficiario", beneficiario)
+    salvar_config_igreja(slug, "pix_cidade", cidade)
+
+
+def criar_contribuicao_online(slug: str, nome: str, tipo: str, valor: float, contato: str = "") -> int:
+    if tipo not in TIPOS_CONTRIBUICAO_ONLINE:
+        raise ValueError("Tipo de contribuição inválido.")
+    valor = float(valor)
+    if not (1 <= valor <= 100_000):
+        raise ValueError("Valor deve ficar entre R$ 1,00 e R$ 100.000,00.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_contribuicoes_online(conn)
+        cur = conn.execute(
+            """INSERT INTO contribuicoes_online (criado_em, nome_doador, contato, tipo, valor)
+               VALUES (?,?,?,?,?)""",
+            (datetime.datetime.now().isoformat(timespec="seconds"), sanitizar(nome)[:80],
+             sanitizar(contato)[:120], tipo, round(valor, 2)),
+        )
+        return cur.lastrowid
+
+
+def listar_contribuicoes_online(slug: str, status: str | None = None) -> list[dict]:
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_contribuicoes_online(conn)
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM contribuicoes_online WHERE status=? ORDER BY id_contribuicao DESC",
+                (status,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM contribuicoes_online ORDER BY id_contribuicao DESC LIMIT 200"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def confirmar_contribuicao_online(slug: str, id_contribuicao: int, data_recebimento,
+                                  categoria: str, id_cadastro: int | None = None) -> int:
+    """Marca a contribuicao como confirmada e grava a receita no financeiro.
+
+    Reserva a contribuicao com um UPDATE condicional antes de inserir o
+    lancamento, para que um duplo clique nao gere duas receitas.
+    """
+    from data.models import Lancamento
+
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_contribuicoes_online(conn)
+        reserva = conn.execute(
+            """UPDATE contribuicoes_online SET status='confirmada'
+               WHERE id_contribuicao=? AND status='pendente'""",
+            (id_contribuicao,),
+        )
+        if reserva.rowcount != 1:
+            raise ValueError("Contribuição já foi tratada ou não existe.")
+        row = conn.execute(
+            "SELECT * FROM contribuicoes_online WHERE id_contribuicao=?", (id_contribuicao,)
+        ).fetchone()
+
+    try:
+        id_lancamento = inserir_lancamento(slug, Lancamento(
+            data=data_recebimento,
+            tipo="Entrada",
+            categoria=categoria,
+            valor=row["valor"],
+            descricao=f"Contribuicao online #{id_contribuicao} - {row['nome_doador'] or 'Anonimo'}",
+            forma_pagamento="Pix",
+            id_cadastro=id_cadastro,
+        ))
+    except Exception:
+        with _conn(db) as conn:
+            conn.execute(
+                "UPDATE contribuicoes_online SET status='pendente' WHERE id_contribuicao=?",
+                (id_contribuicao,),
+            )
+        raise
+
+    with _conn(db) as conn:
+        conn.execute(
+            """UPDATE contribuicoes_online SET id_lancamento=?, confirmado_em=?
+               WHERE id_contribuicao=?""",
+            (id_lancamento, datetime.datetime.now().isoformat(timespec="seconds"), id_contribuicao),
+        )
+    return id_lancamento
+
+
+def rejeitar_contribuicao_online(slug: str, id_contribuicao: int):
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_contribuicoes_online(conn)
+        cur = conn.execute(
+            """UPDATE contribuicoes_online SET status='rejeitada'
+               WHERE id_contribuicao=? AND status='pendente'""",
+            (id_contribuicao,),
+        )
+        if cur.rowcount != 1:
+            raise ValueError("Contribuição já foi tratada ou não existe.")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Documentos emitidos a membros (carteirinha, cartas e certificados) com
+# codigo de verificacao. O QR Code do documento aponta para a pagina publica
+# ?verificar=<slug>.<codigo>, que confirma se o documento foi emitido.
+# ═══════════════════════════════════════════════════════════════════════
+
+TIPOS_DOCUMENTO_MEMBRO = (
+    "Carteirinha",
+    "Carta de Recomendação",
+    "Carta de Transferência",
+    "Certificado de Apresentação de Crianças",
+    "Certificado de Batismo",
+    "Certificado de Consagração de Obreiros",
+    "Certificado de Treinamento de Lideranças",
+)
+
+
+def _garantir_tabela_documentos_emitidos(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS documentos_emitidos (
+            codigo          TEXT PRIMARY KEY,
+            tipo            TEXT NOT NULL,
+            id_cadastro     INTEGER,
+            nome_titular    TEXT DEFAULT '',
+            descricao       TEXT DEFAULT '',
+            emitido_em      TEXT NOT NULL
+        )
+    """)
+
+
+def registrar_documento_emitido(slug, codigo, tipo, id_cadastro, nome_titular, descricao):
+    if tipo not in TIPOS_DOCUMENTO_MEMBRO:
+        raise ValueError("Tipo de documento invalido.")
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_documentos_emitidos(conn)
+        conn.execute(
+            """INSERT INTO documentos_emitidos
+               (codigo, tipo, id_cadastro, nome_titular, descricao, emitido_em)
+               VALUES (?,?,?,?,?,?)""",
+            (codigo, tipo, id_cadastro, sanitizar(nome_titular)[:120], sanitizar(descricao)[:200],
+             datetime.datetime.now().isoformat(timespec="seconds")),
+        )
+
+
+def buscar_documento_emitido(slug, codigo):
+    db = _tenant_db(slug)
+    if not db.exists():
+        return None
+    with _conn(db) as conn:
+        _garantir_tabela_documentos_emitidos(conn)
+        row = conn.execute(
+            "SELECT * FROM documentos_emitidos WHERE codigo=?", (codigo,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def listar_documentos_emitidos(slug, id_cadastro=None):
+    db = _tenant_db(slug)
+    if not db.exists():
+        inicializar_tenant(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_documentos_emitidos(conn)
+        if id_cadastro:
+            rows = conn.execute(
+                "SELECT * FROM documentos_emitidos WHERE id_cadastro=? ORDER BY emitido_em DESC",
+                (id_cadastro,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM documentos_emitidos ORDER BY emitido_em DESC LIMIT 200"
+            ).fetchall()
+    return [dict(r) for r in rows]
