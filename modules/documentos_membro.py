@@ -12,6 +12,7 @@ from data.repository import (
     carregar_cadastros, listar_documentos_emitidos, obter_logo_igreja,
     registrar_documento_emitido,
 )
+from modules.institucional import render_barra_publica
 from modules.pix_brcode import gerar_qr_png
 from utils.helpers import slug_da_sessao
 
@@ -534,6 +535,7 @@ def _texto_certificado(tipo, igreja_nome, membro, dados):
 
 def pagina_verificacao(slug, codigo):
     """Pagina publica (?verificar=<slug>.<codigo>), sem login."""
+    render_barra_publica()
     igreja = buscar_igreja_por_slug(slug)
     documento = buscar_documento_emitido(slug, codigo) if igreja else None
 

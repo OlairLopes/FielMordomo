@@ -8096,6 +8096,10 @@ def salvar_pix_igreja(slug: str, chave: str, beneficiario: str, cidade: str):
 def criar_contribuicao_online(slug: str, nome: str, tipo: str, valor: float, contato: str = "") -> int:
     if tipo not in CATEGORIAS_ENTRADA:
         raise ValueError("Tipo de contribuição inválido.")
+    if not str(nome or "").strip():
+        raise ValueError("Informe seu nome.")
+    if len(re.sub(r"\D", "", str(contato or ""))) not in (10, 11):
+        raise ValueError("Informe o telefone com DDD (10 ou 11 dígitos).")
     valor = float(valor)
     if not (1 <= valor <= 100_000):
         raise ValueError("Valor deve ficar entre R$ 1,00 e R$ 100.000,00.")
