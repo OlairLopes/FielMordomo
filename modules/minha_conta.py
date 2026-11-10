@@ -110,6 +110,240 @@ def _membros_opcoes(slug):
     return opcoes, membros
 
 
+CONFIG_PASTOR_AUXILIAR = {
+    "campo_id": "id_pastor_auxiliar",
+    "titulo": "Pastores auxiliares",
+    "descricao": (
+        "Cadastre acessos restritos para pastor auxiliar. A senha deve possuir "
+        "ao menos 8 caracteres."
+    ),
+    "rotulo_membro_selectbox": "Pastor auxiliar",
+    "rotulo_credencial": "Senha forte",
+    "credencial_help_novo": "Minimo de 8 caracteres.",
+    "credencial_max_chars": None,
+    "colunas_tabela": ["id_cadastro", "nome", "usuario", "telefone", "email", "situacao"],
+    "expander_cadastrar": "Cadastrar pastor auxiliar",
+    "submit_cadastrar": "Salvar pastor auxiliar",
+    "sucesso_cadastrar": "Pastor Auxiliar cadastrado.",
+    "rotulo_editar_select": "Editar pastor auxiliar",
+    "rotulo_nova_credencial": "Nova senha",
+    "submit_editar": "Atualizar pastor auxiliar",
+    "sucesso_editar": "Pastor Auxiliar atualizado.",
+    "botao_inativar": "Inativar pastor auxiliar selecionado",
+    "sucesso_inativar": "Pastor Auxiliar inativado.",
+    "vazio": "Nenhum Pastor Auxiliar cadastrado.",
+    "listar": listar_pastores_auxiliares,
+    "salvar": salvar_pastor_auxiliar,
+    "inativar": inativar_pastor_auxiliar,
+}
+
+CONFIG_SECRETARIO_GERAL = {
+    "campo_id": "id_secretario_geral",
+    "titulo": "Secretarios gerais",
+    "descricao": (
+        "Cadastre acessos restritos para Secretaria Geral. Este perfil acessa "
+        "membros, aniversarios e somente a chamada das reunioes de obreiros."
+    ),
+    "rotulo_membro_selectbox": "Secretario Geral",
+    "rotulo_credencial": "Senha forte",
+    "credencial_help_novo": "Minimo de 8 caracteres.",
+    "credencial_max_chars": None,
+    "colunas_tabela": ["id_cadastro", "nome", "usuario", "telefone", "email", "situacao"],
+    "expander_cadastrar": "Cadastrar Secretario Geral",
+    "submit_cadastrar": "Salvar Secretario Geral",
+    "sucesso_cadastrar": "Secretario Geral cadastrado.",
+    "rotulo_editar_select": "Editar Secretario Geral",
+    "rotulo_nova_credencial": "Nova senha",
+    "submit_editar": "Atualizar Secretario Geral",
+    "sucesso_editar": "Secretario Geral atualizado.",
+    "botao_inativar": "Inativar Secretario Geral selecionado",
+    "sucesso_inativar": "Secretario Geral inativado.",
+    "vazio": "Nenhum Secretario Geral cadastrado.",
+    "listar": listar_secretarios_gerais,
+    "salvar": salvar_secretario_geral,
+    "inativar": inativar_secretario_geral,
+}
+
+CONFIG_RECEPCAO = {
+    "campo_id": "id_recepcao",
+    "titulo": "Recepção",
+    "descricao": (
+        "Diáconos, diaconisas, auxiliares e cooperadoras ativos são incluídos "
+        "automaticamente. Usuário automático: nome completo sem acentos, em "
+        "minúsculas e com espaços convertidos em ponto. Exemplo: joao.da.silva. "
+        "PIN inicial: últimos 4 dígitos do CPF. Esse perfil acessa somente "
+        "visitantes."
+    ),
+    "rotulo_membro_selectbox": "Recepcionista",
+    "rotulo_credencial": "PIN de 4 digitos",
+    "credencial_help_novo": None,
+    "credencial_max_chars": 4,
+    "colunas_tabela": [
+        "id_cadastro", "nome", "usuario", "telefone", "email", "situacao", "automatico",
+    ],
+    "expander_cadastrar": "Cadastrar usuario da recepção",
+    "submit_cadastrar": "Salvar recepção",
+    "sucesso_cadastrar": "Usuário da Recepção cadastrado.",
+    "rotulo_editar_select": "Editar usuario da recepção",
+    "rotulo_nova_credencial": "Novo PIN de 4 digitos",
+    "submit_editar": "Atualizar recepção",
+    "sucesso_editar": "Usuário da Recepção atualizado.",
+    "botao_inativar": "Inativar usuario da recepção",
+    "sucesso_inativar": "Usuário da Recepção inativado.",
+    "vazio": "Nenhum usuário da Recepção cadastrado.",
+    "listar": listar_recepcao_usuarios,
+    "salvar": salvar_recepcao_usuario,
+    "inativar": inativar_recepcao_usuario,
+}
+
+
+def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
+    """Renderiza uma secao de acesso restrito (cadastrar/editar/inativar),
+    parametrizada por perfil (pastor auxiliar, secretario geral, recepcao).
+    As tres secoes eram praticamente identicas; aqui o texto e o
+    comportamento visivel de cada uma sao preservados via `config`."""
+    campo_id = config["campo_id"]
+
+    st.divider()
+    st.markdown(f"### {config['titulo']}")
+    st.caption(config["descricao"])
+
+    try:
+        registros = config["listar"](slug)
+    except Exception:
+        LOGGER.exception("Nao foi possivel carregar %s.", config["titulo"].lower())
+        registros = None
+        st.error(f"Nao foi possivel carregar {config['titulo'].lower()}.")
+
+    with st.expander(config["expander_cadastrar"], expanded=False):
+        with st.form(f"form_{campo_id}_novo"):
+            id_cadastro = None
+            nome = ""
+            telefone = ""
+            if not op_membros:
+                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+            else:
+                membro_label = st.selectbox(
+                    config["rotulo_membro_selectbox"],
+                    list(op_membros.keys()),
+                    help="A lista traz somente membros ativos cadastrados.",
+                    key=f"{campo_id}_membro",
+                )
+                id_cadastro = op_membros[membro_label]
+                row_membro = df_membros[
+                    df_membros["id_cadastro"].astype(int) == int(id_cadastro)
+                ].iloc[0]
+                c1, c2 = st.columns(2)
+                c1.text_input(
+                    "Nome", value=row_membro.get("nome", ""), disabled=True,
+                    key=f"{campo_id}_nome_ro",
+                )
+                c2.text_input(
+                    "Telefone", value=row_membro.get("telefone", ""), disabled=True,
+                    key=f"{campo_id}_tel_ro",
+                )
+                nome = row_membro.get("nome", "")
+                telefone = row_membro.get("telefone", "")
+            c3, c4 = st.columns(2)
+            usuario = c3.text_input("Usuario", key=f"{campo_id}_usuario_novo")
+            senha = c4.text_input(
+                config["rotulo_credencial"],
+                type="password",
+                help=config["credencial_help_novo"],
+                max_chars=config["credencial_max_chars"],
+                key=f"{campo_id}_senha_novo",
+            )
+            email = st.text_input(
+                "E-mail", help="Opcional.", key=f"{campo_id}_email_novo"
+            )
+            observacoes = st.text_area("Observacoes", key=f"{campo_id}_obs_novo")
+            if st.form_submit_button(config["submit_cadastrar"], type="primary"):
+                try:
+                    if not id_cadastro:
+                        st.error("Selecione um membro para criar o acesso.")
+                    else:
+                        config["salvar"](
+                            slug,
+                            nome,
+                            usuario,
+                            senha,
+                            id_cadastro=id_cadastro,
+                            telefone=telefone,
+                            email=email,
+                            situacao="Ativo",
+                            observacoes=observacoes,
+                        )
+                        st.success(config["sucesso_cadastrar"])
+                        st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    if registros is not None and not registros.empty:
+        st.dataframe(
+            registros[config["colunas_tabela"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+        opcoes = {
+            f'{int(row[campo_id])} - {row["nome"]} - {row["usuario"]}': row
+            for _, row in registros.iterrows()
+        }
+        selecionado = st.selectbox(
+            config["rotulo_editar_select"],
+            ["Selecione"] + list(opcoes.keys()),
+            key=f"{campo_id}_sel_editar",
+        )
+        if selecionado != "Selecione":
+            row = opcoes[selecionado]
+            id_registro = int(row[campo_id])
+            with st.form(f"form_editar_{campo_id}_{id_registro}"):
+                c1, c2 = st.columns(2)
+                nome = c1.text_input("Nome", value=row["nome"])
+                usuario = c2.text_input("Usuario", value=row["usuario"])
+                c3, c4 = st.columns(2)
+                nova_senha = c3.text_input(
+                    config["rotulo_nova_credencial"],
+                    type="password",
+                    max_chars=config["credencial_max_chars"],
+                    help="Deixe em branco para manter a senha atual.",
+                )
+                situacao = c4.selectbox(
+                    "Situacao",
+                    ["Ativo", "Inativo"],
+                    index=0 if row.get("situacao") == "Ativo" else 1,
+                    key=f"{campo_id}_situacao_{id_registro}",
+                )
+                telefone = st.text_input("Telefone", value=row.get("telefone", ""))
+                email = st.text_input("E-mail", value=row.get("email", ""))
+                observacoes = st.text_area(
+                    "Observacoes", value=row.get("observacoes", "")
+                )
+                if st.form_submit_button(config["submit_editar"], type="primary"):
+                    try:
+                        config["salvar"](
+                            slug,
+                            nome,
+                            usuario,
+                            nova_senha,
+                            id_cadastro=row.get("id_cadastro"),
+                            telefone=telefone,
+                            email=email,
+                            situacao=situacao,
+                            observacoes=observacoes,
+                            **{campo_id: id_registro},
+                        )
+                        st.success(config["sucesso_editar"])
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+            if st.button(config["botao_inativar"], key=f"{campo_id}_inativar_{id_registro}"):
+                config["inativar"](slug, id_registro)
+                st.success(config["sucesso_inativar"])
+                st.rerun()
+    elif registros is not None:
+        st.info(config["vazio"])
+
+
 def _render_controle_acessos(slug):
     st.divider()
     st.markdown("### Controle de acessos")
@@ -555,376 +789,16 @@ Pedido:
                     else:
                         st.error("Senha principal incorreta.")
 
-    st.divider()
-    st.markdown("### Pastores auxiliares")
-    st.caption(
-        "Cadastre acessos restritos para pastor auxiliar. A senha deve possuir "
-        "ao menos 8 caracteres."
-    )
     try:
         op_membros, df_membros = _membros_opcoes(slug)
-        pastores_aux = listar_pastores_auxiliares(slug)
     except Exception:
-        LOGGER.exception("Nao foi possivel carregar pastores auxiliares.")
-        op_membros, df_membros, pastores_aux = {}, None, None
-        st.error("Nao foi possivel carregar os pastores auxiliares.")
+        LOGGER.exception("Nao foi possivel carregar os membros ativos.")
+        op_membros, df_membros = {}, None
+        st.error("Nao foi possivel carregar os membros ativos.")
 
-    with st.expander("Cadastrar pastor auxiliar", expanded=False):
-        with st.form("form_pastor_auxiliar"):
-            id_cadastro = None
-            nome = ""
-            telefone = ""
-            if not op_membros:
-                st.warning("Nao ha membros ativos disponiveis no cadastro.")
-            else:
-                membro_label = st.selectbox(
-                    "Pastor auxiliar",
-                    list(op_membros.keys()),
-                    help="A lista traz somente membros ativos cadastrados.",
-                )
-                id_cadastro = op_membros[membro_label]
-                row_membro = df_membros[
-                    df_membros["id_cadastro"].astype(int) == int(id_cadastro)
-                ].iloc[0]
-                c1, c2 = st.columns(2)
-                c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
-                c2.text_input("Telefone", value=row_membro.get("telefone", ""), disabled=True)
-                nome = row_membro.get("nome", "")
-                telefone = row_membro.get("telefone", "")
-            c3, c4 = st.columns(2)
-            usuario = c3.text_input("Usuario")
-            senha = c4.text_input("Senha forte", type="password", help="Minimo de 8 caracteres.")
-            email = st.text_input("E-mail", help="Opcional.")
-            observacoes = st.text_area("Observacoes", key="obs_pastor_auxiliar")
-            if st.form_submit_button("Salvar pastor auxiliar", type="primary"):
-                try:
-                    if not id_cadastro:
-                        st.error("Selecione um membro para criar o acesso.")
-                    else:
-                        salvar_pastor_auxiliar(
-                            slug,
-                            nome,
-                            usuario,
-                            senha,
-                            id_cadastro=id_cadastro,
-                            telefone=telefone,
-                            email=email,
-                            situacao="Ativo",
-                            observacoes=observacoes,
-                        )
-                        st.success("Pastor Auxiliar cadastrado.")
-                        st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
-
-    if pastores_aux is not None and not pastores_aux.empty:
-        st.dataframe(
-            pastores_aux[["id_cadastro", "nome", "usuario", "telefone", "email", "situacao"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-        op_pastores = {
-            f'{int(row["id_pastor_auxiliar"])} - {row["nome"]} - {row["usuario"]}': row
-            for _, row in pastores_aux.iterrows()
-        }
-        selecionado = st.selectbox(
-            "Editar pastor auxiliar",
-            ["Selecione"] + list(op_pastores.keys()),
-        )
-        if selecionado != "Selecione":
-            row = op_pastores[selecionado]
-            id_pastor = int(row["id_pastor_auxiliar"])
-            with st.form(f"form_editar_pastor_auxiliar_{id_pastor}"):
-                c1, c2 = st.columns(2)
-                nome = c1.text_input("Nome", value=row["nome"])
-                usuario = c2.text_input("Usuario", value=row["usuario"])
-                c3, c4 = st.columns(2)
-                nova_senha = c3.text_input(
-                    "Nova senha",
-                    type="password",
-                    help="Deixe em branco para manter a senha atual.",
-                )
-                situacao = c4.selectbox(
-                    "Situacao",
-                    ["Ativo", "Inativo"],
-                    index=0 if row.get("situacao") == "Ativo" else 1,
-                )
-                telefone = st.text_input("Telefone", value=row.get("telefone", ""))
-                email = st.text_input("E-mail", value=row.get("email", ""))
-                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
-                if st.form_submit_button("Atualizar pastor auxiliar", type="primary"):
-                    try:
-                        salvar_pastor_auxiliar(
-                            slug,
-                            nome,
-                            usuario,
-                            nova_senha,
-                            id_cadastro=row.get("id_cadastro"),
-                            telefone=telefone,
-                            email=email,
-                            situacao=situacao,
-                            observacoes=observacoes,
-                            id_pastor_auxiliar=id_pastor,
-                        )
-                        st.success("Pastor Auxiliar atualizado.")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(str(exc))
-            if st.button("Inativar pastor auxiliar selecionado", key=f"inativar_pastor_auxiliar_{id_pastor}"):
-                inativar_pastor_auxiliar(slug, id_pastor)
-                st.success("Pastor Auxiliar inativado.")
-                st.rerun()
-    elif pastores_aux is not None:
-        st.info("Nenhum Pastor Auxiliar cadastrado.")
-
-
-    st.divider()
-    st.markdown("### Secretarios gerais")
-    st.caption(
-        "Cadastre acessos restritos para Secretaria Geral. Este perfil acessa "
-        "membros, aniversarios e somente a chamada das reunioes de obreiros."
-    )
-    try:
-        secretarios_gerais = listar_secretarios_gerais(slug)
-    except Exception:
-        LOGGER.exception("Nao foi possivel carregar secretarios gerais.")
-        secretarios_gerais = None
-        st.error("Nao foi possivel carregar os secretarios gerais.")
-
-    with st.expander("Cadastrar Secretario Geral", expanded=False):
-        with st.form("form_secretario_geral"):
-            id_cadastro = None
-            nome = ""
-            telefone = ""
-            if not op_membros:
-                st.warning("Nao ha membros ativos disponiveis no cadastro.")
-            else:
-                membro_label = st.selectbox(
-                    "Secretario Geral",
-                    list(op_membros.keys()),
-                    help="A lista traz somente membros ativos cadastrados.",
-                    key="secretario_geral_membro",
-                )
-                id_cadastro = op_membros[membro_label]
-                row_membro = df_membros[
-                    df_membros["id_cadastro"].astype(int) == int(id_cadastro)
-                ].iloc[0]
-                c1, c2 = st.columns(2)
-                c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
-                c2.text_input("Telefone", value=row_membro.get("telefone", ""), disabled=True)
-                nome = row_membro.get("nome", "")
-                telefone = row_membro.get("telefone", "")
-            c3, c4 = st.columns(2)
-            usuario = c3.text_input("Usuario", key="usuario_secretario_geral")
-            senha = c4.text_input("Senha forte", type="password", help="Minimo de 8 caracteres.", key="senha_secretario_geral")
-            email = st.text_input("E-mail", help="Opcional.", key="email_secretario_geral")
-            observacoes = st.text_area("Observacoes", key="obs_secretario_geral")
-            if st.form_submit_button("Salvar Secretario Geral", type="primary"):
-                try:
-                    if not id_cadastro:
-                        st.error("Selecione um membro para criar o acesso.")
-                    else:
-                        salvar_secretario_geral(
-                            slug,
-                            nome,
-                            usuario,
-                            senha,
-                            id_cadastro=id_cadastro,
-                            telefone=telefone,
-                            email=email,
-                            situacao="Ativo",
-                            observacoes=observacoes,
-                        )
-                        st.success("Secretario Geral cadastrado.")
-                        st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
-
-    if secretarios_gerais is not None and not secretarios_gerais.empty:
-        st.dataframe(
-            secretarios_gerais[["id_cadastro", "nome", "usuario", "telefone", "email", "situacao"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-        op_secretarios = {
-            f'{int(row["id_secretario_geral"])} - {row["nome"]} - {row["usuario"]}': row
-            for _, row in secretarios_gerais.iterrows()
-        }
-        selecionado = st.selectbox(
-            "Editar Secretario Geral",
-            ["Selecione"] + list(op_secretarios.keys()),
-        )
-        if selecionado != "Selecione":
-            row = op_secretarios[selecionado]
-            id_secretario = int(row["id_secretario_geral"])
-            with st.form(f"form_editar_secretario_geral_{id_secretario}"):
-                c1, c2 = st.columns(2)
-                nome = c1.text_input("Nome", value=row["nome"])
-                usuario = c2.text_input("Usuario", value=row["usuario"])
-                c3, c4 = st.columns(2)
-                nova_senha = c3.text_input(
-                    "Nova senha",
-                    type="password",
-                    help="Deixe em branco para manter a senha atual.",
-                )
-                situacao = c4.selectbox(
-                    "Situacao",
-                    ["Ativo", "Inativo"],
-                    index=0 if row.get("situacao") == "Ativo" else 1,
-                    key=f"situacao_secretario_geral_{id_secretario}",
-                )
-                telefone = st.text_input("Telefone", value=row.get("telefone", ""))
-                email = st.text_input("E-mail", value=row.get("email", ""))
-                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
-                if st.form_submit_button("Atualizar Secretario Geral", type="primary"):
-                    try:
-                        salvar_secretario_geral(
-                            slug,
-                            nome,
-                            usuario,
-                            nova_senha,
-                            id_cadastro=row.get("id_cadastro"),
-                            telefone=telefone,
-                            email=email,
-                            situacao=situacao,
-                            observacoes=observacoes,
-                            id_secretario_geral=id_secretario,
-                        )
-                        st.success("Secretario Geral atualizado.")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(str(exc))
-            if st.button("Inativar Secretario Geral selecionado", key=f"inativar_secretario_geral_{id_secretario}"):
-                inativar_secretario_geral(slug, id_secretario)
-                st.success("Secretario Geral inativado.")
-                st.rerun()
-    elif secretarios_gerais is not None:
-        st.info("Nenhum Secretario Geral cadastrado.")
-
-    st.divider()
-    st.markdown("### Recepção")
-    st.caption(
-        "Diáconos, diaconisas, auxiliares e cooperadoras ativos são incluídos "
-        "automaticamente. Usuário automático: nome completo sem acentos, em minúsculas "
-        "e com espaços convertidos em ponto. Exemplo: joao.da.silva. "
-        "PIN inicial: últimos 4 dígitos do CPF. Esse perfil acessa somente visitantes."
-    )
-    try:
-        recepcao_usuarios = listar_recepcao_usuarios(slug)
-    except Exception:
-        LOGGER.exception("Nao foi possivel carregar usuarios da recepcao.")
-        recepcao_usuarios = None
-        st.error("Nao foi possivel carregar os usuarios da recepcao.")
-
-    with st.expander("Cadastrar usuario da recepção", expanded=False):
-        with st.form("form_recepcao_usuario"):
-            id_cadastro = None
-            nome = ""
-            telefone = ""
-            if not op_membros:
-                st.warning("Nao ha membros ativos disponiveis no cadastro.")
-            else:
-                membro_label = st.selectbox(
-                    "Recepcionista",
-                    list(op_membros.keys()),
-                    help="A lista traz somente membros ativos cadastrados.",
-                    key="recepcao_membro",
-                )
-                id_cadastro = op_membros[membro_label]
-                row_membro = df_membros[
-                    df_membros["id_cadastro"].astype(int) == int(id_cadastro)
-                ].iloc[0]
-                c1, c2 = st.columns(2)
-                c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
-                c2.text_input("Telefone", value=row_membro.get("telefone", ""), disabled=True)
-                nome = row_membro.get("nome", "")
-                telefone = row_membro.get("telefone", "")
-            c3, c4 = st.columns(2)
-            usuario = c3.text_input("Usuario", key="usuario_recepcao")
-            senha = c4.text_input("PIN de 4 digitos", type="password", max_chars=4, key="senha_recepcao")
-            email = st.text_input("E-mail", help="Opcional.", key="email_recepcao")
-            observacoes = st.text_area("Observacoes", key="obs_recepcao")
-            if st.form_submit_button("Salvar recepção", type="primary"):
-                try:
-                    if not id_cadastro:
-                        st.error("Selecione um membro para criar o acesso.")
-                    else:
-                        salvar_recepcao_usuario(
-                            slug,
-                            nome,
-                            usuario,
-                            senha,
-                            id_cadastro=id_cadastro,
-                            telefone=telefone,
-                            email=email,
-                            situacao="Ativo",
-                            observacoes=observacoes,
-                        )
-                        st.success("Usuário da Recepção cadastrado.")
-                        st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
-
-    if recepcao_usuarios is not None and not recepcao_usuarios.empty:
-        st.dataframe(
-            recepcao_usuarios[["id_cadastro", "nome", "usuario", "telefone", "email", "situacao", "automatico"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-        op_recepcao = {
-            f'{int(row["id_recepcao"])} - {row["nome"]} - {row["usuario"]}': row
-            for _, row in recepcao_usuarios.iterrows()
-        }
-        selecionado = st.selectbox(
-            "Editar usuario da recepção",
-            ["Selecione"] + list(op_recepcao.keys()),
-        )
-        if selecionado != "Selecione":
-            row = op_recepcao[selecionado]
-            id_recepcao = int(row["id_recepcao"])
-            with st.form(f"form_editar_recepcao_{id_recepcao}"):
-                c1, c2 = st.columns(2)
-                nome = c1.text_input("Nome", value=row["nome"])
-                usuario = c2.text_input("Usuario", value=row["usuario"])
-                c3, c4 = st.columns(2)
-                nova_senha = c3.text_input(
-                    "Novo PIN de 4 digitos",
-                    type="password",
-                    max_chars=4,
-                    help="Deixe em branco para manter a senha atual.",
-                )
-                situacao = c4.selectbox(
-                    "Situacao",
-                    ["Ativo", "Inativo"],
-                    index=0 if row.get("situacao") == "Ativo" else 1,
-                )
-                telefone = st.text_input("Telefone", value=row.get("telefone", ""))
-                email = st.text_input("E-mail", value=row.get("email", ""))
-                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
-                if st.form_submit_button("Atualizar recepção", type="primary"):
-                    try:
-                        salvar_recepcao_usuario(
-                            slug,
-                            nome,
-                            usuario,
-                            nova_senha,
-                            id_cadastro=row.get("id_cadastro"),
-                            telefone=telefone,
-                            email=email,
-                            situacao=situacao,
-                            observacoes=observacoes,
-                            id_recepcao=id_recepcao,
-                        )
-                        st.success("Usuário da Recepção atualizado.")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(str(exc))
-            if st.button("Inativar usuario da recepção", key=f"inativar_recepcao_{id_recepcao}"):
-                inativar_recepcao_usuario(slug, id_recepcao)
-                st.success("Usuário da Recepção inativado.")
-                st.rerun()
-    elif recepcao_usuarios is not None:
-        st.info("Nenhum usuário da Recepção cadastrado.")
+    _render_secao_acesso_restrito(slug, op_membros, df_membros, CONFIG_PASTOR_AUXILIAR)
+    _render_secao_acesso_restrito(slug, op_membros, df_membros, CONFIG_SECRETARIO_GERAL)
+    _render_secao_acesso_restrito(slug, op_membros, df_membros, CONFIG_RECEPCAO)
 
     _render_controle_acessos(slug)
 
