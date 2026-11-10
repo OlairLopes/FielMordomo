@@ -16,6 +16,7 @@ from data.repository import (
     listar_subcategorias_despesa, adicionar_subcategoria_despesa,
     excluir_subcategoria_despesa,
     restaurar_backup_zip,
+    validar_nova_senha,
 )
 from utils.helpers import confirmar_exclusao
 from admin.dashboard_geral import render_dashboard_geral
@@ -135,8 +136,10 @@ def _listar_igrejas():
         )
 
         if st.button("Redefinir senha", key=kp + "btn_reset_senha"):
-            if len(nova_senha) < 6:
-                st.error("Senha deve ter ao menos 6 caracteres.")
+            erros_senha = validar_nova_senha(nova_senha)
+            if erros_senha:
+                for erro in erros_senha:
+                    st.error(erro)
             else:
                 redefinir_senha_igreja(id_ig, nova_senha)
 
@@ -180,19 +183,18 @@ def _criar_igreja():
                 nome=nome,
                 slug=slug,
                 email_admin=email,
-                senha_hash=hash_senha(senha),
+                senha_hash="",
                 plano=plano,
             )
 
             erros = ig.validar()
-
-            if not senha or len(senha) < 6:
-                erros.append("Senha deve ter ao menos 6 caracteres.")
+            erros.extend(validar_nova_senha(senha))
 
             if erros:
                 for e in erros:
                     st.error(e)
             else:
+                ig.senha_hash = hash_senha(senha)
                 try:
                     id_novo = criar_igreja(ig)
                     st.toast(f"Igreja criada! ID: {id_novo} | Slug: {slug}")
@@ -657,8 +659,8 @@ def _backup_admin():
                 with st.expander("Ver detalhes", expanded=False):
                     st.caption(
                         "Estas igrejas nao existiam no sistema atual e foram "
-                        "registradas com plano **basico** e senha padrao "
-                        "**fielmordomo2024**. Recomenda-se redefinir senha e plano."
+                        "registradas com plano **basico** e senha temporaria. "
+                        "Recomenda-se redefinir a senha e o plano pelo painel."
                     )
                     for slug_r in resultado["igrejas_recriadas"]:
                         st.markdown(f"- 🆕 `{slug_r}`")
@@ -745,10 +747,13 @@ def _configuracoes():
         conf = st.text_input("Confirmar nova senha", type="password")
 
         if st.form_submit_button("Alterar senha", type="primary"):
-            if len(nova) < 6:
-                st.error("Senha deve ter ao menos 6 caracteres.")
-            elif nova != conf:
-                st.error("As senhas nao coincidem.")
+            erros_senha = validar_nova_senha(nova)
+            if nova != conf:
+                erros_senha.append("As senhas nao coincidem.")
+
+            if erros_senha:
+                for erro in erros_senha:
+                    st.error(erro)
             else:
                 alterar_senha_super_admin("admin", nova)
                 st.toast("Senha alterada!")

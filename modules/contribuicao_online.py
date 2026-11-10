@@ -6,18 +6,15 @@ import streamlit as st
 from data.repository import (
     buscar_igreja_por_slug, carregar_cadastros, confirmar_contribuicao_online,
     criar_contribuicao_online, listar_contribuicoes_online, obter_pix_igreja,
-    rejeitar_contribuicao_online, salvar_pix_igreja,
+    PIX_QR_EXTENSOES, obter_pix_qr_igreja, remover_pix_qr_igreja,
+    rejeitar_contribuicao_online, salvar_pix_igreja, salvar_pix_qr_igreja,
 )
+from modules.lancamentos import CATEGORIAS_ENTRADA
 from modules.pix_brcode import gerar_payload_pix, gerar_qr_png
 from utils.helpers import formatar_moeda, slug_da_sessao
 
-URL_BASE_APP = "https://fielmordomo.streamlit.app"
-TIPOS = ("Dizimo", "Oferta", "Missao", "Campanha")
-ROTULOS_TIPO = {"Dizimo": "Dízimo", "Oferta": "Oferta", "Missao": "Missão", "Campanha": "Campanha"}
-
-
-def _rotulo(tipo):
-    return ROTULOS_TIPO.get(tipo, tipo)
+URL_BASE_APP = "https://fielmordomo.com.br"
+TIPOS = list(CATEGORIAS_ENTRADA)
 
 
 def _formatar_data_hora(iso):
@@ -41,15 +38,22 @@ def pagina_publica(slug):
         return
 
     pix = obter_pix_igreja(slug)
-    if not pix["chave"]:
+    qr_igreja = obter_pix_qr_igreja(slug)
+    if not pix["chave"] and not qr_igreja:
         st.info("A contribuição online ainda não está configurada nesta igreja.")
         return
 
     st.title(igreja["nome"])
     st.caption("Contribua por Pix. Escolha o tipo e o valor e pague pelo aplicativo do seu banco.")
+    if qr_igreja:
+        st.markdown("**QR Code da igreja**")
+        st.image(qr_igreja, width=260)
+        st.caption("Escaneie com o app do seu banco e informe o valor da contribuição.")
+    if not pix["chave"]:
+        return
 
     with st.form(f"form_contribuicao_{slug}", clear_on_submit=False):
-        tipo = st.selectbox("Tipo de contribuição", TIPOS, format_func=_rotulo)
+        tipo = st.selectbox("Tipo de contribuição", TIPOS)
         valor = st.number_input(
             "Valor (R$)", min_value=VALOR_MINIMO, max_value=VALOR_MAXIMO,
             value=50.0, step=5.0, format="%.2f",
@@ -82,7 +86,7 @@ def pagina_publica(slug):
         return
 
     st.success(
-        f"Contribuição de {formatar_moeda(gerado['valor'])} ({_rotulo(gerado['tipo'])}) registrada. "
+        f"Contribuição de {formatar_moeda(gerado['valor'])} ({gerado['tipo']}) registrada. "
         "Pague pelo QR Code ou pelo copia e cola abaixo."
     )
     st.image(gerar_qr_png(gerado["payload"]), width=260)
@@ -99,7 +103,7 @@ def _url_contribuicao(slug):
 
 def _secao_configuracao(slug):
     pix = obter_pix_igreja(slug)
-    with st.expander("Configurar chave Pix da igreja", expanded=not pix["chave"]):
+    with st.expander("Chave Pix da igreja", expanded=True):
         with st.form(f"form_pix_{slug}"):
             chave = st.text_input("Chave Pix", value=pix["chave"],
                                   help="CPF, CNPJ, e-mail, telefone ou chave aleatoria.")
@@ -113,6 +117,26 @@ def _secao_configuracao(slug):
                     st.success("Chave Pix salva.")
                 except ValueError as ex:
                     st.error(str(ex))
+
+        st.markdown("**QR Code da igreja**")
+        qr_atual = obter_pix_qr_igreja(slug)
+        if qr_atual:
+            st.image(qr_atual, width=180)
+        arquivo = st.file_uploader(
+            "Enviar imagem do QR Code (PNG, JPG ou WEBP, até 2 MB)",
+            type=list(PIX_QR_EXTENSOES), key=f"pix_qr_upload_{slug}",
+        )
+        col_salvar, col_remover = st.columns(2)
+        if arquivo is not None and col_salvar.button("Salvar QR Code", key=f"pix_qr_salvar_{slug}"):
+            try:
+                salvar_pix_qr_igreja(slug, arquivo.getvalue(), arquivo.name.rsplit(".", 1)[-1].lower())
+                st.success("QR Code salvo.")
+                st.rerun()
+            except ValueError as ex:
+                st.error(str(ex))
+        if qr_atual and col_remover.button("Remover QR Code", key=f"pix_qr_remover_{slug}"):
+            remover_pix_qr_igreja(slug)
+            st.rerun()
 
 
 def _secao_divulgacao(slug):
@@ -135,7 +159,7 @@ def _membros_ativos(slug):
 def _card_pendente(slug, item, membros):
     id_c = item["id_contribuicao"]
     st.markdown(
-        f"**#{id_c} · {html.escape(_rotulo(item['tipo']))} · {formatar_moeda(item['valor'])}**  \n"
+        f"**#{id_c} · {html.escape(item['tipo'])} · {formatar_moeda(item['valor'])}**  \n"
         f"{html.escape(item['nome_doador'] or 'Sem nome')} · "
         f"{html.escape(item['contato'] or 'sem contato')} · {_formatar_data_hora(item['criado_em'])}"
     )
@@ -144,13 +168,10 @@ def _card_pendente(slug, item, membros):
         data_recebimento = col1.date_input("Data do recebimento",
                                            value=datetime.date.today(), key=f"dt_{id_c}")
         categoria = col2.selectbox("Categoria", TIPOS, index=TIPOS.index(item["tipo"]),
-                                   format_func=_rotulo, key=f"cat_{id_c}")
-        id_cadastro = None
-        if item["tipo"] == "Dizimo":
-            opcoes = [(None, "Selecione o membro...")] + membros
-            escolha = st.selectbox("Membro (obrigatório para dízimo)", opcoes,
-                                   format_func=lambda o: o[1], key=f"mem_{id_c}")
-            id_cadastro = escolha[0]
+                                   key=f"cat_{id_c}")
+        opcoes = [(None, "Nenhum (obrigatório para dízimo)")] + membros
+        escolha = st.selectbox("Membro", opcoes, format_func=lambda o: o[1], key=f"mem_{id_c}")
+        id_cadastro = escolha[0]
         col_a, col_b = st.columns(2)
         confirmar = col_a.form_submit_button("Confirmar recebimento", type="primary")
         rejeitar = col_b.form_submit_button("Rejeitar")
@@ -207,7 +228,7 @@ def render():
                         "Ref.": h["id_contribuicao"],
                         "Data": _formatar_data_hora(h["criado_em"]),
                         "Doador": h["nome_doador"],
-                        "Tipo": _rotulo(h["tipo"]),
+                        "Tipo": h["tipo"],
                         "Valor": formatar_moeda(h["valor"]),
                         "Status": h["status"],
                     }
