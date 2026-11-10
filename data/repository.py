@@ -2,6 +2,8 @@
 Camada de persistencia multi-tenant.
 """
 
+import base64
+import io
 import os
 import re
 import json
@@ -8049,7 +8051,6 @@ def salvar_audio_biblico_cache(versao, chave, audio_bytes):
 # Contribuicao online por Pix estatico (dizimo e ofertas pela pagina publica)
 # ═══════════════════════════════════════════════════════════════════════
 
-TIPOS_CONTRIBUICAO_ONLINE = ("Dizimo", "Oferta", "Missao", "Campanha")
 STATUS_CONTRIBUICAO_ONLINE = ("pendente", "confirmada", "rejeitada")
 
 
@@ -8093,7 +8094,7 @@ def salvar_pix_igreja(slug: str, chave: str, beneficiario: str, cidade: str):
 
 
 def criar_contribuicao_online(slug: str, nome: str, tipo: str, valor: float, contato: str = "") -> int:
-    if tipo not in TIPOS_CONTRIBUICAO_ONLINE:
+    if tipo not in CATEGORIAS_ENTRADA:
         raise ValueError("Tipo de contribuição inválido.")
     valor = float(valor)
     if not (1 <= valor <= 100_000):
@@ -8268,3 +8269,44 @@ def listar_documentos_emitidos(slug, id_cadastro=None):
                 "SELECT * FROM documentos_emitidos ORDER BY emitido_em DESC LIMIT 200"
             ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# QR Code de Pix enviado pela igreja (imagem), exibido junto ao QR gerado
+# ═══════════════════════════════════════════════════════════════════════
+
+CONFIG_PIX_QR = "pix_qr_imagem"
+PIX_QR_EXTENSOES = ("png", "jpg", "jpeg", "webp")
+PIX_QR_MAX_BYTES = 2_000_000
+
+
+def salvar_pix_qr_igreja(slug: str, dados: bytes, extensao: str):
+    from PIL import Image
+
+    if extensao not in PIX_QR_EXTENSOES:
+        raise ValueError("Envie o QR Code em PNG, JPG ou WEBP.")
+    if not dados or len(dados) > PIX_QR_MAX_BYTES:
+        raise ValueError("A imagem do QR Code deve ter até 2 MB.")
+    try:
+        imagem = Image.open(io.BytesIO(dados)).convert("RGB")
+    except (OSError, ValueError) as ex:
+        raise ValueError("Não foi possível ler a imagem enviada.") from ex
+    imagem.thumbnail((700, 700))
+    saida = io.BytesIO()
+    imagem.save(saida, format="PNG", optimize=True)
+    b64 = base64.b64encode(saida.getvalue()).decode()
+    salvar_config_igreja(slug, CONFIG_PIX_QR, f"data:image/png;base64,{b64}")
+
+
+def obter_pix_qr_igreja(slug: str):
+    valor = obter_config_igreja(slug, CONFIG_PIX_QR, "")
+    if not valor or "," not in valor:
+        return None
+    try:
+        return base64.b64decode(valor.split(",", 1)[1])
+    except (ValueError, TypeError):
+        return None
+
+
+def remover_pix_qr_igreja(slug: str):
+    salvar_config_igreja(slug, CONFIG_PIX_QR, "")

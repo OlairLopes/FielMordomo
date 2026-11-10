@@ -6,6 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from data.repository import listar_igrejas, obter_pix_igreja
 from utils.helpers import normalizar_data_digitada
 
 
@@ -1412,6 +1413,37 @@ def _css_base():
             white-space: nowrap;
         }}
         .fm-menu a:hover {{ color: var(--fm-gold); }}
+        .fm-dropdown {{ position: relative; }}
+        .fm-dropdown summary {{
+            cursor: pointer;
+            list-style: none;
+            color: var(--fm-ink);
+            font-size: .88rem;
+            font-weight: 650;
+            white-space: nowrap;
+        }}
+        .fm-dropdown summary::-webkit-details-marker {{ display: none; }}
+        .fm-dropdown summary:hover {{ color: var(--fm-gold); }}
+        .fm-dropdown-itens {{
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 10px;
+            min-width: 240px;
+            max-height: 60vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 8px;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .14);
+            z-index: 50;
+        }}
+        .fm-dropdown-itens a {{ padding: 8px 10px; border-radius: 6px; }}
+        .fm-dropdown-itens a:hover {{ background: #F1F5F9; }}
         .fm-btn-login {{
             padding: 11px 16px;
             border-radius: 8px;
@@ -1695,6 +1727,34 @@ def _css_base():
     """
 
 
+def _menu_contribuicoes():
+    """Item Contribuicoes da barra: link direto se houver uma igreja com Pix, ou submenu com a lista."""
+    try:
+        igrejas = listar_igrejas()
+    except Exception:
+        LOGGER.exception("Falha ao listar igrejas para o menu de contribuicoes.")
+        return ""
+    opcoes = []
+    for _, igreja in igrejas.iterrows():
+        if not bool(igreja["ativa"]):
+            continue
+        if obter_pix_igreja(igreja["slug"])["chave"]:
+            opcoes.append((igreja["nome"], igreja["slug"]))
+    if not opcoes:
+        return ""
+    if len(opcoes) == 1:
+        _, slug = opcoes[0]
+        return f'<a href="?contribuir={html.escape(slug)}" target="_top">Contribuições</a>'
+    itens = "".join(
+        f'<a href="?contribuir={html.escape(slug)}" target="_top">{html.escape(nome)}</a>'
+        for nome, slug in opcoes
+    )
+    return (
+        '<details class="fm-dropdown"><summary>Contribuições</summary>'
+        f'<div class="fm-dropdown-itens">{itens}</div></details>'
+    )
+
+
 def _navbar():
     return f"""
     <header class="fm-navbar-wrap">
@@ -1710,6 +1770,7 @@ def _navbar():
                 <a href="?pagina=leitura-biblica" target="_top">Plano de Leitura</a>
                 <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
                 <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
+                {_menu_contribuicoes()}
                 <a href="?pagina=contato" target="_top">Contato</a>
                 <a class="fm-btn-login" href="?pagina=login" target="_top">Acessar sistema</a>
             </div>

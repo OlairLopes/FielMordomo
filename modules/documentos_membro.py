@@ -15,7 +15,7 @@ from data.repository import (
 from modules.pix_brcode import gerar_qr_png
 from utils.helpers import slug_da_sessao
 
-URL_BASE_APP = "https://fielmordomo.streamlit.app"
+URL_BASE_APP = "https://fielmordomo.com.br"
 MESES = [
     "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
     "agosto", "setembro", "outubro", "novembro", "dezembro",
