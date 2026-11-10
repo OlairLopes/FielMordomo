@@ -8054,6 +8054,11 @@ def salvar_audio_biblico_cache(versao, chave, audio_bytes):
 STATUS_CONTRIBUICAO_ONLINE = ("pendente", "confirmada", "rejeitada")
 
 
+COMPROVANTE_EXTENSOES = ("png", "jpg", "jpeg", "webp", "pdf")
+COMPROVANTE_MAX_BYTES = 5_000_000
+COMPROVANTE_RETENCAO_DIAS = 30
+
+
 def _garantir_tabela_contribuicoes_online(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS contribuicoes_online (
@@ -8068,6 +8073,88 @@ def _garantir_tabela_contribuicoes_online(conn):
             confirmado_em   TEXT DEFAULT ''
         )
     """)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(contribuicoes_online)").fetchall()]
+    for col, tipo in [
+        ("comprovante", "BLOB"),
+        ("comprovante_nome", "TEXT DEFAULT ''"),
+        ("comprovante_enviado_em", "TEXT DEFAULT ''"),
+    ]:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE contribuicoes_online ADD COLUMN {col} {tipo}")
+    limite = datetime.datetime.now() - datetime.timedelta(days=COMPROVANTE_RETENCAO_DIAS)
+    conn.execute(
+        """UPDATE contribuicoes_online SET comprovante=NULL, comprovante_nome='',
+               comprovante_enviado_em=''
+           WHERE comprovante IS NOT NULL AND comprovante_enviado_em < ?""",
+        (limite.isoformat(timespec="seconds"),),
+    )
+
+
+def _digitos(valor):
+    return re.sub(r"\D", "", str(valor or ""))
+
+
+def _validar_comprovante(dados: bytes, extensao: str):
+    from PIL import Image
+
+    if extensao not in COMPROVANTE_EXTENSOES:
+        raise ValueError("Envie o comprovante em PNG, JPG, WEBP ou PDF.")
+    if not dados:
+        raise ValueError("O arquivo do comprovante está vazio.")
+    if len(dados) > COMPROVANTE_MAX_BYTES:
+        raise ValueError("O comprovante deve ter até 5 MB.")
+    if extensao == "pdf":
+        valido = dados.startswith(b"%PDF")
+    else:
+        try:
+            Image.open(io.BytesIO(dados)).verify()
+            valido = True
+        except (OSError, ValueError):
+            valido = False
+    if not valido:
+        raise ValueError("Não foi possível ler o arquivo enviado.")
+
+
+def anexar_comprovante_online(slug: str, id_contribuicao: int, dados: bytes, extensao: str,
+                              nome_arquivo: str, contato: str | None = None):
+    """Guarda o comprovante do Pix numa contribuicao pendente.
+
+    Com `contato`, só aceita o envio se o telefone bater com o informado na
+    contribuicao (usado pela pagina publica, que nao tem login).
+    """
+    _validar_comprovante(dados, extensao)
+    db = _tenant_db(slug)
+    with _conn(db) as conn:
+        _garantir_tabela_contribuicoes_online(conn)
+        row = conn.execute(
+            "SELECT status, contato FROM contribuicoes_online WHERE id_contribuicao=?",
+            (id_contribuicao,),
+        ).fetchone()
+        if (row is None or row["status"] != "pendente"
+                or (contato is not None and _digitos(row["contato"]) != _digitos(contato))):
+            raise ValueError("Não encontramos uma contribuição pendente com esses dados.")
+        conn.execute(
+            """UPDATE contribuicoes_online SET comprovante=?, comprovante_nome=?,
+                   comprovante_enviado_em=?
+               WHERE id_contribuicao=?""",
+            (dados, sanitizar(nome_arquivo)[:120],
+             datetime.datetime.now().isoformat(timespec="seconds"), id_contribuicao),
+        )
+
+
+def obter_comprovante_online(slug: str, id_contribuicao: int) -> dict | None:
+    db = _tenant_db(slug)
+    if not db.exists():
+        return None
+    with _conn(db) as conn:
+        _garantir_tabela_contribuicoes_online(conn)
+        row = conn.execute(
+            "SELECT comprovante, comprovante_nome FROM contribuicoes_online WHERE id_contribuicao=?",
+            (id_contribuicao,),
+        ).fetchone()
+    if row is None or row["comprovante"] is None:
+        return None
+    return {"dados": bytes(row["comprovante"]), "nome": row["comprovante_nome"]}
 
 
 def obter_pix_igreja(slug: str) -> dict:
@@ -8117,6 +8204,11 @@ def criar_contribuicao_online(slug: str, nome: str, tipo: str, valor: float, con
         return cur.lastrowid
 
 
+_COLUNAS_CONTRIBUICAO = """id_contribuicao, criado_em, nome_doador, contato, tipo, valor, status,
+    id_lancamento, confirmado_em, comprovante_nome, comprovante_enviado_em,
+    (comprovante IS NOT NULL) AS tem_comprovante"""
+
+
 def listar_contribuicoes_online(slug: str, status: str | None = None) -> list[dict]:
     db = _tenant_db(slug)
     if not db.exists():
@@ -8125,12 +8217,14 @@ def listar_contribuicoes_online(slug: str, status: str | None = None) -> list[di
         _garantir_tabela_contribuicoes_online(conn)
         if status:
             rows = conn.execute(
-                "SELECT * FROM contribuicoes_online WHERE status=? ORDER BY id_contribuicao DESC",
+                f"SELECT {_COLUNAS_CONTRIBUICAO} FROM contribuicoes_online "
+                "WHERE status=? ORDER BY id_contribuicao DESC",
                 (status,),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM contribuicoes_online ORDER BY id_contribuicao DESC LIMIT 200"
+                f"SELECT {_COLUNAS_CONTRIBUICAO} FROM contribuicoes_online "
+                "ORDER BY id_contribuicao DESC LIMIT 200"
             ).fetchall()
     return [dict(r) for r in rows]
 
@@ -8147,6 +8241,15 @@ def confirmar_contribuicao_online(slug: str, id_contribuicao: int, data_recebime
     db = _tenant_db(slug)
     with _conn(db) as conn:
         _garantir_tabela_contribuicoes_online(conn)
+        row = conn.execute(
+            """SELECT status, valor, nome_doador, comprovante IS NOT NULL AS tem_comprovante
+               FROM contribuicoes_online WHERE id_contribuicao=?""",
+            (id_contribuicao,),
+        ).fetchone()
+        if row is None or row["status"] != "pendente":
+            raise ValueError("Contribuição já foi tratada ou não existe.")
+        if not row["tem_comprovante"]:
+            raise ValueError("Anexe o comprovante do Pix antes de confirmar.")
         reserva = conn.execute(
             """UPDATE contribuicoes_online SET status='confirmada'
                WHERE id_contribuicao=? AND status='pendente'""",
@@ -8154,9 +8257,6 @@ def confirmar_contribuicao_online(slug: str, id_contribuicao: int, data_recebime
         )
         if reserva.rowcount != 1:
             raise ValueError("Contribuição já foi tratada ou não existe.")
-        row = conn.execute(
-            "SELECT * FROM contribuicoes_online WHERE id_contribuicao=?", (id_contribuicao,)
-        ).fetchone()
 
     try:
         id_lancamento = inserir_lancamento(slug, Lancamento(

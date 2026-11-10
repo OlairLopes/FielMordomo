@@ -4,8 +4,9 @@ import html
 import streamlit as st
 
 from data.repository import (
-    buscar_igreja_por_slug, carregar_cadastros, confirmar_contribuicao_online,
-    criar_contribuicao_online, listar_contribuicoes_online, obter_pix_igreja,
+    anexar_comprovante_online, buscar_igreja_por_slug, carregar_cadastros,
+    COMPROVANTE_EXTENSOES, confirmar_contribuicao_online, criar_contribuicao_online,
+    listar_contribuicoes_online, obter_comprovante_online, obter_pix_igreja,
     PIX_QR_EXTENSOES, obter_pix_qr_igreja, remover_pix_qr_igreja,
     rejeitar_contribuicao_online, salvar_pix_igreja, salvar_pix_qr_igreja,
 )
@@ -64,6 +65,8 @@ def pagina_publica(slug):
         contato = st.text_input("Telefone com DDD (obrigatório)", max_chars=20, placeholder="(00) 00000-0000")
         enviar = st.form_submit_button("Gerar Pix", type="primary")
 
+    _secao_comprovante_posterior(slug)
+
     chave_sessao = _chave_gerado(slug)
     if enviar:
         try:
@@ -97,6 +100,53 @@ def pagina_publica(slug):
         "Depois do pagamento a tesouraria confere o recebimento. "
         f"Referência da contribuição: #{gerado['id']}."
     )
+    st.markdown("**Envie o comprovante do Pix**")
+    _envio_comprovante(slug, gerado["id"], contato=None, chave=f"gerado_{gerado['id']}")
+
+
+def _envio_comprovante(slug, id_contribuicao, contato, chave):
+    arquivo = st.file_uploader(
+        "Comprovante do Pix (PNG, JPG, WEBP ou PDF, até 5 MB)",
+        type=list(COMPROVANTE_EXTENSOES), key=f"comprovante_upload_{chave}",
+    )
+    if arquivo is not None and st.button("Enviar comprovante", key=f"comprovante_enviar_{chave}"):
+        try:
+            anexar_comprovante_online(
+                slug, id_contribuicao, arquivo.getvalue(),
+                arquivo.name.rsplit(".", 1)[-1].lower(), arquivo.name, contato,
+            )
+            st.success("Comprovante recebido. Obrigado! Ele fica guardado por 30 dias.")
+        except ValueError as ex:
+            st.error(str(ex))
+
+
+def _secao_comprovante_posterior(slug):
+    with st.expander("Já paguei: enviar comprovante"):
+        st.caption(
+            "Informe o número da referência e o telefone usados na contribuição. "
+            "O comprovante fica guardado por 30 dias."
+        )
+        referencia = st.text_input("Número da referência (#)", max_chars=10, key=f"comp_ref_{slug}")
+        telefone = st.text_input("Telefone com DDD usado na contribuição", max_chars=20,
+                                 key=f"comp_tel_{slug}")
+        arquivo = st.file_uploader(
+            "Comprovante do Pix (PNG, JPG, WEBP ou PDF, até 5 MB)",
+            type=list(COMPROVANTE_EXTENSOES), key=f"comp_arquivo_{slug}",
+        )
+        if st.button("Enviar comprovante", key=f"comp_enviar_{slug}"):
+            if arquivo is None:
+                st.error("Escolha o arquivo do comprovante.")
+            elif not referencia.strip().lstrip("#").isdigit():
+                st.error("Informe o número da referência.")
+            else:
+                try:
+                    anexar_comprovante_online(
+                        slug, int(referencia.strip().lstrip("#")), arquivo.getvalue(),
+                        arquivo.name.rsplit(".", 1)[-1].lower(), arquivo.name, telefone,
+                    )
+                    st.success("Comprovante recebido. Obrigado!")
+                except ValueError as ex:
+                    st.error(str(ex))
 
 
 def _url_contribuicao(slug):
@@ -158,6 +208,20 @@ def _membros_ativos(slug):
     return [(int(r["id_cadastro"]), r["nome"]) for _, r in df[mascara].iterrows()]
 
 
+def _mostrar_comprovante(slug, item):
+    if not item["tem_comprovante"]:
+        st.warning("Sem comprovante anexado. Peça ao doador o envio antes de confirmar.")
+        return
+    comprovante = obter_comprovante_online(slug, item["id_contribuicao"])
+    if comprovante is None:
+        st.warning("Comprovante expirado (guardado por 30 dias).")
+    elif comprovante["nome"].lower().endswith(".pdf"):
+        st.download_button("Baixar comprovante (PDF)", comprovante["dados"],
+                           file_name=comprovante["nome"], key=f"comp_baixar_{item['id_contribuicao']}")
+    else:
+        st.image(comprovante["dados"], width=260)
+
+
 def _card_pendente(slug, item, membros):
     id_c = item["id_contribuicao"]
     st.markdown(
@@ -165,6 +229,7 @@ def _card_pendente(slug, item, membros):
         f"{html.escape(item['nome_doador'] or 'Sem nome')} · "
         f"{html.escape(item['contato'] or 'sem contato')} · {_formatar_data_hora(item['criado_em'])}"
     )
+    _mostrar_comprovante(slug, item)
     with st.form(f"form_conf_{slug}_{id_c}"):
         col1, col2 = st.columns(2)
         data_recebimento = col1.date_input("Data do recebimento",
