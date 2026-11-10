@@ -57,12 +57,15 @@ PAGINAS_IGREJA = {
     "visitantes": ("Visitantes", "modules.visitantes"),
     "pedidos_oracao": ("Pedidos de Oração", "modules.pedidos_oracao"),
     "tesoureiros": ("Tesoureiros", "modules.tesoureiros"),
+    "contribuicoes": ("Contribuições", "modules.contribuicao_online"),
+    "documentos": ("Documentos", "modules.documentos_membro"),
     "aniversariantes": ("Aniversários", "modules.aniversariantes"),
     "backup": ("Backup", "modules.backup"),
     "minha_conta": ("Minha conta", "modules.minha_conta"),
 }
 PAGINAS_TESOUREIRO = {
     "lancamentos": ("Lançamentos", "modules.lancamentos"),
+    "contribuicoes": ("Contribuições", "modules.contribuicao_online"),
     "cadastros": ("Membros", "modules.cadastros"),
     "relatorios": ("Relatórios", "modules.relatorios"),
 }
@@ -110,6 +113,8 @@ ICONES_MENU = {
     "visitantes": "handshake",
     "pedidos_oracao": "volunteer_activism",
     "tesoureiros": "work",
+    "contribuicoes": "savings",
+    "documentos": "badge",
     "aniversariantes": "cake",
     "backup": "backup",
     "minha_conta": "person",
@@ -118,8 +123,8 @@ ICONES_MENU = {
 # Agrupamento visual da sidebar da igreja (ordem controlada)
 # Cada tupla: (titulo_grupo, cor_do_grupo, lista_de_chaves)
 GRUPOS_MENU_IGREJA = [
-    ("Financeiro", "#10B981", ["lancamentos", "dashboard", "relatorios", "tesoureiros"]),
-    ("Cadastros", "#3B82F6", ["cadastros", "visitantes", "aniversariantes"]),
+    ("Financeiro", "#10B981", ["lancamentos", "contribuicoes", "dashboard", "relatorios", "tesoureiros"]),
+    ("Cadastros", "#3B82F6", ["cadastros", "documentos", "visitantes", "aniversariantes"]),
     ("Ministerio", "#8B5CF6", ["ebd", "gfc", "orhafe", "obreiros", "pedidos_oracao"]),
     ("Eventos", "#F59E0B", ["eventos", "geo_frequencia"]),
     ("Sistema", "#6B7280", ["backup", "minha_conta"]),
@@ -1050,6 +1055,27 @@ def main():
     # ═══════════════════════════════════════════════════════════════════
     if _rota_auto_checkin():
         _renderizar_auto_checkin()
+        st.stop()
+
+    # Pagina publica de contribuicao por Pix (?contribuir=<slug>), sem login
+    slug_contribuicao = st.query_params.get("contribuir", "")
+    if isinstance(slug_contribuicao, list):
+        slug_contribuicao = slug_contribuicao[0] if slug_contribuicao else ""
+    slug_contribuicao = str(slug_contribuicao or "").strip().lower()
+    if slug_contribuicao:
+        from modules import contribuicao_online
+        contribuicao_online.pagina_publica(slug_contribuicao)
+        st.stop()
+
+    # Verificacao publica de documento emitido (?verificar=<slug>.<codigo>), sem login
+    valor_verificar = st.query_params.get("verificar", "")
+    if isinstance(valor_verificar, list):
+        valor_verificar = valor_verificar[0] if valor_verificar else ""
+    valor_verificar = str(valor_verificar or "").strip()
+    if "." in valor_verificar:
+        from modules import documentos_membro
+        slug_doc, codigo_doc = valor_verificar.rsplit(".", 1)
+        documentos_membro.pagina_verificacao(slug_doc.lower(), codigo_doc)
         st.stop()
 
     _resolver_rota_publica()
