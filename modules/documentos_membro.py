@@ -94,6 +94,21 @@ def _novo_codigo():
     return secrets.token_urlsafe(9)
 
 
+def _logo_para_pdf(logo_png, largura_max, altura_max):
+    """Logo como flowable do ReportLab, mantendo a proporcao real da imagem."""
+    from PIL import Image as ImagemPIL
+    from reportlab.platypus import Image
+
+    with ImagemPIL.open(io.BytesIO(logo_png)) as imagem:
+        proporcao = imagem.width / imagem.height
+    largura = largura_max
+    altura = largura / proporcao
+    if altura > altura_max:
+        altura = altura_max
+        largura = altura * proporcao
+    return Image(io.BytesIO(logo_png), largura, altura)
+
+
 def gerar_carteirinha_pdf(igreja_nome, membro, url_verificacao, logo_png=None):
     """Carteirinha no tamanho de cartao (85,6 x 54 mm), com logo, funcao, foto 3x4 e QR."""
     from reportlab.lib.units import mm
@@ -107,16 +122,15 @@ def gerar_carteirinha_pdf(igreja_nome, membro, url_verificacao, logo_png=None):
 
     c.setFillColorRGB(*AZUL_FIELMORDOMO)
     c.rect(0, altura - 12 * mm, largura, 12 * mm, fill=1, stroke=0)
-    texto_cabecalho_x = 3 * mm
     if logo_png:
         c.setFillColorRGB(1, 1, 1)
-        c.roundRect(2 * mm, altura - 11 * mm, 9 * mm, 9 * mm, 1.5 * mm, fill=1, stroke=0)
-        c.drawImage(ImageReader(io.BytesIO(logo_png)), 2.5 * mm, altura - 10.5 * mm, 8 * mm, 8 * mm,
+        c.roundRect(2 * mm, altura - 11 * mm, largura - 4 * mm, 9 * mm, 1.5 * mm, fill=1, stroke=0)
+        c.drawImage(ImageReader(io.BytesIO(logo_png)), 4 * mm, altura - 10 * mm, largura - 8 * mm, 7 * mm,
                     preserveAspectRatio=True, anchor="c", mask="auto")
-        texto_cabecalho_x = 13 * mm
-    c.setFillColorRGB(1, 1, 1)
-    c.setFont("Helvetica-Bold", 7)
-    c.drawString(texto_cabecalho_x, altura - 7.5 * mm, igreja_nome[:40])
+    else:
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawString(3 * mm, altura - 7.5 * mm, igreja_nome[:40])
 
     foto_x, foto_w, foto_h = 4 * mm, 20 * mm, 26.7 * mm
     foto_y = altura - 12 * mm - 3 * mm - foto_h
@@ -196,9 +210,10 @@ def gerar_certificado_pdf(igreja_nome, logo_png, cidade, tipo, texto, codigo, ur
 
     historia = []
     if logo_png:
-        historia.append(Image(io.BytesIO(logo_png), 2.6 * cm, 2.6 * cm, kind="proportional"))
+        historia.append(_logo_para_pdf(logo_png, 9 * cm, 3.0 * cm))
+    else:
+        historia.append(Paragraph(html.escape(igreja_nome), igreja_estilo))
     historia += [
-        Paragraph(html.escape(igreja_nome), igreja_estilo),
         Paragraph("CERTIFICADO", titulo_estilo),
         Paragraph(html.escape(tipo.replace("Certificado de ", "")), subtitulo_estilo),
         Paragraph(html.escape(texto), corpo),
@@ -397,9 +412,10 @@ def gerar_certificado_infantil_pdf(igreja_nome, logo_png, cidade, texto, codigo,
 
     historia = []
     if logo_png:
-        historia.append(Image(io.BytesIO(logo_png), 2.4 * cm, 2.4 * cm, kind="proportional"))
+        historia.append(_logo_para_pdf(logo_png, 9 * cm, 2.8 * cm))
+    else:
+        historia.append(Paragraph(html.escape(igreja_nome), igreja_estilo))
     historia += [
-        Paragraph(html.escape(igreja_nome), igreja_estilo),
         Paragraph("CERTIFICADO", titulo_estilo),
         Paragraph("Apresentação de Crianças", subtitulo_estilo),
         Paragraph(html.escape(texto), corpo),
