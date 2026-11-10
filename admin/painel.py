@@ -657,8 +657,8 @@ def _backup_admin():
                 with st.expander("Ver detalhes", expanded=False):
                     st.caption(
                         "Estas igrejas nao existiam no sistema atual e foram "
-                        "registradas com plano **basico** e senha padrao "
-                        "**fielmordomo2024**. Recomenda-se redefinir senha e plano."
+                        "registradas com plano **basico** e senha temporaria. "
+                        "Recomenda-se redefinir a senha e o plano pelo painel."
                     )
                     for slug_r in resultado["igrejas_recriadas"]:
                         st.markdown(f"- 🆕 `{slug_r}`")
