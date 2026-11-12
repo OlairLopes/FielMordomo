@@ -65,8 +65,6 @@ def pagina_publica(slug):
         contato = st.text_input("Telefone com DDD (obrigatório)", max_chars=20, placeholder="(00) 00000-0000")
         enviar = st.form_submit_button("Gerar Pix", type="primary")
 
-    _secao_comprovante_posterior(slug)
-
     chave_sessao = _chave_gerado(slug)
     if enviar:
         try:
@@ -78,13 +76,18 @@ def pagina_publica(slug):
         except ValueError as ex:
             st.error(str(ex))
             st.session_state.pop(chave_sessao, None)
-            return
-        st.session_state[chave_sessao] = {
-            "payload": payload,
-            "valor": valor,
-            "tipo": tipo,
-            "id": id_contribuicao,
-        }
+        else:
+            st.session_state[chave_sessao] = {
+                "payload": payload,
+                "valor": valor,
+                "tipo": tipo,
+                "id": id_contribuicao,
+            }
+            # Preenche a seção "Já paguei" com a referência e o telefone recém-informados.
+            st.session_state[f"comp_ref_{slug}"] = str(id_contribuicao)
+            st.session_state[f"comp_tel_{slug}"] = contato
+
+    _secao_comprovante_posterior(slug)
 
     gerado = st.session_state.get(chave_sessao)
     if not gerado:
