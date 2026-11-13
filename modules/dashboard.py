@@ -1159,6 +1159,19 @@ def _injetar_css():
     .pastoral-card.amarelo strong { color:#B45309; }
     .pastoral-card.laranja strong { color:#C2410C; }
     .pastoral-card.vermelho strong { color:#DC2626; }
+    .decisao-item { display:flex;gap:12px;align-items:flex-start;background:#FFFFFF;border:1px solid #E2E8F0;
+        border-left:4px solid #94A3B8;border-radius:10px;padding:10px 14px;margin-bottom:8px; }
+    .decisao-item.critico { border-left-color:#DC2626; }
+    .decisao-item.atencao { border-left-color:#F59E0B; }
+    .decisao-item.info { border-left-color:#0B3A66; }
+    .decisao-item strong { display:block;color:#10213A; }
+    .decisao-item > div > span { color:#475569;font-size:.85rem; }
+    .decisao-badge { font-size:.7rem;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:999px;
+        white-space:nowrap;color:#FFFFFF;background:#475569;align-self:center; }
+    .decisao-badge.critico { background:#B91C1C; }
+    .decisao-badge.atencao { background:#92400E; }
+    .decisao-badge.info { background:#0B3A66; }
+    .decisao-vazio { background:#ECFDF5;color:#065F46;border-radius:10px;padding:10px 14px; }
     .fidelidade-grid { display:flex;flex-wrap:wrap;gap:8px;margin:14px 0; }
     .fidelidade-mes { border-radius:8px;min-width:96px;padding:9px 11px;text-align:center; }
     .fidelidade-mes strong { display:block;font-size:.8rem; }
@@ -1323,6 +1336,94 @@ def _injetar_css():
         text-decoration:none;font-size:.78rem;font-weight:600;display:inline-block; }
     </style>
     """, unsafe_allow_html=True)
+
+
+ROTULO_NIVEL = {"critico": "Crítico", "atencao": "Atenção", "info": "Informativo"}
+_ORDEM_NIVEL = {"critico": 0, "atencao": 1, "info": 2}
+
+
+def _acoes_prioritarias(saude_info, meta_reserva, saldo_ytd, churn_info, resumo_atencao, abc_info, score):
+    """Transforma os indicadores em acoes ordenadas por gravidade (funcao pura, testavel)."""
+    acoes = []
+    cobertura = saude_info.get("cobertura")
+    if cobertura is not None and cobertura < meta_reserva:
+        acoes.append(("critico", "Reserva abaixo da meta",
+                      f"Cobertura de {cobertura:.1f} mes(es); meta de {meta_reserva} mes(es). "
+                      "Revise despesas ou planeje a reposicao da reserva."))
+    if saldo_ytd < 0:
+        acoes.append(("critico", "Saldo do ano negativo",
+                      f"As saidas superam as entradas em {formatar_moeda(-saldo_ytd)} no ano."))
+
+    if churn_info.get("quantidade"):
+        acoes.append(("atencao",
+                      f"{churn_info['quantidade']} dizimista(s) deixaram de contribuir neste mes",
+                      f"Impacto estimado: {formatar_moeda(churn_info.get('impacto_estimado', 0))}. "
+                      "Priorize o contato pastoral."))
+
+    faixas = [f for f in resumo_atencao if f.get("quantidade")]
+    if faixas:
+        mais_antiga = max(faixas, key=lambda f: f["limite"])
+        acoes.append(("critico",
+                      f"{mais_antiga['quantidade']} membro(s) sem contribuir ha mais de {mais_antiga['limite']} dias",
+                      "Confira a lista de acompanhamento e defina quem fara o contato."))
+
+    if abc_info and abc_info.get("pct_valor_top_a", 0) >= 60:
+        acoes.append(("atencao", "Receita concentrada em poucos dizimistas",
+                      f"{abc_info['pct_dizimistas_top_a']:.0f}% dos dizimistas (classe A) respondem por "
+                      f"{abc_info['pct_valor_top_a']:.0f}% do dizimo."))
+
+    total_score = score.get("score_total")
+    if total_score is not None and total_score < 50:
+        acoes.append(("atencao", f"Saude financeira em {total_score}/100",
+                      "Veja a composicao do indice na secao de score."))
+
+    for nivel, mensagem in saude_info.get("alertas", []):
+        texto = mensagem.lower()
+        if "reserva" in texto or "saldo acumulado" in texto:
+            continue  # ja tratados acima
+        acoes.append((nivel if nivel in _ORDEM_NIVEL else "atencao", "Indicador de atencao", mensagem))
+
+    return sorted(acoes, key=lambda a: _ORDEM_NIVEL[a[0]])
+
+
+def _painel_decisao(saude_info, meta_reserva, ent_ytd, ent_ytd_ant, sai_ytd, saldo_ytd,
+                    ticket_info, churn_info, acoes):
+    """Painel de decisao no topo da aba pastoral: indicadores-chave e acoes priorizadas."""
+    _secao_dashboard(
+        "Painel de decisao",
+        "Indicadores principais do periodo e as acoes que pedem atencao, da mais urgente a menos.",
+    )
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        _card("Saldo acumulado no ano", formatar_moeda(saldo_ytd),
+              f"Entradas {formatar_moeda(ent_ytd)} ({_variacao(ent_ytd, ent_ytd_ant)}) · "
+              f"saidas {formatar_moeda(sai_ytd)}")
+    cobertura = saude_info.get("cobertura")
+    with c2:
+        if cobertura is None:
+            _card("Reserva", "Sem despesas", f"Meta: {meta_reserva} mes(es)")
+        else:
+            cor = "#10B981" if cobertura >= meta_reserva else "#DC2626"
+            _card("Reserva", f"{cobertura:.1f} meses", f"Meta: {meta_reserva} mes(es)", cor=cor)
+    with c3:
+        _card("Dizimistas no mes", str(ticket_info.get("dizimistas", 0)),
+              f"{ticket_info.get('percentual_arrecadado', 0):.0f}% do potencial arrecadado")
+    with c4:
+        _card("Em risco de afastamento", str(churn_info.get("quantidade", 0)),
+              f"Impacto estimado {formatar_moeda(churn_info.get('impacto_estimado', 0))}",
+              cor="#B45309" if churn_info.get("quantidade") else None)
+
+    if not acoes:
+        st.markdown('<div class="decisao-vazio">Nenhuma acao urgente identificada neste periodo.</div>',
+                    unsafe_allow_html=True)
+        return
+    itens = "".join(
+        f'<div class="decisao-item {nivel}">'
+        f'<span class="decisao-badge {nivel}">{ROTULO_NIVEL[nivel]}</span>'
+        f'<div><strong>{_escape(titulo)}</strong><span>{_escape(detalhe)}</span></div></div>'
+        for nivel, titulo, detalhe in acoes
+    )
+    st.markdown(f'<div class="decisao-acoes">{itens}</div>', unsafe_allow_html=True)
 
 
 def _card(titulo, valor, nota="", icone=None, cor=None):
@@ -2211,12 +2312,52 @@ def render():
         )
 
         if _autorizacao_pastoral(slug):
-            _render_insight_topo(insight_texto)
+            st.divider()
 
-            a1, a2, a3 = st.columns(3)
-            with a1: _card("Entradas YTD", formatar_moeda(ent_ytd), f"{_variacao(ent_ytd, ent_ytd_ant)} vs mesmo periodo anterior")
-            with a2: _card("Saidas YTD", formatar_moeda(sai_ytd))
-            with a3: _card("Saldo YTD", formatar_moeda(saldo_ytd))
+            dias_ativo = DIAS_DIZIMISTA_ATIVO_DEFAULT
+            try:
+                dias_ativo = int(obter_config_igreja(slug, "dias_dizimista_ativo", str(dias_ativo)))
+            except (TypeError, ValueError):
+                pass
+
+            dizimos = df[(df["tipo_norm"] == "ENTRADA") & (df["categoria_norm"] == "DIZIMO")]
+            inicio_padrao = max(df["data"].min().date(), (mes_ref - 11).start_time.date())
+            fim_padrao = min(df["data"].max().date(), mes_ref.end_time.date())
+            f1, f2 = st.columns(2)
+            with f1:
+                inicio_pastoral = st.date_input(
+                    "Analisar contribuições de",
+                    value=inicio_padrao,
+                    format="DD/MM/YYYY",
+                    key=_sk("pastoral_inicio", slug),
+                )
+            with f2:
+                fim_pastoral = st.date_input(
+                    "Até",
+                    value=fim_padrao,
+                    format="DD/MM/YYYY",
+                    key=_sk("pastoral_fim", slug),
+                )
+            if inicio_pastoral > fim_pastoral:
+                st.error("A data inicial não pode ser posterior a data final.")
+                inicio_pastoral = fim_pastoral
+
+            df_pastoral = _periodo(df, inicio_pastoral, fim_pastoral)
+            dizimos_periodo = df_pastoral[
+                (df_pastoral["tipo_norm"] == "ENTRADA")
+                & (df_pastoral["categoria_norm"] == "DIZIMO")
+            ]
+
+            churn_info = _identificar_churn(df, mes_ref, membros, dias_referencia=90)
+            abc_info = _curva_abc_dizimistas(dizimos_periodo, membros)
+            resumo_atencao = _resumo_acompanhamento(
+                membros, dizimos, datetime.date.today(), dias_ativo
+            )
+            acoes = _acoes_prioritarias(saude_info, meta_reserva, saldo_ytd, churn_info,
+                                        resumo_atencao, abc_info, score)
+            _painel_decisao(saude_info, meta_reserva, ent_ytd, ent_ytd_ant, sai_ytd, saldo_ytd,
+                            ticket_info, churn_info, acoes)
+            _render_insight_topo(insight_texto)
 
             _secao_dashboard(
                 "Ticket medio e potencial de arrecadacao",
@@ -2332,42 +2473,6 @@ def render():
             else:
                 st.success("Nenhuma pendencia identificada nos dados.")
             st.caption("Registros invalidos são excluidos dos KPIs até serem corrigidos.")
-
-            st.divider()
-
-            dias_ativo = DIAS_DIZIMISTA_ATIVO_DEFAULT
-            try:
-                dias_ativo = int(obter_config_igreja(slug, "dias_dizimista_ativo", str(dias_ativo)))
-            except (TypeError, ValueError):
-                pass
-
-            dizimos = df[(df["tipo_norm"] == "ENTRADA") & (df["categoria_norm"] == "DIZIMO")]
-            inicio_padrao = max(df["data"].min().date(), (mes_ref - 11).start_time.date())
-            fim_padrao = min(df["data"].max().date(), mes_ref.end_time.date())
-            f1, f2 = st.columns(2)
-            with f1:
-                inicio_pastoral = st.date_input(
-                    "Analisar contribuições de",
-                    value=inicio_padrao,
-                    format="DD/MM/YYYY",
-                    key=_sk("pastoral_inicio", slug),
-                )
-            with f2:
-                fim_pastoral = st.date_input(
-                    "Até",
-                    value=fim_padrao,
-                    format="DD/MM/YYYY",
-                    key=_sk("pastoral_fim", slug),
-                )
-            if inicio_pastoral > fim_pastoral:
-                st.error("A data inicial não pode ser posterior a data final.")
-                inicio_pastoral = fim_pastoral
-
-            df_pastoral = _periodo(df, inicio_pastoral, fim_pastoral)
-            dizimos_periodo = df_pastoral[
-                (df_pastoral["tipo_norm"] == "ENTRADA")
-                & (df_pastoral["categoria_norm"] == "DIZIMO")
-            ]
 
             _secao_dashboard(
                 "Evolucao dos dizimos",
@@ -2493,7 +2598,6 @@ def render():
                 "Classificacao de dizimistas por concentracao de arrecadacao. "
                 "Ajuda a identificar dependencia de poucos contribuintes.",
             )
-            abc_info = _curva_abc_dizimistas(dizimos_periodo, membros)
             _render_curva_abc(abc_info)
 
             # ═══ NOVO: Botoes de acao rapida ═══
@@ -2519,15 +2623,11 @@ def render():
                 "Membros que contribuiram nos ultimos 90 dias mas nao contribuiram "
                 "no mes de referencia. Impacto financeiro estimado.",
             )
-            churn_info = _identificar_churn(df, mes_ref, membros, dias_referencia=90)
             _render_churn_alerta(churn_info, slug, igreja, mes_ref)
 
             _secao_dashboard(
                 "Membros que requerem acompanhamento",
                 f"Criterio configurado: dizimista ativo quando contribuiu nos ultimos {dias_ativo} dias.",
-            )
-            resumo_atencao = _resumo_acompanhamento(
-                membros, dizimos, datetime.date.today(), dias_ativo
             )
             classes = ["amarelo", "laranja", "vermelho"]
             colunas_atencao = st.columns(len(resumo_atencao))
