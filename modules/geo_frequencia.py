@@ -111,7 +111,8 @@ def _garantir_colunas_horario(slug):
             conn.commit()
 
         st.session_state[cache_key] = True
-    except Exception as exc:
+    except sqlite3.Error as exc:
+        logging.exception("geo_frequencia._garantir_colunas_horario: erro tratado")
         st.warning(f"Aviso: nao consegui migrar tabela geo_eventos: {exc}")
 
 
@@ -133,7 +134,8 @@ def _ler_horarios_eventos(slug):
                 int(row[0]): (str(row[1] or ""), str(row[2] or ""))
                 for row in cursor.fetchall()
             }
-    except Exception:
+    except sqlite3.Error:
+        logging.exception("geo_frequencia._ler_horarios_eventos: erro tratado")
         return {}
 
 
@@ -179,7 +181,7 @@ def _ler_config_evento(slug, id_evento):
                     "janela_depois_min": int(row[4] or 30),
                     "mensagem_lembrete": str(row[5] or ""),
                 }
-    except Exception:
+    except sqlite3.Error:
         logging.exception("Erro ignorado silenciosamente")
 
     return config_padrao
@@ -228,7 +230,8 @@ def _salvar_horario_evento(slug, hora_inicio, hora_fim, id_evento=None, nome=Non
                     valores + (str(nome), str(data)),
                 )
             conn.commit()
-    except Exception as exc:
+    except sqlite3.Error as exc:
+        logging.exception("geo_frequencia._salvar_horario_evento: erro tratado")
         st.warning(f"Aviso: nao consegui salvar configuracoes temporais: {exc}")
 
 
@@ -238,7 +241,7 @@ def _str_to_time(s):
         partes = str(s or "").strip().split(":")
         if len(partes) >= 2:
             return datetime.time(int(partes[0]), int(partes[1]))
-    except Exception:
+    except (ValueError, IndexError, TypeError):
         logging.exception("Erro ignorado silenciosamente")
     return None
 
@@ -249,7 +252,8 @@ def _time_to_str(t):
         return ""
     try:
         return t.strftime("%H:%M")
-    except Exception:
+    except (AttributeError, ValueError, TypeError):
+        logging.debug("geo_frequencia._time_to_str: valor invalido ignorado")
         return ""
 
 
@@ -336,7 +340,8 @@ def _calcular_status_temporal_evento(evento, config_temporal=None):
         else:
             delta = agora - dt_ini
             return "em_andamento", _formatar_delta(delta, "Em andamento (iniciou ha {})")
-    except Exception:
+    except (ValueError, TypeError):
+        logging.debug("geo_frequencia._calcular_status_temporal_evento: valor invalido ignorado")
         return "sem_horario", "Erro ao calcular tempo"
 
 
@@ -395,7 +400,8 @@ def _esta_dentro_janela_checkin(evento, config_temporal=None):
             )
 
         return True, "Check-in disponivel"
-    except Exception as exc:
+    except (ValueError, TypeError) as exc:
+        logging.debug("geo_frequencia._esta_dentro_janela_checkin: valor invalido ignorado")
         return True, f"Erro ao verificar horario - check-in livre ({exc})"
 
 
@@ -427,7 +433,8 @@ def _esta_atrasado(evento, config_temporal=None):
         limite_atraso = dt_ini + datetime.timedelta(minutes=tolerancia)
 
         return _agora_brasil() > limite_atraso
-    except Exception:
+    except (ValueError, TypeError):
+        logging.debug("geo_frequencia._esta_atrasado: valor invalido ignorado")
         return False
 
 
@@ -461,7 +468,8 @@ def _garantir_tabela_tokens(slug):
             conn.commit()
 
         st.session_state[cache_key] = True
-    except Exception as exc:
+    except sqlite3.Error as exc:
+        logging.exception("geo_frequencia._garantir_tabela_tokens: erro tratado")
         st.warning(f"Aviso na migracao de tokens: {exc}")
 
 
@@ -505,7 +513,8 @@ def _gerar_tokens_checkin(slug, id_evento, ids_membros):
                     )
                     tokens[int(id_cadastro)] = novo_token
             conn.commit()
-    except Exception as exc:
+    except sqlite3.Error as exc:
+        logging.exception("geo_frequencia._gerar_tokens_checkin: erro tratado")
         st.error(f"Erro ao gerar tokens: {exc}")
 
     return tokens
@@ -540,7 +549,8 @@ def _ler_token_checkin(slug, token):
                 "usado_em": row[4],
                 "resultado": row[5],
             }
-    except Exception:
+    except sqlite3.Error:
+        logging.exception("geo_frequencia._ler_token_checkin: erro tratado")
         return None
 
 
@@ -562,7 +572,7 @@ def _marcar_token_usado(slug, token, resultado):
                 (agora, str(resultado), str(token)),
             )
             conn.commit()
-    except Exception:
+    except sqlite3.Error:
         logging.exception("Erro ignorado silenciosamente")
 
 
@@ -573,7 +583,8 @@ def _url_checkin(slug, token):
     """
     try:
         base = str(st.secrets.get("app", {}).get("url", "")).strip().rstrip("/")
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
+        logging.exception("geo_frequencia._url_checkin: erro tratado")
         base = ""
 
     if not base:
@@ -615,6 +626,7 @@ def _config_whatsapp():
     try:
         cfg = st.secrets.get("whatsapp", {})
     except Exception:
+        logging.exception("geo_frequencia._config_whatsapp: erro tratado")
         cfg = {}
 
     return {
@@ -672,10 +684,12 @@ def _enviar_whatsapp_texto_api(telefone, mensagem):
     except urllib.error.HTTPError as exc:
         try:
             corpo_err = exc.read().decode("utf-8", errors="ignore")
-        except Exception:
+        except (OSError, ValueError):
+            logging.exception("geo_frequencia._enviar_whatsapp_texto_api: erro tratado")
             corpo_err = ""
         return False, f"Erro HTTP {exc.code}: {corpo_err[:200]}"
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
+        logging.exception("geo_frequencia._enviar_whatsapp_texto_api: erro tratado")
         return False, f"Falha no envio: {exc}"
 
 
@@ -709,7 +723,7 @@ def _extrair_coordenadas_google_maps(texto):
         decoded = urllib.parse.unquote(texto_original)
         if decoded != texto_original:
             candidatos.append(decoded)
-    except Exception:
+    except (ValueError, IndexError, TypeError):
         logging.exception("Erro ignorado silenciosamente")
 
     padroes = [
@@ -753,7 +767,8 @@ def _expandir_link_google_maps(url):
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.geturl()
-    except Exception:
+    except (OSError, ValueError):
+        logging.exception("geo_frequencia._expandir_link_google_maps: erro tratado")
         return ""
 
 
@@ -801,7 +816,8 @@ def _buscar_coordenadas_por_endereco(endereco):
 
         display = str(item.get("display_name", endereco))
         return float(lat_str), float(lon_str), display
-    except Exception:
+    except (OSError, ValueError):
+        logging.exception("geo_frequencia._buscar_coordenadas_por_endereco: erro tratado")
         return None
 
 
@@ -830,7 +846,8 @@ def _buscar_endereco_por_coordenadas(latitude, longitude):
         with urllib.request.urlopen(req, timeout=TIMEOUT_HTTP) as resp:
             dados = json.loads(resp.read().decode("utf-8"))
         return str(dados.get("display_name", "") or "")
-    except Exception:
+    except (OSError, ValueError):
+        logging.exception("geo_frequencia._buscar_endereco_por_coordenadas: erro tratado")
         return ""
 
 
@@ -870,6 +887,7 @@ def _captura_unica_topo():
         try:
             loc = streamlit_geolocation()
         except Exception as exc:
+            logging.exception("geo_frequencia._captura_unica_topo: erro tratado")
             st.error(f"Erro: {exc}")
             loc = None
 
@@ -1455,6 +1473,7 @@ def _render_eventos(slug):
                 st.session_state.pop("evt_ref", None)
                 st.rerun()
             except Exception as exc:
+                logging.exception("geo_frequencia._render_eventos: erro tratado")
                 st.error(f"Erro ao salvar: {exc}")
 
     # ─── Acoes ──────────────────────────────────────────────────────
@@ -1492,6 +1511,7 @@ def _render_eventos(slug):
                     st.session_state.pop("evt_ref", None)
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("geo_frequencia._render_eventos: erro tratado")
                     st.error(f"Erro: {exc}")
 
         with ac2:
@@ -1511,6 +1531,7 @@ def _render_eventos(slug):
                     st.session_state.pop("evt_ref", None)
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("geo_frequencia._render_eventos: erro tratado")
                     st.error(f"Erro: {exc}")
 
     # ─── Tabela ─────────────────────────────────────────────────────
@@ -1743,6 +1764,7 @@ def _render_checkin(slug):
                     if id_evt_url or id_cad_url:
                         _limpar_query_geo()
                 except Exception as exc:
+                    logging.exception("geo_frequencia._render_checkin: erro tratado")
                     st.error(f"Erro ao registrar: {exc}")
 
         with st.expander("🛠️ Registrar localização manualmente"):
@@ -1786,6 +1808,7 @@ def _render_checkin(slug):
                             )
                             st.success("Registro salvo.")
                         except Exception as exc:
+                            logging.exception("geo_frequencia._render_checkin: erro tratado")
                             st.error(f"Erro: {exc}")
 
     # ─── EM MASSA ───────────────────────────────────────────────────
@@ -1917,6 +1940,7 @@ def _render_checkin(slug):
                         )
                         registrados += 1
                     except Exception as exc:
+                        logging.exception("geo_frequencia._render_checkin: erro tratado")
                         erros.append(f"{membro_m.get('nome', rotulo)}: {exc}")
 
             if registrados:
@@ -2386,6 +2410,7 @@ def _render_auto_checkin_via_link(slug, token):
     try:
         evento = obter_geo_evento(slug, dados_token["id_evento"])
     except Exception as exc:
+        logging.exception("geo_frequencia._render_auto_checkin_via_link: erro tratado")
         st.error(f"Erro ao carregar evento: {exc}")
         return
 
@@ -2397,6 +2422,7 @@ def _render_auto_checkin_via_link(slug, token):
     try:
         membros_df = carregar_cadastros(slug)
     except Exception as exc:
+        logging.exception("geo_frequencia._render_auto_checkin_via_link: erro tratado")
         st.error(f"Erro ao carregar cadastros: {exc}")
         return
 
@@ -2479,6 +2505,7 @@ def _render_auto_checkin_via_link(slug, token):
     try:
         loc = streamlit_geolocation()
     except Exception as exc:
+        logging.exception("geo_frequencia._render_auto_checkin_via_link: erro tratado")
         st.error(f"Erro na captura: {exc}")
         return
 
@@ -2515,6 +2542,7 @@ def _render_auto_checkin_via_link(slug, token):
         )
         _marcar_token_usado(slug, token, status)
     except Exception as exc:
+        logging.exception("geo_frequencia._render_auto_checkin_via_link: erro tratado")
         st.error(f"Erro ao registrar presenca: {exc}")
         return
 

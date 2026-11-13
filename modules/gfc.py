@@ -1,3 +1,4 @@
+import logging
 import datetime
 
 import pandas as pd
@@ -228,6 +229,7 @@ def _render_grupos(slug):
                     st.success("Grupo familiar salvo.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("gfc._render_grupos: erro tratado")
                     st.error(str(exc))
 
     if grupos.empty:
@@ -298,6 +300,7 @@ def _render_grupos(slug):
                         st.success("Grupo familiar atualizado.")
                         st.rerun()
                     except Exception as exc:
+                        logging.exception("gfc._render_grupos: erro tratado")
                         st.error(str(exc))
 
             if st.button("Inativar/excluir grupo", key=f"gfc_excluir_grupo_{int(row['id_grupo'])}"):
@@ -760,6 +763,7 @@ def _render_reunioes(slug, id_grupo_restrito=None):
                 st.success("Chamada GFC salva.")
                 st.rerun()
             except Exception as exc:
+                logging.exception("gfc._render_reunioes: erro tratado")
                 st.error(str(exc))
 
 
@@ -909,6 +913,7 @@ def _render_form_pessoa_gfc(slug, tipo, op_membros, salvar_fn, expandido=False):
                     st.success(f"{tipo} salvo.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("gfc._render_form_pessoa_gfc: erro tratado")
                     st.error(str(exc))
 
 
@@ -976,6 +981,7 @@ def _render_tabela_pessoa_gfc(slug, titulo, dados, id_col, salvar_fn, excluir_fn
                     st.success("Cadastro atualizado.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("gfc._render_tabela_pessoa_gfc: erro tratado")
                     st.error(str(exc))
 
         if st.button("Inativar cadastro", key=f"gfc_inativar_{id_col}_{int(row[id_col])}"):
@@ -1096,6 +1102,7 @@ def _render_secretarias(slug):
                         st.success("Secretaria GFC cadastrada.")
                         st.rerun()
                     except Exception as exc:
+                        logging.exception("gfc._render_secretarias: erro tratado")
                         st.error(str(exc))
 
     if secretarias.empty:
@@ -1158,6 +1165,7 @@ def _render_secretarias(slug):
                         st.success("Secretaria GFC atualizada.")
                         st.rerun()
                     except Exception as exc:
+                        logging.exception("gfc._render_secretarias: erro tratado")
                         st.error(str(exc))
 
             if st.button("Inativar secretaria", key=f"gfc_sec_inativar_{int(row['id_secretaria'])}"):

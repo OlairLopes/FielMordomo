@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 
 import streamlit as st
 
+from utils.tokens import definir_idioma_pagina, injetar_estilos_publicos
+
 
 LOGGER = logging.getLogger(__name__)
 DOMINIO_OFICIAL = "https://fielmordomo.com.br"
@@ -226,6 +228,7 @@ def _host_atual():
     try:
         bruto = st.context.headers.get("host", "")
     except Exception:
+        logging.exception("app._host_atual: erro tratado")
         bruto = ""
     bruto = str(bruto or "").split(",", 1)[0].strip()
     if not bruto or any(c in bruto for c in "\r\n"):
@@ -249,22 +252,18 @@ def _bloquear_acesso_fora_do_dominio_oficial():
     if host in _dominios_permitidos():
         return
     host_html = html.escape(host, quote=True)
+    injetar_estilos_publicos()
     st.markdown(
         f"""
-        <div style="max-width:720px;margin:80px auto;padding:32px;border:1px solid #ddd;
-                    border-radius:14px;text-align:center;font-family:Arial,sans-serif;">
-            <h2 style="margin-bottom:10px;color:#061B44;">Acesso restrito</h2>
-            <p style="font-size:1rem;color:#333;line-height:1.5;">
-                O FielMordomo deve ser acessado somente pelo dominio oficial.
-            </p>
-            <p style="margin-top:18px;">
-                <a href="{DOMINIO_OFICIAL}" target="_self"
-                   style="display:inline-block;background:#061B44;color:white;text-decoration:none;
-                          padding:12px 22px;border-radius:8px;font-weight:700;">
+        <div class="fm-restrito">
+            <h2>Acesso restrito</h2>
+            <p>O FielMordomo deve ser acessado somente pelo dominio oficial.</p>
+            <p class="fm-acao">
+                <a href="{DOMINIO_OFICIAL}" target="_self" class="fm-btn fm-btn-navy fm-btn-grande">
                     Abrir FielMordomo
                 </a>
             </p>
-            <p style="margin-top:16px;color:#777;font-size:0.85rem;">
+            <p class="fm-nota">
                 Dominio detectado: {host_html}
             </p>
         </div>
@@ -344,6 +343,7 @@ def _renderizar_auto_checkin():
     O modulo de destino le o parametro ?ck= diretamente do query_params
     e faz sua propria logica de renderizacao.
     """
+    injetar_estilos_publicos()
     # CSS minimalista para link publico (sem sidebar, layout centrado)
     st.markdown(
         """
@@ -376,8 +376,8 @@ def _renderizar_auto_checkin():
             "Contate o administrador do sistema."
         )
         st.markdown(
-            f'<p style="text-align:center;margin-top:20px;">'
-            f'<a href="{DOMINIO_OFICIAL}" style="color:#061B44;">Voltar para o site</a>'
+            f'<p class="fm-voltar">'
+            f'<a href="{DOMINIO_OFICIAL}" class="fm-link">Voltar para o site</a>'
             f'</p>',
             unsafe_allow_html=True,
         )
@@ -392,8 +392,8 @@ def _renderizar_auto_checkin():
             f"(Erro: {type(ex).__name__})"
         )
         st.markdown(
-            f'<p style="text-align:center;margin-top:20px;">'
-            f'<a href="{DOMINIO_OFICIAL}" style="color:#061B44;">Voltar para o site</a>'
+            f'<p class="fm-voltar">'
+            f'<a href="{DOMINIO_OFICIAL}" class="fm-link">Voltar para o site</a>'
             f'</p>',
             unsafe_allow_html=True,
         )
@@ -460,6 +460,7 @@ def _botao_inicio_sidebar(key, pagina_destino):
 
 
 def _injetar_css():
+    definir_idioma_pagina()
     st.markdown(
         """
         <meta name="google" content="notranslate">
@@ -543,17 +544,6 @@ def _injetar_css():
             .block-container {padding-left:1rem!important;padding-right:1rem!important}
         }
         </style>
-        <script>
-        (function () {
-            const root = window.parent && window.parent.document
-                ? window.parent.document
-                : document;
-            root.documentElement.setAttribute("lang", "pt-BR");
-            root.documentElement.setAttribute("translate", "no");
-            root.body && root.body.setAttribute("translate", "no");
-            root.body && root.body.classList.add("notranslate");
-        })();
-        </script>
         """,
         unsafe_allow_html=True,
     )
@@ -1009,9 +999,7 @@ def _aplicar_tipografia():
     que login, institucional e app interno compartilhem a mesma fonte."""
     st.markdown(
         """
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block" rel="stylesheet">
+        <link rel="stylesheet" href="/app/static/fonts/fontes.css">
         <style>
         html, body, [class*="css"] {
             font-family: 'Public Sans', -apple-system, 'Segoe UI', Arial, sans-serif;

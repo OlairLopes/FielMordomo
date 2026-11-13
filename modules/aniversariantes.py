@@ -220,6 +220,7 @@ def _config_whatsapp():
     try:
         cfg = st.secrets.get("whatsapp", {})
     except Exception:
+        logging.exception("aniversariantes._config_whatsapp: erro tratado")
         cfg = {}
 
     return {
@@ -404,6 +405,7 @@ def _ler_controle_envios(slug):
         with open(caminho, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
+        logging.exception("aniversariantes._ler_controle_envios: erro tratado")
         return {}
 
 
@@ -474,12 +476,13 @@ def _preparar_df_aniv(df_cad):
         for fmt in formatos:
             try:
                 return datetime.datetime.strptime(texto, fmt).date()
-            except Exception:
+            except (ValueError, TypeError):
                 logging.exception("Erro ignorado silenciosamente")
 
         try:
             return datetime.date.fromisoformat(texto)
-        except Exception:
+        except (ValueError, TypeError):
+            logging.exception("aniversariantes._preparar_df_aniv: erro tratado")
             return None
 
     df["dt_nasc"] = df["data_nascimento"].apply(parse_data)

@@ -81,6 +81,7 @@ def _config_whatsapp():
     try:
         cfg = st.secrets.get("whatsapp", {})
     except Exception:
+        logging.exception("pedidos_oracao._config_whatsapp: erro tratado")
         cfg = {}
     resultado = {
         "access_token": str(
@@ -137,6 +138,7 @@ def _formatar_data(valor):
     try:
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except Exception:
+        logging.debug("pedidos_oracao._formatar_data: valor invalido ignorado")
         return str(valor or "")
 
 
@@ -515,6 +517,7 @@ def _render_agenda(slug):
                     True,
                 )
             except Exception as ex:
+                logging.exception("pedidos_oracao._render_agenda: erro tratado")
                 st.error(str(ex))
             else:
                 st.success("Horário cadastrado.")

@@ -393,6 +393,7 @@ def _config_whatsapp():
     try:
         cfg = st.secrets.get("whatsapp", {})
     except Exception:
+        logging.exception("lancamentos._config_whatsapp: erro tratado")
         cfg = {}
 
     resultado = {
@@ -456,7 +457,8 @@ def _telefone_do_lancamento(df_cad, lancamento):
         return ""
     try:
         id_cadastro = int(id_cadastro)
-    except Exception:
+    except (ValueError, TypeError):
+        logging.exception("lancamentos._telefone_do_lancamento: erro tratado")
         return ""
     if df_cad.empty or "id_cadastro" not in df_cad.columns:
         return ""
@@ -527,8 +529,8 @@ def _gerar_html_comprovante(lancamento, igreja, slug, auto_imprimir=True):
     logo_html = ""
     if logo_b64:
         logo_html = (
-            '<div style="text-align:center;margin-bottom:6px">'
-            f'<img src="{logo_b64}" style="max-height:60px;max-width:160px;object-fit:contain"/>'
+            '<div class="comp-logo-wrap">'
+            f'<img src="{logo_b64}" alt="Logo da igreja" class="comp-logo"/>'
             '</div>'
         )
 
@@ -588,12 +590,16 @@ body {{ background: #f0f0f0; display: flex; justify-content: center; padding: 20
   .cupom {{ box-shadow: none; width: 100%; max-width: 320px; margin: 0 auto; }}
   .btn-imprimir {{ display: none !important; }}
 }}
+  .comp-logo-wrap {{ text-align:center;margin-bottom:6px; }}
+  .comp-logo {{ max-height:60px;max-width:160px;object-fit:contain; }}
+  .comp-acoes {{ text-align:center;margin-bottom:12px; }}
+  .btn-imprimir {{ background:#061B44;color:white;border:none;padding:8px 24px;border-radius:6px;
+    font-size:13px;cursor:pointer;font-weight:600; }}
 </style></head><body>
 
-<div style="text-align:center;margin-bottom:12px">
+<div class="comp-acoes">
   <button class="btn-imprimir" onclick="window.print()"
-    style="background:#061B44;color:white;border:none;padding:8px 24px;
-           border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">
+>
     Imprimir cupom
   </button>
 </div>
@@ -641,8 +647,8 @@ def _gerar_html_comprovante_lote(itens, igreja, slug, data_str, vinc_str,
     logo_html = ""
     if logo_b64:
         logo_html = (
-            '<div style="text-align:center;margin-bottom:6px">'
-            f'<img src="{logo_b64}" style="max-height:60px;max-width:160px;object-fit:contain"/>'
+            '<div class="comp-logo-wrap">'
+            f'<img src="{logo_b64}" alt="Logo da igreja" class="comp-logo"/>'
             '</div>'
         )
 
@@ -698,12 +704,16 @@ body {{ background: #f0f0f0; display: flex; justify-content: center; padding: 20
   .cupom {{ box-shadow: none; width: 100%; max-width: 340px; margin: 0 auto; }}
   .btn-imprimir {{ display: none !important; }}
 }}
+  .comp-logo-wrap {{ text-align:center;margin-bottom:6px; }}
+  .comp-logo {{ max-height:60px;max-width:160px;object-fit:contain; }}
+  .comp-acoes {{ text-align:center;margin-bottom:12px; }}
+  .btn-imprimir {{ background:#061B44;color:white;border:none;padding:8px 24px;border-radius:6px;
+    font-size:13px;cursor:pointer;font-weight:600; }}
 </style></head><body>
 
-<div style="text-align:center;margin-bottom:12px">
+<div class="comp-acoes">
   <button class="btn-imprimir" onclick="window.print()"
-    style="background:#061B44;color:white;border:none;padding:8px 24px;
-           border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">
+>
     Imprimir cupom
   </button>
 </div>
@@ -768,8 +778,8 @@ def _gerar_html_fechamento_caixa(lancamentos, igreja, slug, data_inicio, data_fi
     logo_html = ""
     if logo_b64:
         logo_html = (
-            '<div style="text-align:center;margin-bottom:6px">'
-            f'<img src="{logo_b64}" style="max-height:60px;max-width:160px;object-fit:contain"/>'
+            '<div class="comp-logo-wrap">'
+            f'<img src="{logo_b64}" alt="Logo da igreja" class="comp-logo"/>'
             '</div>'
         )
 
@@ -931,12 +941,16 @@ body {{ background: #f0f0f0; display: flex; justify-content: center; padding: 20
   .cupom {{ box-shadow: none; width: 100%; max-width: 360px; margin: 0 auto; }}
   .btn-imprimir {{ display: none !important; }}
 }}
+  .comp-logo-wrap {{ text-align:center;margin-bottom:6px; }}
+  .comp-logo {{ max-height:60px;max-width:160px;object-fit:contain; }}
+  .comp-acoes {{ text-align:center;margin-bottom:12px; }}
+  .btn-imprimir {{ background:#061B44;color:white;border:none;padding:8px 24px;border-radius:6px;
+    font-size:13px;cursor:pointer;font-weight:600; }}
 </style></head><body>
 
-<div style="text-align:center;margin-bottom:12px">
+<div class="comp-acoes">
   <button class="btn-imprimir" onclick="window.print()"
-    style="background:#061B44;color:white;border:none;padding:8px 24px;
-           border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">
+>
     Imprimir 2a via
   </button>
 </div>
@@ -1147,6 +1161,7 @@ def modal_novo_lancamento(slug, membros, fornec):
                     with st.spinner("Salvando lancamento..."):
                         inserir_lancamento(slug, lanc)
                 except Exception as ex:
+                    logging.exception("lancamentos.modal_novo_lancamento: erro tratado")
                     st.error(f"Erro ao salvar: {ex}")
                 else:
                     st.session_state[chave_dup] = {
@@ -1354,6 +1369,7 @@ def modal_editar_lancamento(slug, sel, membros, fornec):
             try:
                 atualizar_lancamento(slug, lanc)
             except Exception as ex:
+                logging.exception("lancamentos.modal_editar_lancamento: erro tratado")
                 st.error(f"Erro ao atualizar: {ex}")
             else:
                 _invalida()
@@ -1478,10 +1494,10 @@ def modal_visualizar_lancamento(sel, igreja, slug, df_cad):
             link = _link_whatsapp(telefone, mensagem)
             if link:
                 st.markdown(
-                    f'<a href="{_html(link)}" target="_blank" rel="noopener noreferrer" '
-                    f'style="display:inline-block;background:#25D366;color:white;'
-                    f'padding:10px 24px;border-radius:6px;text-decoration:none;'
-                    f'font-weight:600;margin-top:10px;width:100%;text-align:center;box-sizing:border-box;">'
+                    '<style>.comp-whatsapp{display:inline-block;background:#25D366;color:white;'
+                    'padding:10px 24px;border-radius:6px;text-decoration:none;'
+                    'font-weight:600;margin-top:10px;width:100%;text-align:center;box-sizing:border-box;}</style>'
+                    f'<a href="{_html(link)}" target="_blank" rel="noopener noreferrer" class="comp-whatsapp">'
                     f'💬 Abrir conversa no WhatsApp</a>',
                     unsafe_allow_html=True,
                 )
@@ -1571,6 +1587,7 @@ def modal_excluir_lancamento(slug, sel):
             st.toast(f"✅ Lancamento #{str(id_lanc).zfill(6)} excluído!")
             st.rerun()
         except Exception as exc:
+            logging.exception("lancamentos.modal_excluir_lancamento: erro tratado")
             st.error(f"Erro ao excluir: {exc}")
 
 

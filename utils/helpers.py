@@ -35,13 +35,15 @@ def formatar_moeda(valor) -> str:
     try:
         return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
+        logging.debug("helpers.formatar_moeda: valor invalido ignorado")
         return "R$ 0,00"
 
 
 def formatar_percentual(valor) -> str:
     try:
         return f"{float(valor):.1f}%"
-    except Exception:
+    except (ValueError, TypeError):
+        logging.exception("helpers.formatar_percentual: erro tratado")
         return "0.0%"
 
 
@@ -58,6 +60,7 @@ def formatar_data(valor) -> str:
     try:
         return datetime.date.fromisoformat(str(valor)).strftime("%d/%m/%Y")
     except Exception:
+        logging.debug("helpers.formatar_data: valor invalido ignorado")
         return str(valor or "")
 
 
@@ -155,6 +158,7 @@ def data_iso(valor) -> str:
                 logging.exception("Erro ignorado silenciosamente")
         return datetime.date.fromisoformat(texto).isoformat()
     except Exception:
+        logging.debug("helpers.data_iso: valor invalido ignorado")
         return ""
 
 

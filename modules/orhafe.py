@@ -1,3 +1,4 @@
+import logging
 import datetime
 
 import pandas as pd
@@ -1169,6 +1170,7 @@ def _render_secretarias(slug):
                     st.success("Secretaria cadastrada.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("orhafe._render_secretarias: erro tratado")
                     st.error(str(exc))
 
     df = listar_orhafe_secretarias(slug)
@@ -1235,6 +1237,7 @@ def _render_secretarias(slug):
                 st.success("Secretaria atualizada.")
                 st.rerun()
             except Exception as exc:
+                logging.exception("orhafe._render_secretarias: erro tratado")
                 st.error(str(exc))
 
     if confirmar_exclusao(

@@ -1,3 +1,4 @@
+import logging
 import json
 import urllib.request
 
@@ -109,6 +110,7 @@ def _cidades_por_estado(uf):
         )
         return cidades + ["Outros"] if cidades else ["Outros"]
     except Exception:
+        logging.exception("visitantes._cidades_por_estado: erro tratado")
         if uf == "GO":
             return ["Minaçu", "Outros"]
         return ["Outros"]
@@ -119,6 +121,7 @@ def _congregacoes_membros(slug):
     try:
         df = carregar_cadastros(slug)
     except Exception:
+        logging.exception("visitantes._congregacoes_membros: erro tratado")
         return []
     if df is None or df.empty or "congregacao" not in df.columns:
         return []
@@ -315,6 +318,7 @@ def _render_formulario(slug):
             st.session_state["visitante_form_nonce"] = nonce + 1
             st.rerun()
         except Exception as exc:
+            logging.exception("visitantes._render_formulario: erro tratado")
             st.error(str(exc))
 
 def _render_consulta(slug):

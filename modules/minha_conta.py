@@ -277,6 +277,7 @@ def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
                         st.success(config["sucesso_cadastrar"])
                         st.rerun()
                 except Exception as exc:
+                    logging.exception("minha_conta._render_secao_acesso_restrito: erro tratado")
                     st.error(str(exc))
 
     if registros is not None and not registros.empty:
@@ -336,6 +337,7 @@ def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
                         st.success(config["sucesso_editar"])
                         st.rerun()
                     except Exception as exc:
+                        logging.exception("minha_conta._render_secao_acesso_restrito: erro tratado")
                         st.error(str(exc))
             if st.button(config["botao_inativar"], key=f"{campo_id}_inativar_{id_registro}"):
                 config["inativar"](slug, id_registro)
@@ -399,6 +401,7 @@ def _render_controle_acessos(slug):
                 st.success("Controle de acesso atualizado.")
                 st.rerun()
             except Exception as exc:
+                logging.exception("minha_conta._render_controle_acessos: erro tratado")
                 st.error(str(exc))
 
     with st.expander("Redefinir senha ou PIN deste usuario", expanded=False):

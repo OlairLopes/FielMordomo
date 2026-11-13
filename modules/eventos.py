@@ -1,3 +1,4 @@
+import logging
 import datetime
 
 import pandas as pd
@@ -44,7 +45,8 @@ TIPOS_EVENTO = [
 def _parse_data(valor, padrao=None):
     try:
         return datetime.date.fromisoformat(str(valor))
-    except Exception:
+    except (ValueError, TypeError):
+        logging.debug("eventos._parse_data: valor invalido ignorado")
         return padrao or _hoje()
 
 
@@ -110,6 +112,7 @@ def _render_form(slug):
                 st.success("Evento salvo com sucesso.")
                 st.rerun()
             except Exception as exc:
+                logging.exception("eventos._render_form: erro tratado")
                 st.error(str(exc))
 
 
@@ -246,6 +249,7 @@ def _render_lista(slug):
                     st.success("Evento atualizado.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("eventos._render_lista: erro tratado")
                     st.error(str(exc))
 
         if confirmar_exclusao(f"evento_{id_evento}", "Excluir evento selecionado"):

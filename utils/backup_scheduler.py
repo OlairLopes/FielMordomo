@@ -39,6 +39,7 @@ def _ler_ultima_execucao():
         texto = _MARCADOR_ULTIMA_EXECUCAO.read_text(encoding="utf-8").strip()
         return datetime.date.fromisoformat(texto)
     except Exception:
+        logging.exception("backup_scheduler._ler_ultima_execucao: erro tratado")
         return None
 
 

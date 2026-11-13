@@ -8,6 +8,7 @@ import streamlit as st
 
 from data.repository import listar_igrejas, obter_pix_igreja
 from utils.helpers import normalizar_data_digitada
+from utils.tokens import definir_idioma_pagina
 
 
 AZUL_PRINCIPAL = "#0B3A66"
@@ -105,814 +106,12 @@ def _marca_fielmordomo_html():
     return '<a class="fm-logo" href="?pagina=inicio" target="_top">FielMordomo</a>'
 
 
-def _css_base():
-    return f"""
-    <meta name="google" content="notranslate">
-    <meta name="translate" content="no">
-    <style>
-        * {{
-            box-sizing: border-box;
-            translate: no;
-        }}
 
-        html {{
-            scroll-behavior: smooth;
-            -webkit-locale: "pt-BR";
-        }}
 
-        body {{
-            margin: 0;
-        }}
 
-        .fm-page {{
-            width: 100%;
-            min-height: 100vh;
-            background: {CINZA_SUAVE};
-            color: {CINZA_TEXTO};
-            font-family: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-        }}
 
-        .fm-navbar-wrap {{
-            width: 100%;
-            background: rgba(255, 255, 255, 0.97);
-            border-bottom: 1px solid rgba(8, 42, 74, 0.08);
-            position: sticky;
-            top: 0;
-            z-index: 999;
-            backdrop-filter: blur(12px);
-        }}
 
-        .fm-navbar {{
-            max-width: 1180px;
-            margin: 0 auto;
-            padding: 16px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 24px;
-        }}
 
-        .fm-logo {{
-            font-size: 30px;
-            font-weight: 800;
-            color: {AZUL_ESCURO};
-            letter-spacing: -0.8px;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            white-space: nowrap;
-        }}
-
-        .fm-logo span {{
-            color: {DOURADO};
-            font-weight: 900;
-        }}
-
-        .fm-logo-img {{
-            display: block;
-            width: auto;
-            height: auto;
-            max-width: 240px;
-            max-height: 72px;
-            object-fit: contain;
-        }}
-
-        .fm-menu {{
-            display: flex;
-            align-items: center;
-            gap: 22px;
-            flex-wrap: wrap;
-        }}
-
-        .fm-menu a {{
-            color: {AZUL_ESCURO};
-            text-decoration: none;
-            font-size: 15px;
-            font-weight: 650;
-        }}
-
-        .fm-menu a:hover {{
-            color: {DOURADO};
-        }}
-
-        .fm-btn-login {{
-            background: {AZUL_PRINCIPAL};
-            color: white !important;
-            padding: 10px 18px;
-            border-radius: 10px;
-            box-shadow: 0 8px 20px rgba(11, 58, 102, 0.22);
-        }}
-
-        .fm-hero {{
-            max-width: 1180px;
-            margin: 0 auto;
-            padding: 68px 24px 44px;
-            display: grid;
-            grid-template-columns: 1.02fr 0.98fr;
-            gap: 54px;
-            align-items: center;
-            position: relative;
-        }}
-
-        .fm-hero::before {{
-            content: "";
-            position: absolute;
-            left: -80px;
-            top: 105px;
-            width: 360px;
-            height: 360px;
-            background:
-                radial-gradient(circle at center, rgba(11,58,102,0.10), transparent 60%),
-                linear-gradient(135deg, rgba(212,175,55,0.08), transparent);
-            border-radius: 50%;
-            z-index: 0;
-        }}
-
-        .fm-hero-text {{
-            position: relative;
-            z-index: 1;
-        }}
-
-        .fm-eyebrow {{
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: {AZUL_CLARO};
-            color: {AZUL_PRINCIPAL};
-            border: 1px solid rgba(11,58,102,0.12);
-            padding: 7px 12px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 750;
-            margin-bottom: 18px;
-        }}
-
-        .fm-hero h1 {{
-            color: {AZUL_ESCURO};
-            font-size: 48px;
-            line-height: 1.08;
-            letter-spacing: -1.6px;
-            margin: 0 0 22px;
-            font-weight: 850;
-        }}
-
-        .fm-hero p {{
-            color: #405064;
-            font-size: 18px;
-            line-height: 1.7;
-            margin-bottom: 30px;
-            max-width: 610px;
-        }}
-
-        .fm-actions {{
-            display: flex;
-            gap: 14px;
-            flex-wrap: wrap;
-            align-items: center;
-        }}
-
-        .fm-primary {{
-            background: {AZUL_PRINCIPAL};
-            color: white !important;
-            text-decoration: none;
-            padding: 14px 22px;
-            border-radius: 12px;
-            font-weight: 750;
-            box-shadow: 0 12px 28px rgba(11,58,102,0.24);
-            display: inline-flex;
-            gap: 10px;
-            align-items: center;
-        }}
-
-        .fm-secondary {{
-            background: white;
-            color: {AZUL_PRINCIPAL} !important;
-            text-decoration: none;
-            padding: 13px 22px;
-            border-radius: 12px;
-            font-weight: 750;
-            border: 1px solid rgba(11,58,102,0.22);
-            display: inline-flex;
-            gap: 10px;
-            align-items: center;
-        }}
-
-        .fm-dashboard {{
-            background: linear-gradient(145deg, {AZUL_ESCURO}, {AZUL_PROFUNDO});
-            border-radius: 24px;
-            padding: 14px;
-            box-shadow: 0 24px 55px rgba(8,42,74,0.24);
-            position: relative;
-        }}
-
-        .fm-dashboard-inner {{
-            background: #ffffff;
-            border-radius: 16px;
-            overflow: hidden;
-            min-height: 360px;
-            display: grid;
-            grid-template-columns: 150px 1fr;
-        }}
-
-        .fm-sidebar {{
-            background: linear-gradient(180deg, {AZUL_ESCURO}, {AZUL_PROFUNDO});
-            color: white;
-            padding: 18px 14px;
-        }}
-
-        .fm-side-logo {{
-            font-weight: 800;
-            font-size: 15px;
-            margin-bottom: 22px;
-        }}
-
-        .fm-side-item {{
-            font-size: 12px;
-            padding: 8px 6px;
-            color: rgba(255,255,255,0.82);
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }}
-
-        .fm-main-panel {{
-            padding: 18px;
-            background: #F8FAFC;
-        }}
-
-        .fm-panel-top {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }}
-
-        .fm-panel-top h3 {{
-            color: {AZUL_ESCURO};
-            font-size: 18px;
-            margin: 0;
-        }}
-
-        .fm-kpis {{
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-bottom: 12px;
-        }}
-
-        .fm-kpi {{
-            background: white;
-            border-radius: 10px;
-            padding: 12px;
-            border: 1px solid #EDF1F5;
-        }}
-
-        .fm-kpi small {{
-            color: #64748B;
-            font-size: 10px;
-        }}
-
-        .fm-kpi strong {{
-            display: block;
-            color: {AZUL_PRINCIPAL};
-            font-size: 15px;
-            margin-top: 4px;
-        }}
-
-        .fm-charts {{
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
-        }}
-
-        .fm-chart-box {{
-            background: white;
-            border-radius: 12px;
-            padding: 14px;
-            border: 1px solid #EDF1F5;
-            min-height: 118px;
-        }}
-
-        .fm-chart-title {{
-            color: {AZUL_ESCURO};
-            font-size: 12px;
-            font-weight: 800;
-            margin-bottom: 12px;
-        }}
-
-        .fm-bars {{
-            display: flex;
-            gap: 10px;
-            align-items: end;
-            height: 70px;
-        }}
-
-        .fm-bar {{
-            width: 15px;
-            border-radius: 5px 5px 0 0;
-            background: {AZUL_PRINCIPAL};
-        }}
-
-        .fm-bar.gold {{
-            background: {DOURADO};
-        }}
-
-        .fm-donut {{
-            width: 82px;
-            height: 82px;
-            border-radius: 50%;
-            background: conic-gradient({AZUL_PRINCIPAL} 0 58%, {DOURADO} 58% 80%, #9DB6D3 80% 92%, #D7E3F0 92% 100%);
-            margin: 4px auto;
-            position: relative;
-        }}
-
-        .fm-donut::after {{
-            content: "";
-            position: absolute;
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            background: white;
-            left: 22px;
-            top: 22px;
-        }}
-
-        .fm-table {{
-            background: white;
-            border-radius: 12px;
-            padding: 12px;
-            border: 1px solid #EDF1F5;
-        }}
-
-        .fm-table-line {{
-            display: grid;
-            grid-template-columns: 0.8fr 1.8fr 1fr 1fr;
-            gap: 8px;
-            font-size: 10px;
-            padding: 6px 0;
-            border-bottom: 1px solid #EEF2F6;
-            color: #475569;
-        }}
-
-        .fm-cards {{
-            max-width: 1180px;
-            margin: 0 auto;
-            padding: 18px 24px 36px;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 22px;
-        }}
-
-        .fm-card {{
-            background: white;
-            border-radius: 18px;
-            padding: 26px;
-            border: 1px solid rgba(8,42,74,0.07);
-            box-shadow: 0 14px 34px rgba(8,42,74,0.08);
-        }}
-
-        .fm-icon {{
-            width: 54px;
-            height: 54px;
-            border-radius: 16px;
-            background: {AZUL_CLARO};
-            color: {AZUL_PRINCIPAL};
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 25px;
-            margin-bottom: 16px;
-        }}
-
-        .fm-card h3 {{
-            color: {AZUL_ESCURO};
-            margin: 0 0 10px;
-            font-size: 20px;
-        }}
-
-        .fm-card p {{
-            color: #516173;
-            line-height: 1.65;
-            margin: 0;
-            font-size: 15px;
-        }}
-
-        .fm-section {{
-            background: white;
-            padding: 58px 24px;
-        }}
-
-        .fm-section-inner {{
-            max-width: 1180px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 60px;
-        }}
-
-        .fm-section h2 {{
-            color: {AZUL_ESCURO};
-            font-size: 30px;
-            margin: 0 0 16px;
-        }}
-
-        .fm-section p {{
-            color: #4B5563;
-            line-height: 1.75;
-            font-size: 16px;
-        }}
-
-        .fm-list {{
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 13px;
-            margin-top: 18px;
-        }}
-
-        .fm-list div {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #334155;
-            font-weight: 650;
-        }}
-
-        .fm-check {{
-            width: 22px;
-            height: 22px;
-            background: {AZUL_PRINCIPAL};
-            color: white;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            flex-shrink: 0;
-        }}
-
-        .fm-cta {{
-            background: linear-gradient(135deg, {AZUL_ESCURO}, {AZUL_PROFUNDO});
-            padding: 48px 24px;
-            color: white;
-        }}
-
-        .fm-cta-inner {{
-            max-width: 1180px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 30px;
-        }}
-
-        .fm-cta h2 {{
-            color: white;
-            margin: 0 0 8px;
-            font-size: 30px;
-        }}
-
-        .fm-cta p {{
-            color: rgba(255,255,255,0.82);
-            margin: 0;
-            font-size: 16px;
-        }}
-
-        .fm-gold-btn {{
-            background: {DOURADO};
-            color: {AZUL_PROFUNDO} !important;
-            text-decoration: none;
-            padding: 14px 24px;
-            border-radius: 12px;
-            font-weight: 800;
-            white-space: nowrap;
-        }}
-
-        .fm-footer {{
-            background: {AZUL_PROFUNDO};
-            color: rgba(255,255,255,0.78);
-            padding: 22px 24px;
-            border-top: 1px solid rgba(255,255,255,0.08);
-        }}
-
-        .fm-footer-inner {{
-            max-width: 1180px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-            flex-wrap: wrap;
-            font-size: 14px;
-        }}
-
-        .fm-footer a {{
-            color: rgba(255,255,255,0.78);
-            text-decoration: none;
-            margin-left: 18px;
-        }}
-
-        .fm-footer a:hover {{
-            color: {DOURADO};
-        }}
-
-        .fm-simple-page {{
-            max-width: 920px;
-            margin: 0 auto;
-            padding: 58px 24px 80px;
-        }}
-
-        .fm-simple-card {{
-            background: white;
-            border-radius: 20px;
-            padding: 38px;
-            box-shadow: 0 14px 38px rgba(8,42,74,0.08);
-            border: 1px solid rgba(8,42,74,0.08);
-        }}
-
-        .fm-simple-card h1 {{
-            color: {AZUL_ESCURO};
-            font-size: 36px;
-            margin-top: 0;
-        }}
-
-        .fm-simple-card h2 {{
-            color: {AZUL_PRINCIPAL};
-            font-size: 22px;
-            margin-top: 26px;
-        }}
-
-        .fm-simple-card p, .fm-simple-card li {{
-            color: #4B5563;
-            line-height: 1.75;
-            font-size: 16px;
-        }}
-
-        .fm-update-page {{
-            max-width: 920px;
-            margin: 0 auto;
-            padding: 14px 24px 6px;
-        }}
-
-        .fm-page.fm-page-update {{
-            min-height: auto;
-            background: {CINZA_SUAVE};
-        }}
-
-        .fm-update-card {{
-            background: white;
-            border-radius: 18px;
-            padding: 16px 24px;
-            box-shadow: 0 10px 26px rgba(8,42,74,0.06);
-            border: 1px solid rgba(8,42,74,0.08);
-            margin-bottom: 0;
-        }}
-
-        .fm-update-card h1 {{
-            color: {AZUL_ESCURO};
-            font-size: 26px;
-            margin: 0 0 6px;
-        }}
-
-        .fm-update-card p {{
-            color: #4B5563;
-            line-height: 1.55;
-            font-size: 15px;
-            margin: 0;
-        }}
-
-        @media (max-width: 900px) {{
-            .fm-navbar {{
-                align-items: flex-start;
-                flex-direction: column;
-            }}
-
-            .fm-logo-img {{
-                max-width: 190px;
-                max-height: 58px;
-            }}
-
-            .fm-hero {{
-                grid-template-columns: 1fr;
-                padding-top: 42px;
-            }}
-
-            .fm-hero h1 {{
-                font-size: 38px;
-            }}
-
-            .fm-cards {{
-                grid-template-columns: 1fr;
-            }}
-
-            .fm-section-inner {{
-                grid-template-columns: 1fr;
-            }}
-
-            .fm-cta-inner {{
-                flex-direction: column;
-                align-items: flex-start;
-            }}
-
-            .fm-dashboard-inner {{
-                grid-template-columns: 1fr;
-            }}
-
-            .fm-sidebar {{
-                display: none;
-            }}
-
-            .fm-kpis {{
-                grid-template-columns: repeat(2, 1fr);
-            }}
-
-            .fm-charts {{
-                grid-template-columns: 1fr;
-            }}
-        }}
-    </style>
-    """
-
-
-def _navbar():
-    return f"""
-    <div class="fm-navbar-wrap">
-        <div class="fm-navbar">
-            {_marca_fielmordomo_html()}
-
-            <div class="fm-menu">
-                <a href="?pagina=inicio#sobre" target="_top">Sobre</a>
-                <a href="?pagina=inicio#recursos" target="_top">Recursos</a>
-                <a href="?pagina=agenda" target="_top">Agenda</a>
-                <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
-                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
-                <a href="?pagina=contato" target="_top">Contato</a>
-                <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
-                <a class="fm-btn-login" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
-            </div>
-        </div>
-    </div>
-    """
-
-
-def _footer():
-    return """
-    <div class="fm-footer">
-        <div class="fm-footer-inner">
-            <div>FielMordomo © 2026 — Sistema de Gestão Financeira para Igrejas.</div>
-            <div>
-                <a href="?pagina=contato" target="_top">Contato</a>
-                <a href="?pagina=agenda" target="_top">Agenda</a>
-                <a href="?pagina=atualizar-cadastro" target="_top">Atualizar cadastro</a>
-                <a href="?pagina=pedidos-oracao" target="_top">Pedidos de oração</a>
-                <a href="?pagina=privacidade" target="_top">Privacidade LGPD</a>
-                <a href="?pagina=termos" target="_top">Termos de Uso</a>
-            </div>
-        </div>
-    </div>
-    """
-
-
-def _home():
-    return """
-    <section class="fm-hero">
-        <div class="fm-hero-text">
-            <div class="fm-eyebrow">✦ Gestão Financeira para Igrejas</div>
-
-            <h1>Gestão financeira simples, segura e organizada para Igrejas</h1>
-
-            <p>
-                Controle dízimos, ofertas, campanhas, missões, despesas, comprovantes
-                e relatórios em uma única plataforma, com mais clareza para a tesouraria
-                e mais transparência para a liderança.
-            </p>
-
-            <div class="fm-actions">
-                <a class="fm-primary" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
-                <a class="fm-secondary" href="#sobre">ⓘ Conheça o FielMordomo</a>
-            </div>
-        </div>
-
-        <div class="fm-dashboard">
-            <div class="fm-dashboard-inner">
-                <div class="fm-sidebar">
-                    <div class="fm-side-logo">FielMordomo</div>
-                    <div class="fm-side-item">▣ Dashboard</div>
-                    <div class="fm-side-item">◈ Contribuições</div>
-                    <div class="fm-side-item">◇ Despesas</div>
-                    <div class="fm-side-item">▤ Comprovantes</div>
-                    <div class="fm-side-item">▥ Relatórios</div>
-                    <div class="fm-side-item">⚙ Configurações</div>
-                </div>
-
-                <div class="fm-main-panel">
-                    <div class="fm-panel-top">
-                        <h3>Dashboard</h3>
-                        <small>Igreja Exemplo ⌄</small>
-                    </div>
-
-                    <div class="fm-kpis">
-                        <div class="fm-kpi"><small>Dízimos e Ofertas</small><strong>R$ 45.320,50</strong></div>
-                        <div class="fm-kpi"><small>Campanhas e Missões</small><strong>R$ 12.680,75</strong></div>
-                        <div class="fm-kpi"><small>Despesas</small><strong>R$ 18.540,30</strong></div>
-                        <div class="fm-kpi"><small>Saldo do Período</small><strong>R$ 39.460,95</strong></div>
-                    </div>
-
-                    <div class="fm-charts">
-                        <div class="fm-chart-box">
-                            <div class="fm-chart-title">Receitas x Despesas</div>
-                            <div class="fm-bars">
-                                <div class="fm-bar" style="height:55px"></div>
-                                <div class="fm-bar gold" style="height:32px"></div>
-                                <div class="fm-bar" style="height:48px"></div>
-                                <div class="fm-bar gold" style="height:28px"></div>
-                                <div class="fm-bar" style="height:64px"></div>
-                                <div class="fm-bar gold" style="height:36px"></div>
-                                <div class="fm-bar" style="height:58px"></div>
-                                <div class="fm-bar gold" style="height:30px"></div>
-                            </div>
-                        </div>
-
-                        <div class="fm-chart-box">
-                            <div class="fm-chart-title">Distribuição das Receitas</div>
-                            <div class="fm-donut"></div>
-                        </div>
-                    </div>
-
-                    <div class="fm-table">
-                        <div class="fm-table-line"><strong>Data</strong><strong>Descrição</strong><strong>Categoria</strong><strong>Valor</strong></div>
-                        <div class="fm-table-line"><span>10/06</span><span>Dízimo - João Silva</span><span>Dízimos</span><span>R$ 250,00</span></div>
-                        <div class="fm-table-line"><span>10/06</span><span>Oferta - Culto</span><span>Ofertas</span><span>R$ 180,00</span></div>
-                        <div class="fm-table-line"><span>09/06</span><span>Conta de Luz</span><span>Despesa</span><span>R$ 320,00</span></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="fm-cards">
-        <div class="fm-card">
-            <div class="fm-icon">▤</div>
-            <h3>Controle Financeiro</h3>
-            <p>Gerencie dízimos, ofertas, campanhas, missões e despesas com praticidade e confiança.</p>
-        </div>
-
-        <div class="fm-card">
-            <div class="fm-icon">▥</div>
-            <h3>Relatórios Claros</h3>
-            <p>Relatórios completos e visuais que facilitam a análise e a prestação de contas à liderança.</p>
-        </div>
-
-        <div class="fm-card">
-            <div class="fm-icon">♢</div>
-            <h3>Segurança e Organização</h3>
-            <p>Dados protegidos, acessos controlados e informações organizadas para maior transparência.</p>
-        </div>
-    </section>
-
-    <section class="fm-section" id="sobre">
-        <div class="fm-section-inner">
-            <div>
-                <h2>Sobre o FielMordomo</h2>
-                <p>
-                    O FielMordomo é uma plataforma de gestão financeira desenvolvida para apoiar igrejas,
-                    congregações e ministérios na boa administração dos recursos confiados à sua responsabilidade.
-                </p>
-                <p>
-                    O sistema auxilia tesourarias, secretarias, pastores e equipes administrativas no controle
-                    de lançamentos, emissão de comprovantes, acompanhamento de relatórios e organização das
-                    informações financeiras da igreja.
-                </p>
-            </div>
-
-            <div id="recursos">
-                <h2>Recursos principais</h2>
-                <div class="fm-list">
-                    <div><span class="fm-check">✓</span> Cadastro de membros e contribuintes</div>
-                    <div><span class="fm-check">✓</span> Controle de dízimos, ofertas, campanhas e missões</div>
-                    <div><span class="fm-check">✓</span> Registro de despesas e saídas</div>
-                    <div><span class="fm-check">✓</span> Emissão de comprovantes</div>
-                    <div><span class="fm-check">✓</span> Relatórios financeiros</div>
-                    <div><span class="fm-check">✓</span> Backup e recuperação de dados</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="fm-cta">
-        <div class="fm-cta-inner">
-            <div>
-                <h2>Pronto para organizar a gestão financeira da sua igreja?</h2>
-                <p>
-                    Mais controle, mais transparência e mais tempo para o que realmente importa:
-                    o Reino de Deus.
-                </p>
-            </div>
-
-            <a class="fm-gold-btn" href="?pagina=login" target="_top">🔒 Acessar Sistema</a>
-        </div>
-    </section>
-    """
 
 
 def _contato():
@@ -1229,6 +428,7 @@ def _render_atualizar_cadastro_publico():
                         },
                     )
                 except Exception as exc:
+                    logging.exception("institucional._render_atualizar_cadastro_publico: erro tratado")
                     st.error(str(exc))
                 else:
                     st.success("Pre-cadastro enviado para analise da secretaria.")
@@ -1327,6 +527,7 @@ def _render_atualizar_cadastro_publico():
                     },
                 )
             except Exception as exc:
+                logging.exception("institucional._render_atualizar_cadastro_publico: erro tratado")
                 st.error(str(exc))
             else:
                 st.success("Cadastro atualizado com sucesso.")
@@ -1412,7 +613,7 @@ def _css_base():
             text-decoration: none;
             white-space: nowrap;
         }}
-        .fm-menu a:hover {{ color: var(--fm-gold); }}
+        .fm-menu a:hover {{ color: var(--fm-navy); text-decoration: underline; text-decoration-color: var(--fm-gold); text-decoration-thickness: 2px; text-underline-offset: 4px; }}
         .fm-dropdown {{ position: relative; }}
         .fm-dropdown summary {{
             cursor: pointer;
@@ -1423,7 +624,7 @@ def _css_base():
             white-space: nowrap;
         }}
         .fm-dropdown summary::-webkit-details-marker {{ display: none; }}
-        .fm-dropdown summary:hover {{ color: var(--fm-gold); }}
+        .fm-dropdown summary:hover {{ color: var(--fm-navy); text-decoration: underline; text-decoration-color: var(--fm-gold); text-decoration-thickness: 2px; text-underline-offset: 4px; }}
         .fm-dropdown-itens {{
             position: absolute;
             right: 0;
@@ -1522,7 +723,7 @@ def _css_base():
             font-weight: 750;
             text-decoration: none;
         }}
-        .fm-primary {{ background: var(--fm-red); color: #FFFFFF; }}
+        .fm-primary {{ background: #D62F3D; color: #FFFFFF; }}  /* contraste AA com texto branco */
         .fm-secondary {{ border: 1px solid #6F82A3; color: #FFFFFF; background: transparent; }}
 
         .fm-product-stage {{
@@ -1579,6 +780,14 @@ def _css_base():
         .fm-bars-new {{ height: 112px; display: flex; align-items: flex-end; gap: 11px; border-bottom: 1px solid var(--fm-line); }}
         .fm-bars-new i {{ flex: 1; min-width: 8px; background: #1D9E75; border-radius: 3px 3px 0 0; }}
         .fm-bars-new i:nth-child(even) {{ background: var(--fm-red); }}
+        .fm-bars-new > i:nth-child(1) {{ height: 45%; }}
+        .fm-bars-new > i:nth-child(2) {{ height: 26%; }}
+        .fm-bars-new > i:nth-child(3) {{ height: 62%; }}
+        .fm-bars-new > i:nth-child(4) {{ height: 31%; }}
+        .fm-bars-new > i:nth-child(5) {{ height: 78%; }}
+        .fm-bars-new > i:nth-child(6) {{ height: 38%; }}
+        .fm-bars-new > i:nth-child(7) {{ height: 68%; }}
+        .fm-bars-new > i:nth-child(8) {{ height: 29%; }}
         .fm-ring {{ width: 120px; height: 120px; margin: 6px auto 0; border: 22px solid #1D9E75; border-right-color: #F2C94C; border-bottom-color: var(--fm-red); border-radius: 50%; }}
 
         .fm-intro-band {{ padding: 44px 24px; border-bottom: 1px solid var(--fm-line); background: #FFFFFF; }}
@@ -1760,7 +969,7 @@ def _navbar():
     <header class="fm-navbar-wrap">
         <nav class="fm-navbar" aria-label="Navegação principal">
             {_marca_fielmordomo_html()}
-            <input type="checkbox" id="fm-menu-toggle" class="fm-menu-toggle-input">
+            <input type="checkbox" id="fm-menu-toggle" class="fm-menu-toggle-input" aria-label="Abrir ou fechar menu">
             <label for="fm-menu-toggle" class="fm-menu-toggle" aria-label="Abrir menu">
                 <span></span><span></span><span></span>
             </label>
@@ -1840,10 +1049,10 @@ def _home():
                         <div class="fm-product-panel">
                             <h3>Movimento financeiro</h3>
                             <div class="fm-bars-new">
-                                <i style="height:45%"></i><i style="height:26%"></i>
-                                <i style="height:62%"></i><i style="height:31%"></i>
-                                <i style="height:78%"></i><i style="height:38%"></i>
-                                <i style="height:68%"></i><i style="height:29%"></i>
+                                <i></i><i></i>
+                                <i></i><i></i>
+                                <i></i><i></i>
+                                <i></i><i></i>
                             </div>
                         </div>
                         <div class="fm-product-panel"><h3>Distribuição das receitas</h3><div class="fm-ring"></div></div>
@@ -1971,6 +1180,7 @@ def _fmt_data_evento(valor):
     try:
         return datetime.date.fromisoformat(str(valor)).strftime("%d/%m/%Y")
     except Exception:
+        logging.debug("institucional._fmt_data_evento: valor invalido ignorado")
         return str(valor or "")
 
 
@@ -2246,6 +1456,7 @@ def _render_agenda_publica():
                 else:
                     st.error("CPF não localizado no cadastro de membros ativos desta igreja.")
             except Exception as exc:
+                logging.exception("institucional._render_agenda_publica: erro tratado")
                 st.error(str(exc))
 
     if incluir_membros:
@@ -2262,6 +1473,7 @@ def _render_agenda_publica():
 
 
 def render_institucional():
+    definir_idioma_pagina()
     st.markdown(
         """
         <meta name="google" content="notranslate">

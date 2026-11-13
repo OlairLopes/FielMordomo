@@ -1,3 +1,4 @@
+import logging
 import datetime
 
 import pandas as pd
@@ -338,6 +339,7 @@ def _render_chamada(slug):
                 id_reuniao=int(reuniao_atual["id_reuniao"]) if reuniao_atual is not None else None,
             )
         except Exception as ex:
+            logging.exception("obreiros._render_chamada: erro tratado")
             st.error(str(ex))
         else:
             st.success("Chamada salva com sucesso.")

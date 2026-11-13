@@ -206,6 +206,7 @@ def _criar_igreja():
                     st.rerun()
 
                 except Exception as ex:
+                    logging.exception("painel._criar_igreja: erro tratado")
                     if "UNIQUE" in str(ex):
                         st.error(f"Slug '{slug}' já existe. Escolha outro identificador.")
                     else:

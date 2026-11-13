@@ -11,6 +11,7 @@ from data.repository import (
     rejeitar_contribuicao_online, salvar_pix_igreja, salvar_pix_qr_igreja,
 )
 from modules.institucional import render_barra_publica
+from utils.tokens import definir_idioma_pagina
 from modules.lancamentos import CATEGORIAS_ENTRADA
 from modules.pix_brcode import gerar_payload_pix, gerar_qr_png
 from utils.helpers import formatar_moeda, slug_da_sessao
@@ -35,7 +36,6 @@ def _chave_gerado(slug):
 
 _CSS_CONTRIBUICAO = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap');
 :root {
     --fm-navy: #061B44;
     --fm-ink: #10213A;
@@ -73,6 +73,8 @@ div[data-testid="stFormSubmitButton"] button { background: var(--fm-navy); color
 div[data-testid="stFormSubmitButton"] button:hover { background: var(--fm-navy); color: var(--fm-gold);
                                                     border-color: var(--fm-gold); }
 div[data-testid="stFormSubmitButton"] button * { color: #FFFFFF !important; }
+/* O campo aceita digitacao; os botoes +/- do Streamlit ficam sem nome para leitores de tela. */
+[data-testid="stNumberInputStepDown"], [data-testid="stNumberInputStepUp"] { display: none !important; }
 div[data-testid="stFormSubmitButton"] button:hover * { color: var(--fm-gold) !important; }
 .fm-aviso { background: #FFFFFF; border: 1px solid var(--fm-line); border-left: 4px solid var(--fm-gold);
             color: var(--fm-ink); border-radius: 12px; padding: .9rem 1rem; margin: .5rem 0 1rem; }
@@ -87,6 +89,7 @@ def _passo(numero, titulo):
 
 def pagina_publica(slug):
     """Pagina publica de contribuicao (?contribuir=<slug>), sem login."""
+    definir_idioma_pagina()
     render_barra_publica()
     st.markdown(_CSS_CONTRIBUICAO, unsafe_allow_html=True)
     igreja = buscar_igreja_por_slug(slug)

@@ -113,7 +113,8 @@ def _fmt_data(valor):
     try:
         data = _parse_data(valor)
         return data.strftime("%d/%m/%Y") if data else str(valor or "")
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
+        logging.debug("ebd._fmt_data: erro tratado (valor invalido ignorado)")
         return str(valor or "")
 
 
@@ -129,7 +130,7 @@ def _parse_data(valor):
         data = pd.to_datetime(valor, errors="coerce")
         if pd.notna(data):
             return data.date()
-    except Exception:
+    except (ValueError, TypeError):
         logging.exception("Erro ignorado silenciosamente")
 
     texto = str(valor or "").strip()
@@ -138,7 +139,7 @@ def _parse_data(valor):
     for formato in ("%Y-%m-%d", "%d/%m/%Y"):
         try:
             return datetime.datetime.strptime(texto, formato).date()
-        except Exception:
+        except (ValueError, TypeError):
             logging.exception("Erro ignorado silenciosamente")
     return None
 
@@ -147,7 +148,8 @@ def _data_iso(valor):
     try:
         data = _parse_data(valor)
         return data.isoformat() if data else ""
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
+        logging.debug("ebd._data_iso: erro tratado (valor invalido ignorado)")
         return ""
 
 
@@ -219,14 +221,16 @@ def _diagnostico_matriculas_na_data(matriculas, data_referencia):
 def _pct(valor):
     try:
         return f"{float(valor):.1f}%"
-    except Exception:
+    except (ValueError, TypeError):
+        logging.debug("ebd._pct: erro tratado (valor invalido ignorado)")
         return "0.0%"
 
 
 def _moeda(valor):
     try:
         return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
+    except (ValueError, TypeError):
+        logging.debug("ebd._moeda: erro tratado (valor invalido ignorado)")
         return "R$ 0,00"
 
 
@@ -234,14 +238,15 @@ def _int_seguro(valor, padrao=0):
     try:
         if pd.isna(valor):
             return int(padrao)
-    except Exception:
+    except (ValueError, TypeError):
         logging.exception("Erro ignorado silenciosamente")
     try:
         texto = str(valor).strip()
         if not texto:
             return int(padrao)
         return int(float(texto.replace(",", ".")))
-    except Exception:
+    except (ValueError, TypeError, OverflowError):
+        logging.debug("ebd._int_seguro: erro tratado (valor invalido ignorado)")
         return int(padrao)
 
 
@@ -249,14 +254,15 @@ def _float_seguro(valor, padrao=0.0):
     try:
         if pd.isna(valor):
             return float(padrao)
-    except Exception:
+    except (ValueError, TypeError):
         logging.exception("Erro ignorado silenciosamente")
     try:
         texto = str(valor).strip()
         if not texto:
             return float(padrao)
         return float(texto.replace(".", "").replace(",", ".") if "," in texto else texto)
-    except Exception:
+    except (ValueError, TypeError, OverflowError):
+        logging.debug("ebd._float_seguro: erro tratado (valor invalido ignorado)")
         return float(padrao)
 
 
@@ -397,10 +403,10 @@ def _botao_whatsapp(label, telefone, mensagem, key):
         st.caption(f"{label}: informe um WhatsApp valido para gerar o aviso.")
         return
     st.markdown(
-        f'<a href="{html.escape(link, quote=True)}" target="_blank" '
-        'style="display:inline-block;padding:0.55rem 0.85rem;border-radius:10px;'
+        '<style>.ebd-botao-whatsapp{display:inline-block;padding:0.55rem 0.85rem;border-radius:10px;'
         'background:#1D9E75;color:white;text-decoration:none;font-weight:700;'
-        'box-shadow:0 8px 18px rgba(29,158,117,.25)">'
+        'box-shadow:0 8px 18px rgba(29,158,117,.25)}</style>'
+        f'<a href="{html.escape(link, quote=True)}" target="_blank" class="ebd-botao-whatsapp">'
         f'{html.escape(label)}</a>',
         unsafe_allow_html=True,
     )
@@ -570,7 +576,8 @@ def _grafico_desempenho_professores(dados):
 def _valor_grafico_ebd(indicador, valor):
     try:
         numero = float(valor)
-    except Exception:
+    except (ValueError, TypeError):
+        logging.exception("ebd._valor_grafico_ebd: erro tratado")
         return str(valor)
     inteiro = int(round(numero))
     if "Oferta" in str(indicador):
@@ -582,6 +589,7 @@ def _dispositivo_movel():
     try:
         user_agent = str(st.context.headers.get("user-agent", "") or "")
     except Exception:
+        logging.exception("ebd._dispositivo_movel: erro tratado")
         user_agent = ""
     return bool(re.search(r"Mobi|Android|iPhone|iPad|iPod|Tablet", user_agent, re.IGNORECASE))
 
@@ -785,19 +793,22 @@ def _legenda_classes_html(cores_por_classe):
     # canvas do Plotly, entao nunca sobrepoe as barras, e se reorganiza
     # sozinha quando a tela e redimensionada ou girada (portrait/landscape).
     itens = "".join(
-        f'<span style="display:inline-flex;align-items:center;gap:6px;'
-        f'margin:4px 12px;">'
-        f'<span style="width:12px;height:12px;border-radius:3px;'
-        f'background:{html.escape(cor)};display:inline-block;flex:none;"></span>'
-        f'<span style="font-size:13px;color:#334155;">{html.escape(str(classe))}</span>'
+        f'<span class="ebd-legenda-item">'
+        f'<span class="ebd-legenda-cor" style="background:{html.escape(cor)}"></span>'
+        f'<span class="ebd-legenda-texto">{html.escape(str(classe))}</span>'
         f'</span>'
         for classe, cor in cores_por_classe.items()
     )
     st.markdown(
-        f'<div style="display:flex;flex-wrap:wrap;justify-content:center;'
-        f'background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;'
-        f'box-shadow:0 6px 16px rgba(15,23,42,0.08);'
-        f'padding:8px 6px;margin:-10px 0 18px;">{itens}</div>',
+        '<style>'
+        '.ebd-legenda{display:flex;flex-wrap:wrap;justify-content:center;background:#FFFFFF;'
+        'border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 6px 16px rgba(15,23,42,0.08);'
+        'padding:8px 6px;margin:-10px 0 18px;}'
+        '.ebd-legenda-item{display:inline-flex;align-items:center;gap:6px;margin:4px 12px;}'
+        '.ebd-legenda-cor{width:12px;height:12px;border-radius:3px;display:inline-block;flex:none;}'
+        '.ebd-legenda-texto{font-size:13px;color:#334155;}'
+        '</style>'
+        f'<div class="ebd-legenda">{itens}</div>',
         unsafe_allow_html=True,
     )
 
@@ -994,6 +1005,7 @@ def _importar_escala_planilha(slug, arquivo, df_classes):
         else:
             planilha = pd.read_excel(arquivo)
     except Exception as exc:
+        logging.exception("ebd._importar_escala_planilha: erro tratado")
         st.error(f"Nao foi possivel ler a planilha: {exc}")
         return
 
@@ -1082,6 +1094,7 @@ def _importar_escala_planilha(slug, arquivo, df_classes):
             )
             salvas += 1
         except Exception as exc:
+            logging.exception("ebd._importar_escala_planilha: erro tratado")
             erros.append(f"Linha {idx + 2}: {exc}")
 
     if salvas:
@@ -1322,6 +1335,7 @@ def _render_classes(slug):
                     st.success("Classe salva com sucesso.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("ebd._render_classes: erro tratado")
                     st.error(str(exc))
 
     df_classes_ativas = listar_ebd_classes(slug)
@@ -1376,6 +1390,7 @@ def _render_classes(slug):
                         st.success("Matrícula salva.")
                         st.rerun()
                     except Exception as exc:
+                        logging.exception("ebd._render_classes: erro tratado")
                         st.error(str(exc))
 
     filtro_label = st.selectbox(
@@ -1458,6 +1473,7 @@ def _render_classes(slug):
                             st.success("Matrícula atualizada.")
                             st.rerun()
                         except Exception as exc:
+                            logging.exception("ebd._render_classes: erro tratado")
                             st.error(str(exc))
 
         ativas = matriculas[matriculas["ativa"] == 1]
@@ -1587,6 +1603,7 @@ def _render_chamada(slug, id_classe_fixo=None):
     try:
         _render_chamada_conteudo(slug, id_classe_fixo)
     except Exception as exc:
+        logging.exception("ebd._render_chamada: erro tratado")
         st.error(
             "Nao foi possivel carregar a chamada da Escola Bíblica. "
             f"Tipo do erro: {type(exc).__name__}. Detalhe: {exc}"
@@ -1872,6 +1889,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
                 st.success("Chamada salva.")
                 st.rerun()
             except Exception as exc:
+                logging.exception("ebd._render_chamada_conteudo: erro tratado")
                 st.error(str(exc))
 
 
@@ -2178,6 +2196,7 @@ def _render_escala_editar(slug, escala, op_classes, opcoes_item):
                     st.success("Escala atualizada.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("ebd._render_escala_editar: erro tratado")
                     st.error(str(exc))
 
 
@@ -2252,6 +2271,7 @@ def _render_escala_duplicar(slug, escala, opcoes_item):
                 st.success("Escala duplicada.")
                 st.rerun()
             except Exception as exc:
+                logging.exception("ebd._render_escala_duplicar: erro tratado")
                 st.error(str(exc))
 
 
@@ -2324,6 +2344,7 @@ def _render_professores_classe_editar(slug, quadro, id_classe_contexto, funcoes_
                     st.success("Professor atualizado.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("ebd._render_professores_classe_editar: erro tratado")
                     st.error(str(exc))
 
 
@@ -2401,6 +2422,7 @@ def _render_professores_classe(slug, df_classes):
                     st.success("Professor cadastrado.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("ebd._render_professores_classe: erro tratado")
                     st.error(str(exc))
 
     if not quadro.empty:
@@ -2681,6 +2703,7 @@ def _render_escala(slug):
                             st.success("Escala salva.")
                         st.rerun()
                     except Exception as exc:
+                        logging.exception("ebd._render_escala: erro tratado")
                         st.error(str(exc))
 
         with st.expander("Importar escala do Excel"):
@@ -2955,6 +2978,7 @@ def _render_secretarios(slug):
                     st.success("Secretario da Escola Bíblica cadastrado.")
                     st.rerun()
                 except Exception as exc:
+                    logging.exception("ebd._render_secretarios: erro tratado")
                     st.error(str(exc))
 
     df = listar_ebd_secretarios(slug)
@@ -3033,6 +3057,7 @@ def _render_secretarios(slug):
                 st.success("Secretario da Escola Bíblica atualizado.")
                 st.rerun()
             except Exception as exc:
+                logging.exception("ebd._render_secretarios: erro tratado")
                 st.error(str(exc))
 
     if confirmar_exclusao(f"inativar_secretario_ebd_{id_secretario}", "Inativar secretario selecionado"):
@@ -3054,6 +3079,7 @@ def render():
         try:
             fn(*args)
         except Exception as exc:
+            logging.exception("ebd.render: erro tratado")
             st.error(
                 f"Não foi possível carregar {titulo}. "
                 f"Tipo do erro: {type(exc).__name__}. Detalhe: {exc}"

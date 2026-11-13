@@ -1317,6 +1317,10 @@ def _injetar_css():
     .geo-classe-card.presente_sem_contribuir .qtd { color:#B45309; }
     .geo-classe-card.contribui_sem_presenca .qtd { color:#1D4ED8; }
     .geo-classe-card.ausente_total .qtd { color:#DC2626; }
+    .dash-escala { font-size:1.2rem;color:#64748B; }
+    .dash-rotulo-pequeno { font-size:.68rem;color:#64748B; }
+    .dash-btn-whatsapp { background:#25D366;color:white;padding:6px 12px;border-radius:6px;
+        text-decoration:none;font-size:.78rem;font-weight:600;display:inline-block; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1427,7 +1431,7 @@ def _render_score_saude(score):
         )
     st.markdown(
         f'<div class="score-card {classe}">'
-        f'<div class="valor">{score["emoji"]} {score["score_total"]:.0f}<span style="font-size:1.2rem;color:#64748B">/100</span></div>'
+        f'<div class="valor">{score["emoji"]} {score["score_total"]:.0f}<span class="dash-escala">/100</span></div>'
         f'<div class="barra">Score de saude financeira</div>'
         f'<div class="classificacao">{_escape(score["classificacao"])}</div>'
         f'<div class="score-componentes">{componentes_html}</div>'
@@ -1473,9 +1477,7 @@ def _render_churn_alerta(churn_info, slug, igreja, mes_ref):
                     if link:
                         st.markdown(
                             f'<a href="{_escape(link)}" target="_blank" '
-                            f'style="background:#25D366;color:white;padding:6px 12px;'
-                            f'border-radius:6px;text-decoration:none;font-size:.78rem;'
-                            f'font-weight:600;display:inline-block;">📱 WhatsApp</a>',
+                            f'class="dash-btn-whatsapp">📱 WhatsApp</a>',
                             unsafe_allow_html=True,
                         )
 
@@ -1537,6 +1539,7 @@ def _render_metas_arrecadacao(slug, ent_atual, dizimo_atual):
             obter_config_igreja(slug, "meta_dizimo_mensal", "0"), 0
         )
     except Exception:
+        logging.exception("dashboard._render_metas_arrecadacao: erro tratado")
         meta_arrecadacao, meta_dizimo = 0.0, 0.0
 
     if meta_arrecadacao <= 0 and meta_dizimo <= 0:
@@ -1683,7 +1686,7 @@ def _render_cruzamento_geo(df_cruzamento):
                 f'<div class="geo-classe-card {chave}">'
                 f'<div class="qtd">{qtd}</div>'
                 f'<div class="rotulo">{_escape(rotulo)}</div>'
-                f'<div class="rotulo" style="font-size:.68rem;color:#64748B">{_escape(descricao)}</div>'
+                f'<div class="rotulo dash-rotulo-pequeno">{_escape(descricao)}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -1722,9 +1725,7 @@ def _render_lista_whatsapp_classe(classe_df, membros, igreja, mes_ref, rotulo_cl
                     if link:
                         st.markdown(
                             f'<a href="{_escape(link)}" target="_blank" '
-                            f'style="background:#25D366;color:white;padding:6px 12px;'
-                            f'border-radius:6px;text-decoration:none;font-size:.78rem;'
-                            f'font-weight:600;display:inline-block;">📱 Agradecer</a>',
+                            f'class="dash-btn-whatsapp">📱 Agradecer</a>',
                             unsafe_allow_html=True,
                         )
 
@@ -1773,8 +1774,8 @@ def _gerar_html_relatorio_executivo(
         pct = (valor / maximo * 100) if maximo > 0 else 0
         comps_html += (
             f'<tr><td>{_escape(nome)}</td>'
-            f'<td style="text-align:right">{valor:.1f} / {maximo}</td>'
-            f'<td style="text-align:right">{pct:.0f}%</td></tr>'
+            f'<td class="dir">{valor:.1f} / {maximo}</td>'
+            f'<td class="dir">{pct:.0f}%</td></tr>'
         )
 
     insight_html = insight_texto.replace("**", "").replace("⚠️", "")
@@ -1820,9 +1821,12 @@ td {{ padding:6px 8px;border-bottom:1px solid #F1F5F9;color:#334155; }}
     .relatorio {{ box-shadow:none; }}
     .btn-imprimir {{ display:none; }}
 }}
+.centro {{ text-align:center;margin-bottom:12px; }}
+.escala {{ font-size:16px;color:#64748B; }}
+.dir {{ text-align:right; }}
 </style></head>
 <body>
-<div style="text-align:center;margin-bottom:12px">
+<div class="centro">
 <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
 </div>
 
@@ -1842,29 +1846,29 @@ td {{ padding:6px 8px;border-bottom:1px solid #F1F5F9;color:#334155; }}
 
 <h3>Score de Saude Financeira</h3>
 <div class="score-box">
-    <div class="num">{score["score_total"]:.0f}<span style="font-size:16px;color:#64748B">/100</span></div>
+    <div class="num">{score["score_total"]:.0f}<span class="escala">/100</span></div>
     <div class="cls">{score["emoji"]} {_escape(score["classificacao"])}</div>
 </div>
 
 <table>
-<thead><tr><th>Componente</th><th style="text-align:right">Pontos</th><th style="text-align:right">%</th></tr></thead>
+<thead><tr><th>Componente</th><th class="dir">Pontos</th><th class="dir">%</th></tr></thead>
 <tbody>{comps_html}</tbody>
 </table>
 
 <h3>Ticket Medio e Potencial</h3>
 <table>
-<tr><td>Ticket medio de dizimo</td><td style="text-align:right">{_escape(formatar_moeda(ticket_info["ticket_medio"]))}</td></tr>
-<tr><td>Arrecadacao potencial (se 100% dos membros dizimasse)</td><td style="text-align:right">{_escape(formatar_moeda(ticket_info["potencial"]))}</td></tr>
-<tr><td>Gap para o potencial</td><td style="text-align:right">{_escape(formatar_moeda(ticket_info["gap"]))}</td></tr>
-<tr><td>% do potencial arrecadado</td><td style="text-align:right">{ticket_info["percentual_arrecadado"]:.1f}%</td></tr>
+<tr><td>Ticket medio de dizimo</td><td class="dir">{_escape(formatar_moeda(ticket_info["ticket_medio"]))}</td></tr>
+<tr><td>Arrecadacao potencial (se 100% dos membros dizimasse)</td><td class="dir">{_escape(formatar_moeda(ticket_info["potencial"]))}</td></tr>
+<tr><td>Gap para o potencial</td><td class="dir">{_escape(formatar_moeda(ticket_info["gap"]))}</td></tr>
+<tr><td>% do potencial arrecadado</td><td class="dir">{ticket_info["percentual_arrecadado"]:.1f}%</td></tr>
 </table>
 
 <h3>Saude e Reserva</h3>
 <table>
-<tr><td>Cobertura da reserva</td><td style="text-align:right">{f"{saude_info['cobertura']:.1f} meses" if saude_info.get('cobertura') is not None else "Sem despesas"}</td></tr>
-<tr><td>Despesa media mensal</td><td style="text-align:right">{_escape(formatar_moeda(saude_info["media_saidas"]))}</td></tr>
-<tr><td>Resultado medio mensal</td><td style="text-align:right">{_escape(formatar_moeda(saude_info["resultado_medio"]))}</td></tr>
-<tr><td>Saldo acumulado</td><td style="text-align:right">{_escape(formatar_moeda(saude_info["saldo_acumulado"]))}</td></tr>
+<tr><td>Cobertura da reserva</td><td class="dir">{f"{saude_info['cobertura']:.1f} meses" if saude_info.get('cobertura') is not None else "Sem despesas"}</td></tr>
+<tr><td>Despesa media mensal</td><td class="dir">{_escape(formatar_moeda(saude_info["media_saidas"]))}</td></tr>
+<tr><td>Resultado medio mensal</td><td class="dir">{_escape(formatar_moeda(saude_info["resultado_medio"]))}</td></tr>
+<tr><td>Saldo acumulado</td><td class="dir">{_escape(formatar_moeda(saude_info["saldo_acumulado"]))}</td></tr>
 </table>
 
 <div class="rodape">

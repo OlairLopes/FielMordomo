@@ -13,6 +13,8 @@ import re
 import time
 import urllib.parse
 import streamlit as st
+
+from utils.tokens import injetar_estilos_publicos
 from streamlit_cookies_controller import CookieController
 
 from data.repository import (
@@ -49,6 +51,7 @@ def _sessao_secret() -> str:
     try:
         segredo = str(st.secrets.get("auth", {}).get("session_secret", "") or "")
     except Exception:
+        logging.exception("auth._sessao_secret: erro tratado")
         segredo = ""
     if segredo:
         return segredo
@@ -78,6 +81,7 @@ def _validar_token_sessao(token: str):
     try:
         corpo = json.loads(base64.urlsafe_b64decode(payload_b64.encode("ascii")).decode("utf-8"))
     except Exception:
+        logging.exception("auth._validar_token_sessao: erro tratado")
         return None
     if int(corpo.get("exp", 0)) < int(time.time()):
         return None
@@ -214,13 +218,11 @@ def _exibir_logo_sistema():
         dados, _ext = resultado
         st.image(dados, width=150, caption="Logotipo do sistema")
     else:
+        injetar_estilos_publicos()
         st.markdown(
             """
-            <div style="text-align:center;padding:1rem 0 0.5rem">
-              <span style="font-size:2.2rem;font-weight:600;
-                           color:var(--color-text-primary)">
-                FielMordomo
-              </span>
+            <div class="fm-marca">
+              <span>FielMordomo</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -546,6 +548,7 @@ def _seletor_login(modo_atual):
 
 def _mostrar_recuperacao_senha():
     """Tela com contato do admin para recuperação de senha."""
+    injetar_estilos_publicos()
     modo_recuperacao = st.session_state.get("recuperacao_modo") or st.session_state.get("login_modo", "acesso")
     modo_recuperacao_txt = _rotulo_login(modo_recuperacao)
     email_admin  = _normalizar_email(obter_config("contato_email", "admin@fielmordomo.com"))
@@ -578,10 +581,7 @@ def _mostrar_recuperacao_senha():
             f"mailto:{email_link}?subject={assunto}&body={corpo}", quote=True
         )
         st.markdown(
-            f'<a href="{link_email}" '
-            f'style="display:inline-block;background:#061B44;color:white;'
-            f'padding:10px 20px;border-radius:8px;text-decoration:none;'
-            f'font-weight:600;margin:4px 4px 4px 0">'
+            f'<a href="{link_email}" class="fm-btn fm-btn-navy">'
             f'📧 Enviar e-mail ao administrador</a>',
             unsafe_allow_html=True,
         )
@@ -595,9 +595,7 @@ def _mostrar_recuperacao_senha():
         wpp_link = html.escape(f"https://wa.me/{wpp_admin}?text={msg_wpp}", quote=True)
         st.markdown(
             f'<a href="{wpp_link}" target="_blank" rel="noopener noreferrer" '
-            f'style="display:inline-block;background:#25D366;color:white;'
-            f'padding:10px 20px;border-radius:8px;text-decoration:none;'
-            f'font-weight:600;margin:4px 4px 4px 0">'
+            f'class="fm-btn fm-btn-whatsapp">'
             f'💬 Falar pelo WhatsApp</a>',
             unsafe_allow_html=True,
         )
@@ -774,12 +772,14 @@ def _opcoes_igrejas_ativas():
     try:
         igrejas = listar_igrejas()
     except Exception:
+        logging.exception("auth._opcoes_igrejas_ativas: erro tratado")
         return {}, "Não foi possível carregar as igrejas."
     if igrejas is None or igrejas.empty:
         return {}, "Nenhuma igreja cadastrada."
     try:
         igrejas = igrejas[igrejas["ativa"].fillna(0).astype(int) == 1].copy()
     except Exception:
+        logging.exception("auth._opcoes_igrejas_ativas: erro tratado")
         igrejas = igrejas.copy()
     if igrejas.empty:
         return {}, "Nenhuma igreja ativa encontrada."
@@ -823,6 +823,7 @@ def _opcoes_usuarios_por_perfil(slug, perfil):
         else:
             return {}, "Perfil de acesso inválido."
     except Exception:
+        logging.exception("auth._opcoes_usuarios_por_perfil: erro tratado")
         return {}, "Não foi possível carregar os usuários deste perfil."
     if usuarios is None or usuarios.empty:
         return {}, "Nenhum usuário ativo encontrado para esta igreja."
@@ -890,6 +891,7 @@ def _opcoes_grupos_gfc(slug):
     try:
         grupos = listar_gfc_grupos(slug, incluir_inativos=False)
     except Exception:
+        logging.exception("auth._opcoes_grupos_gfc: erro tratado")
         return {}, "Nao foi possivel carregar os grupos GFC desta igreja."
     if grupos is None or grupos.empty:
         return {}, "Nenhum grupo GFC ativo encontrado para esta igreja."
@@ -915,6 +917,7 @@ def _grupo_gfc_do_usuario(slug, usuario):
         secretarias = listar_gfc_secretarias(slug, incluir_inativas=False)
         grupos = listar_gfc_grupos(slug, incluir_inativos=False)
     except Exception:
+        logging.exception("auth._grupo_gfc_do_usuario: erro tratado")
         return None
     if secretarias is None or secretarias.empty or grupos is None or grupos.empty:
         return None

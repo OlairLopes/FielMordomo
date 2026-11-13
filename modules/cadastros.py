@@ -143,6 +143,7 @@ def _ler_upload_foto(arquivo):
     try:
         recortada = _recortar_foto_3x4(dados)
     except Exception:
+        logging.exception("cadastros._ler_upload_foto: erro tratado")
         raise ValueError("Nao foi possivel processar essa imagem. Tente outro arquivo.")
     b64 = base64.b64encode(recortada).decode()
     return f"data:image/jpeg;base64,{b64}"
@@ -153,7 +154,8 @@ def _foto_para_bytes(foto_data_uri):
         return None
     try:
         return base64.b64decode(foto_data_uri.split(",", 1)[1])
-    except Exception:
+    except (ValueError, IndexError):
+        logging.exception("cadastros._foto_para_bytes: erro tratado")
         return None
 
 
@@ -177,7 +179,8 @@ def _normalizar_texto_busca(texto):
 def _formatar_data(data_str):
     try:
         return datetime.date.fromisoformat(data_str).strftime("%d/%m/%Y")
-    except Exception:
+    except (ValueError, TypeError):
+        logging.debug("cadastros._formatar_data: valor invalido ignorado")
         return data_str
 
 
@@ -247,7 +250,7 @@ def _garantir_tabela_historico(slug):
             """)
             conn.commit()
         st.session_state[flag] = True
-    except Exception:
+    except sqlite3.Error:
         logging.exception("Erro ignorado silenciosamente")
 
 
@@ -267,7 +270,8 @@ def _listar_historico(slug, id_cadastro):
                 params=(int(id_cadastro),),
             )
         return df
-    except Exception:
+    except (sqlite3.Error, pd.errors.DatabaseError, ValueError, TypeError):
+        logging.exception("cadastros._listar_historico: erro tratado")
         return pd.DataFrame(columns=[
             "id_historico", "data_ocorrencia", "codigo_tipo",
             "ocorrencia", "categoria", "localidade", "observacao",
@@ -372,6 +376,7 @@ def _renderizar_historico_membro(slug, id_cadastro, congregacao_padrao):
                     observacao=observacao_hist,
                 )
             except Exception as exc:
+                logging.exception("cadastros._renderizar_historico_membro: erro tratado")
                 st.error(f"Nao foi possivel salvar a ocorrencia: {exc}")
             else:
                 st.toast("✅ Ocorrencia registrada!")
@@ -397,22 +402,30 @@ def _renderizar_historico_membro(slug, id_cadastro, congregacao_padrao):
         col_txt, col_del = st.columns([9, 1])
         with col_txt:
             obs_html = (
-                f'<div style="color:#6b7280;font-size:12px;margin-top:3px;">'
+                f'<div class="cad-hist-obs">'
                 f'{_html(observacao_txt)}</div>'
                 if observacao_txt else ""
             )
             st.markdown(
                 f"""
-                <div style="padding:10px 12px;border-left:3px solid {cor_cat};
-                            background:{cor_cat}10;border-radius:6px;margin-bottom:8px;">
-                    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;">
-                        <strong style="font-size:13px;">{_html(data_fmt)}</strong>
-                        <span style="background:{cor_cat}22;color:{cor_cat};
-                                     padding:1px 8px;border-radius:10px;font-size:11px;
-                                     font-weight:600;">{_html(categoria_h)}</span>
+                <style>
+                .cad-hist {{ padding:10px 12px;border-left:3px solid var(--cor);
+                    background:var(--cor-fundo);border-radius:6px;margin-bottom:8px; }}
+                .cad-hist-topo {{ display:flex;justify-content:space-between;flex-wrap:wrap; }}
+                .cad-hist-data {{ font-size:13px; }}
+                .cad-hist-tag {{ background:var(--cor-tag);color:var(--cor);padding:1px 8px;
+                    border-radius:10px;font-size:11px;font-weight:600; }}
+                .cad-hist-texto {{ margin-top:4px;font-size:13px; }}
+                .cad-hist-local {{ color:#6b7280;font-size:12px;margin-top:2px; }}
+                .cad-hist-obs {{ color:#6b7280;font-size:12px;margin-top:3px; }}
+                </style>
+                <div class="cad-hist" style="--cor:{cor_cat};--cor-fundo:{cor_cat}10;--cor-tag:{cor_cat}22">
+                    <div class="cad-hist-topo">
+                        <strong class="cad-hist-data">{_html(data_fmt)}</strong>
+                        <span class="cad-hist-tag">{_html(categoria_h)}</span>
                     </div>
-                    <div style="margin-top:4px;font-size:13px;">{_html(ocorrencia_txt)}</div>
-                    <div style="color:#6b7280;font-size:12px;margin-top:2px;">
+                    <div class="cad-hist-texto">{_html(ocorrencia_txt)}</div>
+                    <div class="cad-hist-local">
                         📍 {_html(localidade_txt)}
                     </div>
                     {obs_html}
@@ -445,6 +458,7 @@ def _renderizar_historico_membro(slug, id_cadastro, congregacao_padrao):
                     try:
                         _excluir_historico(slug, id_hist)
                     except Exception as exc:
+                        logging.exception("cadastros._renderizar_historico_membro: erro tratado")
                         st.error(f"Nao foi possivel excluir: {exc}")
                     else:
                         st.session_state.pop(f"chist_confirmar_del_{id_hist}", None)
@@ -673,6 +687,7 @@ def modal_excluir_cadastro(slug, sel):
             st.toast(f"✅ Cadastro de {nome} excluído!")
             st.rerun()
         except Exception as exc:
+            logging.exception("cadastros.modal_excluir_cadastro: erro tratado")
             st.error(f"Erro ao excluir: {exc}")
 
 
@@ -943,6 +958,7 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
             except LimiteMembrosExcedido as ex:
                 st.error(str(ex))
             except Exception as ex:
+                logging.exception("cadastros._ficha_cadastro: erro tratado")
                 st.error(f"Erro ao salvar: {ex}")
             else:
                 _invalida(slug)
@@ -1037,7 +1053,7 @@ def _painel_cadastros(slug, df, plano, p_info, congregacao_fixa, bloqueado, limi
                     st.rerun()
 
     with st.container(key=f"cad_toolbar_{slug}", horizontal=True, gap="small"):
-        if st.button("", key=f"cadt_novo_{slug}", icon=":material/add:", help="Novo cadastro"):
+        if st.button("Novo cadastro", key=f"cadt_novo_{slug}", icon=":material/add:", help="Novo cadastro"):
             st.session_state[sk_modo] = "novo"
             st.rerun()
         if st.button(
@@ -1065,7 +1081,7 @@ def _painel_cadastros(slug, df, plano, p_info, congregacao_fixa, bloqueado, limi
             disabled=registro_atual is None or modo == "novo",
         ):
             modal_excluir_cadastro(slug, registro_atual)
-        if st.button("", key=f"cadt_atualizar_{slug}", icon=":material/refresh:", help="Atualizar lista"):
+        if st.button("Atualizar lista", key=f"cadt_atualizar_{slug}", icon=":material/refresh:", help="Atualizar lista"):
             _invalida(slug)
             st.rerun()
 
@@ -1103,6 +1119,7 @@ def render():
         try:
             pre = listar_pre_cadastros_membros(slug, "Pendente")
         except Exception:
+            logging.exception("cadastros.render: erro tratado")
             pre = pd.DataFrame()
             st.error("Não foi possível carregar os pre-cadastros.")
         if pre.empty:
@@ -1138,6 +1155,7 @@ def render():
                         try:
                             aprovar_pre_cadastro_membro(slug, int(row_pre["id_pre_cadastro"]))
                         except Exception as exc:
+                            logging.exception("cadastros.render: erro tratado")
                             st.error(str(exc))
                         else:
                             _invalida(slug)
@@ -1172,13 +1190,20 @@ def render():
         pct = min(100, int((qtd_membros / limite) * 100))
         cor_barra = "#D85A30" if pct >= 90 else ("#F5A623" if pct >= 70 else "#1D9E75")
         st.markdown(f"""
-        <div style="background:#f8f9fa;padding:10px 14px;border-radius:8px;margin-bottom:14px">
-            <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px">
+        <style>
+        .cad-plano {{ background:#f8f9fa;padding:10px 14px;border-radius:8px;margin-bottom:14px; }}
+        .cad-plano-linha {{ display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px; }}
+        .cad-plano-pct {{ color:var(--cor);font-weight:600; }}
+        .cad-plano-trilho {{ background:#e9ecef;height:6px;border-radius:3px;overflow:hidden; }}
+        .cad-plano-barra {{ background:var(--cor);height:100%; }}
+        </style>
+        <div class="cad-plano">
+            <div class="cad-plano-linha">
                 <span><b>Plano {p_info['nome']}:</b> {qtd_membros} de {limite} membros</span>
-                <span style="color:{cor_barra};font-weight:600">{pct}%</span>
+                <span class="cad-plano-pct" style="--cor:{cor_barra}">{pct}%</span>
             </div>
-            <div style="background:#e9ecef;height:6px;border-radius:3px;overflow:hidden">
-                <div style="background:{cor_barra};height:100%;width:{pct}%"></div>
+            <div class="cad-plano-trilho">
+                <div class="cad-plano-barra" style="--cor:{cor_barra};width:{pct}%"></div>
             </div>
         </div>
         """, unsafe_allow_html=True)

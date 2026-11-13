@@ -1,0 +1,9 @@
+Fontes hospedadas neste projeto (static/fonts/):
+
+- Fraunces
+- Public Sans
+- Material Symbols Rounded (versao reduzida: apenas os icones usados)
+
+Distribuidas sob a SIL Open Font License, versao 1.1.
+Texto completo: https://openfontlicense.org
+Confira a licenca e a autoria de cada fonte na pagina oficial de cada uma (Google Fonts).

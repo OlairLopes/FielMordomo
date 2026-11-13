@@ -29,6 +29,42 @@ MIMES_IMAGEM = {
 }
 COR_HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
+_CSS_HOME = """
+<style>
+.fm-home-hero { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 20px 30px 20px; }
+.fm-home-hero-alto { padding:60px 20px 40px 20px; }
+.fm-home-logo { max-width:260px; max-height:200px; object-fit:contain; filter:drop-shadow(0 4px 12px rgba(6,27,68,0.15)); }
+.fm-home-marca { font-size:3.5rem; font-weight:800; color:#061B44; letter-spacing:-1px; }
+.fm-home-titulo { color:#061B44; margin:20px 0 4px 0; font-weight:700; font-size:1.8rem; text-align:center; }
+.fm-home-titulo-menor { font-size:1.6rem; }
+.fm-home-sub { color:#888; font-size:0.95rem; margin:0; text-align:center; }
+.fm-home-h4 { color:#061B44; margin:18px 0 12px 0; }
+.fm-kpi { background:white; border-radius:12px; padding:16px 18px; box-shadow:0 2px 6px rgba(0,0,0,0.08);
+          border-left:4px solid var(--cor); height:100%; }
+.fm-kpi-rotulo { font-size:0.72rem; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:0.05em; }
+.fm-kpi-valor { font-size:1.35rem; font-weight:700; color:var(--cor); line-height:1.2; margin-top:4px; }
+.fm-kpi-nota { font-size:0.72rem; color:#888; margin-top:4px; }
+.fm-plano { background:linear-gradient(135deg, var(--plano-ini) 0%, var(--plano-fim) 100%); border-radius:14px;
+            padding:22px 26px; color:white; margin-top:14px; box-shadow:0 4px 14px rgba(6,27,68,0.25); }
+.fm-plano-linha { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+.fm-plano-rotulo { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; opacity:0.85; }
+.fm-plano-nome { font-size:1.6rem; font-weight:700; margin-top:2px; }
+.fm-plano-info { font-size:0.85rem; opacity:0.9; margin-top:4px; }
+.fm-plano-icone { font-size:2.6rem; opacity:0.5; }
+</style>
+"""
+
+
+def _kpi(rotulo, valor, cor, nota=None):
+    bloco_nota = f'<div class="fm-kpi-nota">{nota}</div>' if nota else ""
+    return f"""
+    <div class="fm-kpi" style="--cor:{cor}">
+        <div class="fm-kpi-rotulo">{_html(rotulo)}</div>
+        <div class="fm-kpi-valor">{_html(valor)}</div>
+        {bloco_nota}
+    </div>
+    """
+
 
 def _html(valor):
     return html.escape(str(valor if valor is not None else ""), quote=True)
@@ -58,35 +94,21 @@ def render():
     else:
         img_src = ""
 
+    st.markdown(_CSS_HOME, unsafe_allow_html=True)
     if img_src:
         st.markdown(f"""
-        <div style="display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;padding:40px 20px 30px 20px">
-            <img src="{img_src}"
-                 style="max-width:260px;max-height:200px;object-fit:contain;
-                        filter:drop-shadow(0 4px 12px rgba(6,27,68,0.15))"/>
-            <h2 style="color:#061B44;margin:20px 0 4px 0;font-weight:700;
-                       font-size:1.8rem;text-align:center">
-                {nome_igreja}
-            </h2>
-            <p style="color:#888;font-size:0.95rem;margin:0;text-align:center">
-                Gestao financeira da igreja
-            </p>
+        <div class="fm-home-hero">
+            <img class="fm-home-logo" src="{img_src}" alt="Logo da igreja"/>
+            <h2 class="fm-home-titulo">{nome_igreja}</h2>
+            <p class="fm-home-sub">Gestao financeira da igreja</p>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
-        <div style="display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;padding:60px 20px 40px 20px">
-            <div style="font-size:3.5rem;font-weight:800;color:#061B44;
-                        letter-spacing:-1px">FielMordomo</div>
-            <h2 style="color:#061B44;margin:20px 0 4px 0;font-weight:700;
-                       font-size:1.6rem;text-align:center">
-                {nome_igreja}
-            </h2>
-            <p style="color:#888;font-size:0.95rem;margin:0;text-align:center">
-                Gestao financeira da igreja
-            </p>
+        <div class="fm-home-hero fm-home-hero-alto">
+            <div class="fm-home-marca">FielMordomo</div>
+            <h2 class="fm-home-titulo fm-home-titulo-menor">{nome_igreja}</h2>
+            <p class="fm-home-sub">Gestao financeira da igreja</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -154,7 +176,7 @@ def render():
         )
 
     st.markdown(f"""
-    <h4 style="color:#061B44;margin:18px 0 12px 0">
+    <h4 class="fm-home-h4">
         📊 Resumo de {mes_ano}
     </h4>
     """, unsafe_allow_html=True)
@@ -163,55 +185,18 @@ def render():
 
     cor_saldo = "#1E73BE" if sal_mes >= 0 else "#C62828"
     with c1:
-        st.markdown(f"""
-        <div style="background:white;border-radius:12px;padding:16px 18px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.08);
-                    border-left:4px solid {cor_saldo};height:100%">
-            <div style="font-size:0.72rem;font-weight:600;color:#888;
-                        text-transform:uppercase;letter-spacing:0.05em">Saldo do mes</div>
-            <div style="font-size:1.35rem;font-weight:700;color:{cor_saldo};
-                        line-height:1.2;margin-top:4px">{formatar_moeda(sal_mes)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown(_kpi("Saldo do mes", formatar_moeda(sal_mes), cor_saldo), unsafe_allow_html=True)
     with c2:
-        st.markdown(f"""
-        <div style="background:white;border-radius:12px;padding:16px 18px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.08);
-                    border-left:4px solid #1E73BE;height:100%">
-            <div style="font-size:0.72rem;font-weight:600;color:#888;
-                        text-transform:uppercase;letter-spacing:0.05em">Entradas do mes</div>
-            <div style="font-size:1.35rem;font-weight:700;color:#1E73BE;
-                        line-height:1.2;margin-top:4px">{formatar_moeda(ent_mes)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown(_kpi("Entradas do mes", formatar_moeda(ent_mes), "#1E73BE"), unsafe_allow_html=True)
     with c3:
-        st.markdown(f"""
-        <div style="background:white;border-radius:12px;padding:16px 18px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.08);
-                    border-left:4px solid #C62828;height:100%">
-            <div style="font-size:0.72rem;font-weight:600;color:#888;
-                        text-transform:uppercase;letter-spacing:0.05em">Saidas do mes</div>
-            <div style="font-size:1.35rem;font-weight:700;color:#C62828;
-                        line-height:1.2;margin-top:4px">{formatar_moeda(sai_mes)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown(_kpi("Saidas do mes", formatar_moeda(sai_mes), "#C62828"), unsafe_allow_html=True)
     with c4:
-        st.markdown(f"""
-        <div style="background:white;border-radius:12px;padding:16px 18px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.08);
-                    border-left:4px solid #F57C00;height:100%">
-            <div style="font-size:0.72rem;font-weight:600;color:#888;
-                        text-transform:uppercase;letter-spacing:0.05em">Lancamentos no mes / membros ativos</div>
-            <div style="font-size:1.35rem;font-weight:700;color:#F57C00;
-                        line-height:1.2;margin-top:4px">{n_lanc_mes} / {qtd_membros_ativos}</div>
-            <div style="font-size:0.72rem;color:#888;margin-top:4px">
-                {_html(qtd_membros)} membro(s) cadastrado(s) no total
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(_kpi(
+            "Lancamentos no mes / membros ativos",
+            f"{n_lanc_mes} / {qtd_membros_ativos}",
+            "#F57C00",
+            nota=f"{_html(qtd_membros)} membro(s) cadastrado(s) no total",
+        ), unsafe_allow_html=True)
 
     # ── Card do plano ─────────────────────────────────────────────────────
     cor_plano = str(p_info.get("cor", "#061B44"))
@@ -226,22 +211,14 @@ def render():
 
     st.markdown("")
     st.markdown(f"""
-    <div style="background:linear-gradient(135deg,{cor_plano} 0%,{cor_plano_fim} 100%);
-                border-radius:14px;padding:22px 26px;color:white;margin-top:14px;
-                box-shadow:0 4px 14px rgba(6,27,68,0.25)">
-        <div style="display:flex;justify-content:space-between;align-items:center;
-                    flex-wrap:wrap;gap:10px">
+    <div class="fm-plano" style="--plano-ini:{cor_plano};--plano-fim:{cor_plano_fim}">
+        <div class="fm-plano-linha">
             <div>
-                <div style="font-size:0.72rem;text-transform:uppercase;
-                            letter-spacing:0.08em;opacity:0.85">Plano atual</div>
-                <div style="font-size:1.6rem;font-weight:700;margin-top:2px">
-                    {nome_plano}
-                </div>
-                <div style="font-size:0.85rem;opacity:0.9;margin-top:4px">
-                    Limite: {lim_txt} membros • {preco_plano}
-                </div>
+                <div class="fm-plano-rotulo">Plano atual</div>
+                <div class="fm-plano-nome">{nome_plano}</div>
+                <div class="fm-plano-info">Limite: {lim_txt} membros • {preco_plano}</div>
             </div>
-            <div style="font-size:2.6rem;opacity:0.5">⛪</div>
+            <div class="fm-plano-icone">⛪</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
