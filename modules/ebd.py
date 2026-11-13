@@ -468,7 +468,7 @@ def _metricas_ebd(resumo, aulas):
 
 def _grafico_frequencia_classes(resumo, cores_classes=None, key=None):
     if resumo.empty:
-        st.info("Sem dados de frequencia para o periodo selecionado.")
+        st.info("Sem dados de frequência para o período selecionado.")
         return
     dados = resumo.sort_values("frequencia_pct", ascending=True)
     cores_classes = cores_classes or {}
@@ -534,7 +534,7 @@ def _resumo_professores(aulas):
 
 def _grafico_desempenho_professores(dados):
     if dados.empty:
-        st.info("Sem dados de professores para o periodo selecionado.")
+        st.info("Sem dados de professores para o período selecionado.")
         return
     ordenado = dados.sort_values("indice_desempenho", ascending=True)
     fig = go.Figure(go.Bar(
@@ -932,7 +932,7 @@ def _selecionar_pessoa_escala(
         st.caption(f"Funcao preenchida pelo cadastro: {funcao or 'sem funcao informada'}")
         return nome, telefone, funcao
     if origem == "Buscar no cadastro de membros":
-        st.warning("Nao ha membros ativos cadastrados. Use a insercao manual.")
+        st.warning("Não há membros ativos cadastrados. Use a insercao manual.")
     c1, c2 = st.columns(2)
     nome = c1.text_input(
         f"{titulo} - nome manual",
@@ -949,7 +949,7 @@ def _selecionar_pessoa_escala(
         f"{titulo} - funcao",
         value=str(funcao_padrao or ""),
         key=f"{key_prefix}_funcao_manual",
-        help="Preencha manualmente quando a pessoa nao estiver no cadastro.",
+        help="Preencha manualmente quando a pessoa não estiver no cadastro.",
     )
     if st.form_submit_button(
         f"Limpar {titulo.lower()} digitado",
@@ -1314,7 +1314,7 @@ def _render_classes(slug):
             professor = c2.text_input("Professor principal", value=row.get("professor_principal", ""))
             sala = c3.text_input("Sala/local", value=row.get("sala", ""))
             ativa = st.checkbox("Classe ativa", value=bool(row.get("ativa", 1)))
-            obs = st.text_area("Observacoes", value=row.get("observacoes", ""))
+            obs = st.text_area("Observações", value=row.get("observacoes", ""))
             if st.form_submit_button("Salvar classe", type="primary"):
                 try:
                     salvar_ebd_classe(slug, nome, faixa, professor, sala, obs, ativa, editar)
@@ -1353,7 +1353,7 @@ def _render_classes(slug):
                     id_cadastro = op_membros[membro_label]
                     nome_aluno = df_membros[df_membros["id_cadastro"] == id_cadastro].iloc[0]["nome"]
                 else:
-                    st.warning("Nao ha membros ativos cadastrados.")
+                    st.warning("Não há membros ativos cadastrados.")
             else:
                 nome_aluno = st.text_input("Nome do aluno", key="matricula_nome_manual_novo")
             c1, c2 = st.columns(2)
@@ -1512,7 +1512,7 @@ def _render_classes(slug):
         )
         if excluir != "Selecione" and confirmar_exclusao(f"excluir_classe_{excluir}", "Excluir ou inativar classe"):
             removida = excluir_ebd_classe(slug, int(excluir.split(" - ")[0]))
-            st.success("Classe excluida." if removida else "Classe inativada porque possui historico.")
+            st.success("Classe excluída." if removida else "Classe inativada porque possui histórico.")
             st.rerun()
 
 
@@ -1601,7 +1601,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
     if id_classe_fixo:
         df_classes = df_classes[df_classes["id_classe"] == int(id_classe_fixo)]
         if df_classes.empty:
-            st.error("Sua classe vinculada nao esta ativa ou nao foi encontrada.")
+            st.error("Sua classe vinculada não esta ativa ou não foi encontrada.")
             return
 
     op_classes = _classes_opcoes(df_classes)
@@ -1647,7 +1647,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
             format="DD/MM/YYYY",
         )
         if editar_inicio > editar_fim:
-            st.error("A data inicial nao pode ser maior que a data final.")
+            st.error("A data inicial não pode ser maior que a data final.")
             return
         chamadas_salvas = listar_ebd_aulas(
             slug,
@@ -1656,7 +1656,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
             id_classe,
         )
         if chamadas_salvas.empty:
-            st.info("Nenhuma chamada encontrada no periodo selecionado.")
+            st.info("Nenhuma chamada encontrada no período selecionado.")
             return
         op_chamadas = {
             f'{_fmt_data(row["data"])} - {row["classe"]} - {row.get("tema", "") or "sem tema"}': row
@@ -1702,7 +1702,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
     else:
         if escala_classe.empty:
             st.warning(
-                "Nao ha escala de professores cadastrada para esta classe. "
+                "Não há escala de professores cadastrada para esta classe. "
                 "Cadastre uma escala antes de registrar a chamada."
             )
             return
@@ -1723,7 +1723,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
 
     matriculas_todas = listar_ebd_matriculas(slug, id_classe, incluir_inativas=True)
     if matriculas_todas.empty:
-        st.warning("Esta classe ainda nao possui alunos matriculados.")
+        st.warning("Esta classe ainda não possui alunos matriculados.")
         return
 
     matriculas = _filtrar_matriculas_validas_na_data(matriculas_todas, data_aula)
@@ -1735,7 +1735,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
     if matriculas.empty:
         st.warning(
             "Nenhuma matricula estava ativa na data desta chamada. "
-            "Abaixo estao as matriculas encontradas para esta classe e a situacao delas nesta data."
+            "Abaixo estao as matriculas encontradas para esta classe e a situação delas nesta data."
         )
         st.caption(f"Data selecionada para a chamada: {_fmt_data(data_aula)}")
         st.dataframe(
@@ -1840,7 +1840,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
         qtd_biblias = r2.number_input("Biblias", min_value=0, step=1, value=biblias_atual)
         qtd_harpas = r3.number_input("Harpas", min_value=0, step=1, value=harpas_atual)
         ofertas = r4.number_input("Ofertas", min_value=0.0, step=1.0, value=ofertas_atual, format="%.2f")
-        obs = st.text_area("Observacoes da aula", value=obs_atual)
+        obs = st.text_area("Observações da aula", value=obs_atual)
 
         if st.form_submit_button("Salvar chamada", type="primary"):
             presencas = {}
@@ -1906,7 +1906,7 @@ def _render_relatorios(slug):
     inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="ebd_rel_ini", format="DD/MM/YYYY")
     fim = c2.date_input("Data final", value=_hoje(), key="ebd_rel_fim", format="DD/MM/YYYY")
     if inicio > fim:
-        st.error("A data inicial nao pode ser maior que a data final.")
+        st.error("A data inicial não pode ser maior que a data final.")
         return
 
     aulas = listar_ebd_aulas(slug, inicio.isoformat(), fim.isoformat())
@@ -1925,7 +1925,7 @@ def _render_relatorios(slug):
 
     with tab_classe:
         if aulas.empty:
-            st.info("Nenhuma aula registrada no periodo selecionado.")
+            st.info("Nenhuma aula registrada no período selecionado.")
         else:
             st.markdown("#### Grafico por classe")
             classe_escolhida = st.selectbox(
@@ -1936,7 +1936,7 @@ def _render_relatorios(slug):
             if classe_escolhida == "Todas as classes":
                 st.caption(
                     "Comparativo por sala. Quando uma sala possui mais de uma chamada "
-                    "no periodo, o grafico apresenta a media por chamada daquela sala."
+                    "no período, o grafico apresenta a media por chamada daquela sala."
                 )
                 cores_classes = _seletor_cores_classes(slug, classes_periodo)
                 _grafico_comparativo_classes_ebd(
@@ -1979,15 +1979,15 @@ def _render_relatorios(slug):
             tabela["frequencia_pct"] = tabela["frequencia_pct"].apply(_pct)
             st.dataframe(tabela, use_container_width=True, hide_index=True)
             st.download_button(
-                "Baixar relatorio de classes CSV",
+                "Baixar relatório de classes CSV",
                 data=gerar_csv(resumo),
                 file_name="relatorio_ebd_classes.csv",
                 mime="text/csv",
             )
 
-        with st.expander("Relatorio individual por aluno", expanded=False):
+        with st.expander("Relatório individual por aluno", expanded=False):
             if freq.empty:
-                st.info("Sem chamadas registradas no periodo.")
+                st.info("Sem chamadas registradas no período.")
             else:
                 freq = freq.copy()
                 total = freq["presencas"] + freq["faltas"]
@@ -1999,7 +1999,7 @@ def _render_relatorios(slug):
                 exibicao["frequencia_pct"] = exibicao["frequencia_pct"].apply(_pct)
                 st.dataframe(exibicao, use_container_width=True, hide_index=True)
                 st.download_button(
-                    "Baixar relatorio de alunos CSV",
+                    "Baixar relatório de alunos CSV",
                     data=gerar_csv(freq),
                     file_name="relatorio_ebd_alunos.csv",
                     mime="text/csv",
@@ -2008,10 +2008,10 @@ def _render_relatorios(slug):
     with tab_professores:
         st.markdown("#### Desempenho dos professores")
         st.caption(
-            "O indice de desempenho pondera a frequencia dos alunos pela quantidade de aulas "
-            "ministradas por cada professor, para que professores com poucos registros nao "
+            "O indice de desempenho pondera a frequência dos alunos pela quantidade de aulas "
+            "ministradas por cada professor, para que professores com poucos registros não "
             "fiquem em vantagem ou desvantagem injusta frente aos que ministraram mais aulas "
-            "no periodo."
+            "no período."
         )
         _grafico_desempenho_professores(professores)
         if not professores.empty:
@@ -2039,7 +2039,7 @@ def _render_relatorios(slug):
     with tab_geral:
         with st.expander("Aulas registradas", expanded=False):
             if aulas.empty:
-                st.info("Nenhuma aula no periodo.")
+                st.info("Nenhuma aula no período.")
             else:
                 aulas_exibir = aulas.copy()
                 aulas_exibir["data"] = aulas_exibir["data"].apply(_fmt_data)
@@ -2061,7 +2061,7 @@ def _render_relatorios(slug):
                 )
 
         if aulas.empty:
-            st.info("Nenhuma aula registrada no periodo selecionado.")
+            st.info("Nenhuma aula registrada no período selecionado.")
         else:
             modo_geral = "Média ponderada"
             totais = _totais_aulas(aulas, media=True, por_semana=True)
@@ -2151,11 +2151,11 @@ def _render_escala_editar(slug, escala, op_classes, opcoes_item):
                 telefone_padrao=str(linha.get("telefone_auxiliar", "") or ""),
             )
         tema_edit = st.text_input("Tema/assunto", value=str(linha.get("tema", "") or ""))
-        obs_edit = st.text_area("Observacoes", value=str(linha.get("observacoes", "") or ""))
+        obs_edit = st.text_area("Observações", value=str(linha.get("observacoes", "") or ""))
         classe_nome_edit = "" if op_classes[classe_label_edit] else classe_label_edit
-        if st.form_submit_button("Salvar alteracoes", type="primary"):
+        if st.form_submit_button("Salvar alterações", type="primary"):
             if not professor_edit.strip():
-                st.error("Professor e obrigatorio.")
+                st.error("Professor e obrigatório.")
             else:
                 try:
                     salvar_ebd_escala(
@@ -2196,7 +2196,7 @@ def _render_escala_excluir(slug, escala, opcoes_item, periodo_texto):
             return
         if confirmar_exclusao(f"excluir_escala_{excluir_label}", "Excluir escala selecionada"):
             excluir_ebd_escala(slug, opcoes_item[excluir_label])
-            st.success("Escala excluida.")
+            st.success("Escala excluída.")
             st.rerun()
     else:
         qtd = len(escala)
@@ -2258,7 +2258,7 @@ def _salvar_edicoes_tabela_escala(slug, escala):
     estado = st.session_state.get("escala_data_editor", {})
     linhas_alteradas = estado.get("edited_rows", {})
     if not linhas_alteradas:
-        st.info("Nenhuma alteracao para salvar.")
+        st.info("Nenhuma alteração para salvar.")
         return
     base = escala.reset_index(drop=True)
     for idx_str, alteracoes in linhas_alteradas.items():
@@ -2310,7 +2310,7 @@ def _render_professores_classe_editar(slug, quadro, id_classe_contexto, funcoes_
         else:
             funcao_edit = funcoes_disponiveis[0]
         ativo_edit = st.checkbox("Ativo", value=bool(linha["ativo"]))
-        if st.form_submit_button("Salvar alteracoes", type="primary"):
+        if st.form_submit_button("Salvar alterações", type="primary"):
             if not nome_edit.strip():
                 st.error("Informe o nome.")
             else:
@@ -2494,9 +2494,9 @@ def _montar_plano_escala_automatica(slug, inicio, fim, intervalo_dias, ids_class
 
 def _render_gerar_escala_automatica(slug, df_classes):
     st.caption(
-        "Gera automaticamente a escala de professores para o periodo escolhido, "
+        "Gera automaticamente a escala de professores para o período escolhido, "
         "dividindo as aulas de forma equilibrada entre os professores cadastrados "
-        "no quadro de cada classe. Datas que ja tiverem escala cadastrada sao "
+        "no quadro de cada classe. Datas que já tiverem escala cadastrada são "
         "preservadas e puladas."
     )
     if df_classes.empty:
@@ -2519,7 +2519,7 @@ def _render_gerar_escala_automatica(slug, df_classes):
         key="gerar_escala_intervalo",
     )
     if inicio > fim:
-        st.error("A data inicial nao pode ser maior que a data final.")
+        st.error("A data inicial não pode ser maior que a data final.")
         return
 
     op_classes = _classes_opcoes(df_classes)
@@ -2535,7 +2535,7 @@ def _render_gerar_escala_automatica(slug, df_classes):
         key="gerar_escala_incluir_superintendente",
     )
 
-    if st.button("Pre-visualizar geracao", type="primary", key="gerar_escala_preview_btn"):
+    if st.button("Pre-visualizar geração", type="primary", key="gerar_escala_preview_btn"):
         intervalo_dias = {
             "Semanal (7 dias)": 7, "Quinzenal (14 dias)": 14, "Mensal (28 dias)": 28,
         }[intervalo_label]
@@ -2630,10 +2630,10 @@ def _render_escala(slug):
                     slug, "Auxiliar", "escala_auxiliar"
                 )
             tema = st.text_input("Tema/assunto")
-            obs = st.text_area("Observacoes")
+            obs = st.text_area("Observações")
             st.markdown("#### Repetir escala")
             repetir = st.checkbox("Repetir esta escala em mais datas")
-            st.caption("Os campos abaixo so tem efeito se a opcao acima estiver marcada.")
+            st.caption("Os campos abaixo so tem efeito se a opção acima estiver marcada.")
             c3, c4 = st.columns(2)
             intervalo_label = c3.selectbox(
                 "Intervalo entre repeticoes",
@@ -2648,7 +2648,7 @@ def _render_escala(slug):
             classe_nome = "" if op_classes[classe_label] else classe_label
             if st.form_submit_button("Adicionar escala", type="primary"):
                 if not professor.strip():
-                    st.error("Professor e obrigatorio.")
+                    st.error("Professor e obrigatório.")
                 else:
                     try:
                         intervalo_dias = {
@@ -2732,7 +2732,7 @@ def _render_escala(slug):
                 escala["professor"].fillna("").astype(str).str.strip() == filtro_professor
             ].copy()
         if escala.empty:
-            st.info("Nenhuma escala cadastrada para o periodo.")
+            st.info("Nenhuma escala cadastrada para o período.")
         else:
             st.caption("Edite direto na tabela (data, professor, telefones, tema...) e clique em salvar.")
             exibir = escala.reset_index(drop=True).copy()
@@ -2753,7 +2753,7 @@ def _render_escala(slug):
                 disabled=["classe"],
                 key="escala_data_editor",
             )
-            if st.button("Salvar alteracoes da tabela"):
+            if st.button("Salvar alterações da tabela"):
                 _salvar_edicoes_tabela_escala(slug, escala)
             st.download_button(
                 "Baixar escala CSV",
@@ -2816,7 +2816,7 @@ def _render_escala(slug):
         )
         escala_periodo = listar_ebd_escala(slug, inicio_av.isoformat(), fim_av.isoformat())
         if escala_periodo.empty:
-            st.info("Nenhuma escala cadastrada para o periodo.")
+            st.info("Nenhuma escala cadastrada para o período.")
         else:
             st.caption("Filtre por data e clique para abrir o WhatsApp com a mensagem pronta.")
             modo_aviso = st.radio(
@@ -2881,7 +2881,7 @@ def _render_escala(slug):
                 if not _whatsapp_api_configurada():
                     st.info(
                         "Para enviar em lote automaticamente, configure a WhatsApp Cloud API em "
-                        "st.secrets (mesma configuracao usada em Aniversariantes). Sem isso, use "
+                        "st.secrets (mesma configuração usada em Aniversariantes). Sem isso, use "
                         "os botoes individuais abaixo para abrir o WhatsApp manualmente."
                     )
                 if st.button(
@@ -2944,7 +2944,7 @@ def _render_secretarios(slug):
             c5, c6 = st.columns(2)
             telefone = c5.text_input("Telefone / WhatsApp")
             email = c6.text_input("E-mail")
-            observacoes = st.text_area("Observacoes")
+            observacoes = st.text_area("Observações")
             if st.form_submit_button("Salvar secretario", type="primary"):
                 try:
                     salvar_ebd_secretario(
@@ -3022,7 +3022,7 @@ def _render_secretarios(slug):
             ["Ativo", "Inativo"],
             index=0 if row.get("situacao") == "Ativo" else 1,
         )
-        observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+        observacoes = st.text_area("Observações", value=row.get("observacoes", ""))
         if st.form_submit_button("Atualizar secretario", type="primary"):
             try:
                 salvar_ebd_secretario(
@@ -3042,10 +3042,10 @@ def _render_secretarios(slug):
 
 def render():
     st.subheader("📚 Escola Bíblica")
-    st.caption("Gestao de classes, chamada, frequencia e escala de professores da Escola Bíblica.")
+    st.caption("Gestao de classes, chamada, frequência e escala de professores da Escola Bíblica.")
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão invalida. Faça login novamente.")
         return
 
     def render_seguro(titulo, fn, *args):

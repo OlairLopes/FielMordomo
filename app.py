@@ -372,7 +372,7 @@ def _renderizar_auto_checkin():
 
     if modulo is None:
         st.error(
-            "⚠️ Modulo de auto-checkin nao encontrado no servidor. "
+            "Módulo de auto-checkin não encontrado no servidor. "
             "Contate o administrador do sistema."
         )
         st.markdown(
@@ -388,7 +388,7 @@ def _renderizar_auto_checkin():
     except Exception as ex:
         LOGGER.exception("Falha ao renderizar auto-checkin.")
         st.error(
-            "❌ Nao foi possivel processar o link de check-in. "
+            "Nao foi possivel processar o link de check-in. "
             f"(Erro: {type(ex).__name__})"
         )
         st.markdown(

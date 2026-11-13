@@ -883,13 +883,13 @@ def _captura_unica_topo():
             if cap_ts:
                 ts_txt = f" (em {cap_ts.strftime('%H:%M:%S')})"
             st.success(
-                f"📍 **Localizacao ativa:** `{cap_lat:.6f}, {cap_lon:.6f}`{ts_txt}\n\n"
+                f"**Localizacao ativa:** `{cap_lat:.6f}, {cap_lon:.6f}`{ts_txt}\n\n"
                 "Use o botao **Aplicar** em qualquer aba para usar estas coordenadas."
             )
         else:
             st.info(
-                "👆 **Clique no icone GPS** ao lado para capturar sua localizacao. "
-                "Ela ficara disponivel em todas as abas."
+                "**Clique no icone GPS** ao lado para capturar sua localização. "
+                "Ela ficara disponível em todas as abas."
             )
 
     if loc:
@@ -1104,7 +1104,7 @@ def _init_estado_evento(evento_atual, config_temporal=None):
 
 
 def _render_eventos(slug):
-    st.subheader("📅 Evento e local de referencia")
+    st.subheader("📅 Evento e local de referência")
     st.caption(
         "Cadastre o culto/reuniao, defina o ponto central e habilite a captura "
         "de localizacao quando for o momento."
@@ -1143,7 +1143,7 @@ def _render_eventos(slug):
         col_apl1, col_apl2 = st.columns([3, 1])
         with col_apl1:
             st.info(
-                f"📌 **Localizacao capturada:** `{cap_lat:.6f}, {cap_lon:.6f}`"
+                f"**Localizacao capturada:** `{cap_lat:.6f}, {cap_lon:.6f}`"
             )
         with col_apl2:
             if st.button(
@@ -1158,7 +1158,7 @@ def _render_eventos(slug):
                 if endereco_capt:
                     st.session_state["evt_end"] = endereco_capt
                 st.session_state["evt_ver"] += 1
-                st.success("✅ Localizacao aplicada ao evento!")
+                st.success("Localização aplicada ao evento!")
                 st.rerun()
     else:
         st.caption(
@@ -1170,7 +1170,7 @@ def _render_eventos(slug):
     col_end_1, col_end_2 = st.columns([3, 1])
     with col_end_1:
         endereco_input = st.text_input(
-            "Endereco do evento",
+            "Endereço do evento",
             value=st.session_state["evt_end"],
             key=f"evt_end_v{ver}",
             placeholder="Ex.: Assembleia de Deus Central, Minacu GO",
@@ -1188,7 +1188,7 @@ def _render_eventos(slug):
 
     if buscar_endereco:
         if not endereco_input.strip():
-            st.warning("Informe um endereco para buscar.")
+            st.warning("Informe um endereço para buscar.")
         else:
             with st.spinner("Buscando coordenadas..."):
                 resultado = _buscar_coordenadas_por_endereco(endereco_input)
@@ -1198,17 +1198,17 @@ def _render_eventos(slug):
                 st.session_state["evt_lon"] = lon_b
                 st.session_state["evt_end"] = end_b
                 st.session_state["evt_ver"] += 1
-                st.success("✅ Coordenadas encontradas!")
+                st.success("Coordenadas encontradas!")
                 st.rerun()
             else:
-                st.error("❌ Nao encontrei coordenadas. Complemente com cidade e estado.")
+                st.error("Não encontrei coordenadas. Complemente com cidade e estado.")
 
     # ─── Google Maps ────────────────────────────────────────────────
     with st.expander("🗺️ Buscar no Google Maps ou colar link/coordenadas"):
         busca_maps = st.text_input(
             "Buscar local no Google Maps",
             key=f"busca_maps_v{ver}",
-            placeholder="Nome do local, igreja ou endereco",
+            placeholder="Nome do local, igreja ou endereço",
         )
         if busca_maps.strip():
             if busca_maps.strip().lower().startswith(("http://", "https://")):
@@ -1248,11 +1248,11 @@ def _render_eventos(slug):
                     if end_m:
                         st.session_state["evt_end"] = end_m
                     st.session_state["evt_ver"] += 1
-                    st.success("✅ Coordenadas carregadas!")
+                    st.success("Coordenadas carregadas!")
                     st.rerun()
                 else:
                     st.error(
-                        "❌ Use o formato `lat,lon` (ex: -13.5,-48.2) "
+                        "Use o formato `lat,lon` (ex: -13.5,-48.2) "
                         "ou um link completo do Google Maps."
                     )
                     if link_exp:
@@ -1369,7 +1369,7 @@ def _render_eventos(slug):
         c6, c7 = st.columns(2)
         with c6:
             captura = st.checkbox(
-                "Habilitar captura de localizacao",
+                "Habilitar captura de localização",
                 value=bool(int(evento_atual.get("captura_habilitada", 0) or 0)),
             )
         with c7:
@@ -1391,23 +1391,23 @@ def _render_eventos(slug):
             help="Use {nome}, {evento}, {data}.",
         )
         observacoes = st.text_area(
-            "Observacoes",
+            "Observações",
             value=str(evento_atual.get("observacoes", "") or ""),
             height=60,
         )
 
         if latitude == 0.0 and longitude == 0.0:
-            st.warning("⚠️ Latitude/longitude em 0,0. Capture ou informe coordenadas validas.")
+            st.warning("Latitude/longitude em 0,0. Capture ou informe coordenadas validas.")
 
         salvar = st.form_submit_button("💾 Salvar evento", type="primary")
 
     if salvar:
         if not nome.strip():
-            st.error("❌ Informe o nome do evento.")
+            st.error("Informe o nome do evento.")
         elif latitude == 0.0 and longitude == 0.0:
-            st.error("❌ Informe coordenadas validas.")
+            st.error("Informe coordenadas válidas.")
         elif hora_inicio_form and hora_fim_form and hora_fim_form <= hora_inicio_form:
-            st.error("❌ A hora de fim deve ser maior que a hora de inicio.")
+            st.error("A hora de fim deve ser maior que a hora de inicio.")
         else:
             try:
                 id_existente = evento_atual.get("id_evento")
@@ -1451,11 +1451,11 @@ def _render_eventos(slug):
                         mensagem_lembrete=mensagem_lembrete_form,
                     )
 
-                st.success("✅ Evento salvo!")
+                st.success("Evento salvo!")
                 st.session_state.pop("evt_ref", None)
                 st.rerun()
             except Exception as exc:
-                st.error(f"❌ Erro ao salvar: {exc}")
+                st.error(f"Erro ao salvar: {exc}")
 
     # ─── Acoes ──────────────────────────────────────────────────────
     if evento_atual.get("id_evento"):
@@ -1488,15 +1488,15 @@ def _render_eventos(slug):
                             + "\nEvento cancelado/desativado."
                         ).strip(),
                     )
-                    st.success("✅ Desativado.")
+                    st.success("Desativado.")
                     st.session_state.pop("evt_ref", None)
                     st.rerun()
                 except Exception as exc:
-                    st.error(f"❌ Erro: {exc}")
+                    st.error(f"Erro: {exc}")
 
         with ac2:
             confirmar = st.checkbox(
-                "Confirmo exclusao definitiva",
+                "Confirmo exclusão definitiva",
                 key=f"conf_excluir_{int(evento_atual['id_evento'])}",
             )
             if st.button(
@@ -1507,11 +1507,11 @@ def _render_eventos(slug):
             ):
                 try:
                     excluir_geo_evento(slug, evento_atual["id_evento"])
-                    st.success("✅ Excluido.")
+                    st.success("Excluído.")
                     st.session_state.pop("evt_ref", None)
                     st.rerun()
                 except Exception as exc:
-                    st.error(f"❌ Erro: {exc}")
+                    st.error(f"Erro: {exc}")
 
     # ─── Tabela ─────────────────────────────────────────────────────
     st.divider()
@@ -1566,7 +1566,7 @@ def _render_eventos(slug):
 def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key="sel_evt"):
     eventos = listar_geo_eventos(slug, incluir_inativos=not apenas_ativos)
     if eventos.empty:
-        st.info("📭 Cadastre um evento primeiro na aba **Eventos**.")
+        st.info("Cadastre um evento primeiro na aba **Eventos**.")
         return None
 
     if apenas_ativos:
@@ -1575,7 +1575,7 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
         eventos = eventos[eventos["captura_habilitada"].astype(int) == 1]
 
     if eventos.empty:
-        st.warning("⚠️ Nenhum evento disponivel.")
+        st.warning("Nenhum evento disponível.")
         return None
 
     # Le horarios para enriquecer os rotulos
@@ -1597,9 +1597,9 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
 # ═══════════════════════════════════════════════════════════════════════
 
 def _render_checkin(slug):
-    st.subheader("📲 Check-in por localizacao")
+    st.subheader("📲 Check-in por localização")
     st.caption(
-        "📌 Capture sua localizacao no botao GPS no **topo da pagina**. "
+        "📌 Capture sua localização no botao GPS no **topo da página**. "
         "A captura fica compartilhada entre todas as abas."
     )
 
@@ -1624,21 +1624,21 @@ def _render_checkin(slug):
     if status_temporal == "antes":
         st.info(f"⏰ **{descricao_temporal}** para o evento comecar.")
     elif status_temporal == "em_andamento":
-        st.success(f"🟢 **Evento em andamento** ({descricao_temporal.split('iniciou')[1].strip().rstrip(')') if 'iniciou' in descricao_temporal else descricao_temporal}).")
+        st.success(f"**Evento em andamento** ({descricao_temporal.split('iniciou')[1].strip().rstrip(')') if 'iniciou' in descricao_temporal else descricao_temporal}).")
     elif status_temporal == "encerrado":
-        st.warning(f"🔴 **Evento encerrado** ({descricao_temporal}).")
+        st.warning(f"**Evento encerrado** ({descricao_temporal}).")
     else:
-        st.caption("ℹ️ Este evento nao tem horario definido.")
+        st.caption("ℹ️ Este evento não tem horario definido.")
 
     # Status da janela de check-in
     if dentro_janela:
         if status_temporal != "sem_horario":
-            st.success(f"✅ **Check-in disponivel.** {motivo_janela}")
+            st.success(f"**Check-in disponivel.** {motivo_janela}")
     else:
-        st.error(f"🚫 **Check-in nao disponivel:** {motivo_janela}")
+        st.error(f"**Check-in nao disponivel:** {motivo_janela}")
 
     if not bool(int(evento.get("captura_habilitada", 0) or 0)):
-        st.warning("⚠️ A captura esta **desabilitada** para este evento.")
+        st.warning("A captura esta **desabilitada** para este evento.")
 
     membros = _membros_ativos(slug)
     if membros.empty:
@@ -1651,7 +1651,7 @@ def _render_checkin(slug):
 
     # ─── INDIVIDUAL ─────────────────────────────────────────────────
     with tab_ind:
-        st.caption("Selecione um membro e use a localizacao capturada no topo.")
+        st.caption("Selecione um membro e use a localização capturada no topo.")
 
         mapa_membros = {_rotulo_membro(row): row.to_dict() for _, row in membros.iterrows()}
         opcoes_membros = list(mapa_membros.keys())
@@ -1677,8 +1677,8 @@ def _render_checkin(slug):
 
         if not coord_global:
             st.warning(
-                "📍 **Nenhuma localizacao capturada ainda.** "
-                "Use o botao GPS no **topo da pagina** para capturar sua localizacao."
+                "**Nenhuma localização capturada ainda.** "
+                "Use o botao GPS no **topo da página** para capturar sua localização."
             )
         else:
             lat_c, lon_c = coord_global
@@ -1706,12 +1706,12 @@ def _render_checkin(slug):
 
             if bloqueado:
                 st.error(
-                    "🚫 **Check-in bloqueado:** voce esta fora da janela permitida. "
+                    "**Check-in bloqueado:** voce esta fora da janela permitida. "
                     f"Motivo: {motivo_janela}"
                 )
 
             if st.button(
-                "✅ Registrar minha presenca",
+                "✅ Registrar minha presença",
                 type="primary",
                 use_container_width=True,
                 disabled=bloqueado,
@@ -1732,22 +1732,22 @@ def _render_checkin(slug):
                     if presente_calc:
                         if atrasado_calc:
                             st.success(
-                                f"✅ Presenca registrada para {membro['nome']} "
+                                f"Presenca registrada para {membro['nome']} "
                                 f"(chegou atrasado)."
                             )
                         else:
-                            st.success(f"✅ Presenca registrada para {membro['nome']}!")
+                            st.success(f"Presenca registrada para {membro['nome']}!")
                     else:
-                        st.warning(f"⚠️ Registrado como ausente. Motivo: {status_calc}")
+                        st.warning(f"Registrado como ausente. Motivo: {status_calc}")
 
                     if id_evt_url or id_cad_url:
                         _limpar_query_geo()
                 except Exception as exc:
-                    st.error(f"❌ Erro ao registrar: {exc}")
+                    st.error(f"Erro ao registrar: {exc}")
 
-        with st.expander("🛠️ Registrar localizacao manualmente"):
+        with st.expander("🛠️ Registrar localização manualmente"):
             st.caption(
-                "Use somente se a captura automatica nao funcionar. Como esta opcao "
+                "Use somente se a captura automatica não funcionar. Como esta opção "
                 "ignora a verificacao por GPS, e necessario confirmar a senha da "
                 "igreja antes de registrar."
             )
@@ -1767,7 +1767,7 @@ def _render_checkin(slug):
                     key=f"btn_reg_manual_{evento['id_evento']}_{membro['id_cadastro']}",
                 ):
                     if lat_m == 0 and lon_m == 0:
-                        st.error("Informe coordenadas validas.")
+                        st.error("Informe coordenadas válidas.")
                     else:
                         dist_m, dentro_m, presente_m, status_m, _, _ = _calcular_resultado_presenca(
                             evento, lat_m, lon_m, config_temporal
@@ -1791,14 +1791,14 @@ def _render_checkin(slug):
     # ─── EM MASSA ───────────────────────────────────────────────────
     with tab_massa:
         st.caption(
-            "Use quando a lideranca esta no local. Use a localizacao capturada no topo "
+            "Use quando a lideranca esta no local. Use a localização capturada no topo "
             "e selecione todos os membros presentes."
         )
 
         if not coord_global:
             st.warning(
-                "📍 **Nenhuma localizacao capturada.** "
-                "Use o botao GPS no **topo da pagina**."
+                "**Nenhuma localização capturada.** "
+                "Use o botao GPS no **topo da página**."
             )
             return
 
@@ -1813,10 +1813,10 @@ def _render_checkin(slug):
         col_d3.metric("Distancia", f"{dist_massa:.0f} m")
 
         if dentro_massa:
-            st.success("✅ Voce esta dentro do raio do evento.")
+            st.success("Você esta dentro do raio do evento.")
         else:
             st.warning(
-                f"⚠️ Voce esta fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
+                f"Voce esta fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
                 "Registros serao marcados como ausentes."
             )
 
@@ -1828,7 +1828,7 @@ def _render_checkin(slug):
 
         if not dentro_janela:
             st.error(
-                f"🚫 **Check-in em massa bloqueado:** fora da janela permitida. "
+                f"**Check-in em massa bloqueado:** fora da janela permitida. "
                 f"{motivo_janela}"
             )
 
@@ -1852,7 +1852,7 @@ def _render_checkin(slug):
                 st.rerun()
         with b2:
             if st.button(
-                "✗ Limpar selecao",
+                "✗ Limpar seleção",
                 use_container_width=True,
                 key=f"btn_clear_{evento['id_evento']}",
             ):
@@ -1920,10 +1920,10 @@ def _render_checkin(slug):
                         erros.append(f"{membro_m.get('nome', rotulo)}: {exc}")
 
             if registrados:
-                st.success(f"✅ {registrados} check-in(s) registrados.")
+                st.success(f"{registrados} check-in(s) registrados.")
                 st.session_state[sel_key] = []
             if erros:
-                st.error(f"⚠️ {len(erros)} erro(s):")
+                st.error(f"{len(erros)} erro(s):")
                 for e in erros[:5]:
                     st.caption(f"- {e}")
 
@@ -1934,7 +1934,7 @@ def _render_checkin(slug):
     st.markdown("### 🔗 Auto-checkin via link personalizado")
     st.caption(
         "Envie via WhatsApp um link personalizado para cada membro. "
-        "Ao clicar, o membro autoriza o GPS e a presenca e registrada automaticamente. "
+        "Ao clicar, o membro autoriza o GPS e a presença e registrada automaticamente. "
         "Cada link e unico e pode ser usado apenas uma vez."
     )
 
@@ -1957,14 +1957,14 @@ def _render_checkin(slug):
     with col_g2:
         tokens_ja_gerados = st.session_state.get(tokens_key, {})
         if tokens_ja_gerados:
-            st.info(f"✅ {len(tokens_ja_gerados)} link(s) gerado(s) para este evento.")
+            st.info(f"{len(tokens_ja_gerados)} link(s) gerado(s) para este evento.")
 
     if gerar_links:
         ids_membros = [int(row["id_cadastro"]) for _, row in membros.iterrows()]
         with st.spinner(f"Gerando {len(ids_membros)} links..."):
             tokens_novos = _gerar_tokens_checkin(slug, id_evento_atual, ids_membros)
             st.session_state[tokens_key] = tokens_novos
-        st.success(f"✅ {len(tokens_novos)} links gerados com sucesso!")
+        st.success(f"{len(tokens_novos)} links gerados com sucesso!")
         st.rerun()
 
     # Se ha tokens gerados, mostra opcoes de envio
@@ -2051,9 +2051,9 @@ def _render_checkin(slug):
 
             # Envio em massa via API
             if _whatsapp_api_configurada():
-                st.success("✅ WhatsApp Cloud API configurada.")
+                st.success("WhatsApp Cloud API configurada.")
             else:
-                st.warning("⚠️ WhatsApp Cloud API nao configurada. Use os links individuais abaixo.")
+                st.warning("WhatsApp Cloud API não configurada. Use os links individuais abaixo.")
 
             confirmar_envio_links = st.checkbox(
                 f"Confirmo o envio de links para {qtd_validos_link} membro(s)",
@@ -2085,7 +2085,7 @@ def _render_checkin(slug):
                 df_res = pd.DataFrame(resultados)
                 enviados = int((df_res["Status"] == "Enviado").sum()) if not df_res.empty else 0
                 erros = int((df_res["Status"] == "Erro").sum()) if not df_res.empty else 0
-                st.success(f"✅ Envio concluido. Enviados: {enviados}. Erros: {erros}.")
+                st.success(f"Envio concluido. Enviados: {enviados}. Erros: {erros}.")
                 st.dataframe(df_res, use_container_width=True, hide_index=True)
 
             # Links individuais
@@ -2260,10 +2260,10 @@ def _render_mensagens(slug):
     st.markdown("#### 📨 Envio em massa")
 
     if _whatsapp_api_configurada():
-        st.success("✅ WhatsApp Cloud API configurada.")
+        st.success("WhatsApp Cloud API configurada.")
     else:
         st.warning(
-            "⚠️ WhatsApp Cloud API nao configurada. Voce ainda pode usar os links individuais abaixo."
+            "WhatsApp Cloud API não configurada. Você ainda pode usar os links individuais abaixo."
         )
 
     qtd_validos = (
@@ -2303,7 +2303,7 @@ def _render_mensagens(slug):
         df_res = pd.DataFrame(resultados)
         enviados = int((df_res["Status"] == "Enviado").sum()) if not df_res.empty else 0
         erros = int((df_res["Status"] == "Erro").sum()) if not df_res.empty else 0
-        st.success(f"✅ Concluido. Enviados: {enviados}. Erros: {erros}.")
+        st.success(f"Concluido. Enviados: {enviados}. Erros: {erros}.")
         st.dataframe(df_res, use_container_width=True, hide_index=True)
 
     st.markdown("#### 🔗 Links individuais")
@@ -2348,7 +2348,7 @@ def _render_auto_checkin_via_link(slug, token):
             slug, str(token)[:8],
         )
         st.error(
-            "❌ **Link invalido ou expirado.**\n\n"
+            "**Link invalido ou expirado.**\n\n"
             "Verifique se o link recebido esta completo. "
             "Se o problema persistir, solicite um novo link."
         )
@@ -2387,29 +2387,29 @@ def _render_auto_checkin_via_link(slug, token):
     try:
         evento = obter_geo_evento(slug, dados_token["id_evento"])
     except Exception as exc:
-        st.error(f"❌ Erro ao carregar evento: {exc}")
+        st.error(f"Erro ao carregar evento: {exc}")
         return
 
     if not evento:
-        st.error("❌ Evento nao encontrado no sistema.")
+        st.error("Evento não encontrado no sistema.")
         return
 
     # Busca info do membro
     try:
         membros_df = carregar_cadastros(slug)
     except Exception as exc:
-        st.error(f"❌ Erro ao carregar cadastros: {exc}")
+        st.error(f"Erro ao carregar cadastros: {exc}")
         return
 
     if membros_df.empty:
-        st.error("❌ Nenhum cadastro encontrado.")
+        st.error("Nenhum cadastro encontrado.")
         return
 
     membros_df["id_cadastro"] = pd.to_numeric(membros_df["id_cadastro"], errors="coerce")
     membro_filtro = membros_df[membros_df["id_cadastro"] == dados_token["id_cadastro"]]
 
     if membro_filtro.empty:
-        st.error("❌ Membro nao encontrado no cadastro.")
+        st.error("Membro não encontrado no cadastro.")
         return
 
     membro = membro_filtro.iloc[0]
@@ -2454,13 +2454,13 @@ def _render_auto_checkin_via_link(slug, token):
     if status_temporal == "antes":
         st.info(f"⏰ {descricao_temporal} para o evento comecar.")
     elif status_temporal == "em_andamento":
-        st.success(f"🟢 Evento em andamento.")
+        st.success(f"Evento em andamento.")
     elif status_temporal == "encerrado":
-        st.warning(f"🔴 {descricao_temporal}.")
+        st.warning(f"{descricao_temporal}.")
 
     if not dentro_janela:
         st.error(
-            f"🚫 **Check-in nao disponivel no momento.**\n\n{motivo_janela}\n\n"
+            f"**Check-in nao disponivel no momento.**\n\n{motivo_janela}\n\n"
             "Volte no horario correto para registrar sua presenca."
         )
         return
@@ -2468,12 +2468,12 @@ def _render_auto_checkin_via_link(slug, token):
     # Instrucao clara
     st.markdown("### 📍 Autorize sua localizacao")
     st.caption(
-        "Clique no icone abaixo e autorize seu navegador a acessar a localizacao. "
-        "Sua presenca sera registrada automaticamente."
+        "Clique no icone abaixo e autorize seu navegador a acessar a localização. "
+        "Sua presença será registrada automaticamente."
     )
 
     if not GEO_LIB_OK:
-        st.error("Biblioteca de geolocalizacao nao instalada.")
+        st.error("Biblioteca de geolocalizacao não instalada.")
         return
 
     # Captura GPS
@@ -2484,7 +2484,7 @@ def _render_auto_checkin_via_link(slug, token):
         return
 
     if not loc or loc.get("latitude") is None or loc.get("longitude") is None:
-        st.caption("⬆️ Aguardando captura da localizacao...")
+        st.caption("⬆️ Aguardando captura da localização...")
         return
 
     try:
@@ -2516,7 +2516,7 @@ def _render_auto_checkin_via_link(slug, token):
         )
         _marcar_token_usado(slug, token, status)
     except Exception as exc:
-        st.error(f"❌ Erro ao registrar presenca: {exc}")
+        st.error(f"Erro ao registrar presenca: {exc}")
         return
 
     # Mostra resultado
@@ -2524,14 +2524,14 @@ def _render_auto_checkin_via_link(slug, token):
         st.balloons()
         if atrasado:
             st.success(
-                f"✅ **PRESENCA REGISTRADA!**\n\n"
+                f"**PRESENCA REGISTRADA!**\n\n"
                 f"👤 {nome_membro}\n\n"
                 f"📍 Distancia: {dist:.0f} m\n\n"
                 f"⏰ Voce chegou apos a tolerancia (marcado como atrasado)."
             )
         else:
             st.success(
-                f"✅ **PRESENCA REGISTRADA!**\n\n"
+                f"**PRESENCA REGISTRADA!**\n\n"
                 f"👤 {nome_membro}\n\n"
                 f"📍 Distancia: {dist:.0f} m\n\n"
                 f"🎉 Bem-vindo(a) ao evento!"
@@ -2539,7 +2539,7 @@ def _render_auto_checkin_via_link(slug, token):
     else:
         raio = int(evento.get("raio_metros", DEFAULT_RAIO_METROS))
         st.warning(
-            f"⚠️ **Voce esta fora do raio do evento.**\n\n"
+            f"**Voce esta fora do raio do evento.**\n\n"
             f"📍 Distancia: {dist:.0f} m (raio permitido: {raio} m)\n\n"
             f"Sua localizacao foi registrada como ausente. "
             f"Aproxime-se do local e o secretariado podera te marcar presente manualmente."
@@ -2566,22 +2566,22 @@ def render():
 
     slug = slug_da_sessao()
 
-    st.subheader("📍 Monitoramento por Localizacao")
+    st.subheader("📍 Monitoramento por Localização")
     st.caption(
-        "Controle de presenca por georreferenciamento usando o GPS do celular. "
+        "Controle de presença por georreferenciamento usando o GPS do celular. "
         "Envio de mensagens automatizadas para presentes e ausentes."
     )
 
     if not GEO_LIB_OK:
         st.error(
-            "⚠️ **Biblioteca streamlit-geolocation nao instalada!**\n\n"
+            "**Biblioteca streamlit-geolocation nao instalada!**\n\n"
             "Adicione `streamlit-geolocation>=0.0.10` ao seu `requirements.txt` "
             "e faca o redeploy."
         )
         return
 
     st.info(
-        "💡 **Importante:** a captura de localizacao depende da permissao do "
+        "**Importante:** a captura de localizacao depende da permissao do "
         "navegador/celular. Use somente com ciencia e consentimento dos "
         "participantes (LGPD)."
     )

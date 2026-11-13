@@ -1121,11 +1121,11 @@ def _render_atualizar_cadastro_publico():
             data_nascimento = _parse_data_nascimento(data_nascimento_txt)
             data_nascimento_br = _formatar_data_br(data_nascimento)
             if not slug or not codigo or not cpf or not data_nascimento:
-                st.error("Informe igreja, codigo, CPF e data de nascimento.")
+                st.error("Informe igreja, código, CPF e data de nascimento.")
             else:
                 slug_limpo = slug.strip().lower()
                 if not validar_codigo_atualizacao_cadastral(slug_limpo, codigo):
-                    st.error("Codigo de atualizacao cadastral invalido.")
+                    st.error("Código de atualização cadastral invalido.")
                     return
                 try:
                     cadastro = localizar_cadastro_publico(
@@ -1138,7 +1138,7 @@ def _render_atualizar_cadastro_publico():
                     cadastro = None
                 if not cadastro:
                     st.warning(
-                        "Cadastro nao localizado. Voce pode conferir os dados ou "
+                        "Cadastro não localizado. Você pode conferir os dados ou "
                         "enviar um pre-cadastro para analise da secretaria."
                     )
                     st.session_state["cadastro_publico_slug"] = slug_limpo
@@ -1173,7 +1173,7 @@ def _render_atualizar_cadastro_publico():
             st.markdown("### Enviar pre-cadastro")
         with info_col2:
             st.caption(
-                "Seu pre-cadastro sera enviado para analise. A secretaria da igreja "
+                "Seu pre-cadastro será enviado para analise. A secretaria da igreja "
                 "precisara aprovar antes de virar cadastro oficial."
             )
             st.info(f"Data de nascimento informada: {data_salva_br}")
@@ -1188,7 +1188,7 @@ def _render_atualizar_cadastro_publico():
             batismo_aguas_txt = b1.text_input("Data de batismo nas aguas", placeholder="Ex.: 26/06/1979 ou 26061979")
             batismo_espirito_txt = b2.text_input("Data de batismo no Espirito Santo", placeholder="Ex.: 26/06/1979 ou 26061979")
             telefone = b3.text_input("Telefone / WhatsApp")
-            st.markdown("**Endereco**")
+            st.markdown("**Endereço**")
             c3, c4 = st.columns([3, 1])
             logradouro = c3.text_input("Logradouro")
             numero = c4.text_input("Numero")
@@ -1196,7 +1196,7 @@ def _render_atualizar_cadastro_publico():
             bairro = c5.text_input("Bairro")
             cidade = c6.text_input("Cidade")
             cep = c7.text_input("CEP")
-            observacoes = st.text_area("Observacoes")
+            observacoes = st.text_area("Observações")
             if st.form_submit_button("Enviar pre-cadastro", type="primary"):
                 batismo_aguas = _parse_data_opcional(batismo_aguas_txt)
                 batismo_espirito = _parse_data_opcional(batismo_espirito_txt)
@@ -1285,7 +1285,7 @@ def _render_atualizar_cadastro_publico():
             placeholder="Ex.: 26/06/1979 ou 26061979",
         )
         telefone = b3.text_input("Telefone / WhatsApp", value=cadastro.get("telefone", ""))
-        st.markdown("**Endereco**")
+        st.markdown("**Endereço**")
         c3, c4 = st.columns([3, 1])
         logradouro = c3.text_input("Logradouro", value=cadastro.get("logradouro", ""))
         numero = c4.text_input("Numero", value=cadastro.get("numero", ""))
@@ -1294,8 +1294,8 @@ def _render_atualizar_cadastro_publico():
         cidade = c6.text_input("Cidade", value=cadastro.get("cidade", ""))
         cep = c7.text_input("CEP", value=cadastro.get("cep", ""))
 
-        st.caption("CPF e data de nascimento nao sao alterados por este formulario.")
-        if st.form_submit_button("Salvar atualizacao", type="primary"):
+        st.caption("CPF e data de nascimento não são alterados por este formulario.")
+        if st.form_submit_button("Salvar atualização", type="primary"):
             batismo_aguas = _parse_data_opcional(batismo_aguas_txt)
             batismo_espirito = _parse_data_opcional(batismo_espirito_txt)
             if batismo_aguas_txt.strip() and not batismo_aguas:

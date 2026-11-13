@@ -116,7 +116,7 @@ def _listar_igrejas():
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        if st.button("Salvar alteracoes", type="primary", key=kp + "btn_upd"):
+        if st.button("Salvar alterações", type="primary", key=kp + "btn_upd"):
             atualizar_igreja(id_ig, nome_e, email_e, plano_e, ativa_e)
 
             for k in list(st.session_state.keys()):
@@ -158,7 +158,7 @@ def _listar_igrejas():
                 if k.startswith("_edit_igreja_") or k == "sel_igreja_edit":
                     st.session_state.pop(k, None)
 
-            st.toast("Igreja excluida.")
+            st.toast("Igreja excluída.")
             st.rerun()
 
 
@@ -170,7 +170,7 @@ def _criar_igreja():
         slug_sugerido = st.text_input(
             "Identificador (slug)",
             placeholder="ex: ad-serrinha",
-            help="Letras minusculas, numeros e hifens. Sera o login da igreja.",
+            help="Letras minusculas, números e hifens. Será o login da igreja.",
         )
         email = st.text_input("E-mail do tesoureiro")
         senha = st.text_input("Senha inicial", type="password")
@@ -251,7 +251,7 @@ def _gerenciar_logos():
     st.markdown("#### Logo da sidebar (sistema)")
     st.caption(
         "Logo padrao da barra lateral de menus. "
-        "Usado quando uma igreja nao tem seu proprio logo de sidebar."
+        "Usado quando uma igreja não tem seu proprio logo de sidebar."
     )
 
     logo_sb_sis = obter_logo_sidebar_sistema()
@@ -336,7 +336,7 @@ def _gerenciar_logos():
     # ═══ LOGO DA SIDEBAR (IGREJA) ════════════════════════════════════════
     st.markdown("##### Logo da sidebar da igreja")
     st.caption(
-        "Logo exibido na barra lateral apos o login desta igreja. "
+        "Logo exibido na barra lateral após o login desta igreja. "
         "Se vazio, usa o logo da sidebar do sistema."
     )
 
@@ -415,7 +415,7 @@ def _gerenciar_subcategorias():
         nova_sub = st.text_input(
             "Nome da subcategoria",
             placeholder="Ex: Equipamentos de som",
-            help="Use letras, numeros e espacos. Sem acentos quando possivel.",
+            help="Use letras, números e espacos. Sem acentos quando possível.",
         )
 
         if st.form_submit_button("Adicionar", type="primary"):
@@ -426,7 +426,7 @@ def _gerenciar_subcategorias():
                     st.toast(f"Subcategoria '{nova_sub}' adicionada!")
                     st.rerun()
                 else:
-                    st.error("Esta subcategoria ja existe.")
+                    st.error("Esta subcategoria já existe.")
 
 
 def _backup_admin():
@@ -536,7 +536,7 @@ def _backup_admin():
         st.session_state["backup_admin_falhas"] = falhas
         if falhas:
             st.warning(
-                f"⚠️ Backup gerado, mas {len(falhas)} item(ns) falharam e podem "
+                f"Backup gerado, mas {len(falhas)} item(ns) falharam e podem "
                 "estar ausentes do ZIP. Veja a lista abaixo."
             )
         else:
@@ -552,7 +552,7 @@ def _backup_admin():
 
     if "backup_admin_dados" in st.session_state:
         tam_mb = len(st.session_state["backup_admin_dados"]) / (1024 * 1024)
-        st.success(f"✅ Backup pronto ({tam_mb:.2f} MB)")
+        st.success(f"Backup pronto ({tam_mb:.2f} MB)")
         st.download_button(
             "📥 Baixar backup completo",
             data=st.session_state["backup_admin_dados"],
@@ -574,7 +574,7 @@ def _backup_admin():
     )
 
     st.warning(
-        "⚠️ **Atencao:** esta operacao sobrescreve dados atuais do sistema "
+        "**Atencao:** esta operacao sobrescreve dados atuais do sistema "
         "(igrejas, senhas, planos, configuracoes, logos e subcategorias). "
         "Bancos atuais sao salvos automaticamente em `backups/` no servidor."
     )
@@ -592,7 +592,7 @@ def _backup_admin():
     if arquivo_zip:
         tam_mb_up = arquivo_zip.size / (1024 * 1024)
         st.info(
-            f"📦 Arquivo recebido: **{arquivo_zip.name}** ({tam_mb_up:.2f} MB)"
+            f"Arquivo recebido: **{arquivo_zip.name}** ({tam_mb_up:.2f} MB)"
         )
 
         col_r1, col_r2 = st.columns([1, 3])
@@ -626,13 +626,13 @@ def _backup_admin():
             )
 
             if total_ok > 0:
-                st.success(f"✅ Restauracao concluida — {total_ok} item(ns) restaurado(s).")
+                st.success(f"Restauracao concluida — {total_ok} item(ns) restaurado(s).")
 
             # Master.db
             if resultado["master_restaurado"]:
                 st.markdown(
                     "✅ **Banco master.db restaurado** — "
-                    "senhas, planos, subcategorias e configuracoes do sistema."
+                    "senhas, planos, subcategorias e configurações do sistema."
                 )
 
             # Logos
@@ -658,7 +658,7 @@ def _backup_admin():
                 )
                 with st.expander("Ver detalhes", expanded=False):
                     st.caption(
-                        "Estas igrejas nao existiam no sistema atual e foram "
+                        "Estas igrejas não existiam no sistema atual e foram "
                         "registradas com plano **basico** e senha temporaria. "
                         "Recomenda-se redefinir a senha e o plano pelo painel."
                     )
@@ -668,7 +668,7 @@ def _backup_admin():
             # Erros
             if resultado["erros"]:
                 st.error(
-                    f"⚠️ **{len(resultado['erros'])} erro(s) durante a restauracao:**"
+                    f"**{len(resultado['erros'])} erro(s) durante a restauracao:**"
                 )
                 with st.expander("Ver erros", expanded=True):
                     for erro in resultado["erros"]:
@@ -692,7 +692,7 @@ def _backup_admin():
 def _configuracoes():
     from data.repository import obter_config, salvar_config
 
-    st.subheader("Configuracoes do sistema")
+    st.subheader("Configurações do sistema")
 
     st.markdown("#### Contato para recuperacao de senha")
     st.caption(
@@ -727,7 +727,7 @@ def _configuracoes():
             height=80,
         )
 
-        if st.form_submit_button("Salvar configuracoes", type="primary"):
+        if st.form_submit_button("Salvar configurações", type="primary"):
             salvar_config("contato_email", email_novo.strip())
             salvar_config(
                 "contato_whatsapp",
@@ -735,7 +735,7 @@ def _configuracoes():
             )
             salvar_config("contato_mensagem", msg_nova.strip())
 
-            st.toast("Configuracoes salvas!")
+            st.toast("Configurações salvas!")
             st.rerun()
 
     st.divider()

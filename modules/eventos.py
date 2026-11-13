@@ -57,12 +57,12 @@ def _idx(lista, valor, padrao=0):
 def _render_form(slug):
     st.markdown("### Novo evento")
     st.caption(
-        "Eventos publicos aparecem na pagina institucional. Eventos para membros "
+        "Eventos publicos aparecem na página institucional. Eventos para membros "
         "exigem CPF valido. Eventos restritos ficam apenas dentro do sistema."
     )
 
     with st.form("form_evento_novo", clear_on_submit=True):
-        titulo = st.text_input("Titulo do evento")
+        titulo = st.text_input("Título do evento")
         c1, c2, c3 = st.columns(3)
         data = c1.date_input("Data", value=_hoje(), format="DD/MM/YYYY")
         hora_inicio = c2.text_input("Hora inicio", placeholder="19:00")
@@ -72,7 +72,7 @@ def _render_form(slug):
         local = c4.text_input("Local", placeholder="Templo sede, congregacao, salao...")
         departamento = c5.selectbox("Departamento / tipo de evento", TIPOS_EVENTO)
 
-        descricao = st.text_area("Descricao")
+        descricao = st.text_area("Descrição")
         c6, c7 = st.columns(2)
         responsavel = c6.text_input("Responsavel")
         contato = c7.text_input("Contato")
@@ -121,7 +121,7 @@ def _render_lista(slug):
     sit = c4.selectbox("Situacao", ["Todas"] + SITUACOES, key="eventos_sit")
 
     if inicio > fim:
-        st.error("A data inicial nao pode ser maior que a data final.")
+        st.error("A data inicial não pode ser maior que a data final.")
         return
 
     df = listar_eventos_igreja(
@@ -133,7 +133,7 @@ def _render_lista(slug):
     )
 
     if df.empty:
-        st.info("Nenhum evento encontrado no periodo.")
+        st.info("Nenhum evento encontrado no período.")
         return
 
     c1, c2, c3, c4 = st.columns(4)
@@ -181,7 +181,7 @@ def _render_lista(slug):
                 )
 
         with st.form(f"form_evento_editar_{id_evento}", clear_on_submit=True):
-            titulo = st.text_input("Titulo", value=row["titulo"])
+            titulo = st.text_input("Título", value=row["titulo"])
             c1, c2, c3 = st.columns(3)
             data = c1.date_input("Data", value=_parse_data(row["data"]), key=f"evento_data_{id_evento}", format="DD/MM/YYYY")
             hora_inicio = c2.text_input("Hora inicio", value=row["hora_inicio"] or "")
@@ -197,7 +197,7 @@ def _render_lista(slug):
                 key=f"evento_departamento_{id_evento}",
             )
 
-            descricao = st.text_area("Descricao", value=row["descricao"] or "")
+            descricao = st.text_area("Descrição", value=row["descricao"] or "")
             c6, c7 = st.columns(2)
             responsavel = c6.text_input("Responsavel", value=row["responsavel"] or "")
             contato = c7.text_input("Contato", value=row["contato"] or "")
@@ -218,7 +218,7 @@ def _render_lista(slug):
             cartaz = st.file_uploader(
                 "Novo cartaz do evento",
                 type=["png", "jpg", "jpeg", "webp", "pdf"],
-                help="Se nenhum arquivo for enviado, o cartaz atual sera mantido.",
+                help="Se nenhum arquivo for enviado, o cartaz atual será mantido.",
                 key=f"evento_cartaz_{id_evento}",
             )
 
@@ -249,7 +249,7 @@ def _render_lista(slug):
 
         if confirmar_exclusao(f"evento_{id_evento}", "Excluir evento selecionado"):
             excluir_evento_igreja(slug, id_evento)
-            st.success("Evento excluido.")
+            st.success("Evento excluído.")
             st.rerun()
 
 
@@ -257,7 +257,7 @@ def render():
     st.subheader("📅 Agenda de Eventos")
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão invalida. Faça login novamente.")
         return
 
     tab_novo, tab_lista = st.tabs(["Cadastrar evento", "Eventos"])

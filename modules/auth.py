@@ -1099,7 +1099,7 @@ def _login_orhafe():
 
 def _login_gfc():
     st.markdown("#### Acesso GFC")
-    st.caption("Secretaria de chamada acessa os registros. Secretaria geral acessa todo o modulo GFC.")
+    st.caption("Secretaria de chamada acessa os registros. Secretaria geral acessa todo o módulo GFC.")
     slug = _selectbox_igreja_login("login_gfc_igreja")
     usuario = _selectbox_usuario_login(
         slug,
@@ -1126,7 +1126,7 @@ def _login_gfc():
             help="Grupo preenchido automaticamente pelo lider vinculado ao grupo.",
         )
     else:
-        st.caption("Nao foi encontrado grupo vinculado automaticamente a esta secretaria. Selecione o grupo manualmente.")
+        st.caption("Não foi encontrado grupo vinculado automaticamente a esta secretaria. Selecione o grupo manualmente.")
         grupo_sel = st.selectbox(
             "Grupo familiar de atuação",
             list(op_grupos.keys()),
@@ -1137,11 +1137,11 @@ def _login_gfc():
 
     with st.form("form_login_gfc"):
         cpf4 = st.text_input(
-            "PIN - 4 ultimos digitos do CPF",
+            "PIN - 4 últimos digitos do CPF",
             type="password",
             autocomplete="off",
             max_chars=4,
-            help="Informe os 4 ultimos digitos do CPF do membro vinculado a esta secretaria.",
+            help="Informe os 4 últimos digitos do CPF do membro vinculado a esta secretaria.",
         )
         if st.form_submit_button("Entrar", type="primary", use_container_width=True):
             slug = str(slug or "").strip().lower()
@@ -1151,7 +1151,7 @@ def _login_gfc():
                 st.error("Preencha todos os campos.")
                 return
             if len(cpf4) != 4:
-                st.error("Informe exatamente os 4 ultimos digitos do CPF.")
+                st.error("Informe exatamente os 4 últimos digitos do CPF.")
                 return
             acesso = autenticar_gfc_secretaria_por_cpf4(slug, usuario, cpf4)
             if acesso:

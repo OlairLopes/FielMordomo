@@ -43,7 +43,7 @@ def _gerar_backup(slug):
         dados = exportar_backup_igreja(slug)
     except Exception:
         LOGGER.exception("Nao foi possivel exportar backup da igreja %s.", slug)
-        st.error("Nao foi possivel gerar o backup. Consulte o log do sistema.")
+        st.error("Não foi possível gerar o backup. Consulte o log do sistema.")
         return
     st.session_state[_sk("download_dados", slug)] = dados
     st.session_state[_sk("download_nome", slug)] = _nome_backup(slug)
@@ -53,7 +53,7 @@ def _gerar_backup(slug):
 def _render_download(slug):
     st.markdown("#### Gerar backup")
     st.caption(
-        "O ZIP inclui uma copia consistente do banco SQLite e arquivos CSV para conferencia."
+        "O ZIP inclui uma copia consistente do banco SQLite e arquivos CSV para conferência."
     )
     if st.button("Gerar backup completo", type="primary", key=_sk("gerar", slug)):
         _gerar_backup(slug)
@@ -96,7 +96,7 @@ def _restaurar_upload(slug):
         return
     except Exception:
         LOGGER.exception("Nao foi possivel restaurar backup da igreja %s.", slug)
-        st.error("Nao foi possivel restaurar o backup. Consulte o log do sistema.")
+        st.error("Não foi possível restaurar o backup. Consulte o log do sistema.")
         return
     _limpar_cache_dados()
     st.session_state.pop(_sk("upload_nome", slug), None)
@@ -197,7 +197,7 @@ def _render_backup_automatico(slug, plano):
 def render():
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão invalida. Faça login novamente.")
         return
     igreja = st.session_state.get("igreja", {})
     plano = igreja.get("plano", "basico") if isinstance(igreja, dict) else "basico"

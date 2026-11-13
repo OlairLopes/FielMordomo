@@ -202,7 +202,7 @@ def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
             st.rerun()
         return False
 
-    st.info("Digite a senha da igreja para autorizar esta acao.")
+    st.info("Digite a senha da igreja para autorizar esta ação.")
     senha = st.text_input(
         "Senha de autorizacao",
         type="password",

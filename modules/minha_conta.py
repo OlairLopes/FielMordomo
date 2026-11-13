@@ -206,7 +206,7 @@ def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
 
     st.divider()
     st.markdown(f"### {config['titulo']}")
-    st.caption(config["descricao"])
+    st.caption(config["descrição"])
 
     try:
         registros = config["listar"](slug)
@@ -221,7 +221,7 @@ def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
             nome = ""
             telefone = ""
             if not op_membros:
-                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+                st.warning("Não há membros ativos disponíveis no cadastro.")
             else:
                 membro_label = st.selectbox(
                     config["rotulo_membro_selectbox"],
@@ -256,7 +256,7 @@ def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
             email = st.text_input(
                 "E-mail", help="Opcional.", key=f"{campo_id}_email_novo"
             )
-            observacoes = st.text_area("Observacoes", key=f"{campo_id}_obs_novo")
+            observacoes = st.text_area("Observações", key=f"{campo_id}_obs_novo")
             if st.form_submit_button(config["submit_cadastrar"], type="primary"):
                 try:
                     if not id_cadastro:
@@ -316,7 +316,7 @@ def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
                 telefone = st.text_input("Telefone", value=row.get("telefone", ""))
                 email = st.text_input("E-mail", value=row.get("email", ""))
                 observacoes = st.text_area(
-                    "Observacoes", value=row.get("observacoes", "")
+                    "Observações", value=row.get("observacoes", "")
                 )
                 if st.form_submit_button(config["submit_editar"], type="primary"):
                     try:
@@ -348,14 +348,14 @@ def _render_controle_acessos(slug):
     st.divider()
     st.markdown("### Controle de acessos")
     st.caption(
-        "Ative, inative ou bloqueie usuarios operacionais e libere modulos extras "
+        "Ative, inative ou bloqueie usuarios operacionais e libere módulos extras "
         "sem conceder acesso a areas sensiveis como Backup, Tesoureiros e Minha Conta."
     )
     try:
         acessos = listar_acessos_usuarios(slug)
     except Exception:
         LOGGER.exception("Nao foi possivel carregar controle de acessos.")
-        st.error("Nao foi possivel carregar o controle de acessos.")
+        st.error("Não foi possível carregar o controle de acessos.")
         return
 
     if acessos.empty:
@@ -402,7 +402,7 @@ def _render_controle_acessos(slug):
 
     with st.expander("Redefinir senha ou PIN deste usuario", expanded=False):
         st.warning(
-            "Esta acao nao mostra a senha antiga. Ela substitui a credencial atual "
+            "Esta ação não mostra a senha antiga. Ela substitui a credencial atual "
             "por uma temporaria. Entregue a nova credencial somente ao proprio usuario."
         )
         confirmar_reset = st.checkbox(
@@ -439,7 +439,7 @@ def render():
     igreja = st.session_state.get("igreja", {})
 
     if not isinstance(igreja, dict) or not igreja or not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão invalida. Faça login novamente.")
         return
 
     st.markdown("### Dados da igreja")
@@ -465,7 +465,7 @@ def render():
 
     st.divider()
     st.markdown("### Configuracoes da igreja")
-    st.caption("Personalize criterios usados nos relatorios, dashboard e comprovantes.")
+    st.caption("Personalize critérios usados nos relatórios, dashboard e comprovantes.")
 
     try:
         dias_atual = _config_dias(slug)
@@ -511,7 +511,7 @@ Pedido:
         )
     except Exception:
         LOGGER.exception("Nao foi possivel carregar as configuracoes da igreja.")
-        st.error("Nao foi possivel carregar as configuracoes. Tente novamente.")
+        st.error("Não foi possível carregar as configurações. Tente novamente.")
         return
 
     idx_atual = OPCOES_DIAS.index(dias_atual)
@@ -519,8 +519,8 @@ Pedido:
     with st.form("form_config_igreja"):
         st.markdown("**Dizimista ativo**")
         st.caption(
-            "Um membro e considerado dizimista ativo se contribuiu com dizimo "
-            "nos ultimos N dias."
+            "Um membro e considerado dizimista ativo se contribuiu com dízimo "
+            "nos últimos N dias."
         )
 
         dias_novo = st.selectbox(
@@ -549,9 +549,9 @@ Pedido:
             "Esses valores alimentam o painel de saude financeira."
         )
         reserva_nova = st.text_input(
-            "Reserva financeira disponivel",
+            "Reserva financeira disponível",
             value=f"{reserva_atual:.2f}".replace(".", ","),
-            help="Informe apenas recursos realmente disponiveis como reserva.",
+            help="Informe apenas recursos realmente disponíveis como reserva.",
         )
         opcoes_meta = list(range(1, 13))
         meta_reserva_nova = st.selectbox(
@@ -572,13 +572,13 @@ Pedido:
             height=180,
         )
 
-        st.markdown("**Atualizacao cadastral publica**")
+        st.markdown("**Atualização cadastral pública**")
         st.caption(
-            "Codigo divulgado internamente para membros atualizarem ou enviarem "
-            "pre-cadastro pela pagina institucional."
+            "Código divulgado internamente para membros atualizarem ou enviarem "
+            "pre-cadastro pela página institucional."
         )
         codigo_cadastro_novo = st.text_input(
-            "Codigo de atualizacao cadastral",
+            "Código de atualização cadastral",
             value=str(codigo_cadastro_atual or ""),
             max_chars=30,
             help="Exemplo: AD2026 ou MEMBROS2026.",
@@ -587,7 +587,7 @@ Pedido:
         st.markdown("**Pedidos de oracao e visita pastoral**")
         st.caption(
             "Configure o contato pastoral que recebera notificacoes. "
-            "Pastores auxiliares ativos com telefone cadastrado tambem serao notificados."
+            "Pastores auxiliares ativos com telefone cadastrado também serao notificados."
         )
         p1, p2 = st.columns(2)
         nome_pastor_oracao_novo = p1.text_input(
@@ -611,13 +611,13 @@ Pedido:
             height=180,
         )
 
-        if st.form_submit_button("Salvar configuracoes", type="primary"):
+        if st.form_submit_button("Salvar configurações", type="primary"):
             assinatura_nova = assinatura_nova.strip()
             reserva_numero = _numero_config(reserva_nova, -1)
             if not assinatura_nova:
                 st.error("Informe o nome da assinatura dos comprovantes.")
             elif reserva_numero < 0:
-                st.error("Informe uma reserva financeira valida.")
+                st.error("Informe uma reserva financeira válida.")
             else:
                 try:
                     salvar_config_igreja(slug, "dias_dizimista_ativo", str(dias_novo))
@@ -647,16 +647,16 @@ Pedido:
                     )
                 except Exception:
                     LOGGER.exception("Nao foi possivel salvar as configuracoes da igreja.")
-                    st.error("Nao foi possivel salvar as configuracoes. Tente novamente.")
+                    st.error("Não foi possível salvar as configurações. Tente novamente.")
                 else:
-                    st.toast("Configuracoes salvas!")
+                    st.toast("Configurações salvas!")
                     st.rerun()
 
     st.divider()
     st.markdown("### Subcategorias de despesas")
     st.caption(
-        "Cadastre as classificacoes usadas nos lancamentos de saida. "
-        "Essa lista pertence a esta igreja e aparece no modulo Lancamentos."
+        "Cadastre as classificacoes usadas nos lançamentos de saída. "
+        "Essa lista pertence a esta igreja e aparece no módulo Lançamentos."
     )
 
     try:
@@ -664,7 +664,7 @@ Pedido:
     except Exception:
         LOGGER.exception("Nao foi possivel carregar as subcategorias de despesa.")
         subcategorias = []
-        st.error("Nao foi possivel carregar as subcategorias.")
+        st.error("Não foi possível carregar as subcategorias.")
 
     if subcategorias:
         st.dataframe(
@@ -690,13 +690,13 @@ Pedido:
                     adicionada = adicionar_subcategoria_despesa(nome, slug)
                 except Exception:
                     LOGGER.exception("Nao foi possivel adicionar a subcategoria.")
-                    st.error("Nao foi possivel adicionar a subcategoria.")
+                    st.error("Não foi possível adicionar a subcategoria.")
                 else:
                     if adicionada:
                         st.toast("Subcategoria adicionada!")
                         st.rerun()
                     else:
-                        st.warning("Essa subcategoria ja existe ou e invalida.")
+                        st.warning("Essa subcategoria já existe ou e invalida.")
 
     if subcategorias:
         with st.form("form_excluir_subcategoria"):
@@ -713,21 +713,21 @@ Pedido:
             )
             if st.form_submit_button("Excluir subcategoria"):
                 if not confirmar_remocao:
-                    st.error("Confirme a exclusao antes de continuar.")
+                    st.error("Confirme a exclusão antes de continuar.")
                 else:
                     try:
                         excluir_subcategoria_despesa(remover_subcategoria, slug)
                     except Exception:
                         LOGGER.exception("Nao foi possivel excluir a subcategoria.")
-                        st.error("Nao foi possivel excluir a subcategoria.")
+                        st.error("Não foi possível excluir a subcategoria.")
                     else:
-                        st.toast("Subcategoria excluida.")
+                        st.toast("Subcategoria excluída.")
                         st.rerun()
 
     st.divider()
     st.markdown("### Senha do acompanhamento pastoral")
     st.caption(
-        "Cadastre uma senha exclusiva para proteger os dados individuais de contribuicao. "
+        "Cadastre uma senha exclusiva para proteger os dados individuais de contribuição. "
         "Ela deve ser diferente da senha principal da igreja."
     )
     try:
@@ -735,7 +735,7 @@ Pedido:
     except Exception:
         LOGGER.exception("Nao foi possivel consultar a senha pastoral.")
         pastoral_configurada = False
-        st.error("Nao foi possivel verificar a configuracao da senha pastoral.")
+        st.error("Não foi possível verificar a configuração da senha pastoral.")
     else:
         if pastoral_configurada:
             st.success("Senha pastoral cadastrada. Use o formulario para substitui-la.")
@@ -781,7 +781,7 @@ Pedido:
                     st.error(str(ex))
                 except Exception:
                     LOGGER.exception("Nao foi possivel salvar a senha pastoral.")
-                    st.error("Nao foi possivel salvar a senha pastoral. Tente novamente.")
+                    st.error("Não foi possível salvar a senha pastoral. Tente novamente.")
                 else:
                     if alterada:
                         st.success("Senha pastoral salva com sucesso.")
@@ -794,7 +794,7 @@ Pedido:
     except Exception:
         LOGGER.exception("Nao foi possivel carregar os membros ativos.")
         op_membros, df_membros = {}, None
-        st.error("Nao foi possivel carregar os membros ativos.")
+        st.error("Não foi possível carregar os membros ativos.")
 
     _render_secao_acesso_restrito(slug, op_membros, df_membros, CONFIG_PASTOR_AUXILIAR)
     _render_secao_acesso_restrito(slug, op_membros, df_membros, CONFIG_SECRETARIO_GERAL)
@@ -830,7 +830,7 @@ Pedido:
                     alterada = igreja_alterar_senha(slug, senha_atual, nova_senha)
                 except Exception:
                     LOGGER.exception("Nao foi possivel alterar a senha da igreja.")
-                    st.error("Nao foi possivel alterar a senha. Tente novamente.")
+                    st.error("Não foi possível alterar a senha. Tente novamente.")
                 else:
                     if alterada:
                         _encerrar_sessao()

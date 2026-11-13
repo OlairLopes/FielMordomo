@@ -865,7 +865,7 @@ def _render_form_pessoa_gfc(slug, tipo, op_membros, salvar_fn, expandido=False):
 
         if origem == "Cadastro de membro":
             if not op_membros:
-                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+                st.warning("Não há membros ativos disponíveis no cadastro.")
             else:
                 membro_label = st.selectbox(
                     tipo,
@@ -891,7 +891,7 @@ def _render_form_pessoa_gfc(slug, tipo, op_membros, salvar_fn, expandido=False):
             funcao = c3.text_input("Funcao", value=funcao)
             setor = c4.text_input("Setor", value=setor)
             ordem = st.number_input("Ordem", min_value=0, max_value=999, value=0, step=1)
-            observacoes = st.text_area("Observacoes")
+            observacoes = st.text_area("Observações")
             if st.form_submit_button(f"Salvar {tipo.lower()}", type="primary"):
                 try:
                     salvar_fn(
@@ -957,7 +957,7 @@ def _render_tabela_pessoa_gfc(slug, titulo, dados, id_col, salvar_fn, excluir_fn
                 ["Ativo", "Inativo"],
                 index=0 if int(row.get("ativo", 1) or 0) == 1 else 1,
             )
-            observacoes = st.text_area("Observacoes", value=str(row.get("observacoes", "") or ""))
+            observacoes = st.text_area("Observações", value=str(row.get("observacoes", "") or ""))
             if st.form_submit_button("Atualizar", type="primary"):
                 try:
                     salvar_fn(
@@ -1028,7 +1028,7 @@ def _render_coordenadores_lideres(slug):
 
 def _render_secretarias(slug):
     st.markdown("### Secretarias GFC")
-    st.caption("Cadastre os usuarios que poderao acessar o modulo GFC com igreja, usuario e 4 ultimos digitos do CPF.")
+    st.caption("Cadastre os usuarios que poderao acessar o módulo GFC com igreja, usuario e 4 últimos digitos do CPF.")
 
     secretarias = listar_gfc_secretarias(slug, incluir_inativas=True)
     op_membros, _ = _membros_opcoes(slug)
@@ -1067,12 +1067,12 @@ def _render_secretarias(slug):
             )
             perfil_label = st.selectbox("Perfil", ["Secretaria de chamada", "Secretaria geral"])
             if id_cadastro:
-                st.caption("O PIN de acesso sera validado pelos 4 ultimos digitos do CPF do membro vinculado.")
+                st.caption("O PIN de acesso será validado pelos 4 últimos digitos do CPF do membro vinculado.")
             else:
                 st.warning("Para login por CPF, a secretaria precisa estar vinculada a um membro cadastrado.")
             email = st.text_input("E-mail")
             telefone_form = st.text_input("Telefone", value=telefone)
-            observacoes = st.text_area("Observacoes")
+            observacoes = st.text_area("Observações")
 
             if st.form_submit_button("Salvar secretaria", type="primary"):
                 if not id_cadastro:
@@ -1137,7 +1137,7 @@ def _render_secretarias(slug):
                 novo_pin = st.text_input("Novo PIN de 4 digitos (opcional)", type="password", max_chars=4)
                 telefone_edit = st.text_input("Telefone", value=str(row.get("telefone", "") or ""))
                 email_edit = st.text_input("E-mail", value=str(row.get("email", "") or ""))
-                obs_edit = st.text_area("Observacoes", value=str(row.get("observacoes", "") or ""))
+                obs_edit = st.text_area("Observações", value=str(row.get("observacoes", "") or ""))
 
                 if st.form_submit_button("Atualizar secretaria", type="primary"):
                     try:

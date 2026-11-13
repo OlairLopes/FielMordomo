@@ -79,7 +79,7 @@ def _salvar(slug, tesoureiro, atualizar=False):
         return False
     except Exception:
         LOGGER.exception("Falha ao salvar tesoureiro da congregacao %s.", slug)
-        st.error("Nao foi possivel salvar o tesoureiro. Consulte o log do sistema.")
+        st.error("Não foi possível salvar o tesoureiro. Consulte o log do sistema.")
         return False
     _invalidar(slug)
     st.toast("Cadastro de tesoureiro salvo.")
@@ -89,13 +89,13 @@ def _salvar(slug, tesoureiro, atualizar=False):
 def _form_novo(slug):
     with st.expander("Cadastrar tesoureiro", expanded=False):
         with st.form("form_novo_tesoureiro", clear_on_submit=True):
-            st.caption("O CPF identifica o responsavel e nao sera exibido integralmente na listagem.")
+            st.caption("O CPF identifica o responsavel e não será exibido integralmente na listagem.")
             nome = st.text_input("Nome completo *")
             cpf = st.text_input("CPF *", placeholder="000.000.000-00")
             usuario = st.text_input(
                 "Usuario de acesso *",
                 placeholder="ex: tesouraria.central",
-                help="Use letras minusculas, numeros, ponto, hifen ou sublinhado.",
+                help="Use letras minusculas, números, ponto, hifen ou sublinhado.",
             )
             senha = st.text_input("Senha inicial *", type="password")
             confirma_senha = st.text_input("Confirmar senha inicial *", type="password")
@@ -108,7 +108,7 @@ def _form_novo(slug):
             with c2:
                 email = st.text_input("E-mail")
                 principal = st.checkbox("Responsavel principal")
-            observacoes = st.text_area("Observacoes")
+            observacoes = st.text_area("Observações")
             if st.form_submit_button("Cadastrar", type="primary"):
                 erros_senha = validar_nova_senha(senha)
                 if senha != confirma_senha:
@@ -161,7 +161,7 @@ def _form_editar(slug, df):
     id_tesoureiro = int(row["id_tesoureiro"])
     situacao_atual = str(row["situacao"])
     with st.form(f"form_editar_tesoureiro_{id_tesoureiro}"):
-        st.caption("Para preservar o historico, encerre a atuacao em vez de excluir o registro.")
+        st.caption("Para preservar o histórico, encerre a atuacao em vez de excluir o registro.")
         nome = st.text_input("Nome completo *", value=str(row["nome"] or ""))
         cpf = st.text_input("CPF *", value=str(row["cpf"] or ""))
         usuario = st.text_input("Usuario de acesso *", value=str(row["usuario"] or ""))
@@ -189,15 +189,15 @@ def _form_editar(slug, df):
             "Fim da atuacao",
             value=_data_input(row["data_fim"]),
             format="DD/MM/YYYY",
-            help="Obrigatorio ao encerrar a atuacao.",
+            help="Obrigatório ao encerrar a atuacao.",
         )
         principal = st.checkbox(
             "Responsavel principal",
             value=bool(row["principal"]),
             disabled=situacao == "Inativo",
         )
-        observacoes = st.text_area("Observacoes", value=str(row["observacoes"] or ""))
-        if st.form_submit_button("Salvar alteracoes", type="primary"):
+        observacoes = st.text_area("Observações", value=str(row["observacoes"] or ""))
+        if st.form_submit_button("Salvar alterações", type="primary"):
             erros_senha = validar_nova_senha(senha) if senha else []
             if senha != confirma_senha:
                 erros_senha.append("Senha e confirmacao nao coincidem.")
@@ -226,7 +226,7 @@ def _form_editar(slug, df):
 def render():
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão invalida. Faça login novamente.")
         return
     st.subheader("💼 Tesoureiros")
     if not solicitar_autorizacao(
@@ -237,7 +237,7 @@ def render():
         return
     st.caption(
         "Cadastre credenciais para os responsaveis financeiros. Tesoureiros ativos "
-        "podem entrar no sistema somente para registrar lancamentos."
+        "podem entrar no sistema somente para registrar lançamentos."
     )
     df = _carregar(slug)
     ativos = int((df["situacao"] == "Ativo").sum()) if not df.empty else 0

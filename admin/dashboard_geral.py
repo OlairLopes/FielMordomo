@@ -167,7 +167,7 @@ def _tabela_financeira(df):
 def _tab_visao(dados):
     mensal = dados["mensal"]
     if mensal.empty:
-        st.info("Nao ha movimentacoes validas no periodo selecionado.")
+        st.info("Não há movimentações válidas no período selecionado.")
     else:
         _secao(
             "Evolucao financeira consolidada",
@@ -280,15 +280,15 @@ def _tab_qualidade(dados):
 def _tab_auditoria(dados, ministerio_slug, inicio, fim):
     detalhes = dados["detalhes"].copy()
     if detalhes.empty:
-        st.info("Nao ha lancamentos validos para exportar.")
+        st.info("Não há lançamentos válidos para exportar.")
         return
     detalhes["data"] = detalhes["data"].dt.strftime("%d/%m/%Y")
     st.caption(
-        "Exportacao consolidada para conferencia. O arquivo preserva a congregacao "
-        "de origem de cada lancamento."
+        "Exportacao consolidada para conferência. O arquivo preserva a congregacao "
+        "de origem de cada lançamento."
     )
     st.download_button(
-        "Exportar lancamentos consolidados",
+        "Exportar lançamentos consolidados",
         gerar_csv(detalhes),
         f"auditoria_{ministerio_slug}_{inicio}_{fim}.csv",
         "text/csv",
@@ -342,7 +342,7 @@ def render():
         return
     except Exception:
         LOGGER.exception("Falha ao carregar dashboard ministerial.")
-        st.error("Nao foi possivel consolidar o dashboard. Consulte o log do sistema.")
+        st.error("Não foi possível consolidar o dashboard. Consulte o log do sistema.")
         return
 
     totais = dados["totais"]

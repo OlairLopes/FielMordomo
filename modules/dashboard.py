@@ -1350,7 +1350,7 @@ def _autorizacao_pastoral(slug):
     if not senha_pastoral_configurada(slug):
         st.info(
             "Cadastre uma senha exclusiva para o acompanhamento pastoral "
-            "na pagina Minha Conta."
+            "na página Minha Conta."
         )
         return False
     with st.form(_sk("pastoral_form", slug)):
@@ -1440,7 +1440,7 @@ def _render_churn_alerta(churn_info, slug, igreja, mes_ref):
     """Renderiza alerta e lista de dizimistas em churn."""
     if churn_info["quantidade"] == 0:
         st.success(
-            f"✅ Nenhum dizimista regular parou de contribuir nos ultimos "
+            f"Nenhum dizimista regular parou de contribuir nos ultimos "
             f"{churn_info['dias_referencia']} dias."
         )
         return
@@ -1627,8 +1627,8 @@ def _render_previsao(df, mes_ref):
     previsao = _previsao_regressao_linear(df, mes_ref, horizonte=3)
     if previsao is None:
         st.info(
-            "Sao necessarios pelo menos 3 meses de dados para gerar previsao. "
-            "A previsao usa regressao linear simples sobre os ultimos 12 meses."
+            "São necessários pelo menos 3 meses de dados para gerar previsão. "
+            "A previsão usa regressao linear simples sobre os últimos 12 meses."
         )
         return
 
@@ -1653,9 +1653,9 @@ def _render_previsao(df, mes_ref):
     st.markdown(linhas_html, unsafe_allow_html=True)
 
     st.caption(
-        "⚠️ Previsao baseada em regressao linear dos ultimos 12 meses. "
-        "Nao considera eventos excepcionais (campanhas, feriados, sazonalidade). "
-        "Use como orientacao complementar, nao como fato consumado."
+        "⚠️ Previsão baseada em regressao linear dos últimos 12 meses. "
+        "Não considera eventos excepcionais (campanhas, feriados, sazonalidade). "
+        "Use como orientacao complementar, não como fato consumado."
     )
 
 
@@ -1663,8 +1663,8 @@ def _render_cruzamento_geo(df_cruzamento):
     """Renderiza cruzamento de frequencia geo x contribuicao."""
     if df_cruzamento is None or df_cruzamento.empty:
         st.info(
-            "Cruzamento de dados nao disponivel. "
-            "Requer registros no modulo Monitoramento Geo no periodo selecionado."
+            "Cruzamento de dados não disponível. "
+            "Requer registros no módulo Monitoramento Geo no período selecionado."
         )
         return
 
@@ -1878,11 +1878,11 @@ td {{ padding:6px 8px;border-bottom:1px solid #F1F5F9;color:#334155; }}
 def render():
     _injetar_css()
     st.markdown("## 📊 Dashboard Financeiro")
-    st.caption("Visao executiva para decisao, conferencia e acompanhamento de tendencias.")
+    st.caption("Visao executiva para decisao, conferência e acompanhamento de tendencias.")
     slug = slug_da_sessao()
     df_lanc, df_cad = carregar_lancamentos(slug), carregar_cadastros(slug)
     if df_lanc.empty:
-        st.info("Ainda nao ha lancamentos para o dashboard.")
+        st.info("Ainda não há lançamentos para o dashboard.")
         return
 
     df, cad, faltantes, qualidade = _normalizar_dados(df_lanc, df_cad)
@@ -1890,7 +1890,7 @@ def render():
         st.error("Dashboard indisponivel. Colunas ausentes: " + ", ".join(faltantes))
         return
     if df.empty:
-        st.error("Nao existem lancamentos validos para calcular o dashboard.")
+        st.error("Não existem lançamentos válidos para calcular o dashboard.")
         return
 
     membros = _membros_ativos(cad)
@@ -1908,7 +1908,7 @@ def render():
     col_pi, col_pf = st.columns(2)
     with col_pi:
         inicio_mes = st.date_input(
-            "Periodo - de",
+            "Período - de",
             value=inicio_padrao,
             min_value=data_min,
             max_value=data_max,
@@ -1917,7 +1917,7 @@ def render():
         )
     with col_pf:
         fim_mes = st.date_input(
-            "Periodo - ate",
+            "Período - até",
             value=fim_padrao,
             min_value=data_min,
             max_value=data_max,
@@ -1925,7 +1925,7 @@ def render():
             key=_sk("periodo_fim", slug),
         )
     if inicio_mes > fim_mes:
-        st.error("A data inicial nao pode ser posterior a data final.")
+        st.error("A data inicial não pode ser posterior a data final.")
         inicio_mes, fim_mes = fim_mes, inicio_mes
 
     # Periodo de comparacao imediatamente anterior, com a mesma duracao
@@ -2113,7 +2113,7 @@ def render():
             "Participacao de cada subcategoria no total de saidas do periodo selecionado.",
         )
         if resumo.empty:
-            st.info("Nao ha despesas no periodo selecionado.")
+            st.info("Não há despesas no período selecionado.")
         else:
             _grafico_rosca(resumo, "Subcategoria", "Valor", PALETA, "Despesas")
             _secao_dashboard(
@@ -2140,7 +2140,7 @@ def render():
             saidas_temporal["subcategoria"] = _texto(saidas_temporal["subcategoria"]).replace("", "Sem subcategoria")
 
             if saidas_temporal.empty:
-                st.info("Sem despesas nos ultimos 6 meses para analise temporal.")
+                st.info("Sem despesas nos últimos 6 meses para analise temporal.")
             else:
                 # Top 5 subcategorias por valor total
                 top5_subs = (
@@ -2184,7 +2184,7 @@ def render():
             "Participacao de cada categoria no total de entradas do periodo selecionado.",
         )
         if resumo.empty:
-            st.info("Nao ha receitas no periodo selecionado.")
+            st.info("Não há receitas no período selecionado.")
         else:
             _grafico_rosca(resumo, "Categoria", "Valor", PALETA, "Receitas")
             _secao_dashboard(
@@ -2199,11 +2199,11 @@ def render():
 
     with tab_pastoral:
         if dashboard_restrito:
-            st.warning("Area nao disponivel para o perfil Pastor Auxiliar.")
+            st.warning("Area não disponível para o perfil Pastor Auxiliar.")
             return
         st.warning(
-            "Area restrita. Exibe dados individuais de contribuicao. "
-            "Acesse somente quando necessario e nao compartilhe exportacoes sem autorizacao."
+            "Area restrita. Exibe dados individuais de contribuição. "
+            "Acesse somente quando necessario e não compartilhe exportacoes sem autorizacao."
         )
 
         if _autorizacao_pastoral(slug):
@@ -2247,7 +2247,7 @@ def render():
             # por isso fica atras da senha do acompanhamento pastoral) ═══
             col_btn_exp, _ = st.columns([1, 3])
             with col_btn_exp:
-                if st.button("📄 Exportar relatorio executivo", key=_sk("btn_export_exec", slug),
+                if st.button("📄 Exportar relatório executivo", key=_sk("btn_export_exec", slug),
                              use_container_width=True):
                     html_relatorio = _gerar_html_relatorio_executivo(
                         igreja, slug, inicio_mes, fim_mes, ent, sai, saldo,
@@ -2257,7 +2257,7 @@ def render():
 
             if _sk("html_export", slug) in st.session_state:
                 st.download_button(
-                    "⬇️ Baixar relatorio (HTML - abra no navegador e imprima como PDF)",
+                    "⬇️ Baixar relatório (HTML - abra no navegador e imprima como PDF)",
                     data=st.session_state[_sk("html_export", slug)],
                     file_name=f"relatorio_executivo_{inicio_mes:%Y%m%d}_{fim_mes:%Y%m%d}.html",
                     mime="text/html",
@@ -2327,7 +2327,7 @@ def render():
                 st.plotly_chart(fig_qualidade, use_container_width=True, config=CONFIG_PLOTLY)
             else:
                 st.success("Nenhuma pendencia identificada nos dados.")
-            st.caption("Registros invalidos sao excluidos dos KPIs ate serem corrigidos.")
+            st.caption("Registros invalidos são excluidos dos KPIs até serem corrigidos.")
 
             st.divider()
 
@@ -2343,20 +2343,20 @@ def render():
             f1, f2 = st.columns(2)
             with f1:
                 inicio_pastoral = st.date_input(
-                    "Analisar contribuicoes de",
+                    "Analisar contribuições de",
                     value=inicio_padrao,
                     format="DD/MM/YYYY",
                     key=_sk("pastoral_inicio", slug),
                 )
             with f2:
                 fim_pastoral = st.date_input(
-                    "Ate",
+                    "Até",
                     value=fim_padrao,
                     format="DD/MM/YYYY",
                     key=_sk("pastoral_fim", slug),
                 )
             if inicio_pastoral > fim_pastoral:
-                st.error("A data inicial nao pode ser posterior a data final.")
+                st.error("A data inicial não pode ser posterior a data final.")
                 inicio_pastoral = fim_pastoral
 
             df_pastoral = _periodo(df, inicio_pastoral, fim_pastoral)
@@ -2379,7 +2379,7 @@ def render():
             )
             valores_dizimos = serie_dizimos["entradas"].tolist()
             if not any(valor > 0 for valor in valores_dizimos):
-                st.info("Ainda nao ha dizimos registrados para exibir a evolucao mensal.")
+                st.info("Ainda não há dízimos registrados para exibir a evolucao mensal.")
             else:
                 fig_dizimos = go.Figure(go.Bar(
                     name="Dizimos",
@@ -2429,7 +2429,7 @@ def render():
                 .sort_values("valor")
             )
             if ranking_membros.empty:
-                st.info("Sem dizimos vinculados a membros no periodo.")
+                st.info("Sem dízimos vinculados a membros no período.")
             else:
                 fig_ranking = go.Figure(go.Bar(
                     x=ranking_membros["valor"],
@@ -2466,7 +2466,7 @@ def render():
                 .sort_values("valor", ascending=False)
             )
             if resumo_funcoes.empty:
-                st.info("Sem entradas vinculadas a membros no periodo.")
+                st.info("Sem entradas vinculadas a membros no período.")
             else:
                 fig_funcoes = go.Figure(go.Bar(
                     x=resumo_funcoes["funcao"],
@@ -2538,8 +2538,8 @@ def render():
 
             faixas = _faixas_acompanhamento(membros, dizimos, datetime.date.today(), dias_ativo)
             st.caption(
-                "Os cartoes sao cumulativos. As listas abaixo sao exclusivas para evitar "
-                "duplicidade. A interpretacao e a eventual abordagem dependem de avaliacao humana."
+                "Os cartoes são cumulativos. As listas abaixo são exclusivas para evitar "
+                "duplicidade. A interpretação e a eventual abordagem dependem de avaliação humana."
             )
             for titulo, registros in faixas.items():
                 with st.expander(f"{titulo}: {len(registros)} membro(s)"):
@@ -2592,7 +2592,7 @@ def render():
                 p2.metric("Dizimistas no periodo", qtd_periodo)
                 p3.metric("Sem contribuicao no periodo", nao_dizimistas)
             else:
-                st.info("Nao ha membros ativos cadastrados.")
+                st.info("Não há membros ativos cadastrados.")
 
             _secao_dashboard(
                 "Consulta individual",
@@ -2627,7 +2627,7 @@ def render():
                     i3.metric("Ultima contribuicao", ultima_data)
                     i4.metric("Fidelidade mensal", f"{fidelidade:.1f}%")
                     if dados.empty:
-                        st.info("Nao ha contribuicoes registradas no periodo analisado.")
+                        st.info("Não há contribuições registradas no período analisado.")
                     else:
                         mensal = (
                             dados.groupby("mes_periodo", as_index=False)["valor"].sum()
@@ -2647,13 +2647,13 @@ def render():
                             yaxis=dict(fixedrange=True, gridcolor="#E2E8F0", tickformat=",.0f"),
                         ))
                         st.plotly_chart(fig_membro, use_container_width=True, config=CONFIG_PLOTLY)
-                    st.caption("Presenca mensal das contribuicoes no periodo analisado")
+                    st.caption("Presença mensal das contribuições no período analisado")
                     _cartoes_fidelidade(resumo_individual)
                     _mensagem_fidelidade(selecionado.split(" | ", 1)[-1], resumo_individual)
 
     st.divider()
     st.download_button(
-        "Exportar dados do periodo",
+        "Exportar dados do período",
         gerar_csv(ref),
         f"dashboard_{inicio_mes:%Y%m%d}_{fim_mes:%Y%m%d}.csv",
         "text/csv",

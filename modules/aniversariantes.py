@@ -802,7 +802,7 @@ def render():
                 unsafe_allow_html=True,
             )
         else:
-            st.success(f"🎉 {len(hoje_df)} aniversariante(s) hoje!")
+            st.success(f"{len(hoje_df)} aniversariante(s) hoje!")
 
             for _, r in hoje_df.iterrows():
                 _card_aniv(
@@ -848,7 +848,7 @@ def render():
                 unsafe_allow_html=True,
             )
         else:
-            st.info(f"🎈 {len(sem_df)} aniversariante(s) nesta semana")
+            st.info(f"{len(sem_df)} aniversariante(s) nesta semana")
 
             for _, r in sem_df.iterrows():
                 eh_hoje = (
@@ -893,7 +893,7 @@ def render():
             )
         else:
             st.info(
-                f"🎊 {len(mes_df)} aniversariante(s) em {MESES_PT[hoje.month]}"
+                f"{len(mes_df)} aniversariante(s) em {MESES_PT[hoje.month]}"
             )
 
             for _, r in mes_df.iterrows():

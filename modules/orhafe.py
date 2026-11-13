@@ -91,7 +91,7 @@ def _metricas_chamadas(reunioes):
 
 def _grafico_reunioes(reunioes):
     if reunioes.empty:
-        st.info("Sem reunioes no periodo selecionado.")
+        st.info("Sem reunioes no período selecionado.")
         return
     dados = reunioes.sort_values("data")
     fig = go.Figure()
@@ -127,7 +127,7 @@ def _grafico_reunioes(reunioes):
 
 def _grafico_frequencia(freq):
     if freq.empty:
-        st.info("Sem frequencia individual no periodo.")
+        st.info("Sem frequência individual no período.")
         return
     dados = freq.copy()
     total = dados["presencas"] + dados["ausencias"]
@@ -337,7 +337,7 @@ def _grafico_totais_orhafe(titulo, dados):
 
 def _grafico_resumo_lideres(resumo):
     if resumo.empty:
-        st.info("Sem dados por lider para o periodo selecionado.")
+        st.info("Sem dados por lider para o período selecionado.")
         return
     dados = resumo.sort_values("presentes", ascending=True)
     fig = go.Figure()
@@ -390,7 +390,7 @@ def _render_coordenadoras(slug):
         unsafe_allow_html=True,
     )
     if coordenadoras.empty:
-        st.warning("Cadastre as 4 coordenadoras fixas na aba Configuracoes.")
+        st.warning("Cadastre as 4 coordenadoras fixas na aba Configurações.")
         return
     cards = []
     for _, row in coordenadoras.head(4).iterrows():
@@ -410,7 +410,7 @@ def _render_matriculas(slug):
     op_membros, df_membros = _membros_opcoes(slug)
     with st.form("form_orhafe_matricula"):
         if not op_membros:
-            st.warning("Nao ha membros ativos disponiveis para matricula.")
+            st.warning("Não há membros ativos disponíveis para matricula.")
             membro_label = None
         else:
             membro_label = st.selectbox("Membro", list(op_membros.keys()))
@@ -474,7 +474,7 @@ def _render_matriculas(slug):
                     ["Ativa", "Encerrada"],
                     index=0 if int(row.get("ativa", 1) or 0) == 1 else 1,
                 )
-                observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                observacoes = st.text_area("Observações", value=row.get("observacoes", ""))
                 if st.form_submit_button("Atualizar matricula", type="primary"):
                     salvar_orhafe_matricula(
                         slug,
@@ -527,7 +527,7 @@ def _render_matriculas(slug):
                 )
                 st.rerun()
 
-        with st.expander("Excluir matricula sem historico", expanded=False):
+        with st.expander("Excluir matricula sem histórico", expanded=False):
             st.caption(
                 "A exclusão definitiva só deve ser usada para cadastro lançado por engano. "
                 "Se houver histórico, o sistema encerrará a matrícula em vez de apagar."
@@ -558,7 +558,7 @@ def _render_chamada(slug):
     st.markdown("### Chamada do Círculo de Oração")
     lideres = listar_orhafe_lideres(slug)
     if lideres.empty:
-        st.warning("Cadastre ate 5 lideres na aba Configuracoes antes de registrar chamada.")
+        st.warning("Cadastre até 5 lideres na aba Configurações antes de registrar chamada.")
         return
     chamadas_salvas = listar_orhafe_reunioes(slug)
     modo = st.radio(
@@ -582,7 +582,7 @@ def _render_chamada(slug):
             format="DD/MM/YYYY",
         )
         if editar_inicio > editar_fim:
-            st.error("A data inicial nao pode ser maior que a data final.")
+            st.error("A data inicial não pode ser maior que a data final.")
             return
         chamadas_salvas = listar_orhafe_reunioes(
             slug,
@@ -590,7 +590,7 @@ def _render_chamada(slug):
             editar_fim.isoformat(),
         )
         if chamadas_salvas.empty:
-            st.info("Nenhuma chamada encontrada no periodo selecionado.")
+            st.info("Nenhuma chamada encontrada no período selecionado.")
             return
         op_reunioes = {
             f'{int(row["id_reuniao"])} - {_fmt_data(row["data"])} - {row.get("lider", "") or "sem lider"}': row
@@ -621,13 +621,13 @@ def _render_chamada(slug):
         reuniao_atual = op_reunioes[reuniao_label]
         data_reuniao_original = datetime.date.fromisoformat(str(reuniao_atual["data"]))
         data_reuniao = st.date_input(
-            "Data da reuniao",
+            "Data da reunião",
             value=data_reuniao_original,
             key=f"orhafe_data_edit_{int(reuniao_atual['id_reuniao'])}",
             format="DD/MM/YYYY",
         )
     else:
-        data_reuniao = st.date_input("Data da reuniao", value=_hoje(), format="DD/MM/YYYY")
+        data_reuniao = st.date_input("Data da reunião", value=_hoje(), format="DD/MM/YYYY")
 
     matriculas = listar_orhafe_matriculas(slug, incluir_inativas=True)
     if matriculas.empty:
@@ -638,7 +638,7 @@ def _render_chamada(slug):
     if matriculas.empty:
         st.warning(
             "Nenhuma matricula estava ativa na data desta chamada. "
-            "Verifique a data da reuniao ou a data de inicio das matriculas."
+            "Verifique a data da reunião ou a data de inicio das matriculas."
         )
         return
 
@@ -685,7 +685,7 @@ def _render_chamada(slug):
             value=ofertas_atual,
             format="%.2f",
         )
-        obs = st.text_area("Observacoes", value=obs_atual)
+        obs = st.text_area("Observações", value=obs_atual)
 
         with st.expander("Lista de chamada", expanded=True):
             dados = matriculas[["id_matricula", "nome"]].copy()
@@ -773,7 +773,7 @@ def _render_relatorios(slug):
     inicio = c1.date_input("Data inicial", value=_inicio_mes(), key="orhafe_rel_ini", format="DD/MM/YYYY")
     fim = c2.date_input("Data final", value=_hoje(), key="orhafe_rel_fim", format="DD/MM/YYYY")
     if inicio > fim:
-        st.error("A data inicial nao pode ser maior que a data final.")
+        st.error("A data inicial não pode ser maior que a data final.")
         return
 
     reunioes = listar_orhafe_reunioes(slug, inicio.isoformat(), fim.isoformat())
@@ -781,7 +781,7 @@ def _render_relatorios(slug):
     visitantes = relatorio_orhafe_visitantes(slug, inicio.isoformat(), fim.isoformat())
     st.markdown("#### Relatorio geral")
     if reunioes.empty:
-        st.info("Nenhuma reuniao registrada no periodo selecionado.")
+        st.info("Nenhuma reunião registrada no período selecionado.")
     else:
         totais = _totais_reunioes(reunioes, freq, visitantes)
         c1, c2, c3, c4 = st.columns(4)
@@ -807,7 +807,7 @@ def _render_relatorios(slug):
 
     with st.expander("Reunioes registradas", expanded=False):
         if reunioes.empty:
-            st.info("Nenhuma reuniao registrada no periodo.")
+            st.info("Nenhuma reunião registrada no período.")
         else:
             exibir = reunioes.copy()
             exibir["data"] = exibir["data"].apply(_fmt_data)
@@ -833,9 +833,9 @@ def _render_relatorios(slug):
                 mime="text/csv",
             )
 
-    with st.expander("Relatorio individual por matriculada", expanded=False):
+    with st.expander("Relatório individual por matriculada", expanded=False):
         if freq.empty:
-            st.info("Sem dados individuais no periodo.")
+            st.info("Sem dados individuais no período.")
         else:
             exibir = freq.copy()
             total = exibir["presencas"] + exibir["ausencias"]
@@ -848,7 +848,7 @@ def _render_relatorios(slug):
             )
             st.dataframe(exibir, use_container_width=True, hide_index=True)
             st.download_button(
-                "Baixar relatorio individual CSV",
+                "Baixar relatório individual CSV",
                 data=gerar_csv(freq),
                 file_name="orhafe_frequencia.csv",
                 mime="text/csv",
@@ -863,7 +863,7 @@ def _render_configuracoes(slug):
 
     with st.expander("Cadastrar coordenadora fixa", expanded=coordenadoras.empty):
         if len(coordenadoras[coordenadoras["ativa"] == 1]) >= 4:
-            st.info("Ja existem 4 coordenadoras ativas. Inative ou edite uma antes de cadastrar outra.")
+            st.info("Já existem 4 coordenadoras ativas. Inative ou edite uma antes de cadastrar outra.")
         with st.form("form_orhafe_coordenadora"):
             modo_coord = st.radio(
                 "Origem da coordenadora",
@@ -877,7 +877,7 @@ def _render_configuracoes(slug):
             funcao = "Coordenadora"
             if modo_coord == "Cadastro de membros":
                 if not op_membros:
-                    st.warning("Nao ha membros ativos disponiveis no cadastro.")
+                    st.warning("Não há membros ativos disponíveis no cadastro.")
                 else:
                     membro_label = st.selectbox(
                         "Coordenadora",
@@ -892,14 +892,14 @@ def _render_configuracoes(slug):
                     c1.text_input("Nome", value=row_membro.get("nome", ""), disabled=True)
                     c2.text_input("Telefone / WhatsApp", value=row_membro.get("telefone", ""), disabled=True)
                     funcao = row_membro.get("funcao", "") or "Coordenadora"
-                    st.text_input("Funcao no cadastro", value=funcao, disabled=True)
+                    st.text_input("Função no cadastro", value=funcao, disabled=True)
             else:
                 c1, c2 = st.columns(2)
                 nome = c1.text_input("Nome da coordenadora")
                 telefone = c2.text_input("Telefone / WhatsApp")
-                funcao = st.text_input("Funcao", value="Coordenadora")
+                funcao = st.text_input("Função", value="Coordenadora")
             ordem = st.number_input("Ordem", min_value=1, max_value=4, value=1, step=1)
-            observacoes = st.text_area("Observacoes", key="obs_coord_orhafe")
+            observacoes = st.text_area("Observações", key="obs_coord_orhafe")
             if st.form_submit_button("Salvar coordenadora", type="primary"):
                 if len(coordenadoras[coordenadoras["ativa"] == 1]) >= 4:
                     st.error("O Círculo de Oração deve manter no máximo 4 coordenadoras ativas.")
@@ -956,7 +956,7 @@ def _render_configuracoes(slug):
                         ["Ativa", "Inativa"],
                         index=0 if int(row.get("ativa", 1) or 0) == 1 else 1,
                     )
-                    observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                    observacoes = st.text_area("Observações", value=row.get("observacoes", ""))
                     if st.form_submit_button("Atualizar coordenadora", type="primary"):
                         salvar_orhafe_coordenadora(
                             slug,
@@ -976,12 +976,12 @@ def _render_configuracoes(slug):
                     "Excluir coordenadora selecionada",
                 ):
                     excluir_orhafe_coordenadora(slug, int(row["id_coordenadora"]))
-                    st.success("Coordenadora excluida.")
+                    st.success("Coordenadora excluída.")
                     st.rerun()
 
     with st.expander("Cadastrar lider", expanded=lideres.empty):
         if len(lideres[lideres["ativo"] == 1]) >= 5:
-            st.info("Ja existem 5 lideres ativos. Inative ou edite uma antes de cadastrar outro.")
+            st.info("Já existem 5 lideres ativos. Inative ou edite uma antes de cadastrar outro.")
         with st.form("form_orhafe_lider"):
             modo_lider = st.radio(
                 "Origem da lider",
@@ -995,7 +995,7 @@ def _render_configuracoes(slug):
             funcao = "Lider"
             if modo_lider == "Cadastro de membros":
                 if not op_membros:
-                    st.warning("Nao ha membros ativos disponiveis no cadastro.")
+                    st.warning("Não há membros ativos disponíveis no cadastro.")
                 else:
                     membro_label = st.selectbox(
                         "Lider",
@@ -1016,14 +1016,14 @@ def _render_configuracoes(slug):
                         key="lider_tel_auto",
                     )
                     funcao = row_membro.get("funcao", "") or "Lider"
-                    st.text_input("Funcao no cadastro", value=funcao, disabled=True, key="lider_funcao_auto")
+                    st.text_input("Função no cadastro", value=funcao, disabled=True, key="lider_funcao_auto")
             else:
                 c1, c2 = st.columns(2)
                 nome = c1.text_input("Nome da lider")
                 telefone = c2.text_input("Telefone / WhatsApp")
-                funcao = st.text_input("Funcao", value="Lider")
+                funcao = st.text_input("Função", value="Lider")
             ordem = st.number_input("Ordem", min_value=1, max_value=5, value=1, step=1)
-            observacoes = st.text_area("Observacoes", key="obs_lider_orhafe")
+            observacoes = st.text_area("Observações", key="obs_lider_orhafe")
             if st.form_submit_button("Salvar lider", type="primary"):
                 if len(lideres[lideres["ativo"] == 1]) >= 5:
                     st.error("O Círculo de Oração deve manter no máximo 5 líderes ativas.")
@@ -1080,7 +1080,7 @@ def _render_configuracoes(slug):
                         ["Ativa", "Inativa"],
                         index=0 if int(row.get("ativo", 1) or 0) == 1 else 1,
                     )
-                    observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+                    observacoes = st.text_area("Observações", value=row.get("observacoes", ""))
                     if st.form_submit_button("Atualizar lider", type="primary"):
                         salvar_orhafe_lider(
                             slug,
@@ -1100,7 +1100,7 @@ def _render_configuracoes(slug):
                     "Excluir ou inativar lider selecionada",
                 ):
                     removida = excluir_orhafe_lider(slug, int(row["id_lider"]))
-                    st.success("Lider excluida." if removida else "Lider inativada porque possui historico.")
+                    st.success("Lider excluída." if removida else "Lider inativada porque possui histórico.")
                     st.rerun()
 
 
@@ -1117,7 +1117,7 @@ def _render_secretarias(slug):
             nome = ""
             telefone = ""
             if not op_membros:
-                st.warning("Nao ha membros ativos disponiveis no cadastro.")
+                st.warning("Não há membros ativos disponíveis no cadastro.")
             else:
                 membro_label = st.selectbox(
                     "Secretaria",
@@ -1146,8 +1146,8 @@ def _render_secretarias(slug):
                 ["Secretaria de chamada", "Secretaria geral"],
             )
             perfil = "geral" if perfil_rotulo == "Secretaria geral" else "chamada"
-            email = st.text_input("E-mail", help="Opcional. O cadastro de membros atual nao possui e-mail.")
-            observacoes = st.text_area("Observacoes")
+            email = st.text_input("E-mail", help="Opcional. O cadastro de membros atual não possui e-mail.")
+            observacoes = st.text_area("Observações")
             if st.form_submit_button("Salvar secretaria", type="primary"):
                 try:
                     if not id_cadastro_secretaria:
@@ -1215,7 +1215,7 @@ def _render_secretarias(slug):
             ["Ativo", "Inativo"],
             index=0 if row.get("situacao") == "Ativo" else 1,
         )
-        observacoes = st.text_area("Observacoes", value=row.get("observacoes", ""))
+        observacoes = st.text_area("Observações", value=row.get("observacoes", ""))
         if st.form_submit_button("Atualizar secretaria", type="primary"):
             try:
                 salvar_orhafe_secretaria(
@@ -1250,7 +1250,7 @@ def render():
     st.caption("Gestão de matrículas, chamadas, visitantes, líderes e relatórios do ministério de oração.")
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão invalida. Faça login novamente.")
         return
 
     _render_coordenadoras(slug)

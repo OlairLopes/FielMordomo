@@ -289,7 +289,7 @@ def _render_financeiro(slug, igreja):
     df_bruto = carregar_lancamentos(slug)
     cad = carregar_cadastros(slug)
     if df_bruto.empty:
-        st.info("Ainda nao ha lancamentos.")
+        st.info("Ainda não há lançamentos.")
         return
 
     df, ausentes, datas_invalidas, valores_invalidos = _normalizar_lancamentos(df_bruto)
@@ -306,7 +306,7 @@ def _render_financeiro(slug, igreja):
 
     datas_validas = df["data"].dropna()
     if datas_validas.empty:
-        st.error("Nao existem datas validas para gerar o relatorio.")
+        st.error("Não existem datas válidas para gerar o relatório.")
         return
 
     hoje = datetime.date.today()
@@ -353,7 +353,7 @@ def _render_financeiro(slug, igreja):
             key="rel_fim",
         )
     if inicio > fim:
-        st.error("A data inicial nao pode ser posterior a data final.")
+        st.error("A data inicial não pode ser posterior a data final.")
         return
     periodo = (inicio, fim)
 
@@ -384,7 +384,7 @@ def _render_financeiro(slug, igreja):
         lote_sel,
     )
     if df_f.empty:
-        st.info("Nenhum lancamento para os filtros selecionados.")
+        st.info("Nenhum lançamento para os filtros selecionados.")
         return
 
     entradas = df_f[df_f["tipo_norm"] == "ENTRADA"]
@@ -441,7 +441,7 @@ def _render_financeiro(slug, igreja):
         st.markdown("### Dizimos por membro")
         dizimos = entradas[entradas["categoria_norm"] == "DIZIMO"]
         if dizimos.empty:
-            st.info("Sem dizimos no periodo.")
+            st.info("Sem dízimos no período.")
         else:
             por_membro = (
                 dizimos.assign(nome_cadastro=_texto(dizimos["nome_cadastro"]).replace("", "Nao vinculado"))
@@ -495,7 +495,7 @@ def _render_financeiro(slug, igreja):
 
     with tab_auditoria:
         st.caption(
-            "A tabela detalhada preserva IDs e lotes para conferencia. "
+            "A tabela detalhada preserva IDs e lotes para conferência. "
             "Evite compartilhar exportacoes sem necessidade, pois podem conter dados pessoais."
         )
         st.dataframe(_detalhes_exibicao(df_f), use_container_width=True, hide_index=True)
@@ -545,7 +545,7 @@ def _render_financeiro(slug, igreja):
         )
     except Exception:
         LOGGER.exception("Nao foi possivel gerar os arquivos de prestacao de contas.")
-        st.error("Nao foi possivel gerar os arquivos de prestacao de contas.")
+        st.error("Não foi possível gerar os arquivos de prestacao de contas.")
     else:
         p1, p2 = st.columns(2)
         with p1:
@@ -662,7 +662,7 @@ def _render_leitura_biblica(slug):
     st.markdown("#### Resumo por leitor")
     resumo = resumo_leitores_biblia(slug, plano_id=plano_id)
     if resumo.empty:
-        st.info("Ainda nao ha confirmacoes de leitura registradas.")
+        st.info("Ainda não há confirmacoes de leitura registradas.")
         return
 
     dia_atual_ano = min(datetime.date.today().timetuple().tm_yday, 365)

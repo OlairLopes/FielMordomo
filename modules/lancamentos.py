@@ -148,7 +148,7 @@ def _subcategorias_despesa_seguras(slug):
         return listar_subcategorias_despesa(slug)
     except Exception:
         LOGGER.exception("Nao foi possivel carregar subcategorias de despesa.")
-        st.warning("Nao foi possivel carregar as subcategorias de despesa.")
+        st.warning("Não foi possível carregar as subcategorias de despesa.")
         return []
 
 
@@ -986,7 +986,7 @@ def modal_novo_lancamento(slug, membros, fornec):
         st.session_state["mnl_ver"] = 0
     ver = st.session_state["mnl_ver"]
 
-    st.markdown("**Dados do lancamento**")
+    st.markdown("**Dados do lançamento**")
 
     col_data, col_tipo = st.columns(2)
     with col_data:
@@ -1060,7 +1060,7 @@ def modal_novo_lancamento(slug, membros, fornec):
             l = opc[esc]
             id_cad, nome_cad, tipo_cad = int(l["id_cadastro"]), l["nome"], l["tipo_cadastro"]
 
-    desc = st.text_input("Descricao", key=f"mnl_desc_v{ver}")
+    desc = st.text_input("Descrição", key=f"mnl_desc_v{ver}")
 
     col_fp, col_val = st.columns([2, 1])
     with col_fp:
@@ -1081,7 +1081,7 @@ def modal_novo_lancamento(slug, membros, fornec):
     c_salvar, c_cancelar = st.columns(2)
     with c_salvar:
         salvar = st.button(
-            "💾 Salvar lancamento",
+            "💾 Salvar lançamento",
             type="primary",
             use_container_width=True,
             key=f"mnl_salvar_v{ver}",
@@ -1136,10 +1136,10 @@ def modal_novo_lancamento(slug, membros, fornec):
             )
             if duplicado:
                 st.warning(
-                    "⚠️ Este lancamento parece identico ao que voce acabou de "
+                    "Este lançamento parece identico ao que você acabou de "
                     "salvar (mesma data, tipo, categoria, valor e vinculo). "
                     "Para evitar duplicidade, aguarde alguns segundos antes de "
-                    "salvar novamente se realmente forem lancamentos distintos."
+                    "salvar novamente se realmente forem lançamentos distintos."
                 )
             else:
                 try:
@@ -1153,7 +1153,7 @@ def modal_novo_lancamento(slug, membros, fornec):
                     }
                     _invalida()
                     st.session_state["mnl_ver"] += 1
-                    st.toast("✅ Lancamento salvo!")
+                    st.toast("✅ Lançamento salvo!")
                     st.rerun()
 
 
@@ -1282,7 +1282,7 @@ def modal_editar_lancamento(slug, sel, membros, fornec):
             st.warning("Nenhum fornecedor ativo cadastrado.")
 
     desc_e = st.text_input(
-        "Descricao",
+        "Descrição",
         value=_valor_texto(sel["descricao"]),
         key=kp + "desc",
     )
@@ -1312,7 +1312,7 @@ def modal_editar_lancamento(slug, sel, membros, fornec):
     c_salvar, c_cancelar = st.columns(2)
     with c_salvar:
         salvar = st.button(
-            "💾 Salvar alteracoes",
+            "💾 Salvar alterações",
             type="primary",
             use_container_width=True,
             key=kp + "btn_salvar",
@@ -1359,7 +1359,7 @@ def modal_editar_lancamento(slug, sel, membros, fornec):
                 for k in list(st.session_state.keys()):
                     if k.startswith(kp) or k.startswith("_auth_"):
                         st.session_state.pop(k, None)
-                st.toast("✅ Lancamento alterado!")
+                st.toast("✅ Lançamento alterado!")
                 st.rerun()
 
 
@@ -1435,7 +1435,7 @@ def modal_visualizar_lancamento(sel, igreja, slug, df_cad):
             else:
                 st.code("Nao vinculado", language=None)
 
-            st.markdown("**Descricao**")
+            st.markdown("**Descrição**")
             desc = _valor_texto(sel.get("descricao", ""))
             st.code(desc if desc else "(sem descricao)", language=None)
 
@@ -1460,7 +1460,7 @@ def modal_visualizar_lancamento(sel, igreja, slug, df_cad):
         mensagem = _montar_mensagem_comprovante(dict(sel), igreja, slug)
 
         if not telefone:
-            st.warning("⚠️ Este lancamento nao possui telefone vinculado.")
+            st.warning("Este lançamento não possui telefone vinculado.")
         else:
             st.caption(f"📞 Telefone do vinculado: **{telefone}**")
 
@@ -1522,7 +1522,7 @@ def modal_excluir_lancamento(slug, sel):
     data_str = data_fmt.strftime("%d/%m/%Y") if pd.notna(data_fmt) else "-"
 
     st.warning(
-        f"⚠️ Voce esta prestes a excluir o lancamento:\n\n"
+        f"Voce esta prestes a excluir o lancamento:\n\n"
         f"**Cupom #{str(id_lanc).zfill(6)}**\n\n"
         f"- Data: {data_str}\n"
         f"- Tipo: {tipo} / {categoria}\n"
@@ -1532,7 +1532,7 @@ def modal_excluir_lancamento(slug, sel):
     )
 
     confirmar = st.checkbox(
-        "Confirmo a exclusao deste lancamento",
+        "Confirmo a exclusão deste lançamento",
         key=f"mexc_lanc_conf_{id_lanc}",
     )
 
@@ -1570,7 +1570,7 @@ def modal_excluir_lancamento(slug, sel):
             st.toast(f"✅ Lancamento #{str(id_lanc).zfill(6)} excluido!")
             st.rerun()
         except Exception as exc:
-            st.error(f"❌ Erro ao excluir: {exc}")
+            st.error(f"Erro ao excluir: {exc}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1606,7 +1606,7 @@ def render():
         st.session_state["mnl_aberto"] = False
 
     if st.button(
-        "➕ Novo lancamento",
+        "➕ Novo lançamento",
         type="primary",
         use_container_width=True,
         key="btn_abrir_novo_lanc",
@@ -1617,7 +1617,7 @@ def render():
         modal_novo_lancamento(slug, membros, fornec)
 
     # ─── Importar dizimos via Pix (mantido como expander) ──────────
-    with st.expander("💠 Importar dizimos via Pix (CSV ou PDF)", expanded=False):
+    with st.expander("💠 Importar dízimos via Pix (CSV ou PDF)", expanded=False):
         st.caption(
             "Use um CSV do banco, uma planilha exportada ou o PDF de recebimentos Pix "
             "no modelo analisado. Os registros serao lancados como Entrada > Dizimo > Pix."
@@ -1628,7 +1628,7 @@ def render():
         )
 
         if membros.empty:
-            st.warning("Cadastre membros ativos antes de importar dizimos.")
+            st.warning("Cadastre membros ativos antes de importar dízimos.")
         else:
             modelo = pd.DataFrame([
                 {"data": "04/06/2026", "membro": "Nome do membro", "valor": "100,00"}
@@ -1653,7 +1653,7 @@ def render():
                     st.error(str(ex))
                 except Exception:
                     LOGGER.exception("Nao foi possivel processar o CSV de Pix.")
-                    st.error("Nao foi possivel processar o CSV enviado.")
+                    st.error("Não foi possível processar o CSV enviado.")
                 else:
                     if df_pix_csv.empty:
                         st.warning("O CSV enviado esta vazio.")
@@ -1719,7 +1719,7 @@ def render():
 
                         if total_prontos:
                             if st.button(
-                                "Importar dizimos Pix validos",
+                                "Importar dízimos Pix válidos",
                                 type="primary",
                                 key=_sk("pix_importar", slug),
                             ):
@@ -1733,7 +1733,7 @@ def render():
                                     st.error(str(ex))
                                 except Exception:
                                     LOGGER.exception("Falha ao importar dizimos Pix.")
-                                    st.error("Nao foi possivel importar os dizimos Pix.")
+                                    st.error("Não foi possível importar os dízimos Pix.")
                                 else:
                                     _invalida()
                                     st.success(
@@ -1741,11 +1741,11 @@ def render():
                                     )
                                     st.rerun()
                         else:
-                            st.warning("Nenhuma linha valida para importar.")
+                            st.warning("Nenhuma linha válida para importar.")
 
     # ─── Lancamento em lote (mantido como expander) ────────────────
     if tem_lancamento_lote(plano_igreja):
-        with st.expander("📦 Lancamento em lote (multiplos itens)", expanded=False):
+        with st.expander("📦 Lançamento em lote (multiplos itens)", expanded=False):
             st.caption("Lance varios itens (dizimo + oferta + missao etc) "
                        "compartilhando data, membro/fornecedor e forma de pagamento.")
 
@@ -1809,7 +1809,7 @@ def render():
                         key="lote_subcat_item",
                     )
 
-            desc_lote_item = st.text_input("Descricao", key="lote_desc_item")
+            desc_lote_item = st.text_input("Descrição", key="lote_desc_item")
             valor_lote_item = st.number_input("Valor (R$)", min_value=0.0,
                                               step=0.01, format="%.2f", key="lote_valor_item")
 
@@ -1841,7 +1841,7 @@ def render():
                             rotulo_item += f" / {item['subcategoria']}"
                         st.write(f"**{rotulo_item}**")
                     with col2:
-                        st.write(item["descricao"] or "—")
+                        st.write(item["descrição"] or "—")
                     with col3:
                         st.write(formatar_moeda(item["valor"]))
                     with col4:
@@ -1856,7 +1856,7 @@ def render():
                 c_salvar, c_limpar = st.columns(2)
 
                 with c_salvar:
-                    if st.button("Salvar todos os lancamentos", type="primary", key="lote_salvar"):
+                    if st.button("Salvar todos os lançamentos", type="primary", key="lote_salvar"):
                         if vincular_lote == "Membro" and not id_cad_l:
                             st.error("Selecione um membro para vincular.")
                         elif vincular_lote == "Fornecedor" and not id_cad_l:
@@ -1933,7 +1933,7 @@ def render():
                     st.rerun()
     else:
         p_info_l = obter_plano(plano_igreja)
-        with st.expander("🔒 Lancamento em lote (apenas Profissional e Premium)", expanded=False):
+        with st.expander("🔒 Lançamento em lote (apenas Profissional e Premium)", expanded=False):
             st.warning(
                 f"O lancamento em lote esta disponivel apenas nos planos "
                 f"**Profissional** e **Premium**. Seu plano atual: **{p_info_l['nome']}**."
@@ -1947,13 +1947,13 @@ def render():
     total = len(df_lanc)
     with st.expander(f"📋 Ver lancamentos ({total} registros)", expanded=False):
         if df_lanc.empty:
-            st.info("Nenhum lancamento ainda.")
+            st.info("Nenhum lançamento ainda.")
         else:
             st.dataframe(preparar_df(df_lanc), use_container_width=True)
             st.download_button(
                 "Exportar CSV",
                 gerar_csv(preparar_df(df_lanc)),
-                "lancamentos.csv",
+                "lançamentos.csv",
                 "text/csv",
             )
 
@@ -2012,7 +2012,7 @@ def render():
                 st.session_state.pop(_sk("del_lanc_pendente", slug), None)
             else:
                 st.caption(
-                    "Excluir um lancamento e uma acao irreversivel. Confirme "
+                    "Excluir um lançamento e uma ação irreversivel. Confirme "
                     "a senha da igreja antes de continuar."
                 )
                 if solicitar_autorizacao("excluir_lancamento", "excluir um lancamento"):
@@ -2021,10 +2021,10 @@ def render():
     # ─── Fechamento de caixa (mantido como expander) ───────────────
     with st.expander("📊 2a via do cupom / fechamento de caixa", expanded=False):
         if df_lanc.empty:
-            st.info("Nenhum lancamento ainda.")
+            st.info("Nenhum lançamento ainda.")
         else:
             st.caption(
-                "Gere uma segunda via consolidada para conferencia e assinatura "
+                "Gere uma segunda via consolidada para conferência e assinatura "
                 "do fechamento de caixa."
             )
             df_caixa_base = df_lanc.copy()
@@ -2063,7 +2063,7 @@ def render():
                 )
 
             if inicio_caixa > fim_caixa:
-                st.error("A data inicial nao pode ser posterior a data final.")
+                st.error("A data inicial não pode ser posterior a data final.")
             else:
                 df_caixa = df_caixa_base[
                     df_caixa_base["data_dt"].between(
@@ -2090,7 +2090,7 @@ def render():
                 m4.metric("Lancamentos", len(df_caixa))
 
                 if df_caixa.empty:
-                    st.warning("Nenhum lancamento encontrado para os filtros selecionados.")
+                    st.warning("Nenhum lançamento encontrado para os filtros selecionados.")
                 else:
                     if st.button(
                         "Gerar 2a via do fechamento",

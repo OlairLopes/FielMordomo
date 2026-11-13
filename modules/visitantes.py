@@ -271,7 +271,7 @@ def _render_formulario(slug):
         key=f"visitante_oracao_{nonce}",
     )
     observacoes = st.text_area(
-        "Observacoes",
+        "Observações",
         placeholder="Opcional",
         key=f"visitante_obs_{nonce}",
     )

@@ -39,7 +39,7 @@ CONFIG_PLOTLY = {"displayModeBar": False, "responsive": True}
 
 def _grafico_reunioes(reunioes):
     if reunioes.empty:
-        st.info("Sem reunioes no periodo selecionado.")
+        st.info("Sem reunioes no período selecionado.")
         return
     dados = reunioes.sort_values("data")
     fig = go.Figure()
@@ -75,7 +75,7 @@ def _grafico_reunioes(reunioes):
 
 def _grafico_frequencia(freq):
     if freq.empty:
-        st.info("Sem frequencia individual no periodo.")
+        st.info("Sem frequência individual no período.")
         return
     dados = freq.sort_values("frequencia_pct", ascending=True)
     fig = go.Figure(go.Bar(
@@ -116,7 +116,7 @@ def _resumo_funcoes(freq):
 
 def _grafico_funcoes(resumo):
     if resumo.empty:
-        st.info("Sem resumo por funcao.")
+        st.info("Sem resumo por função.")
         return
     fig = go.Figure(go.Bar(
         name="Frequencia media",
@@ -149,7 +149,7 @@ def _render_chamada(slug):
 
     funcoes = listar_funcoes_obreiros(slug)
     if not funcoes:
-        st.warning("Nenhuma funcao encontrada no cadastro de membros.")
+        st.warning("Nenhuma função encontrada no cadastro de membros.")
         return
 
     chamadas_salvas = listar_obreiros_reunioes(slug)
@@ -186,7 +186,7 @@ def _render_chamada(slug):
             format="DD/MM/YYYY",
         )
         if editar_inicio > editar_fim:
-            st.error("A data inicial nao pode ser maior que a data final.")
+            st.error("A data inicial não pode ser maior que a data final.")
             return
         chamadas_salvas = listar_obreiros_reunioes(
             slug,
@@ -194,7 +194,7 @@ def _render_chamada(slug):
             editar_fim.isoformat(),
         )
         if chamadas_salvas.empty:
-            st.info("Nenhuma chamada encontrada no periodo selecionado.")
+            st.info("Nenhuma chamada encontrada no período selecionado.")
             return
         op_reunioes = {
             f'{int(row["id_reuniao"])} - {_fmt_data(row["data"])} - {row.get("tema", "") or "sem tema"}': row
@@ -229,7 +229,7 @@ def _render_chamada(slug):
         reuniao_atual = op_reunioes[reuniao_label]
         data_original = datetime.date.fromisoformat(str(reuniao_atual["data"]))
         data = st.date_input(
-            "Data da reuniao",
+            "Data da reunião",
             value=data_original,
             key=f"obreiros_data_edit_{int(reuniao_atual['id_reuniao'])}",
             format="DD/MM/YYYY",
@@ -252,7 +252,7 @@ def _render_chamada(slug):
             }
         st.info(f"Editando chamada salva de {_fmt_data(data.isoformat())}.")
     else:
-        data = st.date_input("Data da reuniao", value=_hoje(), key="obreiros_data", format="DD/MM/YYYY")
+        data = st.date_input("Data da reunião", value=_hoje(), key="obreiros_data", format="DD/MM/YYYY")
 
     chave_data = data.isoformat()
     chave_chamada = (
@@ -305,11 +305,11 @@ def _render_chamada(slug):
     c1, c2 = st.columns(2)
     visitantes = c1.number_input("Visitantes", min_value=0, step=1, value=visitantes_atual, key=f"obreiros_visitantes_{chave_data}")
     ofertas = c2.number_input("Ofertas", min_value=0.0, step=1.0, value=ofertas_atual, key=f"obreiros_ofertas_{chave_data}")
-    observacoes = st.text_area("Observacoes", value=observacoes_atual, key=f"obreiros_obs_{chave_data}")
+    observacoes = st.text_area("Observações", value=observacoes_atual, key=f"obreiros_obs_{chave_data}")
     arquivo_ata = st.file_uploader(
         "Ata da reunião",
         type=["pdf", "doc", "docx", "png", "jpg", "jpeg"],
-        help="Anexe a ata em PDF, Word ou imagem. Se a chamada ja tiver uma ata salva, ela sera mantida quando nenhum novo arquivo for enviado.",
+        help="Anexe a ata em PDF, Word ou imagem. Se a chamada já tiver uma ata salva, ela será mantida quando nenhum novo arquivo for enviado.",
         key=f"obreiros_ata_{chave_chamada}",
     )
 
@@ -399,10 +399,10 @@ def _render_relatorios(slug):
                         mime=ata["mime"],
                         use_container_width=True,
                     )
-    with st.expander("Frequencia individual", expanded=False):
+    with st.expander("Frequência individual", expanded=False):
         st.dataframe(freq, use_container_width=True, hide_index=True)
         st.download_button(
-            "Baixar frequencia CSV",
+            "Baixar frequência CSV",
             data=gerar_csv(freq),
             file_name="frequencia_obreiros.csv",
             mime="text/csv",
@@ -413,7 +413,7 @@ def render():
     st.subheader("⛪ Reunião de Obreiros")
     slug = slug_da_sessao()
     if not slug:
-        st.error("Sessao invalida. Faca login novamente.")
+        st.error("Sessão invalida. Faça login novamente.")
         return
     if st.session_state.get("modo") == "secretario_geral":
         _render_chamada(slug)

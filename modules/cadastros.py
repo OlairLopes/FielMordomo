@@ -348,7 +348,7 @@ def _renderizar_historico_membro(slug, id_cadastro, congregacao_padrao):
             help="Congregacao ou igreja relacionada a esta ocorrencia.",
         )
         observacao_hist = st.text_area(
-            "Observacao (opcional)",
+            "Observação (opcional)",
             key=f"chist_obs_{id_cadastro}",
             height=80,
         )
@@ -447,7 +447,7 @@ def _renderizar_historico_membro(slug, id_cadastro, congregacao_padrao):
                         st.error(f"Nao foi possivel excluir: {exc}")
                     else:
                         st.session_state.pop(f"chist_confirmar_del_{id_hist}", None)
-                        st.toast("Ocorrencia excluida.")
+                        st.toast("Ocorrencia excluída.")
                         st.rerun()
             with cc2:
                 if st.button(
@@ -619,7 +619,7 @@ def modal_excluir_cadastro(slug, sel):
 
     if em_uso:
         st.error(
-            f"❌ **Nao e possivel excluir.**\n\n"
+            f"**Nao e possivel excluir.**\n\n"
             f"O cadastro **{nome}** esta vinculado a lancamentos. "
             f"Para excluir, primeiro remova ou altere todos os lancamentos vinculados."
         )
@@ -629,7 +629,7 @@ def modal_excluir_cadastro(slug, sel):
         return
 
     st.warning(
-        f"⚠️ Voce esta prestes a excluir:\n\n"
+        f"Voce esta prestes a excluir:\n\n"
         f"**{nome}** ({_rotulo_tipo_cadastro(tipo)})\n\n"
         f"Esta acao **nao pode ser desfeita**."
     )
@@ -672,7 +672,7 @@ def modal_excluir_cadastro(slug, sel):
             st.toast(f"✅ Cadastro de {nome} excluido!")
             st.rerun()
         except Exception as exc:
-            st.error(f"❌ Erro ao excluir: {exc}")
+            st.error(f"Erro ao excluir: {exc}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -730,7 +730,7 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
 
         if novo and tipo == "Membro" and bloqueado:
             st.error(
-                f"⚠️ Voce atingiu o limite de **{limite} membros** do plano "
+                f"Voce atingiu o limite de **{limite} membros** do plano "
                 f"**{p_info['nome']}**. Faca upgrade para "
                 f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
             )
@@ -833,7 +833,7 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
             )
         with col_num:
             numero = st.text_input(
-                "Numero",
+                "Número",
                 value="" if novo else _val(registro, "numero"),
                 key=kp + "num", disabled=somente_leitura,
             )
@@ -862,7 +862,7 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
     if tab_historico is not None:
         with tab_historico:
             if novo or id_atual is None:
-                st.info("Salve o cadastro primeiro para registrar o historico do membro.")
+                st.info("Salve o cadastro primeiro para registrar o histórico do membro.")
             else:
                 _renderizar_historico_membro(slug, id_atual, congregacao_fixa)
 
@@ -1053,7 +1053,7 @@ def _painel_cadastros(slug, df, plano, p_info, congregacao_fixa, bloqueado, limi
             st.session_state[sk_modo] = "navegar"
             st.rerun()
         if st.button(
-            "", key=f"cadt_prox_{slug}", icon=":material/arrow_forward:", help="Proximo registro",
+            "", key=f"cadt_prox_{slug}", icon=":material/arrow_forward:", help="Próximo registro",
             disabled=not ids_ficha or idx >= len(ids_ficha) - 1,
         ):
             st.session_state[sk_idx] = idx + 1
@@ -1102,7 +1102,7 @@ def render():
             pre = listar_pre_cadastros_membros(slug, "Pendente")
         except Exception:
             pre = pd.DataFrame()
-            st.error("Nao foi possivel carregar os pre-cadastros.")
+            st.error("Não foi possível carregar os pre-cadastros.")
         if pre.empty:
             st.info("Nenhum pre-cadastro pendente.")
         else:

@@ -554,7 +554,7 @@ def _selecionar_igreja_publica():
         carregar_cadastros(slug)
     except Exception:
         LOGGER.exception("Falha ao carregar cadastros para o plano de leitura.")
-        st.error("Nao foi possivel localizar essa igreja.")
+        st.error("Não foi possível localizar essa igreja.")
         return None
     st.session_state["leitura_slug"] = slug
     return slug
