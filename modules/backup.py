@@ -75,7 +75,7 @@ def _guardar_upload(slug, arquivo):
     dados = arquivo.getvalue()
     limite = TAMANHO_MAXIMO_ZIP if arquivo.name.lower().endswith(".zip") else TAMANHO_MAXIMO_ARQUIVOS_ZIP
     if not dados:
-        st.error("O arquivo enviado esta vazio.")
+        st.error("O arquivo enviado está vazio.")
         return
     if len(dados) > limite:
         st.error("O arquivo enviado excede o limite permitido.")

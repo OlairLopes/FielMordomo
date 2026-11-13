@@ -1657,7 +1657,7 @@ def render():
                     st.error("Não foi possível processar o CSV enviado.")
                 else:
                     if df_pix_csv.empty:
-                        st.warning("O CSV enviado esta vazio.")
+                        st.warning("O CSV enviado está vazio.")
                     else:
                         colunas = list(df_pix_csv.columns)
                         col_data_padrao = _detectar_coluna(colunas, ["data", "dt", "date"])
@@ -1936,7 +1936,7 @@ def render():
         p_info_l = obter_plano(plano_igreja)
         with st.expander("🔒 Lançamento em lote (apenas Profissional e Premium)", expanded=False):
             st.warning(
-                f"O lancamento em lote esta disponivel apenas nos planos "
+                f"O lançamento em lote está disponível apenas nos planos "
                 f"**Profissional** e **Premium**. Seu plano atual: **{p_info_l['nome']}**."
             )
             st.info(

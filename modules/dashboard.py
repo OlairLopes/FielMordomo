@@ -967,7 +967,7 @@ def _render_saude_financeira(df, mes_ref, slug):
     st.caption(
         f"Saldo acumulado registrado até {_mes_label(mes_ref)}: "
         f"{formatar_moeda(saude['saldo_acumulado'])}. "
-        "A previsão detalhada dos próximos meses esta na seção 'Previsão' abaixo."
+        "A previsão detalhada dos próximos meses está na seção 'Previsão' abaixo."
     )
 
 
@@ -1671,7 +1671,7 @@ def _render_cruzamento_geo(df_cruzamento):
     classes_labels = {
         "engajado": ("✅ Engajados", "Presente + contribuindo"),
         "presente_sem_contribuir": ("⚠️ Presentes sem contribuir", "Frequenta mas nao dizima"),
-        "contribui_sem_presenca": ("📱 Contribuem a distancia", "Dizima mas nao esta presente"),
+        "contribui_sem_presenca": ("📱 Contribuem a distancia", "Dízima mas não está presente"),
         "ausente_total": ("❌ Ausentes totais", "Nem presente nem contribuindo"),
     }
 

@@ -1706,7 +1706,7 @@ def _render_checkin(slug):
 
             if bloqueado:
                 st.error(
-                    "**Check-in bloqueado:** voce esta fora da janela permitida. "
+                    "**Check-in bloqueado:** você está fora da janela permitida. "
                     f"Motivo: {motivo_janela}"
                 )
 
@@ -1791,7 +1791,7 @@ def _render_checkin(slug):
     # ─── EM MASSA ───────────────────────────────────────────────────
     with tab_massa:
         st.caption(
-            "Use quando a lideranca esta no local. Use a localização capturada no topo "
+            "Use quando a liderança está no local. Use a localização capturada no topo "
             "e selecione todos os membros presentes."
         )
 
@@ -1816,7 +1816,7 @@ def _render_checkin(slug):
             st.success("Você esta dentro do raio do evento.")
         else:
             st.warning(
-                f"Você esta fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
+                f"Você está fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
                 "Registros serao marcados como ausentes."
             )
 
@@ -2538,7 +2538,7 @@ def _render_auto_checkin_via_link(slug, token):
     else:
         raio = int(evento.get("raio_metros", DEFAULT_RAIO_METROS))
         st.warning(
-            f"**Voce esta fora do raio do evento.**\n\n"
+            f"**Você está fora do raio do evento.**\n\n"
             f"📍 Distancia: {dist:.0f} m (raio permitido: {raio} m)\n\n"
             f"Sua localização foi registrada como ausente. "
             f"Aproxime-se do local e o secretariado podera te marcar presente manualmente."

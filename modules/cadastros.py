@@ -621,7 +621,7 @@ def modal_excluir_cadastro(slug, sel):
     if em_uso:
         st.error(
             f"**Não e possível excluir.**\n\n"
-            f"O cadastro **{nome}** esta vinculado a lançamentos. "
+            f"O cadastro **{nome}** está vinculado a lançamentos. "
             f"Para excluir, primeiro remova ou altere todos os lançamentos vinculados."
         )
 

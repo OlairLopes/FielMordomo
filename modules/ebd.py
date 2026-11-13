@@ -998,7 +998,7 @@ def _importar_escala_planilha(slug, arquivo, df_classes):
         return
 
     if planilha.empty:
-        st.warning("A planilha enviada esta vazia.")
+        st.warning("A planilha enviada está vazia.")
         return
 
     planilha = planilha.rename(columns={col: _normalizar_coluna_importacao(col) for col in planilha.columns})
@@ -1602,7 +1602,7 @@ def _render_chamada_conteudo(slug, id_classe_fixo=None):
     if id_classe_fixo:
         df_classes = df_classes[df_classes["id_classe"] == int(id_classe_fixo)]
         if df_classes.empty:
-            st.error("Sua classe vinculada não esta ativa ou não foi encontrada.")
+            st.error("Sua classe vinculada não está ativa ou não foi encontrada.")
             return
 
     op_classes = _classes_opcoes(df_classes)
