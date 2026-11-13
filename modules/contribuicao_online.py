@@ -87,10 +87,10 @@ def pagina_publica(slug):
             st.session_state[f"comp_ref_{slug}"] = str(id_contribuicao)
             st.session_state[f"comp_tel_{slug}"] = contato
 
-    _secao_comprovante_posterior(slug)
-
     gerado = st.session_state.get(chave_sessao)
     if not gerado:
+        # Sem Pix gerado nesta sessão: o envio "Já paguei" é a única forma de anexar o comprovante.
+        _secao_comprovante_posterior(slug)
         return
 
     st.success(
