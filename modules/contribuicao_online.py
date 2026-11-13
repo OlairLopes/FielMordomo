@@ -45,6 +45,8 @@ _CSS_CONTRIBUICAO = """
     --fm-surface: #F6F8FB;
 }
 .stApp { background: var(--fm-surface); }
+/* A barra de menu ocupa a largura da tela; so o formulario fica estreito. */
+.fm-navbar-wrap { width: 100vw !important; position: relative; left: 50%; margin-left: -50vw !important; }
 .block-container { max-width: 720px !important; padding-top: 2rem !important; }
 html, body, .stApp, p, label, input, button, [data-testid="stMarkdownContainer"] {
     font-family: 'Public Sans', -apple-system, 'Segoe UI', Arial, sans-serif;
