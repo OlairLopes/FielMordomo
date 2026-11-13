@@ -70,6 +70,25 @@ def preparar_df(df: pd.DataFrame) -> pd.DataFrame:
     return v
 
 
+def tabela_lancamentos_exibicao(df: pd.DataFrame) -> pd.DataFrame:
+    """Tabela de lancamentos para a tela: nomes amigaveis, sem colunas tecnicas."""
+    colunas = [
+        "id_lancamento", "data", "tipo", "categoria", "subcategoria", "descricao",
+        "forma_pagamento", "nome_cadastro", "tipo_cadastro", "lote_id", "valor",
+    ]
+    tabela = df[[c for c in colunas if c in df.columns]].copy()
+    if "data" in tabela.columns:
+        tabela["data"] = pd.to_datetime(tabela["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+    if "valor" in tabela.columns:
+        tabela["valor"] = pd.to_numeric(tabela["valor"], errors="coerce").fillna(0.0).apply(formatar_moeda)
+    return tabela.rename(columns={
+        "id_lancamento": "ID", "data": "Data", "tipo": "Tipo", "categoria": "Categoria",
+        "subcategoria": "Subcategoria", "descricao": "Descrição", "forma_pagamento": "Pagamento",
+        "nome_cadastro": "Vinculado a", "tipo_cadastro": "Tipo do vínculo", "lote_id": "Lote",
+        "valor": "Valor",
+    })
+
+
 def obter_ativos(df_cad: pd.DataFrame, tipo: str) -> pd.DataFrame:
     colunas = {"tipo_cadastro", "situacao", "id_cadastro", "nome"}
     if df_cad.empty or not colunas.issubset(df_cad.columns):

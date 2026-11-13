@@ -21,7 +21,7 @@ from data.repository import (
     obter_logo_igreja, listar_subcategorias_despesa, obter_config_igreja,
 )
 from utils.helpers import (
-    formatar_moeda, preparar_df, obter_ativos, montar_opcoes,
+    formatar_moeda, preparar_df, tabela_lancamentos_exibicao, obter_ativos, montar_opcoes,
     encontrar_chave, confirmar_exclusao, gerar_csv,
     slug_da_sessao, solicitar_autorizacao,
 )
@@ -1944,24 +1944,17 @@ def render():
                 f"e ganhe a possibilidade de lancar dizimo + oferta + missao em um unico documento."
             )
 
-    # ─── Ver lancamentos (tabela) ──────────────────────────────────
+    # ─── Lancamentos existentes: tabela e acoes no mesmo bloco ─────
     total = len(df_lanc)
-    with st.expander(f"📋 Ver lancamentos ({total} registros)", expanded=False):
-        if df_lanc.empty:
-            st.info("Nenhum lançamento ainda.")
-        else:
-            st.dataframe(preparar_df(df_lanc), use_container_width=True)
-            st.download_button(
-                "Exportar CSV",
-                gerar_csv(preparar_df(df_lanc)),
-                "lançamentos.csv",
-                "text/csv",
-            )
+    st.markdown(f"### Lançamentos existentes ({total})")
+    if df_lanc.empty:
+        st.info("Nenhum lançamento ainda.")
+    else:
+        st.dataframe(tabela_lancamentos_exibicao(df_lanc), use_container_width=True, hide_index=True)
 
     # ─── ACOES em lancamento existente (3 botoes que abrem modais) ─
     if not df_lanc.empty:
-        st.divider()
-        st.markdown("### 🎯 Acoes em lancamento existente")
+        st.markdown("#### Ações")
 
         df_e = df_lanc.copy()
         df_e["data_fmt"] = pd.to_datetime(df_e["data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
@@ -1974,17 +1967,17 @@ def render():
         )
 
         rotulo = st.selectbox(
-            "Selecione um lancamento",
+            "Selecione um lançamento",
             df_e["rotulo"].tolist(),
             key="sel_lanc_acao",
         )
         sel = df_e[df_e["rotulo"] == rotulo].iloc[0]
 
-        c_view, c_edit, c_del = st.columns(3)
+        c_view, c_edit, c_del, c_csv = st.columns(4)
 
         with c_view:
             if st.button(
-                "👁️ Visualizar",
+                "Visualizar",
                 use_container_width=True,
                 key="btn_abrir_view_lanc",
             ):
@@ -1992,7 +1985,7 @@ def render():
 
         with c_edit:
             if st.button(
-                "✏️ Editar",
+                "Editar",
                 use_container_width=True,
                 key="btn_abrir_edit_lanc",
             ):
@@ -2000,11 +1993,20 @@ def render():
 
         with c_del:
             if st.button(
-                "🗑️ Excluir",
+                "Excluir",
                 use_container_width=True,
                 key="btn_abrir_del_lanc",
             ):
                 st.session_state[_sk("del_lanc_pendente", slug)] = int(sel["id_lancamento"])
+
+        with c_csv:
+            st.download_button(
+                "Exportar CSV",
+                gerar_csv(preparar_df(df_lanc)),
+                "lançamentos.csv",
+                "text/csv",
+                use_container_width=True,
+            )
 
         id_pendente = st.session_state.get(_sk("del_lanc_pendente", slug))
         if id_pendente:

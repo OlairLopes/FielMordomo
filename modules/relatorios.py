@@ -114,6 +114,20 @@ def _resumo_por(df, coluna, rotulo):
     return resumo
 
 
+def _formatar_mensal(mensal):
+    exibicao = mensal.copy()
+    for coluna in ("Entradas", "Saidas", "Saldo"):
+        if coluna in exibicao.columns:
+            exibicao[coluna] = exibicao[coluna].apply(formatar_moeda)
+    exibicao = exibicao.rename(columns={"Saidas": "Saídas"})
+    exibicao.index = [
+        f"{str(i)[5:7]}/{str(i)[:4]}" if len(str(i)) == 7 and str(i)[4] == "-" else str(i)
+        for i in exibicao.index
+    ]
+    exibicao.index.name = "Mês"
+    return exibicao
+
+
 def _formatar_resumo(df):
     exibicao = df.copy()
     if "Valor total" in exibicao.columns:
@@ -426,7 +440,7 @@ def _render_financeiro(slug, igreja):
             use_container_width=True,
             config=CONFIG_PLOTLY,
         )
-        st.dataframe(mensal, use_container_width=True)
+        st.dataframe(_formatar_mensal(mensal), use_container_width=True)
 
         st.markdown("### Totais por categoria")
         st.dataframe(_formatar_resumo(resumo_categoria), use_container_width=True, hide_index=True)
