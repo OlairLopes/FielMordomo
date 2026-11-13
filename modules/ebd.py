@@ -947,7 +947,7 @@ def _selecionar_pessoa_escala(
         placeholder="Opcional",
     )
     funcao = st.text_input(
-        f"{titulo} - funcao",
+        f"{titulo} - função",
         value=str(funcao_padrao or ""),
         key=f"{key_prefix}_funcao_manual",
         help="Preencha manualmente quando a pessoa não estiver no cadastro.",
@@ -2204,10 +2204,10 @@ def _render_escala_excluir(slug, escala, opcoes_item, periodo_texto):
         if qtd == 0:
             st.info("Nenhuma escala no periodo/filtro atual.")
             return
-        st.warning(f"Isso ira excluir {qtd} escala(s) do periodo filtrado ({periodo_texto}).")
+        st.warning(f"Isso ira excluir {qtd} escala(s) do período filtrado ({periodo_texto}).")
         if confirmar_exclusao("excluir_escala_periodo", f"Excluir {qtd} escala(s) do periodo filtrado"):
             excluir_ebd_escala_lote(slug, escala["id_escala"].tolist())
-            st.success(f"{qtd} escala(s) excluida(s).")
+            st.success(f"{qtd} escala(s) excluída(s).")
             st.rerun()
 
 
@@ -3055,7 +3055,7 @@ def render():
             fn(*args)
         except Exception as exc:
             st.error(
-                f"Nao foi possivel carregar {titulo}. "
+                f"Não foi possível carregar {titulo}. "
                 f"Tipo do erro: {type(exc).__name__}. Detalhe: {exc}"
             )
 

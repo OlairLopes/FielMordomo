@@ -214,7 +214,7 @@ def _render_secao_acesso_restrito(slug, op_membros, df_membros, config):
     except Exception:
         LOGGER.exception("Nao foi possivel carregar %s.", config["titulo"].lower())
         registros = None
-        st.error(f"Nao foi possivel carregar {config['titulo'].lower()}.")
+        st.error(f"Não foi possível carregar {config['titulo'].lower()}.")
 
     with st.expander(config["expander_cadastrar"], expanded=False):
         with st.form(f"form_{campo_id}_novo"):

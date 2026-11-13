@@ -240,7 +240,7 @@ def _tab_movimentos(dados, tipo):
     coluna = "categoria" if tipo == "Entrada" else "subcategoria"
     resumo = _resumo_por_coluna(movimentos, coluna)
     if resumo.empty:
-        st.info(f"Nao ha {tipo.lower()}s validas no periodo.")
+        st.info(f"Não há {tipo.lower()}s válidas no período.")
         return
     resumo["valor"] = resumo["valor"].map(formatar_moeda)
     st.dataframe(

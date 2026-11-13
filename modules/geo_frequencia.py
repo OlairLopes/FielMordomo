@@ -1633,7 +1633,7 @@ def _render_checkin(slug):
     # Status da janela de check-in
     if dentro_janela:
         if status_temporal != "sem_horario":
-            st.success(f"**Check-in disponivel.** {motivo_janela}")
+            st.success(f"**Check-in disponível.** {motivo_janela}")
     else:
         st.error(f"**Check-in nao disponivel:** {motivo_janela}")
 
@@ -1697,7 +1697,7 @@ def _render_checkin(slug):
             if atrasado_calc and dentro and dentro_janela:
                 st.warning(f"⏰ **Atencao:** voce chegou apos a tolerancia de "
                           f"{config_temporal.get('tolerancia_atraso_min', 15)} min. "
-                          f"Sera marcado como 'atrasado'.")
+                          f"Será marcado como 'atrasado'.")
 
             st.caption(f"Status: {status_calc}")
 
@@ -1732,11 +1732,11 @@ def _render_checkin(slug):
                     if presente_calc:
                         if atrasado_calc:
                             st.success(
-                                f"Presenca registrada para {membro['nome']} "
+                                f"Presença registrada para {membro['nome']} "
                                 f"(chegou atrasado)."
                             )
                         else:
-                            st.success(f"Presenca registrada para {membro['nome']}!")
+                            st.success(f"Presença registrada para {membro['nome']}!")
                     else:
                         st.warning(f"Registrado como ausente. Motivo: {status_calc}")
 
@@ -1816,7 +1816,7 @@ def _render_checkin(slug):
             st.success("Você esta dentro do raio do evento.")
         else:
             st.warning(
-                f"Voce esta fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
+                f"Você esta fora do raio ({int(evento.get('raio_metros', DEFAULT_RAIO_METROS))} m). "
                 "Registros serao marcados como ausentes."
             )
 
@@ -2377,8 +2377,8 @@ def _render_auto_checkin_via_link(slug, token):
         )
         st.error(
             f"⏰ **Este link expirou.**\n\n"
-            f"Links de check-in sao validos por ate {TOKEN_CHECKIN_VALIDADE_HORAS} horas "
-            "apos o envio. Solicite um novo link a lideranca."
+            f"Links de check-in são válidos por até {TOKEN_CHECKIN_VALIDADE_HORAS} horas "
+            "após o envio. Solicite um novo link a lideranca."
         )
         return
 
@@ -2459,8 +2459,8 @@ def _render_auto_checkin_via_link(slug, token):
 
     if not dentro_janela:
         st.error(
-            f"**Check-in nao disponivel no momento.**\n\n{motivo_janela}\n\n"
-            "Volte no horario correto para registrar sua presenca."
+            f"**Check-in não disponível no momento.**\n\n{motivo_janela}\n\n"
+            "Volte no horario correto para registrar sua presença."
         )
         return
 
@@ -2523,14 +2523,14 @@ def _render_auto_checkin_via_link(slug, token):
         st.balloons()
         if atrasado:
             st.success(
-                f"**PRESENCA REGISTRADA!**\n\n"
+                f"**PRESENÇA REGISTRADA!**\n\n"
                 f"👤 {nome_membro}\n\n"
                 f"📍 Distancia: {dist:.0f} m\n\n"
-                f"⏰ Voce chegou apos a tolerancia (marcado como atrasado)."
+                f"⏰ Você chegou após a tolerancia (marcado como atrasado)."
             )
         else:
             st.success(
-                f"**PRESENCA REGISTRADA!**\n\n"
+                f"**PRESENÇA REGISTRADA!**\n\n"
                 f"👤 {nome_membro}\n\n"
                 f"📍 Distancia: {dist:.0f} m\n\n"
                 f"🎉 Bem-vindo(a) ao evento!"
@@ -2540,7 +2540,7 @@ def _render_auto_checkin_via_link(slug, token):
         st.warning(
             f"**Voce esta fora do raio do evento.**\n\n"
             f"📍 Distancia: {dist:.0f} m (raio permitido: {raio} m)\n\n"
-            f"Sua localizacao foi registrada como ausente. "
+            f"Sua localização foi registrada como ausente. "
             f"Aproxime-se do local e o secretariado podera te marcar presente manualmente."
         )
 

@@ -163,7 +163,7 @@ def _render_backup_automatico(slug, plano):
     if not tem_backup_automatico(plano):
         st.caption(
             f"O plano {p_info['nome']} possui backup manual. "
-            "Backups automaticos diarios estao disponiveis nos planos Profissional e Premium."
+            "Backups automaticos diarios estao disponíveis nos planos Profissional e Premium."
         )
         return
 
@@ -172,7 +172,7 @@ def _render_backup_automatico(slug, plano):
     if not backups:
         st.info(
             f"Seu plano inclui backup automatico diario (gerado por volta das "
-            f"{HORA_EXECUCAO}h, horario de Brasilia). Ainda nao foi gerado o "
+            f"{HORA_EXECUCAO}h, horario de Brasilia). Ainda não foi gerado o "
             "primeiro backup automatico desta igreja."
         )
         return

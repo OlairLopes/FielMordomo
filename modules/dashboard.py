@@ -965,9 +965,9 @@ def _render_saude_financeira(df, mes_ref, slug):
     else:
         st.success("Nenhum alerta financeiro relevante foi identificado.")
     st.caption(
-        f"Saldo acumulado registrado ate {_mes_label(mes_ref)}: "
+        f"Saldo acumulado registrado até {_mes_label(mes_ref)}: "
         f"{formatar_moeda(saude['saldo_acumulado'])}. "
-        "A previsao detalhada dos proximos meses esta na secao 'Previsao' abaixo."
+        "A previsão detalhada dos próximos meses esta na seção 'Previsão' abaixo."
     )
 
 
@@ -1440,7 +1440,7 @@ def _render_churn_alerta(churn_info, slug, igreja, mes_ref):
     """Renderiza alerta e lista de dizimistas em churn."""
     if churn_info["quantidade"] == 0:
         st.success(
-            f"Nenhum dizimista regular parou de contribuir nos ultimos "
+            f"Nenhum dizimista regular parou de contribuir nos últimos "
             f"{churn_info['dias_referencia']} dias."
         )
         return
@@ -1451,7 +1451,7 @@ def _render_churn_alerta(churn_info, slug, igreja, mes_ref):
         f'<div class="conteudo">'
         f'<strong>{churn_info["quantidade"]} dizimista(s) regular(es) pararam de contribuir</strong>'
         f'<span>Impacto estimado: {formatar_moeda(churn_info["impacto_estimado"])} por mes '
-        f'(analise dos ultimos {churn_info["dias_referencia"]} dias)</span>'
+        f'(analise dos últimos {churn_info["dias_referencia"]} dias)</span>'
         f'</div></div>',
         unsafe_allow_html=True,
     )
@@ -1462,7 +1462,7 @@ def _render_churn_alerta(churn_info, slug, igreja, mes_ref):
             with col_info:
                 st.markdown(
                     f"**{_escape(item['Nome'])}** — Media {item['Media mensal formatada']} "
-                    f"({item['Contribuicoes no periodo']} contribuicoes anteriores)"
+                    f"({item['Contribuicoes no periodo']} contribuições anteriores)"
                 )
             with col_wa:
                 if item["Telefone"]:
@@ -1692,7 +1692,7 @@ def _render_cruzamento_geo(df_cruzamento):
 def _render_lista_whatsapp_classe(classe_df, membros, igreja, mes_ref, rotulo_classe):
     """Lista dizimistas de uma classe ABC com botao de envio de agradecimento via WhatsApp."""
     if classe_df.empty:
-        st.caption(f"Sem dizimistas Classe {rotulo_classe} no periodo.")
+        st.caption(f"Sem dizimistas Classe {rotulo_classe} no período.")
         return
 
     telefones_dict = membros.set_index("id_cadastro")["telefone"].to_dict()
@@ -2235,7 +2235,7 @@ def render():
             dias_periodo_metas = (fim_mes - inicio_mes).days + 1
             if dias_periodo_metas < 25 or dias_periodo_metas > 35:
                 st.caption(
-                    f"⚠️ O periodo selecionado tem {dias_periodo_metas} dia(s). "
+                    f"⚠️ O período selecionado tem {dias_periodo_metas} dia(s). "
                     "As metas cadastradas sao mensais; para comparacao mais precisa, "
                     "selecione um periodo de aproximadamente um mes."
                 )

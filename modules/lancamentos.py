@@ -1529,7 +1529,7 @@ def modal_excluir_lancamento(slug, sel):
         f"- Tipo: {tipo} / {categoria}\n"
         f"- Valor: **{formatar_moeda(valor)}**\n"
         f"- Vinculado: {nome_vinc or '(sem vinculo)'}\n\n"
-        f"Esta acao **nao pode ser desfeita**."
+        f"Esta ação **não pode ser desfeita**."
     )
 
     confirmar = st.checkbox(
@@ -1568,7 +1568,7 @@ def modal_excluir_lancamento(slug, sel):
                     or k.startswith("_auth_")
                     or k == "sel_lanc_acao"):
                     st.session_state.pop(k, None)
-            st.toast(f"✅ Lancamento #{str(id_lanc).zfill(6)} excluido!")
+            st.toast(f"✅ Lancamento #{str(id_lanc).zfill(6)} excluído!")
             st.rerun()
         except Exception as exc:
             st.error(f"Erro ao excluir: {exc}")
@@ -1909,7 +1909,7 @@ def render():
                                 st.session_state[lote_comprovante_key] = html_comp
                                 st.session_state[lote_itens_key] = []
                                 _invalida()
-                                st.toast(f"{len(itens_salvos)} lancamentos salvos!")
+                                st.toast(f"{len(itens_salvos)} lançamentos salvos!")
                                 st.rerun()
 
                 with c_limpar:
@@ -1940,8 +1940,8 @@ def render():
                 f"**Profissional** e **Premium**. Seu plano atual: **{p_info_l['nome']}**."
             )
             st.info(
-                f"Faca upgrade para **{proximo_plano(plano_igreja).capitalize()}** "
-                f"e ganhe a possibilidade de lancar dizimo + oferta + missao em um unico documento."
+                f"Faça upgrade para **{proximo_plano(plano_igreja).capitalize()}** "
+                f"e ganhe a possibilidade de lancar dízimo + oferta + missao em um unico documento."
             )
 
     # ─── Lancamentos existentes: tabela e acoes no mesmo bloco ─────

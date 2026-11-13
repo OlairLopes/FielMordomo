@@ -431,7 +431,7 @@ def _renderizar_historico_membro(slug, id_cadastro, congregacao_padrao):
 
         if st.session_state.get(f"chist_confirmar_del_{id_hist}"):
             st.warning(
-                f"Confirma a exclusao da ocorrencia "
+                f"Confirma a exclusão da ocorrencia "
                 f"**{ocorrencia_txt}** de {data_fmt}?"
             )
             cc1, cc2 = st.columns(2)
@@ -620,9 +620,9 @@ def modal_excluir_cadastro(slug, sel):
 
     if em_uso:
         st.error(
-            f"**Nao e possivel excluir.**\n\n"
-            f"O cadastro **{nome}** esta vinculado a lancamentos. "
-            f"Para excluir, primeiro remova ou altere todos os lancamentos vinculados."
+            f"**Não e possível excluir.**\n\n"
+            f"O cadastro **{nome}** esta vinculado a lançamentos. "
+            f"Para excluir, primeiro remova ou altere todos os lançamentos vinculados."
         )
 
         if st.button("Fechar", use_container_width=True, key=f"mexc_fechar_{id_sel}"):
@@ -632,11 +632,11 @@ def modal_excluir_cadastro(slug, sel):
     st.warning(
         f"Voce esta prestes a excluir:\n\n"
         f"**{nome}** ({_rotulo_tipo_cadastro(tipo)})\n\n"
-        f"Esta acao **nao pode ser desfeita**."
+        f"Esta ação **não pode ser desfeita**."
     )
 
     confirmar = st.checkbox(
-        f"Confirmo a exclusao de {nome}",
+        f"Confirmo a exclusão de {nome}",
         key=f"mexc_conf_{id_sel}",
     )
 
@@ -670,7 +670,7 @@ def modal_excluir_cadastro(slug, sel):
                     or k.startswith("_auth_")
                     or k == "sel_cad_acao"):
                     st.session_state.pop(k, None)
-            st.toast(f"✅ Cadastro de {nome} excluido!")
+            st.toast(f"✅ Cadastro de {nome} excluído!")
             st.rerun()
         except Exception as exc:
             st.error(f"Erro ao excluir: {exc}")
@@ -731,8 +731,8 @@ def _ficha_cadastro(slug, plano, p_info, congregacao_fixa, bloqueado, limite, re
 
         if novo and tipo == "Membro" and bloqueado:
             st.error(
-                f"Voce atingiu o limite de **{limite} membros** do plano "
-                f"**{p_info['nome']}**. Faca upgrade para "
+                f"Você atingiu o limite de **{limite} membros** do plano "
+                f"**{p_info['nome']}**. Faça upgrade para "
                 f"**{proximo_plano(plano).capitalize()}** para cadastrar mais membros."
             )
             return

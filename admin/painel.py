@@ -207,7 +207,7 @@ def _criar_igreja():
 
                 except Exception as ex:
                     if "UNIQUE" in str(ex):
-                        st.error(f"Slug '{slug}' ja existe. Escolha outro identificador.")
+                        st.error(f"Slug '{slug}' já existe. Escolha outro identificador.")
                     else:
                         st.error(f"Erro: {ex}")
 
@@ -403,7 +403,7 @@ def _gerenciar_subcategorias():
                     use_container_width=True,
                 ):
                     excluir_subcategoria_despesa(sub)
-                    st.toast(f"Subcategoria '{sub}' excluida.")
+                    st.toast(f"Subcategoria '{sub}' excluída.")
                     st.rerun()
     else:
         st.info("Nenhuma subcategoria cadastrada.")
@@ -544,7 +544,7 @@ def _backup_admin():
 
     if st.session_state.get("backup_admin_falhas"):
         with st.expander(
-            f"⚠️ {len(st.session_state['backup_admin_falhas'])} falha(s) no ultimo backup completo",
+            f"⚠️ {len(st.session_state['backup_admin_falhas'])} falha(s) no último backup completo",
             expanded=False,
         ):
             for item, erro in st.session_state["backup_admin_falhas"]:
@@ -626,7 +626,7 @@ def _backup_admin():
             )
 
             if total_ok > 0:
-                st.success(f"Restauracao concluida — {total_ok} item(ns) restaurado(s).")
+                st.success(f"Restauracao concluída — {total_ok} item(ns) restaurado(s).")
 
             # Master.db
             if resultado["master_restaurado"]:
