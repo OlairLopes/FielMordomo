@@ -22,6 +22,7 @@ from utils.helpers import (
     inicio_mes as _inicio_mes,
     slug_da_sessao,
 )
+from utils.helpers import cabecalho_modulo
 
 
 CORES = {
@@ -410,7 +411,8 @@ def _render_relatorios(slug):
 
 
 def render():
-    st.subheader("⛪ Reunião de Obreiros")
+    cabecalho_modulo("Reunião de Obreiros")
+
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessão invalida. Faça login novamente.")

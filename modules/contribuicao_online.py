@@ -14,6 +14,7 @@ from modules.institucional import render_barra_publica
 from modules.lancamentos import CATEGORIAS_ENTRADA
 from modules.pix_brcode import gerar_payload_pix, gerar_qr_png
 from utils.helpers import formatar_moeda, slug_da_sessao
+from utils.helpers import cabecalho_modulo
 
 URL_BASE_APP = "https://fielmordomo.com.br"
 TIPOS = list(CATEGORIAS_ENTRADA)
@@ -346,7 +347,8 @@ def render():
         st.error("Sessão inválida. Faça login novamente.")
         return
 
-    st.subheader("Contribuições online")
+    cabecalho_modulo("Contribuições online")
+
     _secao_configuracao(slug)
     _secao_divulgacao(slug)
 

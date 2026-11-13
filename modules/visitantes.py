@@ -18,6 +18,7 @@ from utils.helpers import (
     inicio_mes as _inicio_mes,
     slug_da_sessao,
 )
+from utils.helpers import cabecalho_modulo
 
 
 ESTADOS_BR = [
@@ -381,7 +382,8 @@ def _render_consulta(slug):
 
 
 def render():
-    st.subheader("🤝 Registro de Visitantes")
+    cabecalho_modulo("Registro de Visitantes")
+
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessão inválida. Faça login novamente.")

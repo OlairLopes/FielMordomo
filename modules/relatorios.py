@@ -19,6 +19,7 @@ from data.repository import (
 from modules.leitura_biblica import render_importar_leitores
 from report_exports import AZUL, gerar_excel_relatorio, gerar_pdf_relatorio
 from utils.helpers import formatar_moeda, gerar_csv, slug_da_sessao
+from utils.helpers import cabecalho_modulo
 
 
 LOGGER = logging.getLogger(__name__)
@@ -276,7 +277,7 @@ def render():
     igreja = st.session_state.get("igreja", {})
     if not isinstance(igreja, dict):
         igreja = {}
-    st.subheader("📈 Relatórios")
+    cabecalho_modulo("Relatórios")
 
     tab_financeiro, tab_leitura = st.tabs(["Financeiro", "Plano de Leitura"])
     with tab_financeiro:

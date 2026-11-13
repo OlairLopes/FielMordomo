@@ -1104,7 +1104,7 @@ def _init_estado_evento(evento_atual, config_temporal=None):
 
 
 def _render_eventos(slug):
-    st.subheader("📅 Evento e local de referência")
+    st.subheader("Evento e local de referência")
     st.caption(
         "Cadastre o culto/reuniao, defina o ponto central e habilite a captura "
         "de localizacao quando for o momento."
@@ -1597,7 +1597,7 @@ def _selecionar_evento(slug, apenas_ativos=False, apenas_habilitados=False, key=
 # ═══════════════════════════════════════════════════════════════════════
 
 def _render_checkin(slug):
-    st.subheader("📲 Check-in por localização")
+    st.subheader("Check-in por localização")
     st.caption(
         "📌 Capture sua localização no botao GPS no **topo da página**. "
         "A captura fica compartilhada entre todas as abas."
@@ -2103,7 +2103,7 @@ def _render_checkin(slug):
 # ═══════════════════════════════════════════════════════════════════════
 
 def _render_frequencia(slug):
-    st.subheader("📊 Presentes e ausentes")
+    st.subheader("Presentes e ausentes")
     evento = _selecionar_evento(slug, apenas_ativos=False, key="evt_freq")
     if not evento:
         return
@@ -2166,8 +2166,7 @@ def _render_frequencia(slug):
 # ═══════════════════════════════════════════════════════════════════════
 
 def _render_mensagens(slug):
-    st.subheader("💬 Mensagens para presentes e ausentes")
-
+    st.subheader("Mensagens para presentes e ausentes")
     evento = _selecionar_evento(slug, apenas_ativos=False, key="evt_msg")
     if not evento:
         return
@@ -2566,7 +2565,7 @@ def render():
 
     slug = slug_da_sessao()
 
-    st.subheader("📍 Monitoramento por Localização")
+    st.subheader("Monitoramento por Localização")
     st.caption(
         "Controle de presença por georreferenciamento usando o GPS do celular. "
         "Envio de mensagens automatizadas para presentes e ausentes."

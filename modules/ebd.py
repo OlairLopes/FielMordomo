@@ -46,6 +46,7 @@ from modules.aniversariantes import (
     _whatsapp_api_configurada,
 )
 from utils.helpers import confirmar_exclusao, gerar_csv, slug_da_sessao
+from utils.helpers import cabecalho_modulo
 
 
 CORES = {
@@ -3041,7 +3042,8 @@ def _render_secretarios(slug):
 
 
 def render():
-    st.subheader("📚 Escola Bíblica")
+    cabecalho_modulo("Escola Bíblica")
+
     st.caption("Gestao de classes, chamada, frequência e escala de professores da Escola Bíblica.")
     slug = slug_da_sessao()
     if not slug:

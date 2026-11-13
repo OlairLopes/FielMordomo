@@ -20,6 +20,7 @@ from data.repository import (
 )
 from utils.helpers import confirmar_exclusao, slug_da_sessao, solicitar_autorizacao
 from utils.planos import obter_plano, pode_cadastrar_membro, proximo_plano
+from utils.helpers import cabecalho_modulo
 
 
 FUNCOES = [
@@ -1087,7 +1088,8 @@ def _painel_cadastros(slug, df, plano, p_info, congregacao_fixa, bloqueado, limi
 
 def render():
     slug = slug_da_sessao()
-    st.subheader("👥 Membros e fornecedores")
+    cabecalho_modulo("Membros e fornecedores")
+
     df = _get(slug)
 
     igreja = st.session_state.get("igreja", {})

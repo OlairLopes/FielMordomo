@@ -14,6 +14,7 @@ from data.repository import (
     validar_nova_senha,
 )
 from utils.helpers import slug_da_sessao, solicitar_autorizacao
+from utils.helpers import cabecalho_modulo
 
 
 LOGGER = logging.getLogger(__name__)
@@ -228,7 +229,8 @@ def render():
     if not slug:
         st.error("Sessão invalida. Faça login novamente.")
         return
-    st.subheader("💼 Tesoureiros")
+    cabecalho_modulo("Tesoureiros")
+
     if not solicitar_autorizacao(
         "gerenciar_tesoureiros",
         "gerenciar acessos de tesoureiros",

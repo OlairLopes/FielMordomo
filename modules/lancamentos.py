@@ -26,6 +26,7 @@ from utils.helpers import (
     slug_da_sessao, solicitar_autorizacao,
 )
 from utils.planos import tem_lancamento_lote, obter_plano, proximo_plano
+from utils.helpers import cabecalho_modulo
 
 JANELA_DUPLICIDADE_SEGUNDOS = 15
 
@@ -1589,7 +1590,7 @@ def render():
     lote_itens_key = _sk("lote_itens", slug)
     lote_comprovante_key = _sk("lote_comprovante_html", slug)
 
-    st.subheader("💰 Lançamentos financeiros")
+    cabecalho_modulo("Lançamentos financeiros")
 
     # ─── BOTAO PRINCIPAL: Novo lancamento ──────────────────────────
     if "mnl_aberto" not in st.session_state:

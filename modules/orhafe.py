@@ -38,6 +38,7 @@ from utils.helpers import (
     normalizar_data_digitada,
     slug_da_sessao,
 )
+from utils.helpers import cabecalho_modulo
 
 
 CORES = {
@@ -1246,7 +1247,8 @@ def _render_secretarias(slug):
 
 
 def render():
-    st.subheader("🙏 Círculo de Oração")
+    cabecalho_modulo("Círculo de Oração")
+
     st.caption("Gestão de matrículas, chamadas, visitantes, líderes e relatórios do ministério de oração.")
     slug = slug_da_sessao()
     if not slug:

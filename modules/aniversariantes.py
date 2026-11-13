@@ -16,6 +16,7 @@ import streamlit as st
 
 from data.repository import carregar_cadastros
 from utils.helpers import slug_da_sessao, gerar_csv
+from utils.helpers import cabecalho_modulo
 
 
 MESES_PT = {
@@ -733,7 +734,8 @@ def render():
     df_cad = carregar_cadastros(slug)
     df_aniv = _preparar_df_aniv(df_cad)
 
-    st.subheader("🎂 Aniversariantes")
+    cabecalho_modulo("Aniversariantes")
+
     st.caption("Acompanhe os aniversariantes dos membros da igreja.")
 
     if df_aniv.empty:

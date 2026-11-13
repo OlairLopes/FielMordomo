@@ -15,6 +15,7 @@ from data.repository import (
 from modules.institucional import render_barra_publica
 from modules.pix_brcode import gerar_qr_png
 from utils.helpers import slug_da_sessao
+from utils.helpers import cabecalho_modulo
 
 URL_BASE_APP = "https://fielmordomo.com.br"
 MESES = [
@@ -564,7 +565,8 @@ def render():
     igreja_nome = igreja["nome"] if igreja else slug
     df = carregar_cadastros(slug)
 
-    st.subheader("Documentos de membros")
+    cabecalho_modulo("Documentos de membros")
+
     if df.empty:
         st.info("Cadastre membros para emitir documentos.")
         return

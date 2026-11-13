@@ -1,4 +1,5 @@
 import datetime
+import html
 import logging
 import time
 
@@ -226,3 +227,14 @@ def solicitar_autorizacao(key: str, acao: str = "continuar") -> bool:
             st.rerun()
 
     return False
+
+
+def cabecalho_modulo(titulo: str) -> None:
+    """Titulo padrao das telas internas: Fraunces, azul-marinho e filete dourado."""
+    st.markdown(
+        '<div style="margin:.25rem 0 1.25rem;">'
+        '<h2 style="font-family:\'Fraunces\',Georgia,\'Times New Roman\',serif;color:#061B44;'
+        'font-weight:700;margin:0;padding-bottom:.45rem;border-bottom:3px solid #D4AF37;'
+        f'display:inline-block;">{html.escape(titulo)}</h2></div>',
+        unsafe_allow_html=True,
+    )

@@ -32,6 +32,7 @@ from data.repository import (
 )
 from utils.helpers import slug_da_sessao
 from utils.planos import obter_plano
+from utils.helpers import cabecalho_modulo
 
 
 LOGGER = logging.getLogger(__name__)
@@ -433,7 +434,7 @@ def _render_controle_acessos(slug):
 
 
 def render():
-    st.subheader("👤 Minha Conta")
+    cabecalho_modulo("Minha Conta")
 
     slug = slug_da_sessao()
     igreja = st.session_state.get("igreja", {})

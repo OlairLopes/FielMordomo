@@ -17,6 +17,7 @@ from data.repository import (
 from utils.backup_scheduler import HORA_EXECUCAO, listar_backups_automaticos
 from utils.helpers import formatar_moeda, slug_da_sessao, solicitar_autorizacao
 from utils.planos import obter_plano, tem_backup_automatico
+from utils.helpers import cabecalho_modulo
 
 
 LOGGER = logging.getLogger(__name__)
@@ -201,7 +202,8 @@ def render():
         return
     igreja = st.session_state.get("igreja", {})
     plano = igreja.get("plano", "basico") if isinstance(igreja, dict) else "basico"
-    st.subheader("💾 Backup de dados")
+    cabecalho_modulo("Backup de dados")
+
     st.caption("Exporte ou restaure os dados isolados desta congregacao.")
     _render_resumo(slug)
     st.divider()

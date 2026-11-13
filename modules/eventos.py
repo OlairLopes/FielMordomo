@@ -17,6 +17,7 @@ from utils.helpers import (
     inicio_mes as _inicio_mes,
     slug_da_sessao,
 )
+from utils.helpers import cabecalho_modulo
 
 
 VISIBILIDADES = ["Publico", "Membros", "Restrito"]
@@ -254,7 +255,8 @@ def _render_lista(slug):
 
 
 def render():
-    st.subheader("📅 Agenda de Eventos")
+    cabecalho_modulo("Agenda de Eventos")
+
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessão invalida. Faça login novamente.")

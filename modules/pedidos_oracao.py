@@ -23,6 +23,7 @@ from data.repository import (
     excluir_horario_visita_pastoral,
 )
 from utils.helpers import gerar_csv, slug_da_sessao
+from utils.helpers import cabecalho_modulo
 
 
 LOGGER = logging.getLogger(__name__)
@@ -543,7 +544,8 @@ def _render_agenda(slug):
 
 
 def render():
-    st.subheader("🕊️ Pedidos de Oração")
+    cabecalho_modulo("Pedidos de Oração")
+
     slug = slug_da_sessao()
     if not slug:
         st.error("Sessão inválida. Faça login novamente.")

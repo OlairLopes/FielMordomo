@@ -37,6 +37,7 @@ from utils.helpers import (
     normalizar_data_digitada,
     slug_da_sessao,
 )
+from utils.helpers import cabecalho_modulo
 
 
 TIPOS_CULTO_GFC = [
@@ -1170,7 +1171,8 @@ def render():
     modo = st.session_state.get("modo", "")
     secretaria = st.session_state.get("secretaria_gfc", {})
     perfil_secretaria = secretaria.get("perfil") if isinstance(secretaria, dict) else ""
-    st.subheader("👨‍👩‍👧 GFC - Grupos Familiares de Crescimento")
+    cabecalho_modulo("GFC - Grupos Familiares de Crescimento")
+
     st.caption("Primeira etapa: cadastro dos grupos, registro dos cultos e relatório básico.")
 
     if modo == "secretaria_gfc" and perfil_secretaria != "geral":
