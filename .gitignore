@@ -26,3 +26,5 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+# Backup antigo de acentuacao (somente local, nao versionar)
+_backup_acentuacao/
