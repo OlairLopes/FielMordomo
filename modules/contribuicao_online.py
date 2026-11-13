@@ -6,7 +6,7 @@ import streamlit as st
 from data.repository import (
     anexar_comprovante_online, buscar_igreja_por_slug, carregar_cadastros,
     COMPROVANTE_EXTENSOES, confirmar_contribuicao_online, criar_contribuicao_online,
-    listar_contribuicoes_online, obter_comprovante_online, obter_pix_igreja,
+    listar_contribuicoes_online, obter_comprovante_online, obter_logo_igreja, obter_pix_igreja,
     PIX_QR_EXTENSOES, obter_pix_qr_igreja, remover_pix_qr_igreja,
     rejeitar_contribuicao_online, salvar_pix_igreja, salvar_pix_qr_igreja,
 )
@@ -32,9 +32,60 @@ def _chave_gerado(slug):
     return f"contribuicao_gerada_{slug}"
 
 
+_CSS_CONTRIBUICAO = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap');
+:root {
+    --fm-navy: #061B44;
+    --fm-ink: #10213A;
+    --fm-gold: #D4AF37;
+    --fm-line: #DCE4EE;
+    --fm-muted: #607089;
+    --fm-surface: #F6F8FB;
+}
+.stApp { background: var(--fm-surface); }
+.block-container { max-width: 720px !important; padding-top: 2rem !important; }
+html, body, .stApp, p, label, input, button, [data-testid="stMarkdownContainer"] {
+    font-family: 'Public Sans', -apple-system, 'Segoe UI', Arial, sans-serif;
+    color: var(--fm-ink);
+}
+h1, h2, h3 { font-family: 'Fraunces', Georgia, 'Times New Roman', serif !important; color: var(--fm-navy); }
+.fm-cabecalho { text-align: center; margin: 0 0 1.5rem; }
+.fm-cabecalho h1 { font-size: 2rem; margin: .5rem 0 .25rem; }
+.fm-cabecalho h1::after {
+    content: ""; display: block; width: 56px; height: 3px; margin: .6rem auto 0;
+    background: var(--fm-gold); border-radius: 2px;
+}
+.fm-cabecalho p { color: var(--fm-muted); margin: .75rem 0 0; font-size: .95rem; }
+.fm-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.fm-passo { display: flex; align-items: center; gap: .55rem; font-weight: 700; color: var(--fm-navy);
+            margin: 1.4rem 0 .6rem; }
+.fm-passo span { background: var(--fm-navy); color: var(--fm-gold); border-radius: 999px; width: 1.6rem; height: 1.6rem;
+                 display: inline-flex; align-items: center; justify-content: center; font-size: .85rem; flex: none;
+                 font-weight: 800; }
+div[data-testid="stForm"] { border: 1px solid var(--fm-line); border-radius: 14px; padding: 1.25rem;
+                            background: #FFFFFF; box-shadow: 0 1px 2px rgba(6,27,68,.04); }
+div[data-testid="stFormSubmitButton"] button { background: var(--fm-navy); color: #FFFFFF; border: 1px solid var(--fm-navy);
+                                               border-radius: 10px; width: 100%; font-weight: 700; padding: .7rem; }
+div[data-testid="stFormSubmitButton"] button:hover { background: var(--fm-navy); color: var(--fm-gold);
+                                                    border-color: var(--fm-gold); }
+div[data-testid="stFormSubmitButton"] button * { color: #FFFFFF !important; }
+div[data-testid="stFormSubmitButton"] button:hover * { color: var(--fm-gold) !important; }
+.fm-aviso { background: #FFFFFF; border: 1px solid var(--fm-line); border-left: 4px solid var(--fm-gold);
+            color: var(--fm-ink); border-radius: 12px; padding: .9rem 1rem; margin: .5rem 0 1rem; }
+.fm-nota { color: var(--fm-muted); font-size: .85rem; margin: .4rem 0 0; }
+</style>
+"""
+
+
+def _passo(numero, titulo):
+    return f'<div class="fm-passo"><span>{numero}</span>{html.escape(titulo)}</div>'
+
+
 def pagina_publica(slug):
     """Pagina publica de contribuicao (?contribuir=<slug>), sem login."""
     render_barra_publica()
+    st.markdown(_CSS_CONTRIBUICAO, unsafe_allow_html=True)
     igreja = buscar_igreja_por_slug(slug)
     if not igreja:
         st.error("Igreja não encontrada.")
@@ -46,15 +97,34 @@ def pagina_publica(slug):
         st.info("A contribuição online ainda não está configurada nesta igreja.")
         return
 
-    st.title(igreja["nome"])
-    st.caption("Contribua por Pix. Escolha o tipo e o valor e pague pelo aplicativo do seu banco.")
+    logo_igreja = obter_logo_igreja(slug)
+    nome_escapado = html.escape(igreja["nome"])
+    subtitulo = "Contribua por Pix. Escolha o tipo e o valor e pague pelo aplicativo do seu banco."
+    if logo_igreja:
+        # Com logo cadastrada, ela substitui o nome visualmente; o nome fica oculto para leitores de tela.
+        _, col_logo, _ = st.columns([1, 1, 1])
+        col_logo.image(logo_igreja[0], width=180)
+        st.markdown(
+            f'<div class="fm-cabecalho"><h1 class="fm-sr-only">{nome_escapado}</h1>'
+            f"<p>{subtitulo}</p></div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div class="fm-cabecalho"><h1>{nome_escapado}</h1><p>{subtitulo}</p></div>',
+            unsafe_allow_html=True,
+        )
     if qr_igreja:
-        st.markdown("**QR Code da igreja**")
+        st.markdown("**Pague com o QR Code da igreja**")
         st.image(qr_igreja, width=260)
-        st.caption("Escaneie com o app do seu banco e informe o valor da contribuição.")
+        st.markdown(
+            '<p class="fm-nota">Escaneie com o app do seu banco e informe o valor da contribuição.</p>',
+            unsafe_allow_html=True,
+        )
     if not pix["chave"]:
         return
 
+    st.markdown(_passo(1, "Escolha o valor e informe seus dados"), unsafe_allow_html=True)
     with st.form(f"form_contribuicao_{slug}", clear_on_submit=False):
         tipo = st.selectbox("Tipo de contribuição", TIPOS)
         valor = st.number_input(
@@ -93,17 +163,20 @@ def pagina_publica(slug):
         _secao_comprovante_posterior(slug)
         return
 
-    st.success(
-        f"Contribuição de {formatar_moeda(gerado['valor'])} ({gerado['tipo']}) registrada. "
-        "Pague pelo QR Code ou pelo copia e cola abaixo."
+    st.markdown(
+        f'<div class="fm-aviso">Contribuição de {html.escape(formatar_moeda(gerado["valor"]))} '
+        f'({html.escape(gerado["tipo"])}) registrada. Referência <b>#{gerado["id"]}</b>.</div>',
+        unsafe_allow_html=True,
     )
+    st.markdown(_passo(2, "Pague pelo QR Code ou pelo copia e cola"), unsafe_allow_html=True)
     st.image(gerar_qr_png(gerado["payload"]), width=260)
+    st.markdown("**Pix copia e cola**")
     st.code(gerado["payload"], language=None)
-    st.caption(
-        "Depois do pagamento a tesouraria confere o recebimento. "
-        f"Referência da contribuição: #{gerado['id']}."
+    st.markdown(
+        '<p class="fm-nota">Depois do pagamento, a tesouraria confere o recebimento.</p>',
+        unsafe_allow_html=True,
     )
-    st.markdown("**Envie o comprovante do Pix**")
+    st.markdown(_passo(3, "Envie o comprovante do Pix"), unsafe_allow_html=True)
     _envio_comprovante(slug, gerado["id"], contato=None, chave=f"gerado_{gerado['id']}")
 
 
